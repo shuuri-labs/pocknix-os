@@ -74,9 +74,11 @@ sudo -E make build
 ## 6. Build the kernel + qcom-abl boot image
 
 ```bash
-make kernel        # native compile — long; produces build/image/KERNEL + build/kernel/out
+sudo make kernel   # native compile — long; produces build/image/KERNEL + build/kernel/out
 make check         # should now show: kernel build <ver> + boot image KERNEL <size>
 ```
+> Use `sudo` here because `build/` is root-owned after `sudo make build` (so a non-root
+> `make kernel` can't write the download cache). The compile itself doesn't require root.
 This fetches stock `linux-7.0.11`, applies the patch stack in order, builds Image+dtbs+modules,
 and assembles the qcom-abl boot image (gzip Image + appended DTBs + dummy ramdisk). See
 [`../kernel/README.md`](../kernel/README.md) for the recipe. Pin the source afterward:
