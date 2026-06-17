@@ -10,8 +10,15 @@ _Last updated: 2026-06-17 — end of Phase 0._
 
 ## TL;DR — where we are
 
-- **Phase 0 (build harness & skeleton): DONE.** `make help`, `make check`, `make sync` all
-  work and are tested on macOS. Linux-only targets are guarded and fail fast off-Linux.
+- **Phase 0 (build harness & skeleton): DONE + VERIFIED.** `make help`/`check`/`sync` work on
+  macOS; **`sudo make build` verified end-to-end in a Fedora aarch64 VM** — ALARM bootstrap →
+  keyring → full base package install (130 pkgs) completes cleanly. Linux-only targets guarded.
+  - Fixes that testing flushed out (all pushed): chroot DNS on systemd-resolved hosts
+    (`lib.sh chroot_resolv`), ALARM-only Phase 0 pacman.conf (holo/local deferred), and
+    dropping `CheckSpace` (breaks chroot transactions with a bogus "not enough disk space").
+  - Benign warnings during base build (ignore): mkinitcpio autodetect "failed to detect root
+    filesystem" (chroot), microcode "aarch64 not supported" (x86-only hook), kms
+    `drm_privacy_screen_register` symbol, missing vconsole.conf.
 - **Next: Phase 1 (kernel).** Build `linux-pocknix` → `qcom-abl` boot image (`/flash/KERNEL`).
 - **Build host:** prefer an **aarch64 Linux** host (native, no qemu, native kernel compile).
   macOS can only do `sync`/`check`/editing — not the actual image build.
@@ -89,7 +96,12 @@ Goal: `make kernel` produces a `qcom-abl` boot image + matching modules tree.
    local repo (`build/localrepo`) + `build/image/KERNEL`. Wire it into `make kernel`/`build`.
 5. **Toolchain:** on aarch64 host, native gcc — nothing extra. On x86_64, supply an aarch64
    cross-toolchain (see plan.md open question #2, now mostly resolved).
-6. **Verify** (SM8550 README method): `md5sum` of built `Image` vs deployed `/flash/KERNEL`;
+6. **Remove the generic ALARM kernel.** The ALARM rootfs ships `linux-aarch64` (got upgraded
+   during the Phase 0 base install, triggering the mkinitcpio runs). The RP6 boots our
+   qcom-abl `/flash/KERNEL`, not an ALARM initramfs kernel — so `pacman -Rdd linux-aarch64`
+   (or exclude it) and install `linux-pocknix` instead. This also kills the benign mkinitcpio
+   warnings. Decide whether the qcom-abl image embeds an initramfs (thorch replaces it).
+7. **Verify** (SM8550 README method): `md5sum` of built `Image` vs deployed `/flash/KERNEL`;
    `uname -r` matches the shipped `lib/modules/<ver>/`; `cat /proc/version` timestamp.
 
 ---
