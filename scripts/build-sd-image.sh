@@ -56,11 +56,22 @@ firstboot_config() {
 PARTLABEL=${ROOT_LABEL}  /  ext4  rw,relatime  0 1
 EOF
   echo "pocknix" > "${root}/etc/hostname"
-  # ssh in over USB/wifi as a boot signal; getty on the screen is automatic
-  chroot "${root}" systemctl enable sshd NetworkManager >/dev/null 2>&1 || true
   if [ -f "${root}/etc/ssh/sshd_config" ]; then
     sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' "${root}/etc/ssh/sshd_config"
   fi
+
+  # install the committed test-image overlay (usb gadget, diag dump, autologin, NM conf)
+  if [ -d "${POCKNIX_ROOT}/overlay" ]; then
+    log "installing overlay (usb-gadget + diag + autologin)"
+    rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
+    chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" 2>/dev/null || true
+  fi
+
+  # enable services for interaction/verification with no keyboard:
+  #   sshd + NetworkManager (network), pocknix-usbgadget (ssh over USB-C),
+  #   pocknix-diag (writes pocknix-diag.txt to the FAT partition)
+  chroot "${root}" systemctl enable sshd NetworkManager \
+        pocknix-usbgadget.service pocknix-diag.service >/dev/null 2>&1 || true
 }
 
 main() {
