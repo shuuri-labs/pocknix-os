@@ -9,7 +9,7 @@ SCRIPTS := scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync bootstrap build fast kernel sd-image install check clean distclean
+.PHONY: help sync bootstrap build fast kernel sd-image install check du trim clean distclean
 
 help: ## Show this help
 	@echo "pocknix-os build targets:"
@@ -41,10 +41,18 @@ install: ## Install to internal storage, preserving ABL [Phase 6] (on-device)
 check: ## Preflight: validate harness + any built artifacts
 	@$(SCRIPTS)/check.sh
 
-clean: ## Remove build output (keeps downloaded ALARM tarball cache)
-	@rm -rf build/rootfs build/image build/localrepo
-	@echo "cleaned build artifacts (cache kept)"
+du: ## Show build/ disk usage breakdown (find the space hogs)
+	@du -sh build/* 2>/dev/null | sort -h; \
+	 [ -d build/kernel ] && { echo '--- build/kernel ---'; du -sh build/kernel/* 2>/dev/null | sort -h; } || true
+
+trim: ## Reclaim space: drop the regenerable kernel SOURCE tree (keeps KERNEL+modules+rootfs+image)
+	@sudo rm -rf build/kernel/linux-* build/kernel/mkbootimg-src
+	@echo "trimmed kernel source tree (regenerated on next 'make kernel'); kept out/, rootfs, image, cache"
+
+clean: ## Remove build output: rootfs, image, kernel build (keeps download cache)
+	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel
+	@echo "cleaned build artifacts (download cache kept)"
 
 distclean: ## Remove all build output including caches
-	@rm -rf build/rootfs build/image build/localrepo build/cache
+	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel build/cache
 	@echo "removed all build output"
