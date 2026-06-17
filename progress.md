@@ -9,6 +9,13 @@ _Last updated: 2026-06-17 — end of Phase 0._
 
 ---
 
+## 🎉 MILESTONE: kernel boots on the RP6 (from SD)
+Our `pocknix-sd.img` booted on real hardware — `pocknix login` prompt on the display. Proves:
+ABL loads our KERNEL from SD → patched 7.0.11 boots → ext4 root mounts via
+`root=PARTLABEL=POCKNIX_ROOT` (no initramfs) → systemd + getty. Our SD layout is ABL-valid
+(the earlier "boots internal" was just internal-priority). Login: root / `pocknix`.
+Next: on-device hardware verification (esp. **suspend/resume** — the whole point of the patches).
+
 ## TL;DR — where we are
 
 - **Phase 0 (build harness & skeleton): DONE + VERIFIED.** `make help`/`check`/`sync` work on
@@ -47,7 +54,7 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
 |---|---|---|
 | 0 | Build harness, repo skeleton, ALARM bootstrap, pacman wiring, `sync` | ✅ done |
 | 1 | `build-kernel.sh` → qcom-abl `KERNEL` + modules; rootfs integration | ✅ compiles in VM; sha256 pinned; on-device boot pending |
-| 1.5 | `build-sd-image.sh` → flashable SD boot-test image (no internal risk) | 🔨 implemented, needs VM build + flash + boot |
+| 1.5 | `build-sd-image.sh` → flashable SD boot-test image | ✅ BOOTS ON DEVICE (pocknix login from SD); hardware verification next |
 | 2 | `pocknix-bsp`/quirks: inputplumber, suspend hooks, audio/thermal | ⬜ |
 | 3 | Steam session: gamescope (DRM) + native ARM steam, `pocknix-steam.service` | ⬜ |
 | 4 | Desktop session: Plasma Mobile + `kwin_wayland`, `pocknix-desktop.service` | ⬜ |
