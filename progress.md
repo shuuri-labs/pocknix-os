@@ -22,10 +22,13 @@ _Last updated: 2026-06-17 — end of Phase 0._
     `drm_privacy_screen_register` symbol, missing vconsole.conf.
 - **Phase 1 (kernel): COMPILES + pinned** — `make kernel` builds patched 7.0.11 reproducibly
   → `build/image/KERNEL` (qcom-abl) + modules. `KERNEL_SOURCE_SHA256` pinned.
-- **First-boot milestone (in progress):** `make sd-image` builds a flashable SD image to
-  boot-test the kernel on the RP6 **without touching internal ROCKNIX**. Decided SD (not
-  internal) for testing — safe + trivial recovery (pull/re-flash SD). **Next: build it in the
-  VM, flash to a microSD, boot the RP6.**
+- **First-boot milestone (in progress):** `make sd-image` builds a flashable SD image.
+  **IMPORTANT device fact (verified):** the RP6 boots **internal ROCKNIX first and ignores the
+  SD** while an internal install exists — even an official ROCKNIX SD won't boot over it. No
+  SD-priority toggle exists; "Switch boot mode" only flips Android⇄ROCKNIX. To SD-boot you must
+  ABL → **Uninstall ROCKNIX** first; restore later via official SD + `installtointernal`
+  (SD-only, no PC/EDL). So SD testing is NOT "leave internal untouched" — but it's reversible.
+  **Next: uninstall internal → boot official SD (confirm + capture layout) → flash + boot ours.**
 - **Build host:** prefer an **aarch64 Linux** host (native, no qemu, native kernel compile).
   macOS can only do `sync`/`check`/editing — not the actual image build.
 
