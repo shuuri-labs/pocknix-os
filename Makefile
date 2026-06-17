@@ -9,7 +9,7 @@ SCRIPTS := scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync bootstrap build fast kernel install check clean distclean
+.PHONY: help sync bootstrap build fast kernel sd-image install check clean distclean
 
 help: ## Show this help
 	@echo "pocknix-os build targets:"
@@ -31,6 +31,9 @@ fast: ## Iterate on packages/config without re-bootstrapping (root, Linux)
 kernel: ## Build only the in-project kernel (linux-pocknix) [Phase 1]
 	@if [ -x $(SCRIPTS)/build-kernel.sh ]; then $(SCRIPTS)/build-kernel.sh; \
 	 else echo "Phase 1 not implemented: scripts/build-kernel.sh missing"; exit 1; fi
+
+sd-image: ## Build a flashable SD boot-test image (needs build + kernel) (root, Linux)
+	@$(SCRIPTS)/build-sd-image.sh
 
 install: ## Install to internal storage, preserving ABL [Phase 6] (on-device)
 	@$(SCRIPTS)/install.sh
