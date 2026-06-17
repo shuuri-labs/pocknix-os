@@ -5,8 +5,8 @@ Wants=multi-user.target
 
 [Service]
 Type=oneshot
-# small delay so dmesg / device probing has settled
-ExecStartPre=/bin/sh -c 'sleep 8'
+# delay so device probing AND a wifi association attempt have time to settle
+ExecStartPre=/bin/sh -c 'sleep 30'
 ExecStart=/usr/local/bin/pocknix-diag
 RemainAfterExit=yes
 
