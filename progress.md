@@ -52,9 +52,13 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
   - **`vendor/` (GITIGNORED, build-time only)** — `reference/` copies of ROCKNIX steam
     launch scripts + quirks to adapt, and the 160 MB `filesystem/` firmware overlay (stock
     firmware actually comes from `linux-firmware` at build).
-- Decision (resolved): kernel is **self-contained in-repo**, going beyond thorch (which
-  syncs the whole kernel from public ROCKNIX, gitignored). Stock upstream Linux source =
-  pinned tarball fetched in Phase 1; firmware = `linux-firmware`, not committed.
+- Decision (resolved): kernel inputs are a **pinned snapshot of ROCKNIX `next` (nightly)** +
+  jaewun's suspend branch + our small delta, **committed** in `kernel/` (self-contained +
+  reproducible). We track **nightly (`next`), not stable**. The RP6 is officially supported
+  by ROCKNIX, so most patches are public ROCKNIX work — our delta is just jaewun's suspend
+  set + TSENS `0203` / `CONFIG_PM_SLEEP_DEBUG` / SDAM hooks. Stock Linux source = pinned
+  tarball fetched in Phase 1; firmware = `linux-firmware`, not committed. Thorch auto-fetches
+  nightly at build; we pin+commit instead. `make sync` advances the pin.
 
 ## Stubs left in place (grep `STUB` in scripts/)
 

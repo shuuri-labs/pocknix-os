@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 # sync.sh — refresh the vendored ROCKNIX SM8550 inputs into two destinations:
 #
-#   kernel/   (COMMITTED)  — the RP6 kernel ENABLEMENT: patches, DTS, kernel
-#             config, firmware list, qcom-abl bootloader packaging. This is the
-#             RP6-specific kernel work and it lives IN the repo so pocknix-os is
-#             self-contained (clone + build; no external ROCKNIX checkout needed
-#             to have the kernel sources). `make sync` refreshes it from your
+#   kernel/   (COMMITTED)  — the full kernel input set: patch stack, DTS, kernel
+#             config, firmware list, qcom-abl bootloader packaging. A PINNED
+#             SNAPSHOT of ROCKNIX `next` (nightly) + jaewun's suspend branch + our
+#             delta. The RP6 is officially supported upstream, so most of this is
+#             public ROCKNIX work; committing it makes pocknix-os self-contained
+#             and reproducible. `make sync` advances the pin from your
 #             distribution/ checkout — review the git diff and commit the result.
 #
 #   vendor/   (GITIGNORED) — build-time-only material that we do NOT redistribute:
 #             ROCKNIX reference scripts to adapt, and the device firmware/overlay
 #             (stock firmware comes from linux-firmware at build instead).
 #
-# Unlike thorch (which syncs the whole kernel from public ROCKNIX at build time,
-# gitignored), we commit *our* enablement and fetch only stock upstream Linux +
-# stock firmware. Set DISTRIBUTION_DIR to your ROCKNIX 'distribution' checkout.
+# Thorch auto-fetches ROCKNIX nightly at build (gitignored); we pin + commit a
+# nightly snapshot instead (reproducible, clone-standalone). We track nightly
+# (`next`), not stable. Set DISTRIBUTION_DIR to your ROCKNIX 'distribution'
+# checkout (expected on a `next`-based branch, e.g. thor-suspend-merge).
 
 source "$(dirname "$0")/lib.sh"
 

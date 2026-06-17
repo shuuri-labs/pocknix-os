@@ -32,12 +32,16 @@ plan.md        full phased plan
 
 ### Self-contained kernel (vs thorch)
 
-The RP6 kernel work lives **in the repo** under `kernel/` (patches, DTS, config, fw list).
-Only **stock upstream Linux** (version+sha-pinned tarball) and **stock firmware**
-(`linux-firmware`) are fetched at build. This is deliberately more self-contained than
-thorch, which syncs the whole kernel from public ROCKNIX at build time into a gitignored tree
-— we maintain the SM8550 fork, so the patches belong in-repo. `make sync` *refreshes* `kernel/`
-from your `distribution/` checkout; review the diff and commit. See [`kernel/README.md`](kernel/README.md).
+The full kernel input set lives **in the repo** under `kernel/` (patches, DTS, config, fw
+list) as a **pinned snapshot of ROCKNIX `next` (nightly)** — the RP6 is officially supported
+upstream, so most patches are public ROCKNIX work; the maintainer's delta is small (jaewun's
+suspend branch + a few debug patches). Only **stock Linux source** (version+sha-pinned tarball)
+and **stock firmware** (`linux-firmware`) are fetched at build.
+
+This is more self-contained *and* reproducible than thorch, which auto-fetches ROCKNIX nightly
+at build into a gitignored tree. We track **nightly (`next`), not stable**; `make sync`
+advances the pin from your `distribution/` checkout (review the diff, commit). See
+[`kernel/README.md`](kernel/README.md) for provenance.
 
 ## Requirements
 

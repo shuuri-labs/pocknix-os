@@ -95,8 +95,11 @@ an Arch PKGBUILD instead of inside the LibreELEC buildroot.
   then the SM8550 config (`linux.aarch64.conf`) + qcom-abl packaging. NOT just stock+device
   patches. **Stock Linux source** is fetched at build as a version+sha-pinned tarball
   (`KERNEL_SOURCE_URL/SHA256`); firmware comes from `linux-firmware` per `kernel-firmware.dat`.
-  This is the same build thorch does — we commit the inputs (the RP6 patches aren't public,
-  so they can't be auto-fetched the way thorch pulls public ROCKNIX).
+  This is the same build thorch does; difference is we **pin + commit a ROCKNIX `next`
+  (nightly) snapshot** rather than auto-fetching nightly at build — reproducible and
+  clone-standalone. The RP6 is officially supported by ROCKNIX, so most patches are public
+  ROCKNIX work; our delta is small (jaewun's suspend branch + TSENS `0203` / PM_SLEEP_DEBUG /
+  SDAM). We track **nightly (`next`), not stable.** See `kernel/README.md` for provenance.
 - **`packages/linux-pocknix/PKGBUILD`** reproduces the boot-image build, porting the logic
   from ROCKNIX `packages/linux/package.mk` + `bootloader/mkimage`:
   1. apply patches, build with the cross toolchain → `Image` + DTBs,
