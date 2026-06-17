@@ -47,6 +47,20 @@ ensure_kernel_in_rootfs() {
   fi
 }
 
+# Install the SM8550 device firmware (ath12k wifi board data, adsp/cdsp, vpu, ...)
+# from ROCKNIX's synced overlay into the rootfs. Without this, wifi/audio/video
+# firmware is missing. (Belongs in a pocknix-bsp package eventually — Phase 2.)
+FW_SRC="${VENDOR_DIR}/rocknix-sm8550/filesystem/usr/lib/kernel-overlays/base/lib/firmware"
+install_firmware() {
+  if [ -d "${FW_SRC}" ]; then
+    log "installing SM8550 device firmware -> rootfs /usr/lib/firmware ($(du -sh "${FW_SRC}" | cut -f1))"
+    mkdir -p "${ROOTFS_DIR}/usr/lib/firmware"
+    rsync -a "${FW_SRC}/" "${ROOTFS_DIR}/usr/lib/firmware/"
+  else
+    warn "ROCKNIX firmware overlay not at ${FW_SRC} — run 'make sync' (wifi/audio firmware will be missing)"
+  fi
+}
+
 firstboot_config() {
   local root="$1"
   log "configuring first boot (root login, fstab, ssh, network, hostname)"
@@ -67,15 +81,39 @@ EOF
     chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" 2>/dev/null || true
   fi
 
+  # optional Wi-Fi pre-seed so we can SSH over Wi-Fi without a USB cable
+  if [ -n "${SD_WIFI_SSID}" ]; then
+    log "pre-seeding Wi-Fi for SSID '${SD_WIFI_SSID}'"
+    install -d -m 700 "${root}/etc/NetworkManager/system-connections"
+    cat > "${root}/etc/NetworkManager/system-connections/pocknix-wifi.nmconnection" <<EOF
+[connection]
+id=pocknix-wifi
+type=wifi
+autoconnect=true
+[wifi]
+mode=infrastructure
+ssid=${SD_WIFI_SSID}
+[wifi-security]
+key-mgmt=wpa-psk
+psk=${SD_WIFI_PSK}
+[ipv4]
+method=auto
+[ipv6]
+method=auto
+EOF
+    chmod 600 "${root}/etc/NetworkManager/system-connections/pocknix-wifi.nmconnection"
+  fi
+
   # enable services for interaction/verification with no keyboard:
-  #   sshd + NetworkManager (network), pocknix-usbgadget (ssh over USB-C),
-  #   pocknix-diag (writes pocknix-diag.txt to the FAT partition)
-  chroot "${root}" systemctl enable sshd NetworkManager \
+  #   sshd + NetworkManager + iwd (wifi), pocknix-usbgadget (ssh over USB-C),
+  #   pocknix-diag (writes the boot report to /var/log + the FAT partition)
+  chroot "${root}" systemctl enable sshd NetworkManager iwd \
         pocknix-usbgadget.service pocknix-diag.service >/dev/null 2>&1 || true
 }
 
 main() {
   ensure_kernel_in_rootfs
+  install_firmware
 
   local root_mib img_mib boot_end
   root_mib=$(( $(du -sm "${ROOTFS_DIR}" | cut -f1) + SD_SLACK_MIB ))
