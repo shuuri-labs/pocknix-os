@@ -9,12 +9,22 @@ _Last updated: 2026-06-17 — end of Phase 0._
 
 ---
 
-## 🎉 MILESTONE: kernel boots on the RP6 (from SD)
-Our `pocknix-sd.img` booted on real hardware — `pocknix login` prompt on the display. Proves:
-ABL loads our KERNEL from SD → patched 7.0.11 boots → ext4 root mounts via
-`root=PARTLABEL=POCKNIX_ROOT` (no initramfs) → systemd + getty. Our SD layout is ABL-valid
-(the earlier "boots internal" was just internal-priority). Login: root / `pocknix`.
-Next: on-device hardware verification (esp. **suspend/resume** — the whole point of the patches).
+## 🎉 MILESTONE: kernel boots + runs on the RP6 (from SD), verified by diag
+`pocknix-sd.img` boots on real hardware (`pocknix login`). The first-boot diag confirmed:
+our 7.0.11 kernel (built root@fedora), `root=PARTLABEL=POCKNIX_ROOT` → `/dev/mmcblk0p2` ext4
+(no initramfs), modules 7.0.11, gamepad `js0`, and **`mem_sleep: s2idle [deep]`** (deep
+suspend available). Login root / `pocknix`.
+
+Firmware finding (from diag): device firmware was missing → wifi (`ath12k board-2.bin`), audio
+(`adsp/cdsp`), video (`vpu`) failed. ROCKNIX's synced overlay (`vendor/`) has those; we now
+`install_firmware` them into the rootfs in build-sd-image.sh. GPU `a740_*` + `regulatory.db`
+still missing (come from upstream `linux-firmware`/`wireless-regdb`) — follow-up; not needed
+for boot. Benign noise: dummy regulators, `disp_cc` WARN, GPT alt-header (image < SD size,
+`sgdisk -e` to fix). USB gadget needs a USB-C **data** cable (user lacks one) → using **Wi-Fi
+pre-seed** (`SD_WIFI_SSID/PSK`) for SSH instead.
+
+Next: rebuild image (firmware + wifi) → SSH over wifi → **suspend/resume test** (the patches'
+whole point). Then Phase 2 (pocknix-bsp: firmware as a package, inputplumber, suspend hooks).
 
 ## TL;DR — where we are
 
