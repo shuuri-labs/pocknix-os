@@ -20,8 +20,11 @@ _Last updated: 2026-06-17 — end of Phase 0._
   - Benign warnings during base build (ignore): mkinitcpio autodetect "failed to detect root
     filesystem" (chroot), microcode "aarch64 not supported" (x86-only hook), kms
     `drm_privacy_screen_register` symbol, missing vconsole.conf.
-- **Phase 1 (kernel): implemented** (`scripts/build-kernel.sh`, `make kernel`) — needs a
-  compile test in the Fedora VM, then on-device boot verification. **Next after that: Phase 2.**
+- **Phase 1 (kernel): COMPILES** — `make kernel` builds patched 7.0.11 end-to-end in the
+  Fedora VM and produces `build/image/KERNEL` (qcom-abl) + modules. **Paused here for review.**
+  Remaining before Phase 1 is fully "done": (1) pin `KERNEL_SOURCE_SHA256`, (2) on-device boot
+  test — which can't happen until there's a rootfs to mount (a first-boot milestone). **Next
+  when resuming: a minimal "prove it boots" image, or Phase 2 features.**
 - **Build host:** prefer an **aarch64 Linux** host (native, no qemu, native kernel compile).
   macOS can only do `sync`/`check`/editing — not the actual image build.
 
@@ -39,7 +42,7 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Build harness, repo skeleton, ALARM bootstrap, pacman wiring, `sync` | ✅ done |
-| 1 | `build-kernel.sh` → qcom-abl `KERNEL` + modules; rootfs integration | 🔨 implemented, needs VM compile test |
+| 1 | `build-kernel.sh` → qcom-abl `KERNEL` + modules; rootfs integration | ✅ compiles in VM; pending sha256 pin + on-device boot |
 | 2 | `pocknix-bsp`/quirks: inputplumber, suspend hooks, audio/thermal | ⬜ |
 | 3 | Steam session: gamescope (DRM) + native ARM steam, `pocknix-steam.service` | ⬜ |
 | 4 | Desktop session: Plasma Mobile + `kwin_wayland`, `pocknix-desktop.service` | ⬜ |
@@ -78,7 +81,12 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
 
 ---
 
-## Phase 1 (kernel) — IMPLEMENTED, needs a VM compile test
+## Phase 1 (kernel) — COMPILES in VM ✅ (pending sha256 pin + on-device boot)
+
+Built end-to-end via `sudo make kernel`: patched 7.0.11 → `build/image/KERNEL` + modules.
+Bug fixed along the way: SIGPIPE/exit-141 from `yes "" | make olddefconfig` (now plain
+`olddefconfig`). To pin reproducibility: `sha256sum build/cache/linux-7.0.11.tar.xz` →
+`KERNEL_SOURCE_SHA256` in `config/pocknix.conf`.
 
 `scripts/build-kernel.sh` (run via `make kernel`) reproduces ROCKNIX's recipe and assembles
 the qcom-abl boot image. `build-image.sh install_kernel()` integrates it into the rootfs.
