@@ -81,40 +81,31 @@ EOF
     chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" 2>/dev/null || true
   fi
 
-  # regulatory country for Wi-Fi — iwd sets the kernel regdom on startup. Without
-  # this the kernel stays on the world domain and 5 GHz APs can't be joined.
-  if [ -n "${SD_WIFI_COUNTRY}" ]; then
-    log "setting Wi-Fi regulatory country: ${SD_WIFI_COUNTRY}"
-    install -d -m 755 "${root}/etc/iwd"
-    cat > "${root}/etc/iwd/main.conf" <<EOF
-[General]
-Country=${SD_WIFI_COUNTRY}
-EOF
-  else
-    warn "SD_WIFI_COUNTRY unset — kernel stays on world regdom; 5 GHz Wi-Fi won't associate"
-  fi
-
-  # optional Wi-Fi pre-seed so we can SSH over Wi-Fi without a USB cable
+  # Wi-Fi pre-seed — provision iwd DIRECTLY. iwd is the backend and owns autoconnect;
+  # an NM keyfile profile never reaches iwd (the credentials don't get handed off), so
+  # we write iwd's own known-network file + main.conf (regulatory Country, needed for
+  # 5 GHz; EnableNetworkConfiguration so iwd does its own DHCP) and hand wlan0 to iwd
+  # by marking it unmanaged in NetworkManager.
   if [ -n "${SD_WIFI_SSID}" ]; then
-    log "pre-seeding Wi-Fi for SSID '${SD_WIFI_SSID}'"
-    install -d -m 700 "${root}/etc/NetworkManager/system-connections"
-    cat > "${root}/etc/NetworkManager/system-connections/pocknix-wifi.nmconnection" <<EOF
-[connection]
-id=pocknix-wifi
-type=wifi
-autoconnect=true
-[wifi]
-mode=infrastructure
-ssid=${SD_WIFI_SSID}
-[wifi-security]
-key-mgmt=wpa-psk
-psk=${SD_WIFI_PSK}
-[ipv4]
-method=auto
-[ipv6]
-method=auto
+    log "pre-seeding Wi-Fi (iwd) for SSID '${SD_WIFI_SSID}'${SD_WIFI_COUNTRY:+, country ${SD_WIFI_COUNTRY}}"
+    install -d -m 755 "${root}/etc/iwd"
+    {
+      echo "[General]"
+      [ -n "${SD_WIFI_COUNTRY}" ] && echo "Country=${SD_WIFI_COUNTRY}"
+      echo "EnableNetworkConfiguration=true"
+    } > "${root}/etc/iwd/main.conf"
+    install -d -m 700 "${root}/var/lib/iwd"
+    printf '[Security]\nPassphrase=%s\n' "${SD_WIFI_PSK}" > "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk"
+    chmod 600 "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk"
+    # let iwd own wlan0 end-to-end (autoconnect + DHCP); keep NM off it to avoid conflict
+    cat > "${root}/etc/NetworkManager/conf.d/10-unmanage-gadget.conf" <<EOF
+[keyfile]
+unmanaged-devices=interface-name:usb0;interface-name:gadget;interface-name:ncm0;interface-name:wlan0
 EOF
-    chmod 600 "${root}/etc/NetworkManager/system-connections/pocknix-wifi.nmconnection"
+    [ -z "${SD_WIFI_COUNTRY}" ] && warn "SD_WIFI_COUNTRY unset — world regdom; 5 GHz won't associate"
+  elif [ -n "${SD_WIFI_COUNTRY}" ]; then
+    install -d -m 755 "${root}/etc/iwd"
+    printf '[General]\nCountry=%s\n' "${SD_WIFI_COUNTRY}" > "${root}/etc/iwd/main.conf"
   fi
 
   # enable services for interaction/verification with no keyboard:
