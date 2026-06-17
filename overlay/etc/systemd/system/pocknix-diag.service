@@ -1,0 +1,14 @@
+[Unit]
+Description=pocknix first-boot diagnostic dump (writes pocknix-diag.txt to the boot partition)
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+# small delay so dmesg / device probing has settled
+ExecStartPre=/bin/sh -c 'sleep 8'
+ExecStart=/usr/local/bin/pocknix-diag
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+#!/bin/sh
+# pocknix-diag — write a boot report to the FAT boot partition so it can be read by
+# pulling the SD and reading pocknix-diag.txt (no keyboard/network needed). Runs
+# once at boot via pocknix-diag.service.
+OUT=/run/pocknix-diag.txt
+{
+  echo "=== pocknix first-boot diagnostic ==="
+  date
+  printf '\n## uname\n';        uname -a
+  printf '\n## /proc/version\n'; cat /proc/version
+  printf '\n## /proc/cmdline\n'; cat /proc/cmdline
+  printf '\n## root mount\n';    findmnt / 2>/dev/null
+  printf '\n## block devices\n'; lsblk -f 2>/dev/null || lsblk
+  printf '\n## kernel modules dir\n'; ls /usr/lib/modules 2>/dev/null
+  printf '\n## network interfaces\n'; ip -br a 2>/dev/null
+  printf '\n## suspend support\n'
+  echo "mem_sleep: $(cat /sys/power/mem_sleep 2>/dev/null)"
+  echo "state:     $(cat /sys/power/state 2>/dev/null)"
+  printf '\n## input devices\n'; ls -1 /dev/input 2>/dev/null
+  printf '\n## dmesg errors/warnings (tail)\n'; dmesg --level=err,warn 2>/dev/null | tail -100
+} > "$OUT" 2>&1
+
+# Copy onto the FAT boot partition (readable on macOS too).
+mp=$(mktemp -d)
+if mount /dev/disk/by-partlabel/system "$mp" 2>/dev/null || mount -L ROCKNIX "$mp" 2>/dev/null; then
+  cp "$OUT" "$mp/pocknix-diag.txt" 2>/dev/null || true
+  sync
+  umount "$mp" 2>/dev/null || true
+fi
+rmdir "$mp" 2>/dev/null || true

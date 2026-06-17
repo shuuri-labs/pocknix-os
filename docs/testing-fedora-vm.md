@@ -119,6 +119,25 @@ hold **Vol‑** at power-on). **Boot signals to look for**, in order:
 3. `uname -a` shows our kernel; `cat /proc/cmdline` shows our cmdline; `lsblk` shows the SD.
 4. SSH: if Wi-Fi/USB networking is up, `ssh root@<ip>`.
 
+### Interacting with it (the RP6 has no keyboard)
+
+The image bakes in three no-keyboard paths (`overlay/`, enabled by `build-sd-image.sh`):
+
+- **SSH over USB-C (recommended).** `pocknix-usbgadget` brings up a CDC-NCM network gadget at
+  **`10.66.0.1`**. **Connect the USB-C cable to your computer *before* powering on** (so the
+  USB controller is in device mode at boot). The RP6 then appears as a USB ethernet interface:
+  - macOS: System Settings → Network → the new USB interface → Configure IPv4 **Manually**,
+    IP `10.66.0.2`, mask `255.255.255.0`. Then `ssh root@10.66.0.1` (pw `pocknix`).
+- **Diagnostic dump (zero interaction).** `pocknix-diag` writes **`pocknix-diag.txt` to the FAT
+  boot partition** ~8 s after boot. Power off, put the SD in your Mac/VM, and read that file —
+  it has `uname`, `/proc/cmdline`, root mount, `lsblk`, suspend support, input devices, and the
+  `dmesg` errors/warnings. This works even if the gadget doesn't.
+- **Console autologin.** tty1 auto-logs-in as root (useful only if you later attach a USB
+  keyboard in host mode).
+
+> The "initramfs unpacking failed" line during boot is **expected and harmless** — we ship no
+> initramfs (UFS/ext4 are built in); the kernel mounts root directly via `root=PARTLABEL=`.
+
 To go back to ROCKNIX: power off, remove the SD. Internal is untouched.
 
 ### If it doesn't boot

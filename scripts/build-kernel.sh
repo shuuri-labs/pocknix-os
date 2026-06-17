@@ -133,8 +133,15 @@ assemble_bootimg() {
   gzip -c "${KBUILD}/out/Image" > "${kgz}"
   for d in "${KBUILD}"/out/dtbs/*.dtb; do [ -f "${d}" ] && cat "${d}" >> "${kgz}"; done
   if [ -z "${ramdisk}" ]; then
-    ramdisk="${KBUILD}/out/ramdisk.dummy"
-    printf 'dummy' > "${ramdisk}"
+    # We don't use an initramfs (UFS/ext4 are built in). Ship a VALID empty cpio
+    # so the kernel unpacks it cleanly instead of printing "Initramfs unpacking
+    # failed" (harmless, but noisy). Falls back to a dummy string if cpio is absent.
+    ramdisk="${KBUILD}/out/ramdisk.empty"
+    if have cpio; then
+      printf '' | cpio -o -H newc --quiet > "${ramdisk}" 2>/dev/null
+    else
+      printf 'dummy' > "${ramdisk}"
+    fi
   fi
   log "assembling qcom-abl boot image -> ${IMAGE_DIR}/KERNEL"
   python3 "${MKBOOTIMG}" \
