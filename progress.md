@@ -19,7 +19,8 @@ _Last updated: 2026-06-17 — end of Phase 0._
   - Benign warnings during base build (ignore): mkinitcpio autodetect "failed to detect root
     filesystem" (chroot), microcode "aarch64 not supported" (x86-only hook), kms
     `drm_privacy_screen_register` symbol, missing vconsole.conf.
-- **Next: Phase 1 (kernel).** Build `linux-pocknix` → `qcom-abl` boot image (`/flash/KERNEL`).
+- **Phase 1 (kernel): implemented** (`scripts/build-kernel.sh`, `make kernel`) — needs a
+  compile test in the Fedora VM, then on-device boot verification. **Next after that: Phase 2.**
 - **Build host:** prefer an **aarch64 Linux** host (native, no qemu, native kernel compile).
   macOS can only do `sync`/`check`/editing — not the actual image build.
 
@@ -37,7 +38,7 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Build harness, repo skeleton, ALARM bootstrap, pacman wiring, `sync` | ✅ done |
-| 1 | `linux-pocknix` PKGBUILD → qcom-abl `/flash/KERNEL` + modules | ⏭️ next |
+| 1 | `build-kernel.sh` → qcom-abl `KERNEL` + modules; rootfs integration | 🔨 implemented, needs VM compile test |
 | 2 | `pocknix-bsp`/quirks: inputplumber, suspend hooks, audio/thermal | ⬜ |
 | 3 | Steam session: gamescope (DRM) + native ARM steam, `pocknix-steam.service` | ⬜ |
 | 4 | Desktop session: Plasma Mobile + `kwin_wayland`, `pocknix-desktop.service` | ⬜ |
@@ -76,33 +77,44 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
 
 ---
 
-## NEXT: Phase 1 checklist (kernel)
+## Phase 1 (kernel) — IMPLEMENTED, needs a VM compile test
 
-Goal: `make kernel` produces a `qcom-abl` boot image + matching modules tree.
+`scripts/build-kernel.sh` (run via `make kernel`) reproduces ROCKNIX's recipe and assembles
+the qcom-abl boot image. `build-image.sh install_kernel()` integrates it into the rootfs.
 
-1. **Create `packages/linux-pocknix/PKGBUILD`.** Adapt packaging logic from the vendored
-   references:
-   - `vendor/rocknix-sm8550/reference/linux/` (ROCKNIX `packages/linux` — build/config steps)
-   - `vendor/rocknix-sm8550/bootloader/` (qcom-abl / mkbootimg wrapping)
-   - thorch's `linux-thorch` PKGBUILD (overall shape) — fetch from GitHub when needed.
-2. **Vendor the kernel source.** Decide: git submodule pinned to the ROCKNIX SM8550 fork
-   branch vs. a tarball in `vendor/kernel/`. Patches/DTS/config already synced under
-   `vendor/rocknix-sm8550/`.
-3. **Reproduce the boot image** (per SM8550 README): apply patches → build `Image` + DTBs →
-   gzip kernel + **concatenate DTBs** → `mkbootimg` (qcom-abl). Output:
-   - boot image → staged for `/flash/KERNEL`
-   - `lib/modules/<ver>/` → into the rootfs `/usr/lib/modules/`
-4. **Write `scripts/build-kernel.sh`** to invoke the PKGBUILD and drop the result into the
-   local repo (`build/localrepo`) + `build/image/KERNEL`. Wire it into `make kernel`/`build`.
-5. **Toolchain:** on aarch64 host, native gcc — nothing extra. On x86_64, supply an aarch64
-   cross-toolchain (see plan.md open question #2, now mostly resolved).
-6. **Remove the generic ALARM kernel.** The ALARM rootfs ships `linux-aarch64` (got upgraded
-   during the Phase 0 base install, triggering the mkinitcpio runs). The RP6 boots our
-   qcom-abl `/flash/KERNEL`, not an ALARM initramfs kernel — so `pacman -Rdd linux-aarch64`
-   (or exclude it) and install `linux-pocknix` instead. This also kills the benign mkinitcpio
-   warnings. Decide whether the qcom-abl image embeds an initramfs (thorch replaces it).
-7. **Verify** (SM8550 README method): `md5sum` of built `Image` vs deployed `/flash/KERNEL`;
-   `uname -r` matches the shipped `lib/modules/<ver>/`; `cat /proc/version` timestamp.
+What it does:
+- Fetch stock kernel.org `linux-7.0.11` (pinned via `KERNEL_SOURCE_SHA256`), extract.
+- Apply the committed stack **in order**: `kernel/patches/{10-mainline,20-sm8550,30-version}`.
+- Copy `kernel/dts` into the tree and **ensure a `dtb-` Makefile entry** for each
+  `qcs8550-*.dts` (no SM8550 patch registers them — may already be in stock 7.0.11).
+- `.config` from `kernel/config/linux.aarch64.conf`, substituting `@DEVICENAME@`→RP6 and
+  `@INITRAMFS_SOURCE@`→empty (**no embedded initramfs**), then `olddefconfig`.
+- `make Image dtbs modules` (native gcc on aarch64; cross on x86).
+- Boot image = `gzip(Image)` ++ all DTBs appended, **dummy ramdisk**, `mkbootimg` with
+  ROCKNIX params (offsets 0, header v0, os 12.0.0) → `build/image/KERNEL`.
+- `install_kernel()`: drop generic `linux-aarch64`, rsync modules → rootfs `/usr/lib/modules/`.
+
+Key design call: **no initramfs.** UFS/SCSI/ext4 are built-in (`=y`), so the kernel mounts
+the ext4 root directly. cmdline = `root=PARTLABEL=POCKNIX_ROOT rw` + ROCKNIX's SM8550 params
+(replacing LibreELEC's `boot=/disk=LABEL=`). Dummy ramdisk mirrors ROCKNIX's known-good boot.
+
+### To test in the Fedora aarch64 VM
+```bash
+sudo dnf install -y gcc make bc bison flex openssl-devel elfutils-libelf-devel \
+                    perl python3 git xz gzip rsync diffutils
+git pull
+make kernel          # native compile; ~long. produces build/image/KERNEL + build/kernel/out
+make check           # should now show kernel build <ver> + boot image KERNEL <size>
+```
+
+### Still open / to verify
+- **On-device boot** (only testable on the RP6): does qcom-abl accept our cmdline + dummy
+  ramdisk, and is `root=PARTLABEL=POCKNIX_ROOT` correct? PARTLABEL needs a GPT partition
+  named `POCKNIX_ROOT` — finalized by the Phase 6 installer. Fallback if needed: real
+  mkinitcpio ramdisk (assemble_bootimg accepts a ramdisk arg) or `root=/dev/sdaN`/PARTUUID.
+- **Pin `KERNEL_SOURCE_SHA256`** in `config/pocknix.conf` once the 7.0.11 tarball is fetched.
+- **Verify** (SM8550 README): `md5sum` built KERNEL vs deployed `/flash/KERNEL`; `uname -r`
+  matches shipped modules; `cat /proc/version`.
 
 ---
 

@@ -77,16 +77,19 @@ cloud instance** (AWS Graviton, Oracle Ampere, Hetzner ARM), or any ARM board wi
 ## Quick start
 
 ```bash
-make help                         # list targets
-make check                        # preflight (works anywhere)
+make help                          # list targets
+make check                         # preflight (works anywhere, no root)
 
 export DISTRIBUTION_DIR=$HOME/Documents/Coding/distribution   # ROCKNIX source
-make sync                         # vendor SM8550 kernel + device files
+make sync                          # vendor SM8550 kernel + device files (no root)
 
-# on a Linux host, as root:
+# the build chroots, so it needs root — use sudo -E to pass exported vars through:
 export POCKNIX_ALARM_SHA256=...    # pin for reproducible builds (optional)
-sudo make build                   # bootstrap + base packages (later phases stubbed)
+sudo -E make build                 # bootstrap + base packages (later phases stubbed)
 ```
+
+> Only `bootstrap`/`build`/`fast` need root (they `chroot`). Run `help`/`check`/`sync` as your
+> normal user — `sudo make sync` would write the synced `kernel/` files as root-owned.
 
 ## Configuration
 

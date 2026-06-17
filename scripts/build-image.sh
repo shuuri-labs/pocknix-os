@@ -68,6 +68,24 @@ install_packages() {
   chroot "${root}" pacman -Syu --noconfirm --needed "${pkgs[@]}"
 }
 
+# Install the linux-pocknix modules into the rootfs and remove the generic ALARM
+# kernel. Requires `make kernel` to have produced build/kernel/out first.
+install_kernel() {
+  local root="$1"
+  local out="${BUILD_DIR}/kernel/out"
+  if [ ! -d "${out}/modroot/lib/modules" ]; then
+    warn "no kernel artifacts in ${out} — run 'make kernel' first; skipping kernel integration"
+    return 0
+  fi
+  local kver; kver="$(cat "${out}/kernelrelease" 2>/dev/null)"
+  log "installing pocknix kernel modules (${kver}) + removing generic ALARM kernel"
+  # the RP6 boots our qcom-abl /flash/KERNEL, not an ALARM initramfs kernel
+  chroot "${root}" pacman -Rdd --noconfirm linux-aarch64 2>/dev/null || true
+  rm -rf "${root}/boot/initramfs-linux"*.img 2>/dev/null || true
+  rsync -a "${out}/modroot/lib/modules/" "${root}/usr/lib/modules/"
+  [ -n "${kver}" ] && chroot "${root}" depmod "${kver}" 2>/dev/null || true
+}
+
 main() {
   # 1. base rootfs
   "${POCKNIX_ROOT}/scripts/bootstrap.sh"
@@ -88,12 +106,9 @@ main() {
   # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"   # Phase 4
   # append_local_repo "${ROOTFS_DIR}/etc/pacman.conf"                          # Phase 2/5 (pocknix-* pkgs)
 
-  # 4. kernel (Phase 1) -- builds linux-pocknix into the local repo + /flash/KERNEL
-  if [ -x "${POCKNIX_ROOT}/scripts/build-kernel.sh" ]; then
-    "${POCKNIX_ROOT}/scripts/build-kernel.sh"
-  else
-    warn "STUB: kernel build (Phase 1) not implemented yet — image will have no KERNEL"
-  fi
+  # 4. kernel (Phase 1): use artifacts from `make kernel`. Install pocknix modules
+  #    into the rootfs and drop the generic ALARM kernel (we boot qcom-abl KERNEL).
+  install_kernel "${ROOTFS_DIR}"
 
   # 5. sessions + quirks (Phase 2/3/4/5) -- install pocknix-* local packages
   warn "STUB: pocknix-bsp / session units (Phase 2-5) not implemented yet"

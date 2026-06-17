@@ -44,11 +44,17 @@ else
 fi
 
 # --- built artifacts (only checked if they exist) --------------------------
-if [ -d "${ROOTFS_DIR}" ]; then
-  note "rootfs" "present"
-  if [ -f "${IMAGE_DIR}/KERNEL" ]; then note "boot image KERNEL" "present"
-  else note "boot image KERNEL" "not built (Phase 1)"; fi
+if [ -d "${BUILD_DIR}/kernel/out" ]; then
+  note "kernel build" "$(cat "${BUILD_DIR}/kernel/out/kernelrelease" 2>/dev/null || echo present)"
+else
+  note "kernel build" "run 'make kernel'"
 fi
+if [ -f "${IMAGE_DIR}/KERNEL" ]; then
+  note "boot image KERNEL" "$(du -h "${IMAGE_DIR}/KERNEL" | cut -f1) (qcom-abl)"
+else
+  note "boot image KERNEL" "not built (make kernel)"
+fi
+[ -d "${ROOTFS_DIR}" ] && note "rootfs" "present"
 
 echo
 [ "$fail" -eq 0 ] && ok "preflight passed" || die "preflight found problems (see above)"
