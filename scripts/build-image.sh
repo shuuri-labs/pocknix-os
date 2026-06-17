@@ -16,11 +16,33 @@ LOCAL_REPO_DIR="${BUILD_DIR}/localrepo"
 
 render_pacman_conf() {
   local out="$1"
-  log "rendering pacman.conf"
-  sed -e "s|@HOLO_RELEASE@|${HOLO_RELEASE}|g" \
-      -e "s|@HOLO_REPO_URL@|${HOLO_REPO_URL}|g" \
-      -e "s|@LOCAL_REPO_DIR@|${LOCAL_REPO_DIR}|g" \
-      "${CONFIG_DIR}/pacman.conf.in" > "${out}"
+  log "rendering pacman.conf (ALARM base)"
+  cp -f "${CONFIG_DIR}/pacman.conf.in" "${out}"
+}
+
+# Appended only when their packages are installed (Phase 3+), so the Phase 0 base
+# install never depends on an unwired/unreachable repo.
+append_holo_repo() {
+  local out="$1"
+  grep -q "^\[${HOLO_RELEASE}\]" "${out}" && return 0
+  log "adding holo repo (${HOLO_RELEASE})"
+  cat >> "${out}" <<EOF
+
+[${HOLO_RELEASE}]
+SigLevel = Optional TrustAll
+Server = ${HOLO_REPO_URL}/${HOLO_RELEASE}/os/aarch64
+EOF
+}
+append_local_repo() {
+  local out="$1"
+  grep -q '^\[pocknix\]' "${out}" && return 0
+  log "adding local pocknix repo"
+  cat >> "${out}" <<EOF
+
+[pocknix]
+SigLevel = Optional TrustAll
+Server = file://${LOCAL_REPO_DIR}
+EOF
 }
 
 read_pkglist() {
@@ -58,10 +80,13 @@ main() {
   chroot_mount "${ROOTFS_DIR}"
   configure_keyring "${ROOTFS_DIR}"
 
-  # 3. packages: base now; session lists become active in Phase 3/4
+  # 3. packages: base now (ALARM only); session lists become active in Phase 3/4,
+  #    each adding its repo to pacman.conf first.
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/base.list"
-  # install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"     # Phase 3
-  # install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"   # Phase 4
+  # append_holo_repo  "${ROOTFS_DIR}/etc/pacman.conf"                          # Phase 3
+  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"     # Phase 3
+  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"   # Phase 4
+  # append_local_repo "${ROOTFS_DIR}/etc/pacman.conf"                          # Phase 2/5 (pocknix-* pkgs)
 
   # 4. kernel (Phase 1) -- builds linux-pocknix into the local repo + /flash/KERNEL
   if [ -x "${POCKNIX_ROOT}/scripts/build-kernel.sh" ]; then

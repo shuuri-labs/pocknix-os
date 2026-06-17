@@ -1,8 +1,10 @@
-# pocknix-os pacman.conf template (rendered by build-image.sh)
+# pocknix-os pacman.conf — Arch Linux ARM base (always valid).
 #
-# Placeholders (@NAME@) are substituted at build time. Repo ORDER matters:
-# Arch Linux ARM repos come first so that mesa/glibc/systemd resolve to ALARM,
-# and only the SteamOS-mode packages are pulled from [holo]. See plan.md #1.
+# This file is the ALARM-only base, copied into the rootfs by build-image.sh.
+# The holo repo (steam/gamescope) and the local pocknix repo are appended later,
+# only when their packages are actually installed (Phase 3+), so the Phase 0 base
+# install never trips over an unwired/unreachable repo. ALARM repos resolve via
+# the mirrorlist the ALARM rootfs already ships in /etc/pacman.d/mirrorlist.
 
 [options]
 Architecture = aarch64
@@ -12,7 +14,6 @@ SigLevel    = Required DatabaseOptional
 LocalFileSigLevel = Optional
 ParallelDownloads = 5
 
-# --- Arch Linux ARM (authoritative for base userland + mesa) ---------------
 [core]
 Include = /etc/pacman.d/mirrorlist
 
@@ -24,14 +25,3 @@ Include = /etc/pacman.d/mirrorlist
 
 [aur]
 Include = /etc/pacman.d/mirrorlist
-
-# --- Valve holo (SteamOS-mode packages ONLY: steam, gamescope, mangoapp) ----
-# Signed by Valve's key; we trust the DB optionally and packages by signature.
-[@HOLO_RELEASE@]
-SigLevel = Optional TrustAll
-Server = @HOLO_REPO_URL@/@HOLO_RELEASE@/os/aarch64
-
-# --- Local pocknix packages (linux-pocknix, pocknix-bsp, session units...) --
-[pocknix]
-SigLevel = Optional TrustAll
-Server = file://@LOCAL_REPO_DIR@
