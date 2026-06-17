@@ -1,8 +1,9 @@
 #!/bin/sh
-# pocknix-diag — write a boot report to the FAT boot partition so it can be read by
-# pulling the SD and reading pocknix-diag.txt (no keyboard/network needed). Runs
-# once at boot via pocknix-diag.service.
-OUT=/run/pocknix-diag.txt
+# pocknix-diag — write a boot report so it can be read by pulling the SD (no
+# keyboard/network needed). Written to the ext4 ROOT (persists across power-off;
+# read it in the Fedora VM by mounting p2) AND copied to the FAT boot partition
+# (readable on macOS). Runs once at boot via pocknix-diag.service.
+OUT=/var/log/pocknix-diag.txt
 {
   echo "=== pocknix first-boot diagnostic ==="
   date
