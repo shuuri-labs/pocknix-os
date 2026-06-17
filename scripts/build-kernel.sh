@@ -89,7 +89,10 @@ configure() {
   sed -e "s|@DEVICENAME@|${DEVICE}|g" \
       -e 's|@INITRAMFS_SOURCE@||g' \
       "${KERNEL_DIR}/config/linux.aarch64.conf" > "${KSRC}/.config"
-  yes "" | kmake olddefconfig >/dev/null
+  # olddefconfig auto-accepts defaults for any new symbols (no prompts, no stdin).
+  # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,
+  # abort the script with exit 141.
+  kmake olddefconfig >/dev/null
 }
 
 build_kernel() {

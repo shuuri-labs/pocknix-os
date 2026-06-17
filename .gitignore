@@ -14,6 +14,9 @@
 # local Claude Code settings
 /.claude/
 
+# personal learning journal — not part of the project
+/learnings.md
+
 # macOS / editor cruft
 .DS_Store
 *.swp
