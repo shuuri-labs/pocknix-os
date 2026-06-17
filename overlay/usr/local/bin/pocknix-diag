@@ -14,9 +14,18 @@ OUT=/var/log/pocknix-diag.txt
   printf '\n## block devices\n'; lsblk -f 2>/dev/null || lsblk
   printf '\n## kernel modules dir\n'; ls /usr/lib/modules 2>/dev/null
   printf '\n## network interfaces\n'; ip -br a 2>/dev/null
+  printf '\n## wifi: services alive?\n'
+  echo "NetworkManager: $(systemctl is-active NetworkManager 2>/dev/null)  iwd: $(systemctl is-active iwd 2>/dev/null)"
+  printf '\n## wifi: rfkill (sysfs)\n'
+  for r in /sys/class/rfkill/rfkill*; do
+    [ -e "$r/name" ] || continue
+    echo "$(cat "$r/name") type=$(cat "$r/type") soft=$(cat "$r/soft") hard=$(cat "$r/hard")"
+  done
   printf '\n## wifi: NetworkManager device/conn\n'
+  nmcli radio all 2>/dev/null
   nmcli device status 2>/dev/null
   nmcli -f NAME,TYPE,DEVICE connection show 2>/dev/null
+  printf '\n## wifi: iwd devices\n'; iwctl device list 2>/dev/null || echo "(iwctl n/a)"
   printf '\n## wifi: connection profile baked?\n'; ls /etc/NetworkManager/system-connections/ 2>/dev/null || echo "(none)"
   printf '\n## wifi: iwd station\n'; iwctl station wlan0 show 2>/dev/null || echo "(iwctl n/a)"
   printf '\n## rfkill\n'; rfkill list 2>/dev/null || echo "(rfkill n/a)"
