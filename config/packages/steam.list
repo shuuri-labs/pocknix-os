@@ -1,0 +1,12 @@
+# Steam session stack (Phase 3)
+# gamescope/steam/mangoapp come from the holo repo; they link against ALARM mesa.
+
+# --- from holo (SteamOS-mode) ---
+gamescope
+steam
+mangohud
+# mangoapp           # pulled in by mangohud on holo; uncomment if packaged separately
+
+# --- supporting (ALARM) ---
+# xorg-xwayland is required by gamescope's --xwayland-count
+xorg-xwayland

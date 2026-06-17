@@ -1,0 +1,12 @@
+# Desktop session stack — Plasma Mobile (Phase 4), all from Arch Linux ARM.
+# Plasma Mobile runs on its own compositor (kwin_wayland); NOT hosted in Sway.
+
+plasma-mobile
+plasma-workspace
+kwin
+plasma-nano
+plasma-nm
+powerdevil
+maliit-keyboard
+# minimal app set — keep lean, no full Plasma desktop
+# discover            # optional app store; uncomment if wanted

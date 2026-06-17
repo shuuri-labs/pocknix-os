@@ -88,11 +88,15 @@ source + RP6 enablement and reproduce the `qcom-abl` boot-image packaging in a P
 process from `pacstrap`-ing finished packages. We replicate ROCKNIX's packaging steps inside
 an Arch PKGBUILD instead of inside the LibreELEC buildroot.
 
-- **Vendor into the repo** (`vendor/kernel/` or a git submodule pinned to the ROCKNIX SM8550
-  fork branch): kernel source, the SM8550 patch series
-  (`devices/SM8550/patches/linux/*.patch` — incl. the suspend/resume set, RP6 panel, RSInput
-  gamepad, TSENS uplow-wake fix), the RP6 DTS (`qcs8550-retroidpocket-rp6.dts` + `.dtsi`s),
-  and the kernel config (`linux.aarch64.conf`).
+- **Committed in-repo** under `kernel/` (done in Phase 0 via `make sync`; more self-contained
+  than thorch). The kernel reproduces ROCKNIX's recipe exactly — **stock kernel.org 7.0.11**
+  (pinned) + the **full ROCKNIX patch stack in order**: `10-mainline/` (5 generic backports)
+  → `20-sm8550/` (61 device: suspend/resume, RP6 panel, RSInput, TSENS) → `30-version/` (2),
+  then the SM8550 config (`linux.aarch64.conf`) + qcom-abl packaging. NOT just stock+device
+  patches. **Stock Linux source** is fetched at build as a version+sha-pinned tarball
+  (`KERNEL_SOURCE_URL/SHA256`); firmware comes from `linux-firmware` per `kernel-firmware.dat`.
+  This is the same build thorch does — we commit the inputs (the RP6 patches aren't public,
+  so they can't be auto-fetched the way thorch pulls public ROCKNIX).
 - **`packages/linux-pocknix/PKGBUILD`** reproduces the boot-image build, porting the logic
   from ROCKNIX `packages/linux/package.mk` + `bootloader/mkimage`:
   1. apply patches, build with the cross toolchain → `Image` + DTBs,
@@ -220,10 +224,12 @@ Rationale:
    pacman repo priority (ALARM first; pull only the named packages from holo) and verify by
    diffing core package versions before wiring `pacman.conf`. If holo gamescope hard-depends
    on holo mesa, fall back to building gamescope from source against ALARM mesa.
-2. **Kernel cross-toolchain:** the ROCKNIX config was built with `aarch64-rocknix-linux-gnu-
-   gcc-15.2.0`. Decide how `linux-pocknix` compiles — native on aarch64 in an ALARM chroot,
-   or cross from x86 with a matching GCC. Confirm `mkbootimg`/qcom-abl params match what the
-   RP6 ABL expects (the README notes the boot image is gzip kernel + concatenated DTBs).
+2. **Kernel toolchain (mostly resolved):** on an **aarch64 Linux build host this is moot** —
+   `linux-pocknix` compiles natively with the host GCC (the config's
+   `aarch64-rocknix-linux-gnu-gcc-15.2.0` string is informational; any recent GCC 15.x works),
+   no cross-toolchain or ROCKNIX Docker container. Only on an x86_64 host do we need an
+   aarch64 cross-toolchain. Remaining: confirm `mkbootimg`/qcom-abl params match what the RP6
+   ABL expects (README: gzip kernel + concatenated DTBs).
 3. **DRM mode query without sway:** ROCKNIX reads geometry via `swaymsg`. We need a
    sway-free way to get the RP6 panel mode/refresh/rotation for the gamescope args (e.g.
    `drm_info`, libdisplay-info, or a fixed RP6 profile from the DTS). Confirm panel
