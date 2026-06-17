@@ -1,7 +1,8 @@
 # pocknix-os — progress & resume notes
 
 Working notes for picking this back up after a break. For the *why* behind decisions, see
-[`plan.md`](plan.md); for *how to run it*, see [`README.md`](README.md). This file tracks
+[`plan.md`](plan.md); for *how to run it*, see [`README.md`](README.md); for VM setup +
+testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
 _Last updated: 2026-06-17 — end of Phase 0._

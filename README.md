@@ -49,7 +49,9 @@ The image build runs on a **Linux host, as root** (it uses `chroot`). Tools need
 `bash, curl, tar (bsdtar preferred), rsync, sed`.
 
 > The maintainer works from macOS; run the build targets on a Linux build box, VM, or
-> container. `make check`, `make sync`, and editing all work fine on macOS.
+> container. `make check`, `make sync`, and editing all work fine on macOS. For a step-by-step
+> VM setup (incl. dependencies and the gotchas we hit), see
+> [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md).
 
 ### Build host architecture (matters — aarch64 is simpler)
 

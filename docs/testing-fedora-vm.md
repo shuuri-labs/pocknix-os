@@ -1,0 +1,108 @@
+# Testing pocknix-os in a Fedora VM (Apple Silicon)
+
+How to build and smoke-test pocknix-os in a **Fedora aarch64** VM on an Apple Silicon Mac
+(M1/M2/M3). aarch64 is the right choice: it runs **natively** (no qemu emulation) and matches
+the build target, so package install and the kernel compile run at full speed.
+
+> What's testable in the VM: the **build pipeline** (bootstrap → base packages → kernel →
+> boot image). What is **not** testable here: actually booting on the RP6 (needs the device).
+
+## 1. Create the VM (UTM)
+
+[UTM](https://mac.getutm.app/) is the free standard on Apple Silicon (uses Apple's
+Virtualization framework for native ARM).
+
+1. `brew install --cask utm` (or download from the site).
+2. Get **Fedora aarch64** (Server or Workstation, "ARM aarch64") from getfedora.org.
+3. New VM → **Virtualize** → Linux → the Fedora ISO. Resources: **4+ CPUs, 8 GB RAM, 60 GB
+   disk** (rootfs build ≈ a few GB; kernel source + build tree adds ~2–3 GB more).
+4. Install Fedora, reboot, log in.
+
+> Parallels / VMware Fusion work too — just ensure the guest is **aarch64**, not x86.
+
+## 2. Install dependencies
+
+```bash
+# image build (chroot/bootstrap/packages)
+sudo dnf install -y git make curl rsync bsdtar
+
+# kernel build (make kernel)
+sudo dnf install -y gcc bc bison flex openssl-devel elfutils-libelf-devel \
+                    perl python3 xz gzip diffutils
+```
+`bsdtar` (libarchive) preserves the ALARM tarball best; gnu `tar` is the fallback. No
+`qemu-user-static` is needed on aarch64.
+
+## 3. Get the code
+
+```bash
+git clone https://github.com/shuuri-labs/pocknix-os.git
+cd pocknix-os
+```
+The RP6 kernel inputs are committed under `kernel/`, so a clone has everything custom; only
+stock upstream Linux + stock firmware are fetched at build.
+
+## 4. Preflight (no root)
+
+```bash
+make check
+```
+Expect `host os → Linux ok` and `kernel: enablement → 68 patches`.
+
+## 5. Build the base rootfs
+
+```bash
+sudo -E make build      # -E passes exported vars (e.g. POCKNIX_ALARM_SHA256) through sudo
+```
+This bootstraps the ALARM aarch64 rootfs, inits the keyring, and installs the base packages
+(ALARM repos only in Phase 0). Success ends with:
+```
+ok  build-image: base rootfs built at .../build/rootfs (later phases stubbed)
+```
+Verify:
+```bash
+sudo chroot build/rootfs uname -m                       # aarch64
+sudo chroot build/rootfs pacman -Q | wc -l              # ~130+
+sudo chroot build/rootfs pacman -Q mesa networkmanager pipewire vulkan-freedreno
+```
+For a reproducible build, pin the rootfs:
+```bash
+export POCKNIX_ALARM_SHA256=$(sha256sum build/cache/ArchLinuxARM-aarch64-latest.tar.gz | cut -d' ' -f1)
+sudo -E make build
+```
+
+## 6. Build the kernel + qcom-abl boot image
+
+```bash
+make kernel        # native compile — long; produces build/image/KERNEL + build/kernel/out
+make check         # should now show: kernel build <ver> + boot image KERNEL <size>
+```
+This fetches stock `linux-7.0.11`, applies the patch stack in order, builds Image+dtbs+modules,
+and assembles the qcom-abl boot image (gzip Image + appended DTBs + dummy ramdisk). See
+[`../kernel/README.md`](../kernel/README.md) for the recipe. Pin the source afterward:
+```bash
+sha256sum build/cache/linux-7.0.11.tar.xz    # put this in config/pocknix.conf KERNEL_SOURCE_SHA256
+```
+
+## 7. Cleanup
+
+```bash
+make clean       # removes rootfs/image/localrepo/kernel build, keeps the download cache
+make distclean   # also removes the cache
+```
+
+## Gotchas (already handled — here so they're not a surprise)
+
+| Symptom | Cause / fix |
+|---|---|
+| `Could not resolve host` for every repo during `make build` | systemd-resolved stub `127.0.0.53` in the chroot. Handled by `lib.sh chroot_resolv` (uses real upstream resolvers, public DNS fallback). |
+| `could not determine cachedir mount point / not enough free disk space` (with ample space) | pacman `CheckSpace` can't resolve mounts in a chroot. We omit `CheckSpace` in `pacman.conf.in`. |
+| `holo`/`pocknix` repo DB download fails | Intentional in Phase 0 — base install is ALARM-only; those repos are added in Phase 3+. |
+| `POCKNIX_ALARM_SHA256 is unset` warning under sudo | `sudo` drops env; use `sudo -E make build` to pass it through. |
+| mkinitcpio warnings (autodetect/microcode/kms) during base build | Benign chroot/arch artifacts from the generic `linux-aarch64`; Phase 1 removes that kernel. |
+| `tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr...'` | Harmless; install `bsdtar` to silence. |
+
+## Host requirements recap
+
+Linux host, **root for `bootstrap`/`build`/`fast`/`kernel`** (chroot/compile);
+`help`/`check`/`sync` run as your normal user. aarch64 host strongly preferred (native).
