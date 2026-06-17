@@ -81,6 +81,19 @@ EOF
     chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" 2>/dev/null || true
   fi
 
+  # regulatory country for Wi-Fi — iwd sets the kernel regdom on startup. Without
+  # this the kernel stays on the world domain and 5 GHz APs can't be joined.
+  if [ -n "${SD_WIFI_COUNTRY}" ]; then
+    log "setting Wi-Fi regulatory country: ${SD_WIFI_COUNTRY}"
+    install -d -m 755 "${root}/etc/iwd"
+    cat > "${root}/etc/iwd/main.conf" <<EOF
+[General]
+Country=${SD_WIFI_COUNTRY}
+EOF
+  else
+    warn "SD_WIFI_COUNTRY unset — kernel stays on world regdom; 5 GHz Wi-Fi won't associate"
+  fi
+
   # optional Wi-Fi pre-seed so we can SSH over Wi-Fi without a USB cable
   if [ -n "${SD_WIFI_SSID}" ]; then
     log "pre-seeding Wi-Fi for SSID '${SD_WIFI_SSID}'"
