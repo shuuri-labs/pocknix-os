@@ -1,0 +1,19 @@
+# build output
+/build/*
+!/build/.gitkeep
+
+# vendored upstream (re-created by `make sync`)
+/vendor/*
+!/vendor/.gitkeep
+
+# locally built packages
+/packages/**/*.pkg.tar.zst
+/packages/**/src/
+/packages/**/pkg/
+
+# local Claude Code settings
+/.claude/
+
+# macOS / editor cruft
+.DS_Store
+*.swp

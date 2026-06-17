@@ -1,0 +1,46 @@
+# Base userland for pocknix-os (Arch Linux ARM repos)
+# One package per line; '#' comments and blank lines ignored.
+# Phase 0 ships a minimal, bootable base. Session stacks live in their own lists.
+
+# --- core system ---
+base
+systemd
+systemd-sysvcompat
+dbus-broker
+mkinitcpio
+
+# --- networking ---
+networkmanager
+iwd
+wireless-regdb
+openssh
+
+# --- filesystem / storage ---
+e2fsprogs
+dosfstools
+util-linux
+
+# --- graphics stack (mesa from ALARM, NOT holo — see plan.md #1) ---
+mesa
+vulkan-freedreno
+vulkan-icd-loader
+libdrm
+mesa-utils
+
+# --- audio ---
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+
+# --- handheld input / quirks deps ---
+# inputplumber config is shipped by pocknix-bsp (Phase 2); the daemon itself:
+# inputplumber            # uncomment once available in repo/AUR build
+
+# --- utilities ---
+sudo
+nano
+less
+htop
+jq
+zstd

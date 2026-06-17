@@ -1,0 +1,41 @@
+From: jaewun <jaewun@users.noreply.github.com>
+Subject: [PATCH] scsi: ufs: qcom: propagate hibern8 exit failure from clk_scale_notify
+
+ufs_qcom_clk_scale_notify() wakes the link with ufshcd_uic_hibern8_exit()
+after a POST_CHANGE clock scale but drops its return value and always returns 0.
+Every other error in this function (hibern8 enter, the pre/post change helpers)
+is captured and returned; only this success-path link-wake was silently ignored.
+
+If the link fails to exit hibern8 -- e.g. a marginal M-PHY after a deep-suspend
+PHY collapse -- the function reports success to the clock-scaling core. The core
+(ufshcd_scale_clks) is built to consume a non-zero POST_CHANGE return: on failure
+it rolls back the OPP/clock frequency, leaves target_freq unchanged, and the
+devfreq governor logs the failure and retries on the next poll. Returning 0
+defeats all of that and records a stale frequency on a link that never woke.
+
+Capture and return the error so the failure is honestly propagated to the
+clock-scaling/devfreq accounting and rollback path instead of being masked as
+success. Note: link recovery itself is NOT triggered by this return -- the
+failing UIC command already schedules the error handler from inside
+ufshcd_uic_pwr_ctrl() (link-broken + schedule_eh_work) before the return
+propagates. This patch only stops the false-success accounting.
+
+An equivalent fix was proposed upstream but not merged; mainline still carries
+this bug.
+
+Signed-off-by: jaewun <jaewun@users.noreply.github.com>
+---
+diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
+--- a/drivers/ufs/host/ufs-qcom.c
++++ b/drivers/ufs/host/ufs-qcom.c
+@@ -1779,10 +1779,10 @@
+ 		}
+
+ 		ufs_qcom_icc_update_bw(host);
+-		ufshcd_uic_hibern8_exit(hba);
++		err = ufshcd_uic_hibern8_exit(hba);
+ 	}
+
+-	return 0;
++	return err;
+ }

@@ -1,0 +1,37 @@
+# pocknix-os pacman.conf template (rendered by build-image.sh)
+#
+# Placeholders (@NAME@) are substituted at build time. Repo ORDER matters:
+# Arch Linux ARM repos come first so that mesa/glibc/systemd resolve to ALARM,
+# and only the SteamOS-mode packages are pulled from [holo]. See plan.md #1.
+
+[options]
+Architecture = aarch64
+HoldPkg     = pacman glibc
+CheckSpace
+SigLevel    = Required DatabaseOptional
+LocalFileSigLevel = Optional
+ParallelDownloads = 5
+
+# --- Arch Linux ARM (authoritative for base userland + mesa) ---------------
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+
+[alarm]
+Include = /etc/pacman.d/mirrorlist
+
+[aur]
+Include = /etc/pacman.d/mirrorlist
+
+# --- Valve holo (SteamOS-mode packages ONLY: steam, gamescope, mangoapp) ----
+# Signed by Valve's key; we trust the DB optionally and packages by signature.
+[@HOLO_RELEASE@]
+SigLevel = Optional TrustAll
+Server = @HOLO_REPO_URL@/@HOLO_RELEASE@/os/aarch64
+
+# --- Local pocknix packages (linux-pocknix, pocknix-bsp, session units...) --
+[pocknix]
+SigLevel = Optional TrustAll
+Server = file://@LOCAL_REPO_DIR@

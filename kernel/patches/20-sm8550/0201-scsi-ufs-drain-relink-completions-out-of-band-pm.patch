@@ -1,0 +1,362 @@
+From: jaewun <jaewun@users.noreply.github.com>
+Subject: [PATCH] scsi: ufs: drain relink completions out-of-band during PM resume
+
+On this non-MCQ controller the UFS interrupt is request_threaded_irq(IRQF_ONESHOT
+| IRQF_SHARED) on a GIC-v3 SPI. When the primary handler returns IRQ_WAKE_THREAD,
+genirq keeps the line masked until the threaded handler's irq_finalize_oneshot()
+runs. If that threaded handler is left pending-but-unrunnable across a PM
+transition, the line stays masked, ufshcd_intr() is never re-entered, and the cold
+relink's UIC/UTP completions latch in REG_INTERRUPT_STATUS forever -- the relink
+hangs and, with no hardware watchdog, the device wedges until a manual power-cycle.
+
+This bites hardest on the error-handler reset path. ufshcd_err_handler() diverts
+PM-context errors to link_recovery, so the reset_and_restore() it runs has
+pm_op_in_progress already cleared. The error IRQ that triggered the handler left
+the line IRQF_ONESHOT-masked (the primary returned IRQ_WAKE_THREAD and the threaded
+handler cannot run during the reset), and the relink's non-synchronising
+disable_irq() keeps genirq from unmasking it. With the line masked and the threaded
+handler unrunnable, ufshcd_intr() is never re-invoked and nothing services the
+relink's completions.
+
+Service them without depending on the UFS IRQ firing:
+
+  - ufshcd_pm_drain_completions() services UTP/UIC/TMF completions and read-clears
+    the UIC error-code registers (storm prevention). It runs from ufshcd_intr()'s
+    PM fast path (hardirq) and from an arch-timer poller (pm_poll_timer).
+
+  - ufshcd_relinking() (pm_op_in_progress || relink_poll_active) scopes the drain
+    to both the PM-resume relink and the EH reset_and_restore window; the EH arms
+    relink_poll_active + the poll timer around the reset and disarms after. The
+    poll timer is the load-bearing drain for the masked-line EH window; on the
+    resume path the inline hardirq drain already covers it (pm_op_in_progress is
+    set before the relink, so ufshcd_intr() takes the inline path and never leaves
+    the line oneshot-masked) and the timer is a cheap, reused belt-and-suspenders.
+
+  - ufshcd_relinking() also gates the non-synchronising disable_irq so the PM/EH
+    path cannot deadlock on the threaded handler it pre-empted.
+
+  - A stalled cold-relink DME_LINK_STARTUP (UIC error, no completion) is
+    force-completed with UIC_CMD_RESULT_FAILURE so link startup can retry rather
+    than wait forever.
+
+At dev-init-NOP time REG_INTERRUPT_ENABLE is already full (ufshcd_make_hba_
+operational sets UFSHCD_ENABLE_INTRS before ufshcd_verify_dev_init), so the
+IS-gated drain reaps the NOP completion directly; no doorbell-level reap is needed.
+
+Validated by RTC deep-suspend soaks (>=120s cold-rail dwell), bare and in a live
+gamescope/Steam session: the relink that previously wedged within 1-2 cycles now
+survives sustained deep-dwell cycling.
+
+Signed-off-by: jaewun <jaewun@users.noreply.github.com>
+---
+--- a/drivers/ufs/core/ufshcd.c
++++ b/drivers/ufs/core/ufshcd.c
+@@ -348,6 +348,24 @@
+ static void ufshcd_hba_vreg_set_lpm(struct ufs_hba *hba);
+ static void ufshcd_hba_vreg_set_hpm(struct ufs_hba *hba);
+ 
++/*
++ * True while the controller is being relinked and the threaded IRQ handler
++ * cannot be relied upon -- either a PM suspend/resume (pm_op_in_progress) or the
++ * specific error-handler reset bracket (relink_poll_active, set around
++ * ufshcd_reset_and_restore() in ufshcd_err_handler() when pm_op_in_progress is
++ * already clear). In both, ufshcd_disable_irq() must not synchronize on the
++ * (possibly stuck/masked) thread and completions must be drained out-of-band
++ * rather than waited on via the IRQ. The error-handler case is how a marginal
++ * cold link wedges under post-resume I/O load (e.g. Steam). A dedicated flag is
++ * used rather than UFSHCD_STATE_RESET so generic resets/probe are unaffected.
++ * Lock-free cross-context reads -> READ_ONCE.
++ */
++static inline bool ufshcd_relinking(struct ufs_hba *hba)
++{
++	return READ_ONCE(hba->pm_op_in_progress) ||
++	       READ_ONCE(hba->relink_poll_active);
++}
++
+ void ufshcd_enable_irq(struct ufs_hba *hba)
+ {
+ 	if (!hba->is_irq_enabled) {
+@@ -360,7 +378,24 @@
+ void ufshcd_disable_irq(struct ufs_hba *hba)
+ {
+ 	if (hba->is_irq_enabled) {
+-		disable_irq(hba->irq);
++		/*
++		 * hba->irq is a threaded, IRQF_ONESHOT interrupt. The synchronous
++		 * disable_irq() runs synchronize_irq(), which waits for the threaded
++		 * handler (ufshcd_threaded_intr) to finish. During a PM operation the
++		 * threaded handler is not relied upon -- resume-time completions are
++		 * serviced inline in hardirq -- and it may be unscheduled (the
++		 * deep-resume PM phase) or stuck on the resuming controller. Waiting
++		 * for it then HARD-WEDGES the resume relink: this is reached from the
++		 * ufshcd_hba_enable() retry in ufshcd_link_startup() via both
++		 * ufshcd_hba_stop() and the qcom ufs_qcom_host_reset() PRE_CHANGE
++		 * hook. Mask without synchronizing while relinking (PM resume OR an
++		 * error-handler reset); the controller reset and out-of-band completion
++		 * servicing handle any in-flight state.
++		 */
++		if (ufshcd_relinking(hba))
++			disable_irq_nosync(hba->irq);
++		else
++			disable_irq(hba->irq);
+ 		hba->is_irq_enabled = false;
+ 	}
+ }
+@@ -6863,6 +6898,17 @@
+ 
+ 		hba->force_reset = false;
+ 		spin_unlock_irqrestore(hba->host->host_lock, flags);
++		/*
++		 * Arm the out-of-band completion poller across the error-handler
++		 * relink. ufshcd_state == UFSHCD_STATE_RESET here and pm_op_in_progress
++		 * is clear, so ufshcd_relinking() gates the drain (and the nosync
++		 * disable_irq) on. This is the path a marginal cold link wedges through
++		 * under post-resume I/O load (e.g. Steam), with pm_op already cleared.
++		 */
++		if (!hba->mcq_enabled) {
++			WRITE_ONCE(hba->relink_poll_active, true);
++			mod_timer(&hba->pm_poll_timer, jiffies + msecs_to_jiffies(2));
++		}
+ 		err = ufshcd_reset_and_restore(hba);
+ 		if (err)
+ 			dev_err(hba->dev, "%s: reset and restore failed with err %d\n",
+@@ -6889,6 +6935,14 @@
+ 	}
+ 	ufshcd_clear_eh_in_progress(hba);
+ 	spin_unlock_irqrestore(hba->host->host_lock, flags);
++	/*
++	 * Stop the relink poller before unprepare can release the clocks. Clear the
++	 * flag first so the callback sees ufshcd_relinking() false and will not
++	 * re-arm, then synchronously delete. Done after the host_lock is dropped
++	 * (the drain takes host_lock).
++	 */
++	WRITE_ONCE(hba->relink_poll_active, false);
++	timer_delete_sync(&hba->pm_poll_timer);
+ 	ufshcd_err_handling_unprepare(hba);
+ 	up(&hba->host_sem);
+ 
+@@ -7207,6 +7261,115 @@
+ 	return retval;
+ }
+ 
++/*
++ * ufshcd_pm_drain_completions - service UTP/UIC/TMF completions without the IRQ
++ * @hba: per adapter instance
++ *
++ * The UFS interrupt is a threaded IRQF_ONESHOT line. If its threaded handler is
++ * left pending-but-unrunnable across a PM transition the genirq core keeps the
++ * line masked, so ufshcd_intr() is never re-invoked and the cold-resume relink's
++ * completions latch in REG_INTERRUPT_STATUS forever (UIC link-startup and the
++ * first dev-cmd NOP both wait_for_completion()). Drain and service them directly.
++ * Called inline from ufshcd_intr()'s PM fast path (hardirq) AND from the PM poll
++ * timer (softirq), so it must not depend on the UFS IRQ firing. pm_drain_active
++ * serialises the two callers so they cannot both W1C REG_INTERRUPT_STATUS.
++ */
++static void ufshcd_pm_drain_completions(struct ufs_hba *hba)
++{
++	int retries = hba->nutrs;
++
++	if (test_and_set_bit(0, &hba->pm_drain_active))
++		return;
++
++	while (retries-- > 0) {
++		unsigned long flags;
++		u32 status, compl_bits;
++
++		status = ufshcd_readl(hba, REG_INTERRUPT_STATUS) &
++			 ufshcd_readl(hba, REG_INTERRUPT_ENABLE);
++		if (!status)
++			break;
++
++		/* W1C exactly the snapshot we read. */
++		ufshcd_writel(hba, status, REG_INTERRUPT_STATUS);
++
++		if (status & UFSHCD_ERROR_MASK) {
++			/*
++			 * read-to-clear all UIC error-code registers so a
++			 * transient resume-time error cannot storm.
++			 */
++			ufshcd_readl(hba, REG_UIC_ERROR_CODE_PHY_ADAPTER_LAYER);
++			ufshcd_readl(hba, REG_UIC_ERROR_CODE_DATA_LINK_LAYER);
++			ufshcd_readl(hba, REG_UIC_ERROR_CODE_NETWORK_LAYER);
++			ufshcd_readl(hba, REG_UIC_ERROR_CODE_TRANSPORT_LAYER);
++			ufshcd_readl(hba, REG_UIC_ERROR_CODE_DME);
++
++			/*
++			 * If the relink's in-flight UIC command (e.g.
++			 * DME_LINKSTARTUP) errored with no accompanying UIC
++			 * completion, force-complete it with UIC_CMD_RESULT_FAILURE
++			 * so ufshcd_wait_for_uic_cmd() returns promptly and the
++			 * relink retries/rescues. Restricted to DME_LINK_STARTUP
++			 * with no uic_async_done in flight so power-mode UIC
++			 * commands are untouched. irqsave: this also runs in
++			 * softirq (the PM poll timer).
++			 */
++			spin_lock_irqsave(hba->host->host_lock, flags);
++			if (!(status & UFSHCD_UIC_MASK) && !hba->uic_async_done &&
++			    hba->active_uic_cmd &&
++			    hba->active_uic_cmd->cmd_active &&
++			    hba->active_uic_cmd->command ==
++				    UIC_CMD_DME_LINK_STARTUP) {
++				struct uic_command *cmd = hba->active_uic_cmd;
++
++				cmd->argument2 = (cmd->argument2 &
++						  ~MASK_UIC_COMMAND_RESULT) |
++						 UIC_CMD_RESULT_FAILURE;
++				cmd->cmd_active = false;
++				complete(&cmd->done);
++			}
++			spin_unlock_irqrestore(hba->host->host_lock, flags);
++		}
++
++		compl_bits = status & (UTP_TRANSFER_REQ_COMPL | UFSHCD_UIC_MASK);
++		if (compl_bits & UFSHCD_UIC_MASK)
++			ufshcd_uic_cmd_compl(hba, compl_bits);
++		if (status & UTP_TASK_REQ_COMPL)
++			ufshcd_tmc_handler(hba);
++		if (compl_bits & UTP_TRANSFER_REQ_COMPL)
++			ufshcd_transfer_req_compl(hba);
++	}
++
++	clear_bit(0, &hba->pm_drain_active);
++}
++
++/*
++ * ufshcd_pm_poll_timer_fn - out-of-band UFS completion drain during PM resume.
++ *
++ * Armed across the deep-resume relink window. Fires off the arch timer, so it
++ * services UFS completions even when the (oneshot-masked) UFS IRQ line never
++ * re-invokes ufshcd_intr(). Self-rearms while pm_op_in_progress; the resume
++ * path clears the flag and timer_delete_sync()s it on the way out.
++ */
++static void ufshcd_pm_poll_timer_fn(struct timer_list *t)
++{
++	struct ufs_hba *hba = timer_container_of(hba, t, pm_poll_timer);
++
++	if (hba->mcq_enabled || !ufshcd_relinking(hba))
++		return;
++
++	ufshcd_pm_drain_completions(hba);
++
++	/*
++	 * Re-check before re-arming so a concurrent disarm (which clears the
++	 * relink state before timer_delete_sync()) cannot lose the race and leave
++	 * the timer armed. A stray re-arm would be harmless anyway -- the next tick
++	 * sees the state clear and returns without MMIO -- but avoid it.
++	 */
++	if (ufshcd_relinking(hba))
++		mod_timer(&hba->pm_poll_timer, jiffies + msecs_to_jiffies(2));
++}
++
+ /**
+  * ufshcd_intr - Main interrupt service routine
+  * @irq: irq number
+@@ -7222,6 +7385,23 @@
+ 	struct ufs_hba *hba = __hba;
+ 	u32 intr_status, enabled_intr_status;
+ 
++	/*
++	 * On this non-MCQ controller interrupt handling is normally deferred to
++	 * the threaded handler, which is not scheduled during the deep-resume PM
++	 * phase. That leaves completed UTP/UIC commands latched in IS but never
++	 * serviced (the relink's first command waits forever), and a latched
++	 * UIC_ERROR re-fires the level IRQ forever (storm). While the controller
++	 * is resuming, service UTP/UIC/TMF completions inline in hardirq, and
++	 * W1C-ack + read-clear the UIC error-code registers so a transient
++	 * resume-time error cannot storm. Do not run ufshcd_check_errors() from
++	 * hardirq (it would schedule the error handler / link recovery, which is
++	 * reentrant during PM).
++	 */
++	if (!hba->mcq_enabled && ufshcd_relinking(hba)) {
++		ufshcd_pm_drain_completions(hba);
++		return IRQ_HANDLED;
++	}
++
+ 	/* Move interrupt handling to thread when MCQ & ESI are not enabled */
+ 	if (!hba->mcq_enabled || !hba->mcq_esi_enabled)
+ 		return IRQ_WAKE_THREAD;
+@@ -9729,6 +9909,7 @@
+ 
+ static void ufshcd_hba_exit(struct ufs_hba *hba)
+ {
++	timer_delete_sync(&hba->pm_poll_timer);
+ 	if (hba->is_powered) {
+ 		ufshcd_pm_qos_exit(hba);
+ 		ufshcd_exit_clk_scaling(hba);
+@@ -10182,6 +10363,17 @@
+ 	if (ret)
+ 		goto out;
+ 
++	/*
++	 * Vendor resume is done so the controller clocks/registers are usable.
++	 * Arm the out-of-band completion poller for the relink: the UFS IRQ may
++	 * be oneshot-masked (threaded handler pending-but-unrunnable across the PM
++	 * transition), in which case ufshcd_intr() never fires and the relink's
++	 * UIC/UTP completions are never serviced. The timer drains them off the
++	 * arch timer instead. Disarmed at out: before pm_op_in_progress is cleared.
++	 */
++	if (!hba->mcq_enabled)
++		mod_timer(&hba->pm_poll_timer, jiffies + msecs_to_jiffies(2));
++
+ 	/* For DeepSleep, the only supported option is to have the link off */
+ 	WARN_ON(ufshcd_is_ufs_dev_deepsleep(hba) && !ufshcd_is_link_off(hba));
+ 
+@@ -10259,9 +10451,18 @@
+ out:
+ 	if (ret)
+ 		ufshcd_update_evt_hist(hba, UFS_EVT_WL_RES_ERR, (u32)ret);
++	/*
++	 * Stop the relink completion poller BEFORE ufshcd_release() (which can
++	 * queue clock gating once is_suspended is cleared) so the timer can never
++	 * read UFS MMIO after the clocks are gated. Clear pm_op_in_progress first so
++	 * a concurrently-firing timer sees the flag false and does not re-arm, then
++	 * synchronously delete it. From here normal IRQ delivery resumes: the
++	 * now-runnable threaded handler drains any remaining IS and unmasks the line.
++	 */
++	hba->pm_op_in_progress = false;
++	timer_delete_sync(&hba->pm_poll_timer);
+ 	hba->clk_gating.is_suspended = false;
+ 	ufshcd_release(hba);
+-	hba->pm_op_in_progress = false;
+ 	return ret;
+ }
+ 
+@@ -10884,6 +11085,13 @@
+ 	 */
+ 	hba->vcc_off_delay_us = 2000;
+ 
++	/*
++	 * Set up the relink completion poll timer before the first goto out_disable
++	 * (which reaches ufshcd_hba_exit() -> timer_delete_sync()), so teardown
++	 * never operates on an uninitialised timer.
++	 */
++	timer_setup(&hba->pm_poll_timer, ufshcd_pm_poll_timer_fn, 0);
++
+ 	err = ufshcd_hba_init(hba);
+ 	if (err)
+ 		goto out_error;
+--- a/include/ufs/ufshcd.h
++++ b/include/ufs/ufshcd.h
+@@ -976,6 +976,22 @@
+ 	enum ufs_pm_level pm_lvl_min;
+ 	int pm_op_in_progress;
+ 
++	/*
++	 * Thor: out-of-band completion drain for the deep-resume relink. The UFS
++	 * IRQ is IRQF_ONESHOT; if its threaded handler is left pending-but-
++	 * unrunnable across the PM transition, genirq keeps the line masked and
++	 * ufshcd_intr() is never re-invoked, so the relink's UIC/UTP completions
++	 * latch in IS forever. pm_poll_timer fires off the arch timer (independent
++	 * of the masked UFS line) to drain completions while pm_op_in_progress.
++	 * pm_drain_active serialises the timer drain against the hardirq drain.
++	 * relink_poll_active extends the same protection to the error-handler reset
++	 * (which runs reset_and_restore with pm_op_in_progress clear) -- set only
++	 * across that explicit bracket, not for generic resets.
++	 */
++	struct timer_list pm_poll_timer;
++	unsigned long pm_drain_active;
++	bool relink_poll_active;
++
+ 	/* Auto-Hibernate Idle Timer register value */
+ 	u32 ahit;
+ 
