@@ -9,7 +9,10 @@
 [options]
 Architecture = aarch64
 HoldPkg     = pacman glibc
-CheckSpace
+# NOTE: CheckSpace is intentionally OMITTED. Inside a chroot it can't resolve the
+# cachedir mount point (mountinfo shows host-absolute paths), failing with
+# "could not determine cachedir mount point / not enough free disk space" even
+# with ample space. Standard for chroot/bootstrap builds.
 SigLevel    = Required DatabaseOptional
 LocalFileSigLevel = Optional
 ParallelDownloads = 5
