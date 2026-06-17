@@ -20,11 +20,12 @@ _Last updated: 2026-06-17 — end of Phase 0._
   - Benign warnings during base build (ignore): mkinitcpio autodetect "failed to detect root
     filesystem" (chroot), microcode "aarch64 not supported" (x86-only hook), kms
     `drm_privacy_screen_register` symbol, missing vconsole.conf.
-- **Phase 1 (kernel): COMPILES** — `make kernel` builds patched 7.0.11 end-to-end in the
-  Fedora VM and produces `build/image/KERNEL` (qcom-abl) + modules. **Paused here for review.**
-  Remaining before Phase 1 is fully "done": (1) pin `KERNEL_SOURCE_SHA256`, (2) on-device boot
-  test — which can't happen until there's a rootfs to mount (a first-boot milestone). **Next
-  when resuming: a minimal "prove it boots" image, or Phase 2 features.**
+- **Phase 1 (kernel): COMPILES + pinned** — `make kernel` builds patched 7.0.11 reproducibly
+  → `build/image/KERNEL` (qcom-abl) + modules. `KERNEL_SOURCE_SHA256` pinned.
+- **First-boot milestone (in progress):** `make sd-image` builds a flashable SD image to
+  boot-test the kernel on the RP6 **without touching internal ROCKNIX**. Decided SD (not
+  internal) for testing — safe + trivial recovery (pull/re-flash SD). **Next: build it in the
+  VM, flash to a microSD, boot the RP6.**
 - **Build host:** prefer an **aarch64 Linux** host (native, no qemu, native kernel compile).
   macOS can only do `sync`/`check`/editing — not the actual image build.
 
@@ -42,7 +43,8 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Build harness, repo skeleton, ALARM bootstrap, pacman wiring, `sync` | ✅ done |
-| 1 | `build-kernel.sh` → qcom-abl `KERNEL` + modules; rootfs integration | ✅ compiles in VM; pending sha256 pin + on-device boot |
+| 1 | `build-kernel.sh` → qcom-abl `KERNEL` + modules; rootfs integration | ✅ compiles in VM; sha256 pinned; on-device boot pending |
+| 1.5 | `build-sd-image.sh` → flashable SD boot-test image (no internal risk) | 🔨 implemented, needs VM build + flash + boot |
 | 2 | `pocknix-bsp`/quirks: inputplumber, suspend hooks, audio/thermal | ⬜ |
 | 3 | Steam session: gamescope (DRM) + native ARM steam, `pocknix-steam.service` | ⬜ |
 | 4 | Desktop session: Plasma Mobile + `kwin_wayland`, `pocknix-desktop.service` | ⬜ |

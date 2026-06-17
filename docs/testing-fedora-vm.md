@@ -29,6 +29,9 @@ sudo dnf install -y git make curl rsync bsdtar
 # kernel build (make kernel)
 sudo dnf install -y gcc bc bison flex openssl-devel elfutils-libelf-devel \
                     perl python3 xz gzip diffutils
+
+# SD boot-test image (make sd-image)
+sudo dnf install -y parted dosfstools e2fsprogs util-linux
 ```
 `bsdtar` (libarchive) preserves the ALARM tarball best; gnu `tar` is the fallback. No
 `qemu-user-static` is needed on aarch64.
@@ -85,6 +88,45 @@ and assembles the qcom-abl boot image (gzip Image + appended DTBs + dummy ramdis
 ```bash
 sha256sum build/cache/linux-7.0.11.tar.xz    # put this in config/pocknix.conf KERNEL_SOURCE_SHA256
 ```
+
+## 6b. Build + flash the SD boot-test image
+
+Boot-test the kernel on the RP6 **without touching internal ROCKNIX**. The image mirrors
+ROCKNIX's qcom-abl SD layout (GPT: fat32 `system`/`ROCKNIX` with `KERNEL`, ext4 `POCKNIX_ROOT`
+with the rootfs) so the device's existing ABL boots it.
+
+```bash
+sudo make build      # ensure the rootfs exists AND has the pocknix kernel modules
+sudo make kernel     # ensure build/image/KERNEL exists
+sudo make sd-image   # -> build/image/pocknix-sd.img
+```
+> `make sd-image` also re-syncs the pocknix modules into the rootfs and drops the generic
+> `linux-aarch64`, so it's fine if you ran `make build` before the kernel existed.
+
+Flash to the microSD (in the VM, pass the USB SD reader through to the guest; or copy the
+`.img` to the Mac host and flash there with Balena Etcher / `dd`):
+```bash
+lsblk                              # find the SD device — e.g. /dev/sdb. DO NOT pick your disk.
+sudo dd if=build/image/pocknix-sd.img of=/dev/sdX bs=4M conv=fsync status=progress
+sync
+```
+
+Insert into the RP6 and power on (if it boots internal ROCKNIX instead, use the boot menu —
+hold **Vol‑** at power-on). **Boot signals to look for**, in order:
+1. Kernel log scroll on the screen (console=tty0) — proves the ABL loaded our KERNEL.
+2. A `login:` prompt — proves systemd came up and root mounted (`root=PARTLABEL=POCKNIX_ROOT`).
+   Log in as `root` / `pocknix`.
+3. `uname -a` shows our kernel; `cat /proc/cmdline` shows our cmdline; `lsblk` shows the SD.
+4. SSH: if Wi-Fi/USB networking is up, `ssh root@<ip>`.
+
+To go back to ROCKNIX: power off, remove the SD. Internal is untouched.
+
+### If it doesn't boot
+The biggest unknown is whether the ABL accepts our SD KERNEL. If you get nothing:
+- Confirm your unit boots an **official ROCKNIX SD image** at all (sanity check the SD path).
+- Compare partition names/labels against a real ROCKNIX SD (`sudo gdisk -l`, `lsblk -f`) — the
+  ABL may key off a specific name/label/GUID we need to match. Paste findings and we adjust.
+- A bad boot can't hurt internal ROCKNIX (we never wrote to it).
 
 ## 7. Cleanup
 
