@@ -1,20 +1,36 @@
-# kernel/ — RP6 (SM8550) kernel enablement
+# kernel/ — RP6 (SM8550) kernel inputs (pinned ROCKNIX nightly snapshot)
 
-This directory holds the **RP6-specific kernel work, committed in-repo** so pocknix-os is
-self-contained: a clone has everything custom needed to build the kernel. Only **stock
-upstream Linux source** and **stock firmware** are fetched at build time (both pinned).
+This directory holds the **complete kernel input set, committed in-repo** so pocknix-os is
+self-contained *and* reproducible: a clone builds the exact same kernel with no ROCKNIX
+checkout needed. Only **stock Linux source** and **stock firmware** are fetched at build
+(both version+sha pinned).
 
-This goes further than thorch, which syncs the whole kernel (incl. patches) from public
-ROCKNIX at build time into a gitignored tree. Since we maintain the SM8550 fork, our patches
-belong in the repo, not behind a build-time fetch.
+## Provenance — what's whose
+
+The RP6 is **officially supported by ROCKNIX**, so the bulk of these patches are **public
+ROCKNIX work**, not ours:
+
+- **Public ROCKNIX RP6/SM8550 support** — the RP6 panel (`0104`), touchscreen, backlight,
+  audio, thermal, etc. From ROCKNIX's **`next` (nightly)** branch.
+- **jaewun's suspend/resume set** — `0201`, `0204`–`0207`, `1004`, `1006`–`1009`. From
+  `jaewun/ROCKNIX` `thor-suspend-fixes`; we merge/maintain it.
+- **Our delta** (small) — TSENS uplow-wake broadening (`0203`), `CONFIG_PM_SLEEP_DEBUG`, and
+  the SDAM breadcrumb debug hooks.
+
+What's committed here is a **pinned snapshot of ROCKNIX `next` (nightly)** + jaewun's branch +
+our delta — taken from the maintainer's `distribution/` fork (branch `thor-suspend-merge`).
+We track **nightly (`next`), not a stable release**. `make sync` advances the pin when we
+choose, which keeps builds reproducible (the kernel doesn't move under us between syncs).
+
+Thorch, by contrast, auto-fetches public ROCKNIX nightly at build time (gitignored). We pin +
+commit instead — same build, but reproducible and clone-standalone.
 
 ## The full kernel = stock source + this patch stack + this config
 
-The kernel is **not** "stock Linux + our device patches." It reproduces ROCKNIX's recipe
-exactly: stock kernel.org **`linux-7.0.11`** (pinned in `config/pocknix.conf`) with the full
-ROCKNIX patch stack applied **in order**, then the SM8550 config, then qcom-abl packaging.
-This is the same build thorch performs — we just commit the inputs instead of fetching them
-from public ROCKNIX (necessary, since the RP6 patches aren't public).
+The kernel is **not** "stock Linux + a few device patches." It reproduces ROCKNIX's recipe
+exactly: stock kernel.org **`linux-7.0.11`** (pinned in `config/pocknix.conf`, the version
+ROCKNIX `next` currently uses for SM8550) with the full ROCKNIX patch stack applied **in
+order**, then the SM8550 config, then qcom-abl packaging.
 
 ## Contents
 

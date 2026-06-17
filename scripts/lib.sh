@@ -34,7 +34,26 @@ chroot_mount() {
   mount -t proc  proc    "${root}/proc"
   mount -t sysfs sys     "${root}/sys"
   mount -t tmpfs tmpfs   "${root}/run"
-  cp -f /etc/resolv.conf "${root}/etc/resolv.conf"
+  chroot_resolv "${root}"
+}
+
+# Give the chroot a working /etc/resolv.conf. On systemd-resolved hosts (Fedora,
+# Arch, etc.) the host /etc/resolv.conf is a stub pointing at 127.0.0.53, which
+# resolves nothing inside the chroot — so prefer the real upstream resolvers, and
+# fall back to public DNS if only a localhost stub is available.
+chroot_resolv() {
+  local root="$1" src
+  for src in /run/systemd/resolve/resolv.conf /etc/resolv.conf; do
+    if [ -e "$src" ]; then
+      rm -f "${root}/etc/resolv.conf"
+      cp -L "$src" "${root}/etc/resolv.conf"
+      break
+    fi
+  done
+  if ! grep -E '^[[:space:]]*nameserver' "${root}/etc/resolv.conf" 2>/dev/null | grep -qv '127\.'; then
+    warn "no usable upstream resolver found in chroot — falling back to public DNS (1.1.1.1)"
+    printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > "${root}/etc/resolv.conf"
+  fi
 }
 chroot_umount() {
   local root="$1"
