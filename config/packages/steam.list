@@ -1,12 +1,11 @@
-# Steam session stack (Phase 3)
-# gamescope/steam/mangoapp come from the holo repo; they link against ALARM mesa.
+# Steam session stack (Phase 3) — all from Arch Linux ARM (aarch64), NOT holo.
+# gamescope is in ALARM extra (3.16.24, newer than holo's 3.16.17) and built against ALARM's
+# mesa, so there's no ABI risk and no need for the holo repo / its core+extra name collision.
+# mesa is already in base.list (ALARM).
+#
+# The native ARM Steam CLIENT is not a pacman package — it's bootstrapped at first launch
+# (steamrtarm64), handled by the session launcher (pocknix-steam). Not listed here.
 
-# --- from holo (SteamOS-mode) ---
-gamescope
-steam
-mangohud
-# mangoapp           # pulled in by mangohud on holo; uncomment if packaged separately
-
-# --- supporting (ALARM) ---
-# xorg-xwayland is required by gamescope's --xwayland-count
-xorg-xwayland
+gamescope          # SteamOS session compositor (DRM backend)
+xorg-xwayland      # required by gamescope's --xwayland-count
+mangohud           # perf overlay / mangoapp — verify aarch64 availability in ALARM at wire-up

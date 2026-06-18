@@ -135,13 +135,11 @@ main() {
   chroot_mount "${ROOTFS_DIR}"
   configure_keyring "${ROOTFS_DIR}"
 
-  # 3. packages: base now (ALARM only); session lists become active in Phase 3/4,
-  #    each adding its repo to pacman.conf first.
+  # 3. packages: base now; session lists become active in Phase 3/4. gamescope/mangohud are
+  #    in ALARM (no holo needed) — see config/packages/steam.list. Activate once GPU is up.
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/base.list"
-  # append_holo_repo  "${ROOTFS_DIR}/etc/pacman.conf"                          # Phase 3
-  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"     # Phase 3
-  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"   # Phase 4
-  # append_local_repo "${ROOTFS_DIR}/etc/pacman.conf"                          # Phase 2/5 (pocknix-* pkgs)
+  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"     # Phase 3 (ALARM)
+  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"   # Phase 4 (ALARM)
 
   # 4. kernel (Phase 1): use artifacts from `make kernel`. Install pocknix modules
   #    into the rootfs and drop the generic ALARM kernel (we boot qcom-abl KERNEL).

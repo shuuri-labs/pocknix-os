@@ -3,15 +3,17 @@
 # Will grow to carry InputPlumber configs, udev rules, audio/thermal/governor quirks.
 pkgname=pocknix-bsp
 pkgver=0.1.0
-pkgrel=2
-pkgdesc="pocknix board support (RP6/SM8550): suspend sleep.d hooks, SDAM breadcrumb, wakeup quirks"
+pkgrel=3
+pkgdesc="pocknix board support (RP6/SM8550): suspend sleep.d hooks + SDAM breadcrumb"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=()
-source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
-        '99-pocknix-suspend-wakeups.rules')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+# NOTE: a udev rule disarming power_supply wakeups was tried and removed — the
+# RP6 spurious deep-sleep wake is kernel-level (not gated by any power/wakeup
+# toggle); see docs/sm8550-suspend-wake-report.md. Needs a kernel/DT fix upstream.
+source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -23,9 +25,4 @@ package() {
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/003-sdam-debug"
   install -Dm755 "${srcdir}/sdam-debug-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/003-sdam-debug"
-
-  # disarm power-supply wakeup sources (battery/charger/Type-C) so the device
-  # stays in deep sleep on battery — see docs/sm8550-suspend-wake-report.md
-  install -Dm644 "${srcdir}/99-pocknix-suspend-wakeups.rules" \
-    "${pkgdir}/usr/lib/udev/rules.d/99-pocknix-suspend-wakeups.rules"
 }
