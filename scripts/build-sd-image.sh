@@ -102,7 +102,8 @@ EOF
   # enable services for interaction/verification with no keyboard:
   #   sshd + iwd (wifi) + systemd-resolved (DNS), usbgadget (ssh over USB-C), diag (boot report).
   #   seatd: gamescope's DRM backend needs a seat (no logind seat over SSH).
-  chroot "${root}" systemctl enable sshd iwd systemd-resolved seatd \
+  #   inputplumber: gamepad -> Steam Input (DualSense) mapping.
+  chroot "${root}" systemctl enable sshd iwd systemd-resolved seatd inputplumber \
         pocknix-usbgadget.service pocknix-diag.service >/dev/null 2>&1 || true
   if [ -n "${SD_WIFI_SSID}" ]; then
     # iwd owns wifi end-to-end incl. its own DHCP. NetworkManager, if running, registers
