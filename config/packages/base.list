@@ -26,6 +26,7 @@ vulkan-freedreno
 vulkan-icd-loader
 libdrm
 mesa-utils
+vulkan-tools        # vulkaninfo + vkcube — confirm Turnip/GPU and test gamescope
 
 # --- GPU firmware (Adreno 740) ---
 # a740_sqe.fw + qcom/sm8550/a740_zap.mbn are NOT in the ROCKNIX overlay; they live

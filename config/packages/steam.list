@@ -6,6 +6,6 @@
 # The native ARM Steam CLIENT is not a pacman package — it's bootstrapped at first launch
 # (steamrtarm64), handled by the session launcher (pocknix-steam). Not listed here.
 
-gamescope          # SteamOS session compositor (DRM backend)
+gamescope          # SteamOS session compositor (DRM backend) — ALARM extra (aarch64)
 xorg-xwayland      # required by gamescope's --xwayland-count
-mangohud           # perf overlay / mangoapp — verify aarch64 availability in ALARM at wire-up
+# mangohud         # perf overlay — re-enable once aarch64 availability in ALARM is confirmed

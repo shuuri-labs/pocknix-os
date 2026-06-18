@@ -138,7 +138,7 @@ main() {
   # 3. packages: base now; session lists become active in Phase 3/4. gamescope/mangohud are
   #    in ALARM (no holo needed) — see config/packages/steam.list. Activate once GPU is up.
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/base.list"
-  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"     # Phase 3 (ALARM)
+  install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"        # Phase 3 (ALARM): gamescope
   # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"   # Phase 4 (ALARM)
 
   # 4. kernel (Phase 1): use artifacts from `make kernel`. Install pocknix modules
