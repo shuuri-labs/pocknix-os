@@ -23,8 +23,19 @@ for boot. Benign noise: dummy regulators, `disp_cc` WARN, GPT alt-header (image 
 `sgdisk -e` to fix). USB gadget needs a USB-C **data** cable (user lacks one) → using **Wi-Fi
 pre-seed** (`SD_WIFI_SSID/PSK`) for SSH instead.
 
-Next: rebuild image (firmware + wifi) → SSH over wifi → **suspend/resume test** (the patches'
-whole point). Then Phase 2 (pocknix-bsp: firmware as a package, inputplumber, suspend hooks).
+**DONE:** SSH over wifi works, and **deep suspend/resume verified on hardware** (`PM: suspend
+entry (deep)` → ~3.5 s asleep → `PM: suspend exit`, SSH survived). The maintainer's TSENS
+patch is confirmed active (`leaving TSENS uplow IRQ … as non-wakeup`). `pm_wakeup_irq=21`
+(the wake source — confirm it's the power key).
+
+Wifi saga resolution (for the record): needed (1) device firmware overlay (ath12k board-2.bin
+etc.), (2) regulatory **Country** set for 5 GHz (db present ≠ domain set), (3) provision **iwd
+directly** (`/var/lib/iwd/<SSID>.psk`) not via NM, (4) **disable NM** so it doesn't hijack
+iwd's netconfig — iwd does its own DHCP (`EnableNetworkConfiguration`). All in build-sd-image.sh.
+
+Next: Phase 2 (pocknix-bsp: firmware/inputplumber/suspend hooks as a package), longer-soak
+suspend testing (60 s+, multiple cycles, SDAM breadcrumb), then sessions. The kernel side
+(Phase 1) is validated end-to-end on hardware.
 
 ## TL;DR — where we are
 
@@ -64,7 +75,7 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
 |---|---|---|
 | 0 | Build harness, repo skeleton, ALARM bootstrap, pacman wiring, `sync` | ✅ done |
 | 1 | `build-kernel.sh` → qcom-abl `KERNEL` + modules; rootfs integration | ✅ compiles in VM; sha256 pinned; on-device boot pending |
-| 1.5 | `build-sd-image.sh` → flashable SD boot-test image | ✅ BOOTS ON DEVICE (pocknix login from SD); hardware verification next |
+| 1.5 | `build-sd-image.sh` → flashable SD boot-test image | ✅ BOOTS + WiFi/SSH + **deep suspend/resume verified on HW** |
 | 2 | `pocknix-bsp`/quirks: inputplumber, suspend hooks, audio/thermal | ⬜ |
 | 3 | Steam session: gamescope (DRM) + native ARM steam, `pocknix-steam.service` | ⬜ |
 | 4 | Desktop session: Plasma Mobile + `kwin_wayland`, `pocknix-desktop.service` | ⬜ |
