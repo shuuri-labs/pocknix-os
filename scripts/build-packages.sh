@@ -54,8 +54,8 @@ build_one() {
   # makepkg refuses to run as root; build as the 'builder' user.
   chroot "${BROOT}" runuser -u builder -- \
     bash -lc "cd /build/${name} && makepkg -f --noconfirm --nocheck --skippgpcheck"
-  cp "${BROOT}/build/${name}"/*.pkg.tar.zst "${LOCALREPO}/" 2>/dev/null \
-    || { warn "no .pkg.tar.zst produced for ${name}"; return 1; }
+  cp "${BROOT}/build/${name}"/*.pkg.tar.* "${LOCALREPO}/" 2>/dev/null \
+    || { warn "no .pkg.tar.* produced for ${name}"; return 1; }
 }
 
 main() {
@@ -77,13 +77,13 @@ main() {
   chroot_mount "${BROOT}"
   mkdir -p "${BROOT}/localrepo"
   mount --bind "${LOCALREPO}" "${BROOT}/localrepo"
-  chroot "${BROOT}" bash -lc "cd /localrepo && rm -f ${REPO_DB} pocknix.db && repo-add -q ${REPO_DB} *.pkg.tar.zst"
+  chroot "${BROOT}" bash -lc "cd /localrepo && rm -f ${REPO_DB} pocknix.db && repo-add -q ${REPO_DB} *.pkg.tar.*"
   umount "${BROOT}/localrepo"
   chroot_umount "${BROOT}"
   trap - EXIT
 
   ok "local repo ready -> ${LOCALREPO}"
-  ls -1 "${LOCALREPO}"/*.pkg.tar.zst 2>/dev/null | sed 's#.*/#  #'
+  ls -1 "${LOCALREPO}"/*.pkg.tar.* 2>/dev/null | sed 's#.*/#  #'
 }
 
 main "$@"
