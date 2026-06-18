@@ -50,9 +50,11 @@ prepare() {
 
 build() {
   cd gamescope
-  # subproject -Werror is stricter than upstream CI on distro GCC (per ROCKNIX).
-  local relax=' -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=return-type'
-  export CFLAGS+="${relax}" CXXFLAGS+="${relax}"
+  # The pinned gamescope/wlroots build with -Werror, but ALARM's libs are newer than
+  # upstream CI built against (e.g. newer libinput adds enum values -> -Werror=switch).
+  # Disable -Werror wholesale rather than chase each version-skew warning. CFLAGS
+  # propagate into the subprojects (wlroots etc.), and being last they override -Werror.
+  export CFLAGS+=" -Wno-error" CXXFLAGS+=" -Wno-error"
   meson setup build \
     --prefix=/usr --buildtype=release -Db_lto=false \
     -Ddrm_backend=enabled \
