@@ -25,26 +25,34 @@ trap cleanup EXIT
 setup_chroot() {
   if [ -x "${BROOT}/usr/bin/makepkg" ]; then
     log "reusing build chroot: ${BROOT}"
-    return 0
+  else
+    mkdir -p "${CACHE_DIR}"
+    [ -f "${TARBALL}" ] || { log "downloading ALARM tarball for build chroot"; \
+      curl -fL --retry 3 -o "${TARBALL}" "${ALARM_MIRROR}/${ALARM_TARBALL}"; }
+    log "creating build chroot -> ${BROOT} (one-time; ~1.5 GB with base-devel)"
+    rm -rf "${BROOT}"; mkdir -p "${BROOT}"
+    if have bsdtar; then bsdtar -xpf "${TARBALL}" -C "${BROOT}"
+    else tar -xpf "${TARBALL}" -C "${BROOT}" --numeric-owner; fi
+    maybe_install_qemu "${BROOT}"
+    cp -f "${CONFIG_DIR}/pacman.conf.in" "${BROOT}/etc/pacman.conf"   # ALARM-only base
+    chroot_mount "${BROOT}"
+    chroot "${BROOT}" pacman-key --init
+    chroot "${BROOT}" pacman-key --populate archlinuxarm
+    chroot "${BROOT}" pacman -Syu --noconfirm --needed base-devel sudo
+    chroot_umount "${BROOT}"
   fi
-  mkdir -p "${CACHE_DIR}"
-  [ -f "${TARBALL}" ] || { log "downloading ALARM tarball for build chroot"; \
-    curl -fL --retry 3 -o "${TARBALL}" "${ALARM_MIRROR}/${ALARM_TARBALL}"; }
-  log "creating build chroot -> ${BROOT} (one-time; ~1.5 GB with base-devel)"
-  rm -rf "${BROOT}"; mkdir -p "${BROOT}"
-  if have bsdtar; then bsdtar -xpf "${TARBALL}" -C "${BROOT}"
-  else tar -xpf "${TARBALL}" -C "${BROOT}" --numeric-owner; fi
-  maybe_install_qemu "${BROOT}"
-  cp -f "${CONFIG_DIR}/pacman.conf.in" "${BROOT}/etc/pacman.conf"   # ALARM-only base
-  chroot_mount "${BROOT}"
-  chroot "${BROOT}" pacman-key --init
-  chroot "${BROOT}" pacman-key --populate archlinuxarm
-  chroot "${BROOT}" pacman -Syu --noconfirm --needed base-devel sudo
+
+  # Idempotent: ensure the 'builder' user, sudo, and passwordless sudoers exist — this
+  # also repairs chroots created by older versions of this script (which had no sudo),
+  # so `makepkg -s` (deps installed via `sudo pacman` as builder) works without a rebuild.
   chroot "${BROOT}" id builder >/dev/null 2>&1 || chroot "${BROOT}" useradd -m builder
-  # makepkg -s installs makedepends via `sudo pacman` as the builder user.
+  if [ ! -x "${BROOT}/usr/bin/sudo" ]; then
+    chroot_mount "${BROOT}"
+    chroot "${BROOT}" pacman -Sy --noconfirm --needed sudo
+    chroot_umount "${BROOT}"
+  fi
   printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > "${BROOT}/etc/sudoers.d/builder"
   chmod 0440 "${BROOT}/etc/sudoers.d/builder"
-  chroot_umount "${BROOT}"
 }
 
 build_one() {
