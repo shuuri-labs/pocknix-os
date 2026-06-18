@@ -1,0 +1,10 @@
+# pocknix: disarm power-supply wakeup sources that spuriously wake the RP6 (SM8550)
+# from deep sleep. The battery gauge / qcom-battmgr (USB + wireless) / UCSI Type-C
+# source PSYs fire status-change wakeups even on battery, so the SoC won't stay
+# asleep. These expose a power/wakeup toggle, so we disable it in userspace here.
+# The power key (pmic_pwrkey) is a separate input device and is unaffected.
+#
+# Note: wakeup sources WITHOUT a power/wakeup node (e.g. the TSENS uplow IRQ, geni
+# UART, DT wakeup-source GPIOs) cannot be disarmed this way — those need kernel/DT
+# fixes. See docs/sm8550-suspend-wake-report.md and learnings.md.
+ACTION=="add", SUBSYSTEM=="power_supply", TEST=="power/wakeup", ATTR{power/wakeup}="disabled"
