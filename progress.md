@@ -5,7 +5,36 @@ Working notes for picking this back up after a break. For the *why* behind decis
 testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
-_Last updated: 2026-06-17 — end of Phase 0._
+_Last updated: 2026-06-18 — Phase 3: GPU + gamescope rendering on the RP6 panel._
+
+---
+
+## 🎉 MILESTONE: Steam-session compositor renders on the GPU (Phase 3)
+`gamescope --backend drm --force-orientation left --use-rotation-shader -- vkcube` shows the
+spinning cube **on the RP6 panel** (`right` rendered upside-down → use `left`). Full GPU stack
+is up. Chain of fixes that got us here:
+
+1. **GPU firmware** — `a740_sqe.fw` + `gmu_gen70200.bin` from `linux-firmware-qcom`. The kernel
+   couldn't load it because the built-in `msm` driver probes **before the rootfs mounts** (no
+   initramfs). Fix: build **`DRM_MSM=m`** (loads post-root via udev) — see build-kernel.sh.
+   GMU firmware v4.1.9 loads; `/dev/dri/card0` + `renderD128` present.
+2. **Vulkan** — `vulkaninfo` shows **`Turnip Adreno (TM) 740`** on ALARM mesa. Confirmed.
+3. **gamescope** — vanilla (ALARM 3.16.24) **cannot** drive the RP6 panel: it's mounted rotated
+   (DTS `rotation=<270>`) so gamescope sets a DRM **plane rotation** the `msm` DPU rejects →
+   endless `Failed to prepare 1-layer flip (Invalid argument)` (upstream #1883/#819). Fix:
+   **build ROCKNIX's patched gamescope** (`packages/gamescope`, commit `fe78bc6` + 4 patches);
+   patch `0005` adds **`--use-rotation-shader`** (rotate in a compute shader, no plane-rotation
+   property) → flip accepted. Build needed `makepkg -s` (chroot sudo), wlroots build-deps
+   (xwayland, libdisplay-info, xcb-util-*), and a blanket **`-Wno-error`** (ALARM libs newer
+   than the pinned wlroots' CI).
+
+Seat: gamescope needs **seatd** running (`systemctl enable --now seatd`) — over SSH there's no
+logind seat. DNS on-device fixed too (iwd → systemd-resolved).
+
+**Next:** wire `packages/gamescope` into the image build (install our epoch=1 build, drop ALARM
+gamescope from steam.list) + enable seatd; then the **native ARM Steam client** (bootstrap
+`steamrtarm64`) and the **`pocknix-steam`** session unit (gamescope launch adapted from ROCKNIX
+`start_steam.sh`, minus ES/sway).
 
 ---
 
