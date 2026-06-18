@@ -47,20 +47,6 @@ ensure_kernel_in_rootfs() {
   fi
 }
 
-# Install the SM8550 device firmware (ath12k wifi board data, adsp/cdsp, vpu, ...)
-# from ROCKNIX's synced overlay into the rootfs. Without this, wifi/audio/video
-# firmware is missing. (Belongs in a pocknix-bsp package eventually — Phase 2.)
-FW_SRC="${VENDOR_DIR}/rocknix-sm8550/filesystem/usr/lib/kernel-overlays/base/lib/firmware"
-install_firmware() {
-  if [ -d "${FW_SRC}" ]; then
-    log "installing SM8550 device firmware -> rootfs /usr/lib/firmware ($(du -sh "${FW_SRC}" | cut -f1))"
-    mkdir -p "${ROOTFS_DIR}/usr/lib/firmware"
-    rsync -a "${FW_SRC}/" "${ROOTFS_DIR}/usr/lib/firmware/"
-  else
-    warn "ROCKNIX firmware overlay not at ${FW_SRC} — run 'make sync' (wifi/audio firmware will be missing)"
-  fi
-}
-
 firstboot_config() {
   local root="$1"
   log "configuring first boot (root login, fstab, ssh, network, hostname)"
@@ -127,7 +113,7 @@ EOF
 
 main() {
   ensure_kernel_in_rootfs
-  install_firmware
+  # firmware is now installed into the rootfs by build-image.sh (make build)
 
   local root_mib img_mib boot_end
   root_mib=$(( $(du -sm "${ROOTFS_DIR}" | cut -f1) + SD_SLACK_MIB ))

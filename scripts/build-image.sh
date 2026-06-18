@@ -87,6 +87,21 @@ install_packages() {
   chroot "${root}" pacman -Syu --noconfirm --needed "${pkgs[@]}"
 }
 
+# Install the SM8550 device firmware (ath12k wifi board data, adsp/cdsp, vpu, ...)
+# from ROCKNIX's synced overlay into the rootfs. It's a large synced vendor blob,
+# so installed directly here rather than packaged (could become pocknix-firmware later).
+FW_SRC="${VENDOR_DIR}/rocknix-sm8550/filesystem/usr/lib/kernel-overlays/base/lib/firmware"
+install_firmware() {
+  local root="$1"
+  if [ -d "${FW_SRC}" ]; then
+    log "installing SM8550 device firmware -> rootfs /usr/lib/firmware ($(du -sh "${FW_SRC}" | cut -f1))"
+    mkdir -p "${root}/usr/lib/firmware"
+    rsync -a "${FW_SRC}/" "${root}/usr/lib/firmware/"
+  else
+    warn "ROCKNIX firmware overlay not at ${FW_SRC} — run 'make sync' (wifi/audio firmware will be missing)"
+  fi
+}
+
 # Install the linux-pocknix modules into the rootfs and remove the generic ALARM
 # kernel. Requires `make kernel` to have produced build/kernel/out first.
 install_kernel() {
@@ -132,8 +147,9 @@ main() {
   #    into the rootfs and drop the generic ALARM kernel (we boot qcom-abl KERNEL).
   install_kernel "${ROOTFS_DIR}"
 
-  # 5. device support (Phase 2): install pocknix-bsp (suspend hooks etc.) from the
-  #    local repo. Session packages (Phase 3/4) get added here later.
+  # 5. device support (Phase 2): SM8550 firmware + pocknix-bsp (suspend hooks etc.).
+  #    Session packages (Phase 3/4) get added here later.
+  install_firmware "${ROOTFS_DIR}"
   install_local_packages "${ROOTFS_DIR}"
 
   chroot_umount "${ROOTFS_DIR}"; trap - EXIT
