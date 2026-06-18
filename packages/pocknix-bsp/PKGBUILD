@@ -1,0 +1,25 @@
+# pocknix-bsp — board support for the Retroid Pocket 6 (SM8550).
+# Phase 2 scaffold: starts with the suspend sleep.d runner + SDAM breadcrumb.
+# Will grow to carry InputPlumber configs, udev rules, audio/thermal/governor quirks.
+pkgname=pocknix-bsp
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix board support (RP6/SM8550): suspend sleep.d hooks incl. SDAM breadcrumb"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=()
+source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
+  install -Dm755 "${srcdir}/pocknix-sleep" \
+    "${pkgdir}/usr/lib/systemd/system-sleep/pocknix-sleep"
+
+  # suspend/resume hooks (run by the hook above, in name order)
+  install -Dm755 "${srcdir}/sdam-debug-pre" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/pre/003-sdam-debug"
+  install -Dm755 "${srcdir}/sdam-debug-post" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/post/003-sdam-debug"
+}

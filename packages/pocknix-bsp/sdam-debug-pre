@@ -1,0 +1,9 @@
+#!/bin/sh
+# SDAM suspend breadcrumb (pre). Ported from ROCKNIX (GPL-2.0).
+# Mark SDAM byte 0x50 = 0x01 (entered suspend, kernel PM path not yet completed).
+# On the next boot: 0x01 => failure was inside the kernel PM path; 0xFF => suspend/
+# resume completed fully. Offset 0x50 is within the 0x50-0x7f scratch window that
+# spmi_sdam0 accepts (offset 0 is out of bounds and always fails).
+printf '\x01' | dd of=/sys/bus/nvmem/devices/spmi_sdam0/nvmem \
+  bs=1 count=1 seek=80 conv=notrunc 2>/dev/kmsg \
+  || echo "003-sdam-debug: SDAM write failed" >/dev/kmsg
