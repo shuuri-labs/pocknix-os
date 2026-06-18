@@ -32,8 +32,8 @@ kernel: ## Build only the in-project kernel (linux-pocknix) [Phase 1]
 	@if [ -x $(SCRIPTS)/build-kernel.sh ]; then $(SCRIPTS)/build-kernel.sh; \
 	 else echo "Phase 1 not implemented: scripts/build-kernel.sh missing"; exit 1; fi
 
-packages: ## Build local pocknix-* packages (makepkg in an Arch chroot) -> build/localrepo (root)
-	@$(SCRIPTS)/build-packages.sh
+packages: ## Build local pocknix-* packages -> build/localrepo (root). PKG="a b" builds a subset
+	@$(SCRIPTS)/build-packages.sh $(PKG)
 
 sd-image: ## Build a flashable SD boot-test image (needs build + kernel) (root, Linux)
 	@$(SCRIPTS)/build-sd-image.sh
