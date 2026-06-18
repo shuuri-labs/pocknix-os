@@ -5,7 +5,7 @@
 # build chroot (base-devel). Results + a pacman repo DB land in build/localrepo,
 # which build-image.sh consumes via the [pocknix] repo.
 #
-# Standalone: `sudo make build-packages` (test this in isolation first).
+# Standalone: `sudo make packages` (test this in isolation first).
 # Needs a Linux host + root (chroot/mount); native makepkg on aarch64, qemu on x86.
 
 source "$(dirname "$0")/lib.sh"
