@@ -105,6 +105,10 @@ EOF
   #   inputplumber: gamepad -> Steam Input (DualSense) mapping.
   chroot "${root}" systemctl enable sshd iwd systemd-resolved seatd inputplumber \
         pocknix-usbgadget.service pocknix-diag.service >/dev/null 2>&1 || true
+  # audio server (PipeWire) as per-user services — start in the autologin/session user.
+  # WirePlumber applies the AYN-Odin2 UCM (shipped by pocknix-bsp) automatically.
+  chroot "${root}" systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service \
+        >/dev/null 2>&1 || true
   if [ -n "${SD_WIFI_SSID}" ]; then
     # iwd owns wifi end-to-end incl. its own DHCP. NetworkManager, if running, registers
     # as iwd's netconfig agent and then refuses the unmanaged wlan0 -> IP never gets set.
