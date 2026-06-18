@@ -62,6 +62,9 @@ install_local_packages() {
   chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
+  # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
+  # bind mount doesn't exist on the running device, so it would break `pacman -Sy` there.
+  sed -i '/^\[pocknix\]/,+2d' "${root}/etc/pacman.conf"
 }
 
 read_pkglist() {
