@@ -47,19 +47,22 @@ Server = file:///localrepo
 EOF
 }
 
-# Build the local pocknix-* packages and install pocknix-bsp into the rootfs.
+# Build the local pocknix-* packages and install them into the rootfs:
+#   pocknix-bsp (board support) + gamescope (ROCKNIX-patched, epoch=1 -> beats ALARM's;
+#   vanilla gamescope can't drive the RP6's rotated msm panel — see plan.md Phase 3).
 install_local_packages() {
   local root="$1"
   if [ ! -f "${LOCAL_REPO_DIR}/pocknix.db" ]; then
-    warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping pocknix-bsp"
+    warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping local pkgs"
     return 0
   fi
-  log "installing local pocknix packages (pocknix-bsp)"
+  log "installing local pocknix packages (pocknix-bsp, gamescope)"
   append_local_repo "${root}/etc/pacman.conf"
   mkdir -p "${root}/localrepo"
   mount --bind "${LOCAL_REPO_DIR}" "${root}/localrepo"
   chroot "${root}" pacman -Sy --noconfirm
-  chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp
+  # gamescope deps (xorg-xwayland, seatd, libdisplay-info, …) resolve from ALARM.
+  chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp gamescope
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
