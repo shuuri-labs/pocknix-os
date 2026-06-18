@@ -81,8 +81,10 @@ EOF
       echo "EnableNetworkConfiguration=true"
       echo ""
       echo "[Network]"
-      echo "NameResolvingService=none"
+      echo "NameResolvingService=systemd"
     } > "${root}/etc/iwd/main.conf"
+    # iwd pushes DHCP DNS to systemd-resolved; point glibc at resolved's stub.
+    ln -sf /run/systemd/resolve/stub-resolv.conf "${root}/etc/resolv.conf"
     install -d -m 700 "${root}/var/lib/iwd"
     printf '[Security]\nPassphrase=%s\n' "${SD_WIFI_PSK}" > "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk"
     chmod 600 "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk"
@@ -98,8 +100,8 @@ EOF
   fi
 
   # enable services for interaction/verification with no keyboard:
-  #   sshd + iwd (wifi), pocknix-usbgadget (ssh over USB-C), pocknix-diag (boot report).
-  chroot "${root}" systemctl enable sshd iwd \
+  #   sshd + iwd (wifi) + systemd-resolved (DNS), usbgadget (ssh over USB-C), diag (boot report).
+  chroot "${root}" systemctl enable sshd iwd systemd-resolved \
         pocknix-usbgadget.service pocknix-diag.service >/dev/null 2>&1 || true
   if [ -n "${SD_WIFI_SSID}" ]; then
     # iwd owns wifi end-to-end incl. its own DHCP. NetworkManager, if running, registers
