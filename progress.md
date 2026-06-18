@@ -31,10 +31,42 @@ is up. Chain of fixes that got us here:
 Seat: gamescope needs **seatd** running (`systemctl enable --now seatd`) — over SSH there's no
 logind seat. DNS on-device fixed too (iwd → systemd-resolved).
 
-**Next:** wire `packages/gamescope` into the image build (install our epoch=1 build, drop ALARM
-gamescope from steam.list) + enable seatd; then the **native ARM Steam client** (bootstrap
-`steamrtarm64`) and the **`pocknix-steam`** session unit (gamescope launch adapted from ROCKNIX
-`start_steam.sh`, minus ES/sway).
+Image wiring **DONE**: `install_local_packages` installs our epoch=1 gamescope; gamescope dropped
+from steam.list; seatd enabled. Confirmed orientation: **`--force-orientation left`** (right is
+upside-down). Next full `make build && make sd-image` bakes it all in.
+
+---
+
+## ▶ NEXT SESSION: Phase 2 (controller + audio), then finish Phase 3
+Current on-device status: display/GPU/gamescope ✅, wifi/ssh ✅, suspend ✅(spurious-wake caveat),
+gamepad enumerates as `js0` ✅ but **no Steam Input mapping**, **audio likely silent** (no UCM).
+
+**Phase 2a — InputPlumber (gamepad → Steam Input):**
+- RP6 gamepad = the **RSInput** kernel driver (patch `0031_input-...RSInput-Gamepad`, already in
+  our kernel) on the DTS `&gamepad` node. Enumerates as `js0`.
+- ROCKNIX has **no RP6 InputPlumber config** in SM8550 (only AYN/AYANEO). The **template is in
+  the SM8250 tree**: `devices/SM8250/filesystem/usr/share/inputplumber/{capability_maps/retroid_mcu.yaml,
+  devices/01-retroid-controller.yaml}`. Port + adapt for the RP6's RSInput device (check vendor/
+  product / evdev name against `01-retroid-controller.yaml`).
+- Build the **inputplumber daemon**: port ROCKNIX `packages/tools/inputplumber` to a pocknix
+  PKGBUILD (Rust), or use the AUR `inputplumber`. Ship the YAMLs via `pocknix-bsp`; enable
+  `inputplumber.service`.
+
+**Phase 2b — Audio (UCM + pipewire):**
+- ROCKNIX audio routing is in **`packages/audio/alsa-ucm-conf`** with a **`patches/SM8550`** dir +
+  `sources/ucm2/Qualcomm/sm8550/` card configs. Port the SM8550 UCM (the RP6 card's `.conf`) —
+  either patch ALARM's `alsa-ucm-conf` or ship the ucm2 files via `pocknix-bsp`. First check if
+  ALARM's `alsa-ucm-conf` already carries sm8550.
+- Ensure **pipewire / pipewire-pulse / wireplumber** actually run (already in base.list; with
+  root-autologin they may need a system instance or a user session). Verify with `aplay -l` +
+  `wpctl status`.
+
+**Phase 2c (lower priority):** fan (ROCKNIX `0500-set-boot-fanspeed` — does the RP6 have one?),
+CPU/GPU governors, thermal.
+
+**Then finish Phase 3:** native ARM Steam client (`steamrtarm64`, provenance = open Q#4) +
+`pocknix-steam` systemd session (gamescope launch from ROCKNIX `start_steam.sh`, minus ES/sway,
+with `--force-orientation left --use-rotation-shader` + panel mode from DRM not swaymsg).
 
 ---
 
