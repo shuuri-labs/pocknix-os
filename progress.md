@@ -26,7 +26,14 @@ pre-seed** (`SD_WIFI_SSID/PSK`) for SSH instead.
 **DONE:** SSH over wifi works, and **deep suspend/resume verified on hardware** (`PM: suspend
 entry (deep)` → ~3.5 s asleep → `PM: suspend exit`, SSH survived). The maintainer's TSENS
 patch is confirmed active (`leaving TSENS uplow IRQ … as non-wakeup`). `pm_wakeup_irq=21`
-(the wake source — confirm it's the power key).
+(= `pmic_pwrkey`, power button).
+
+**Known issue (deferred to upstream/Phase 2):** spurious wake from deep sleep, intermittent,
+`pm_wakeup_irq=ENODATA` (genuine deep-sleep wake). `wakeup_sources` shows only the pmic_glink
+power-supply path active (`battery`, `ucsi`, `qcom-battmgr-usb/wls`) → charger/Type-C/PD wakes,
+likely while USB-connected. Written up in `docs/sm8550-suspend-wake-report.md` to send to the
+SM8550 suspend maintainer; key test to add = suspend on battery (unplugged) vs plugged. Not a
+distro blocker — mostly the kernel contributor's domain.
 
 Wifi saga resolution (for the record): needed (1) device firmware overlay (ath12k board-2.bin
 etc.), (2) regulatory **Country** set for 5 GHz (db present ≠ domain set), (3) provision **iwd
