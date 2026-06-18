@@ -63,26 +63,30 @@ diff /tmp/ws.before /tmp/ws.after
 > battery       10    11    0   0   0   92    13    1724194   0
 ```
 
-## Userspace disarm is INEFFECTIVE (→ kernel-level)
-Setting `power/wakeup = disabled` on `battery` — and then on **all** `/sys/class/power_supply/*`
-devices — does **not** stop the wake; the SoC still self-wakes from deep sleep in ~3.5 s:
-```
-# echo disabled > /sys/class/power_supply/battery/power/wakeup     -> still wakes ~3.4s
-# for w in /sys/class/power_supply/*/power/wakeup; do echo disabled >"$w"; done -> still wakes ~3.5s
-PM: suspend entry (deep)   @1332.77
-PM: suspend exit           @1336.25   (~3.48s, untouched)
-```
-So the wake is **not gated by any power_supply device's `power/wakeup`** — it arrives via the
-pmic_glink/AOSS path below where userspace can mask it (consistent with `pm_wakeup_irq`=ENODATA).
-**This needs a kernel/DT fix**, analogous to the TSENS uplow-wake patch but for the pmic_glink
-battery/charger wakeup. (A userspace udev/`power/wakeup` workaround was tried and removed as
-ineffective.)
+## `power/wakeup` is the wrong knob — `battery` is a *virtual* wakeup source
+The `battery` source appears in `/sys/kernel/debug/wakeup_sources` but **not** in
+`/sys/class/wakeup/` — i.e. it's a **virtual** wakeup source with **no `power/wakeup` toggle**.
+Disabling `power/wakeup` had no effect at any level:
+- on `battery` and on **all** `/sys/class/power_supply/*` → still self-wakes ~3.4 s
+- on **every device-backed source in `/sys/class/wakeup/` except `pwrkey`** (rtc, alarmtimer,
+  mhi0, gpio-keys, both remoteprocs) → still self-wakes ~3.5 s
 
-## Questions for the maintainer
-1. On battery, the `pmic_glink`/`qcom-battmgr`/`battery` path wakes the SoC from deep sleep, and
-   it can't be masked from userspace (see above). Should this wakeup be disarmed on RP6 at the
-   driver/DT level (as TSENS was), or is the AYN Thor expected to stay asleep here?
-2. Known behavior on the AYN Thor — does it stay in deep sleep on battery, or see the same
-   pmic_glink wake?
-3. Where is the right place to disarm it — the `qcom-battmgr`/pmic_glink driver
-   (`enable_irq_wake`/`device_init_wakeup`), the SPMI/PMIC IRQ, or a DT change?
+So the wake is delivered via `pmic_glink`/glink (the charger firmware on the ADSP) as a virtual
+wakeup that none of the `power/wakeup` knobs gate (consistent with `pm_wakeup_irq`=ENODATA).
+
+**But this is reportedly fixable in userspace** — another ROCKNIX tester (MonsterRider) on the
+same SM8550 suspend patches: *"tsensors had to be disabled in the kernel, but the rest (battery,
+charging, charger detect, gpio) could be disabled in userspace via **standby-wake-filter**."*
+So the correct mechanism is `standby-wake-filter` (not `power/wakeup`); we're obtaining its exact
+sysfs path/command. Likely a userspace fix after all — **not** confirmed kernel-level.
+
+## Open questions
+1. What exactly is **`standby-wake-filter`** (sysfs path / command / script)? It reportedly
+   disarms the battery/charging/charger-detect/gpio wakes in userspace on this SoC.
+2. Known behavior on the AYN Thor — does it stay in deep sleep on battery with that filter
+   applied?
+3. (If a kernel angle is still wanted) where would the battery/pmic_glink wake be disarmed —
+   the `qcom-battmgr`/pmic_glink driver, the SPMI/PMIC IRQ, or DT?
+
+> Status: likely a **userspace** fix via `standby-wake-filter` (per MonsterRider). Obtaining
+> the exact mechanism, then it'll go into `pocknix-bsp`'s `sleep.d/pre` hook.

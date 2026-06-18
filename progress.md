@@ -28,13 +28,15 @@ entry (deep)` → ~3.5 s asleep → `PM: suspend exit`, SSH survived). The maint
 patch is confirmed active (`leaving TSENS uplow IRQ … as non-wakeup`). `pm_wakeup_irq=21`
 (= `pmic_pwrkey`, power button).
 
-**Known issue — CONFIRMED KERNEL-LEVEL, handed to maintainer:** spurious deep-sleep wake on
-battery (~3.5s, intermittent, `pm_wakeup_irq=ENODATA`). `wakeup_sources` diff fingered the
-`battery`/pmic_glink power-supply path. **Userspace disarm tested and INEFFECTIVE** — setting
-`power/wakeup=disabled` on `battery` and on ALL `/sys/class/power_supply/*` did not stop it, so
-the wake isn't gated by any `power/wakeup` toggle (pmic_glink/AOSS hardware wake). The udev rule
-was **removed** (ineffective); pocknix-bsp pkgrel 3. Needs a kernel/DT fix (à la TSENS) —
-documented in `docs/sm8550-suspend-wake-report.md`. Not a distro blocker.
+**Known issue — spurious deep-sleep wake (battery, ~3.5s):** the `battery` wakeup source (in
+debugfs `wakeup_sources` but NOT `/sys/class/wakeup/` → a **virtual** source via pmic_glink /
+ADSP charger fw) wakes the SoC. `power/wakeup` is the WRONG knob — disabling it on all
+power_supply class devices AND all device-backed `/sys/class/wakeup/` sources (except pwrkey)
+did NOT stop it. The udev rule was removed (pocknix-bsp pkgrel 3). **A ROCKNIX tester
+(MonsterRider) reports the fix is userspace via `standby-wake-filter`** (tsensors=kernel, done;
+battery/charging/charger-detect/gpio=userspace). **Action: get the exact `standby-wake-filter`
+path/command, then apply it in pocknix-bsp's sleep.d/pre hook.** Likely userspace, NOT kernel.
+See `docs/sm8550-suspend-wake-report.md`. Not a distro blocker.
 
 Wifi saga resolution (for the record): needed (1) device firmware overlay (ath12k board-2.bin
 etc.), (2) regulatory **Country** set for 5 GHz (db present ≠ domain set), (3) provision **iwd
