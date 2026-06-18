@@ -3,18 +3,20 @@
 # InputPlumber composite-device config for the RP6 gamepad. Grows with audio/thermal.
 pkgname=pocknix-bsp
 pkgver=0.1.0
-pkgrel=4
-pkgdesc="pocknix board support (RP6/SM8550): suspend hooks, SDAM breadcrumb, InputPlumber config"
+pkgrel=5
+pkgdesc="pocknix board support (RP6/SM8550): suspend hooks, SDAM breadcrumb, InputPlumber + audio UCM"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=()
-optdepends=('inputplumber: gamepad -> Steam Input mapping (uses 01-rsinput-rp6.yaml)')
+optdepends=('inputplumber: gamepad -> Steam Input mapping (uses 01-rsinput-rp6.yaml)'
+            'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin2 UCM)')
 # NOTE: a udev rule disarming power_supply wakeups was tried and removed — the
 # RP6 spurious deep-sleep wake is kernel-level (not gated by any power/wakeup
 # toggle); see docs/sm8550-suspend-wake-report.md. Needs a kernel/DT fix upstream.
-source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post' '01-rsinput-rp6.yaml')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post' '01-rsinput-rp6.yaml'
+        'AYN-Odin2.conf' 'HiFi.conf')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -30,4 +32,13 @@ package() {
   # InputPlumber composite-device config for the RP6 RSInput gamepad
   install -Dm644 "${srcdir}/01-rsinput-rp6.yaml" \
     "${pkgdir}/usr/share/inputplumber/devices/01-rsinput-rp6.yaml"
+
+  # ALSA UCM for the RP6 sound card (reports as "AYN-Odin2"). The codec include
+  # sequences (/lib, /codecs/wcd938x, /codecs/qcom-lpass) come from base alsa-ucm-conf.
+  local ucm="${pkgdir}/usr/share/alsa/ucm2"
+  install -Dm644 "${srcdir}/AYN-Odin2.conf" "${ucm}/AYN/Odin2/AYN-Odin2.conf"
+  install -Dm644 "${srcdir}/HiFi.conf"      "${ucm}/AYN/Odin2/HiFi.conf"
+  # card-match file (matched by card longname under the sm8550 driver dir)
+  install -d "${ucm}/conf.d/sm8550"
+  ln -sf "../../AYN/Odin2/AYN-Odin2.conf" "${ucm}/conf.d/sm8550/AYN-Odin2.conf"
 }

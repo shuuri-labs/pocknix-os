@@ -66,18 +66,28 @@ build_one() {
   # -s syncs makedepends (gamescope needs many); pocknix-bsp has none so it's a no-op.
   chroot "${BROOT}" runuser -u builder -- \
     bash -lc "cd /build/${name} && makepkg -s -f --noconfirm --nocheck --skippgpcheck"
+  # keep only the freshly built version in the repo (avoids stale dupes accumulating,
+  # which otherwise break `pacman -U pkg-*.tar` with "duplicate target").
+  rm -f "${LOCALREPO}/${name}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${name}"-*:*.pkg.tar.* 2>/dev/null || true
   cp "${BROOT}/build/${name}"/*.pkg.tar.* "${LOCALREPO}/" 2>/dev/null \
     || { warn "no .pkg.tar.* produced for ${name}"; return 1; }
 }
 
 main() {
+  # Optional args = package names to build (subset); no args = build all in packages/.
+  # e.g. `make packages PKG="inputplumber pocknix-bsp"` to skip the slow gamescope rebuild.
+  local want=("$@")
   mkdir -p "${LOCALREPO}"
   setup_chroot
 
   chroot_mount "${BROOT}"
-  local built=0
+  local built=0 name
   for pkgdir in "${PACKAGES_DIR}"/*/; do
     [ -f "${pkgdir}/PKGBUILD" ] || continue
+    name="$(basename "${pkgdir}")"
+    if [ "${#want[@]}" -gt 0 ]; then
+      case " ${want[*]} " in *" ${name} "*) ;; *) continue ;; esac
+    fi
     build_one "${pkgdir}" && built=$((built+1)) || true
   done
   chroot_umount "${BROOT}"

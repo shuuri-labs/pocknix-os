@@ -40,6 +40,8 @@ pipewire
 pipewire-pulse
 pipewire-alsa
 wireplumber
+alsa-utils          # aplay/amixer/alsaucm/speaker-test — card inspection + UCM testing
+alsa-ucm-conf       # ALSA Use Case Manager configs (card routing); RP6 UCM may need adding
 
 # --- handheld input / quirks deps ---
 # inputplumber config is shipped by pocknix-bsp (Phase 2); the daemon itself:
