@@ -1,19 +1,20 @@
 # pocknix-bsp — board support for the Retroid Pocket 6 (SM8550).
-# Phase 2 scaffold: starts with the suspend sleep.d runner + SDAM breadcrumb.
-# Will grow to carry InputPlumber configs, udev rules, audio/thermal/governor quirks.
+# Carries device-specific quirks: suspend sleep.d runner + SDAM breadcrumb, and the
+# InputPlumber composite-device config for the RP6 gamepad. Grows with audio/thermal.
 pkgname=pocknix-bsp
 pkgver=0.1.0
-pkgrel=3
-pkgdesc="pocknix board support (RP6/SM8550): suspend sleep.d hooks + SDAM breadcrumb"
+pkgrel=4
+pkgdesc="pocknix board support (RP6/SM8550): suspend hooks, SDAM breadcrumb, InputPlumber config"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=()
+optdepends=('inputplumber: gamepad -> Steam Input mapping (uses 01-rsinput-rp6.yaml)')
 # NOTE: a udev rule disarming power_supply wakeups was tried and removed — the
 # RP6 spurious deep-sleep wake is kernel-level (not gated by any power/wakeup
 # toggle); see docs/sm8550-suspend-wake-report.md. Needs a kernel/DT fix upstream.
-source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post')
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post' '01-rsinput-rp6.yaml')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -25,4 +26,8 @@ package() {
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/003-sdam-debug"
   install -Dm755 "${srcdir}/sdam-debug-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/003-sdam-debug"
+
+  # InputPlumber composite-device config for the RP6 RSInput gamepad
+  install -Dm644 "${srcdir}/01-rsinput-rp6.yaml" \
+    "${pkgdir}/usr/share/inputplumber/devices/01-rsinput-rp6.yaml"
 }

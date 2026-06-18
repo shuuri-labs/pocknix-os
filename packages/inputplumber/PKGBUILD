@@ -1,0 +1,31 @@
+# inputplumber — input router/remapper daemon. Creates a unified virtual controller
+# (e.g. DualSense) from the raw gamepad so Steam Input sees a proper pad + handles the
+# Guide button, rumble, etc. We use the upstream PREBUILT aarch64 release (same as
+# ROCKNIX) — no Rust build in the chroot. RP6 device config ships in pocknix-bsp.
+pkgname=inputplumber
+pkgver=0.75.2
+pkgrel=1
+pkgdesc="Open source input router and remapper daemon (prebuilt aarch64 release)"
+arch=('aarch64')
+url="https://github.com/ShadowBlip/InputPlumber"
+license=('GPL3')
+depends=('systemd' 'libevdev' 'libiio' 'polkit' 'dbus')
+provides=('inputplumber')
+conflicts=('inputplumber')
+# Prebuilt binary: don't strip/lto/etc.
+options=('!strip' '!debug' '!lto')
+source=("inputplumber-aarch64-${pkgver}.tar.gz::https://github.com/ShadowBlip/InputPlumber/releases/download/v${pkgver}/inputplumber-aarch64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  # Release tarball lays out usr/ at the top (bin, lib/systemd, share/inputplumber, dbus,
+  # polkit). Handle either a top-level usr/ or a single wrapper dir containing usr/.
+  local usrdir
+  if [ -d "${srcdir}/usr" ]; then
+    usrdir="${srcdir}/usr"
+  else
+    usrdir="$(find "${srcdir}" -maxdepth 2 -type d -name usr | head -1)"
+  fi
+  [ -n "${usrdir}" ] || { echo "could not find usr/ in the release tarball"; return 1; }
+  cp -a "${usrdir}" "${pkgdir}/usr"
+}

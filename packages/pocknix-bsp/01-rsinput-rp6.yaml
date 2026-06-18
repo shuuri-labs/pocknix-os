@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/composite_device_v1.json
+# InputPlumber composite device for the Retroid Pocket 6 gamepad.
+#
+# The RP6 gamepad is the in-kernel RSInput driver (CONFIG_JOYSTICK_RETROID), which
+# enumerates with phys "rsinput-gamepad/input0" and emits STANDARD evdev gamepad codes
+# (BTN_SOUTH/EAST/NORTH/WEST, BTN_TL/TR, ABS_Z/RZ triggers, ABS_X/Y + ABS_RX/RY sticks,
+# BTN_DPAD_*, BTN_THUMBL/R, BTN_MODE, BTN_SELECT/START). So no capability_map is needed —
+# InputPlumber's built-in evdev->gamepad translation handles it. We emulate a DualSense so
+# Steam Input gets a first-class controller (Guide button, rumble, gyro-ready).
+version: 1
+kind: CompositeDevice
+name: Retroid Pocket 6 (RSInput)
+
+# Always applicable on this device (single-target distro).
+matches: []
+single_source: false
+
+source_devices:
+  - group: gamepad
+    evdev:
+      phys_path: rsinput-gamepad/input0
+      handler: event*
+
+options:
+  auto_manage: true
+
+target_devices:
+  - ds5
+  - keyboard
