@@ -66,6 +66,9 @@ build_one() {
   # -s syncs makedepends (gamescope needs many); pocknix-bsp has none so it's a no-op.
   chroot "${BROOT}" runuser -u builder -- \
     bash -lc "cd /build/${name} && makepkg -s -f --noconfirm --nocheck --skippgpcheck"
+  # keep only the freshly built version in the repo (avoids stale dupes accumulating,
+  # which otherwise break `pacman -U pkg-*.tar` with "duplicate target").
+  rm -f "${LOCALREPO}/${name}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${name}"-*:*.pkg.tar.* 2>/dev/null || true
   cp "${BROOT}/build/${name}"/*.pkg.tar.* "${LOCALREPO}/" 2>/dev/null \
     || { warn "no .pkg.tar.* produced for ${name}"; return 1; }
 }
