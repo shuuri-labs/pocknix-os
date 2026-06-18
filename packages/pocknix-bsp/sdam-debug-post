@@ -1,0 +1,6 @@
+#!/bin/sh
+# SDAM suspend breadcrumb (post). Ported from ROCKNIX (GPL-2.0).
+# Mark SDAM byte 0x50 = 0xFF (kernel PM path AND all post-resume hooks completed).
+printf '\xFF' | dd of=/sys/bus/nvmem/devices/spmi_sdam0/nvmem \
+  bs=1 count=1 seek=80 conv=notrunc 2>/dev/kmsg \
+  || echo "003-sdam-debug: SDAM write failed" >/dev/kmsg

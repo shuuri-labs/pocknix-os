@@ -9,7 +9,7 @@ SCRIPTS := scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync bootstrap build fast kernel sd-image install check du trim clean distclean
+.PHONY: help sync bootstrap build fast kernel packages sd-image install check du trim clean distclean
 
 help: ## Show this help
 	@echo "pocknix-os build targets:"
@@ -32,6 +32,9 @@ kernel: ## Build only the in-project kernel (linux-pocknix) [Phase 1]
 	@if [ -x $(SCRIPTS)/build-kernel.sh ]; then $(SCRIPTS)/build-kernel.sh; \
 	 else echo "Phase 1 not implemented: scripts/build-kernel.sh missing"; exit 1; fi
 
+packages: ## Build local pocknix-* packages (makepkg in an Arch chroot) -> build/localrepo (root)
+	@$(SCRIPTS)/build-packages.sh
+
 sd-image: ## Build a flashable SD boot-test image (needs build + kernel) (root, Linux)
 	@$(SCRIPTS)/build-sd-image.sh
 
@@ -49,10 +52,10 @@ trim: ## Reclaim space: drop the regenerable kernel SOURCE tree (keeps KERNEL+mo
 	@sudo rm -rf build/kernel/linux-* build/kernel/mkbootimg-src
 	@echo "trimmed kernel source tree (regenerated on next 'make kernel'); kept out/, rootfs, image, cache"
 
-clean: ## Remove build output: rootfs, image, kernel build (keeps download cache)
-	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel
+clean: ## Remove build output: rootfs, image, kernel, package chroot (keeps download cache)
+	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel build/pkgbuild-root
 	@echo "cleaned build artifacts (download cache kept)"
 
 distclean: ## Remove all build output including caches
-	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel build/cache
+	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel build/pkgbuild-root build/cache
 	@echo "removed all build output"

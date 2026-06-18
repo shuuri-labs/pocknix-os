@@ -33,6 +33,8 @@ SigLevel = Optional TrustAll
 Server = ${HOLO_REPO_URL}/${HOLO_RELEASE}/os/aarch64
 EOF
 }
+# The local repo lives on the host; we bind-mount it to /localrepo inside the rootfs
+# chroot, so the repo Server is that in-chroot path.
 append_local_repo() {
   local out="$1"
   grep -q '^\[pocknix\]' "${out}" && return 0
@@ -41,8 +43,25 @@ append_local_repo() {
 
 [pocknix]
 SigLevel = Optional TrustAll
-Server = file://${LOCAL_REPO_DIR}
+Server = file:///localrepo
 EOF
+}
+
+# Build the local pocknix-* packages and install pocknix-bsp into the rootfs.
+install_local_packages() {
+  local root="$1"
+  if [ ! -f "${LOCAL_REPO_DIR}/pocknix.db" ]; then
+    warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping pocknix-bsp"
+    return 0
+  fi
+  log "installing local pocknix packages (pocknix-bsp)"
+  append_local_repo "${root}/etc/pacman.conf"
+  mkdir -p "${root}/localrepo"
+  mount --bind "${LOCAL_REPO_DIR}" "${root}/localrepo"
+  chroot "${root}" pacman -Sy --noconfirm
+  chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp
+  umount "${root}/localrepo"
+  rmdir "${root}/localrepo" 2>/dev/null || true
 }
 
 read_pkglist() {
@@ -68,6 +87,21 @@ install_packages() {
   chroot "${root}" pacman -Syu --noconfirm --needed "${pkgs[@]}"
 }
 
+# Install the SM8550 device firmware (ath12k wifi board data, adsp/cdsp, vpu, ...)
+# from ROCKNIX's synced overlay into the rootfs. It's a large synced vendor blob,
+# so installed directly here rather than packaged (could become pocknix-firmware later).
+FW_SRC="${VENDOR_DIR}/rocknix-sm8550/filesystem/usr/lib/kernel-overlays/base/lib/firmware"
+install_firmware() {
+  local root="$1"
+  if [ -d "${FW_SRC}" ]; then
+    log "installing SM8550 device firmware -> rootfs /usr/lib/firmware ($(du -sh "${FW_SRC}" | cut -f1))"
+    mkdir -p "${root}/usr/lib/firmware"
+    rsync -a "${FW_SRC}/" "${root}/usr/lib/firmware/"
+  else
+    warn "ROCKNIX firmware overlay not at ${FW_SRC} — run 'make sync' (wifi/audio firmware will be missing)"
+  fi
+}
+
 # Install the linux-pocknix modules into the rootfs and remove the generic ALARM
 # kernel. Requires `make kernel` to have produced build/kernel/out first.
 install_kernel() {
@@ -90,11 +124,14 @@ main() {
   # 1. base rootfs
   "${POCKNIX_ROOT}/scripts/bootstrap.sh"
 
+  # 1b. build the local pocknix-* packages (own build chroot) -> build/localrepo
+  "${POCKNIX_ROOT}/scripts/build-packages.sh"
+
   # 2. pacman config + repos inside the rootfs
   mkdir -p "${LOCAL_REPO_DIR}"
   render_pacman_conf "${ROOTFS_DIR}/etc/pacman.conf"
 
-  trap 'chroot_umount "${ROOTFS_DIR}"' EXIT
+  trap 'umount "${ROOTFS_DIR}/localrepo" 2>/dev/null || true; chroot_umount "${ROOTFS_DIR}"' EXIT
   chroot_mount "${ROOTFS_DIR}"
   configure_keyring "${ROOTFS_DIR}"
 
@@ -110,8 +147,10 @@ main() {
   #    into the rootfs and drop the generic ALARM kernel (we boot qcom-abl KERNEL).
   install_kernel "${ROOTFS_DIR}"
 
-  # 5. sessions + quirks (Phase 2/3/4/5) -- install pocknix-* local packages
-  warn "STUB: pocknix-bsp / session units (Phase 2-5) not implemented yet"
+  # 5. device support (Phase 2): SM8550 firmware + pocknix-bsp (suspend hooks etc.).
+  #    Session packages (Phase 3/4) get added here later.
+  install_firmware "${ROOTFS_DIR}"
+  install_local_packages "${ROOTFS_DIR}"
 
   chroot_umount "${ROOTFS_DIR}"; trap - EXIT
 

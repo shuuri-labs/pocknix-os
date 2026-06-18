@@ -1,0 +1,19 @@
+#!/bin/sh
+# pocknix system-sleep hook. systemd runs every executable in
+# /usr/lib/systemd/system-sleep/ around suspend/resume with:
+#   $1 = pre | post     $2 = suspend | hibernate | hybrid-sleep | suspend-then-hibernate
+# We dispatch our own ordered hooks in /usr/lib/pocknix/sleep.d/{pre,post}/.
+# (Minimal, infra-free port of ROCKNIX's quirks sleep.d runner.)
+stage="$1"
+case "${stage}" in
+  pre)  dir=/usr/lib/pocknix/sleep.d/pre  ;;
+  post) dir=/usr/lib/pocknix/sleep.d/post ;;
+  *)    exit 0 ;;
+esac
+
+[ -d "${dir}" ] || exit 0
+for hook in "${dir}"/*; do
+  [ -x "${hook}" ] || continue
+  "${hook}" "$@" 2>/dev/kmsg || echo "pocknix-sleep: ${hook##*/} failed" >/dev/kmsg
+done
+exit 0
