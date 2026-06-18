@@ -84,7 +84,7 @@ fork, vendored in and built here. Modeled on [thorch-os](https://github.com/thor
 | 0 | Build harness, repo skeleton, ALARM bootstrap, pacman wiring, `sync` | ✅ done |
 | 1 | `build-kernel.sh` → qcom-abl `KERNEL` + modules; rootfs integration | ✅ compiles in VM; sha256 pinned; on-device boot pending |
 | 1.5 | `build-sd-image.sh` → flashable SD boot-test image | ✅ BOOTS + WiFi/SSH + **deep suspend/resume verified on HW** |
-| 2 | `pocknix-bsp` (pacman pkg): suspend sleep.d+SDAM ✅scaffolded; inputplumber/firmware/quirks next | 🔨 makepkg flow needs VM test |
+| 2 | `pocknix-bsp` pkg (suspend sleep.d + SDAM + wakeup udev rule) ✅; firmware → rootfs build ✅; makepkg flow ✅ | ✅ core done; inputplumber/audio/thermal = polish (or Phase 3) |
 | 3 | Steam session: gamescope (DRM) + native ARM steam, `pocknix-steam.service` | ⬜ |
 | 4 | Desktop session: Plasma Mobile + `kwin_wayland`, `pocknix-desktop.service` | ⬜ |
 | 5 | `pocknix-session-select` + boot default + in-session switch entries | ⬜ |
