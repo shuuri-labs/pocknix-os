@@ -126,10 +126,18 @@ Port ROCKNIX SM8550 device integration into a `pocknix-bsp` / `pocknix-quirks` p
 - **Adapt from ROCKNIX/thorch:** quirks platform tree + `thorch-rocknix-quirks` packaging.
 
 ### Phase 3 — Session 1: Steam (gamescope + native ARM client)
-- **Packages from Arch Linux ARM (REVISED — no holo needed):** `gamescope` (ALARM `extra`,
-  aarch64 `3.16.24`), `mangohud`, `xorg-xwayland`, and `mesa` — all built against ALARM, so no
-  ABI mismatch. The native ARM `steam` **client** is bootstrapped at first launch
-  (`steamrtarm64`), not a pacman package; the session launcher handles it.
+- **Packages (REVISED twice):**
+  - **`gamescope` → BUILT FROM SOURCE (ROCKNIX commit `fe78bc6` + their 4 patches)**, NOT the
+    ALARM binary. Vanilla gamescope (ALARM 3.16.24, also 3.16.11 per upstream #1883/#819)
+    *cannot* drive the RP6 panel: it's mounted rotated (DTS `rotation=<270>`), so gamescope
+    attempts a DRM **plane rotation** the `msm` DPU rejects → endless "Failed to prepare
+    1-layer flip (Invalid argument)". ROCKNIX patch `0005` adds `--use-rotation-shader`
+    (rotate in a compute shader, no plane-rotation property) → flip accepted. Packaged as
+    `packages/gamescope` (epoch=1 so it wins over ALARM's). Launch with
+    `--force-orientation <left|right> --use-rotation-shader`.
+  - **`mangohud`, `xorg-xwayland`, `mesa` → Arch Linux ARM** (no holo; ABI-matched).
+  - Native ARM `steam` **client** bootstrapped at first launch (`steamrtarm64`), not a package.
+  - Vulkan/Turnip on ALARM mesa is **confirmed working** on-device (`Turnip Adreno (TM) 740`).
 - **Launch logic — adapt directly from ROCKNIX** `start_steam.sh` / `start_steam_arm64.sh`,
   specifically `steam_launch_bigpicture()`:
   `gamescope --backend drm -W $W -H $H -r $REFRESH --xwayland-count 2 --mangoapp

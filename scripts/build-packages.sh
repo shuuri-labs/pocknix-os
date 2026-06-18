@@ -39,8 +39,11 @@ setup_chroot() {
   chroot_mount "${BROOT}"
   chroot "${BROOT}" pacman-key --init
   chroot "${BROOT}" pacman-key --populate archlinuxarm
-  chroot "${BROOT}" pacman -Syu --noconfirm --needed base-devel
+  chroot "${BROOT}" pacman -Syu --noconfirm --needed base-devel sudo
   chroot "${BROOT}" id builder >/dev/null 2>&1 || chroot "${BROOT}" useradd -m builder
+  # makepkg -s installs makedepends via `sudo pacman` as the builder user.
+  printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > "${BROOT}/etc/sudoers.d/builder"
+  chmod 0440 "${BROOT}/etc/sudoers.d/builder"
   chroot_umount "${BROOT}"
 }
 
@@ -52,8 +55,9 @@ build_one() {
   cp -r "${pkgdir}" "${BROOT}/build/${name}"
   chroot "${BROOT}" chown -R builder:builder "/build/${name}"
   # makepkg refuses to run as root; build as the 'builder' user.
+  # -s syncs makedepends (gamescope needs many); pocknix-bsp has none so it's a no-op.
   chroot "${BROOT}" runuser -u builder -- \
-    bash -lc "cd /build/${name} && makepkg -f --noconfirm --nocheck --skippgpcheck"
+    bash -lc "cd /build/${name} && makepkg -s -f --noconfirm --nocheck --skippgpcheck"
   cp "${BROOT}/build/${name}"/*.pkg.tar.* "${LOCALREPO}/" 2>/dev/null \
     || { warn "no .pkg.tar.* produced for ${name}"; return 1; }
 }
