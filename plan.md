@@ -19,16 +19,16 @@ the AYN Thor, same SoC).
 ### Decisions locked in this session
 - **Kernel:** vendored into this project and built here as a `linux-pocknix` package — full
   self-contained OS, not an imported prebuilt blob. (Modeled on thorch's `linux-thorch`.)
-- **Rootfs base:** clean Arch Linux ARM tarball + Valve's `holo-core-aarch64` pacman repo
-  for SteamOS-mode packages only. Keeps pure pacman per constraint.
-- **Package sourcing split (important):**
-  - **`mesa` → Arch Linux ARM repo** (not holo). SteamOS's mesa often lags behind upstream
-    stable; ALARM tracks current. Applies to the Adreno 740 Vulkan/GL stack for *both*
-    sessions.
-  - **`steam`, `gamescope` (+ `mangohud`/`mangoapp`, SteamOS-mode bits) → holo
-    `holo-core-aarch64`.** These are the Valve-specific, SteamOS-mode packages worth reusing
-    as-is rather than rebuilding.
-  - **Plasma Mobile + base userland → Arch Linux ARM repo.**
+- **Rootfs base:** clean Arch Linux ARM tarball. **(REVISED: holo not needed for the build.)**
+- **Package sourcing (REVISED — almost everything from ALARM):**
+  - **`mesa` → Arch Linux ARM** (not holo; holo's mesa lags). Adreno 740 Vulkan/GL, both sessions.
+  - **`gamescope` → Arch Linux ARM** `extra` (aarch64, **`3.16.24`** — *newer* than holo's
+    3.16.17, and built against ALARM's mesa → no ABI risk). Verified present in ALARM.
+  - **`mangohud` → Arch Linux ARM** (verify aarch64 availability at wire-up).
+  - **Plasma Mobile + base userland → Arch Linux ARM.**
+  - **Only the native ARM `steam` *client*** is special — not in ALARM; comes via the Steam
+    bootstrapper at first launch (`steamrtarm64`), handled by the session launcher. **holo is
+    likely not needed at all**; keep it in reserve only if the steam client turns out to need it.
 - **Install target:** **internal storage**, replacing the existing ROCKNIX install (same
   `/flash` + root partition layout the kernel already expects). No SD-image phase.
 - **Steam client:** **native ARM64 client** (`steamrtarm64`), *not* Steam-under-FEX. FEX is
@@ -126,9 +126,10 @@ Port ROCKNIX SM8550 device integration into a `pocknix-bsp` / `pocknix-quirks` p
 - **Adapt from ROCKNIX/thorch:** quirks platform tree + `thorch-rocknix-quirks` packaging.
 
 ### Phase 3 — Session 1: Steam (gamescope + native ARM client)
-- **Packages from holo `holo-core-aarch64` (no source build):** `gamescope`, native `steam`
-  ARM runtime, `mangohud`/`mangoapp`. **`mesa` comes from Arch Linux ARM**, not holo (holo's
-  mesa lags upstream stable) — gamescope/Steam link against the ALARM mesa.
+- **Packages from Arch Linux ARM (REVISED — no holo needed):** `gamescope` (ALARM `extra`,
+  aarch64 `3.16.24`), `mangohud`, `xorg-xwayland`, and `mesa` — all built against ALARM, so no
+  ABI mismatch. The native ARM `steam` **client** is bootstrapped at first launch
+  (`steamrtarm64`), not a pacman package; the session launcher handles it.
 - **Launch logic — adapt directly from ROCKNIX** `start_steam.sh` / `start_steam_arm64.sh`,
   specifically `steam_launch_bigpicture()`:
   `gamescope --backend drm -W $W -H $H -r $REFRESH --xwayland-count 2 --mangoapp
@@ -210,7 +211,8 @@ Rationale:
 | Kernel (`linux-pocknix` PKGBUILD, qcom-abl boot image) | ROCKNIX `packages/linux` + `bootloader/mkimage`, thorch `linux-thorch` | **Build fresh in-project** (vendor source) |
 | SM8550 quirks / InputPlumber / suspend hooks | ROCKNIX `devices/SM8550/...`, `thorch-rocknix-quirks` | **Adapt** (RP6 DTS) |
 | Steam launch (gamescope + native ARM) | ROCKNIX `start_steam*.sh` | **Adapt** — strip ES/sway |
-| `gamescope`, native Steam, mangoapp | holo `holo-core-aarch64` repo | **Reuse binary** (no build) |
+| `gamescope`, `mangohud`, `xorg-xwayland` | Arch Linux ARM `extra` (aarch64) | **Reuse binary** (gamescope 3.16.24, no ABI risk) |
+| native Steam **client** | Steam bootstrapper at first launch (`steamrtarm64`) | not a pacman package |
 | `mesa` (Adreno 740 Vulkan/GL) | Arch Linux ARM repo | **Reuse binary** — *not* holo (lags) |
 | Session-select mechanism | ROCKNIX `steamos-session-select` | **Adapt** — generalize to 2 sessions |
 | Plasma **Mobile** packaging | thorch is desktop-Plasma | **Build fresh** |
@@ -221,12 +223,11 @@ Rationale:
 
 ## Open questions to resolve before/within implementation
 
-1. **holo vs ALARM ABI split (highest-risk):** holo ships its own `mesa`, `glibc`, maybe
-   `systemd`. We deliberately take `mesa` from ALARM but `steam`/`gamescope` from holo — so
-   those holo binaries must link against ALARM's `mesa`/`glibc` without an ABI break. Set
-   pacman repo priority (ALARM first; pull only the named packages from holo) and verify by
-   diffing core package versions before wiring `pacman.conf`. If holo gamescope hard-depends
-   on holo mesa, fall back to building gamescope from source against ALARM mesa.
+1. **holo vs ALARM ABI split — RESOLVED/MOOT.** gamescope (`3.16.24`) and mesa are both in
+   ALARM aarch64, so we take them from ALARM (ABI-matched) and **don't add the holo repo at
+   all** (which also avoids holo's `core`/`extra` name collision with ALARM). The only
+   remaining holo question is the native steam *client*, which comes via the bootstrapper, not
+   a package — so the original ABI risk is gone.
 2. **Kernel toolchain (mostly resolved):** on an **aarch64 Linux build host this is moot** —
    `linux-pocknix` compiles natively with the host GCC (the config's
    `aarch64-rocknix-linux-gnu-gcc-15.2.0` string is informational; any recent GCC 15.x works),
