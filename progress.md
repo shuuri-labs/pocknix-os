@@ -28,13 +28,13 @@ entry (deep)` → ~3.5 s asleep → `PM: suspend exit`, SSH survived). The maint
 patch is confirmed active (`leaving TSENS uplow IRQ … as non-wakeup`). `pm_wakeup_irq=21`
 (= `pmic_pwrkey`, power button).
 
-**Known issue (deferred to upstream/Phase 2):** spurious wake from deep sleep, intermittent,
-`pm_wakeup_irq=ENODATA` (genuine deep-sleep wake). `wakeup_sources` shows only the pmic_glink
-power-supply path active (`battery`, `ucsi`, `qcom-battmgr-usb/wls`). Happens **on battery
-(unplugged)**, so it's the power-supply/battmgr status path itself, not charging. Written up in
-`docs/sm8550-suspend-wake-report.md` for the SM8550 suspend maintainer; definitive attribution
-test = diff `wakeup_sources` before/after a self-waking suspend. Not a distro blocker — mostly
-the kernel contributor's domain.
+**Known issue — CONFIRMED KERNEL-LEVEL, handed to maintainer:** spurious deep-sleep wake on
+battery (~3.5s, intermittent, `pm_wakeup_irq=ENODATA`). `wakeup_sources` diff fingered the
+`battery`/pmic_glink power-supply path. **Userspace disarm tested and INEFFECTIVE** — setting
+`power/wakeup=disabled` on `battery` and on ALL `/sys/class/power_supply/*` did not stop it, so
+the wake isn't gated by any `power/wakeup` toggle (pmic_glink/AOSS hardware wake). The udev rule
+was **removed** (ineffective); pocknix-bsp pkgrel 3. Needs a kernel/DT fix (à la TSENS) —
+documented in `docs/sm8550-suspend-wake-report.md`. Not a distro blocker.
 
 Wifi saga resolution (for the record): needed (1) device firmware overlay (ath12k board-2.bin
 etc.), (2) regulatory **Country** set for 5 GHz (db present ≠ domain set), (3) provision **iwd

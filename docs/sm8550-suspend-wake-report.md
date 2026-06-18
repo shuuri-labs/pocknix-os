@@ -55,13 +55,34 @@ systemctl suspend          # let it self-wake (don't touch it)
 cat /sys/kernel/debug/wakeup_sources > /tmp/ws.after
 diff /tmp/ws.before /tmp/ws.after
 ```
-- Result: _<fill in — which source incremented>_
+- Result — the `battery` source's counters increment across one self-waking suspend:
+```
+8c8
+< battery       9   10    0   0   0   81    13    1662810   0
+---
+> battery       10    11    0   0   0   92    13    1724194   0
+```
+
+## Userspace disarm is INEFFECTIVE (→ kernel-level)
+Setting `power/wakeup = disabled` on `battery` — and then on **all** `/sys/class/power_supply/*`
+devices — does **not** stop the wake; the SoC still self-wakes from deep sleep in ~3.5 s:
+```
+# echo disabled > /sys/class/power_supply/battery/power/wakeup     -> still wakes ~3.4s
+# for w in /sys/class/power_supply/*/power/wakeup; do echo disabled >"$w"; done -> still wakes ~3.5s
+PM: suspend entry (deep)   @1332.77
+PM: suspend exit           @1336.25   (~3.48s, untouched)
+```
+So the wake is **not gated by any power_supply device's `power/wakeup`** — it arrives via the
+pmic_glink/AOSS path below where userspace can mask it (consistent with `pm_wakeup_irq`=ENODATA).
+**This needs a kernel/DT fix**, analogous to the TSENS uplow-wake patch but for the pmic_glink
+battery/charger wakeup. (A userspace udev/`power/wakeup` workaround was tried and removed as
+ineffective.)
 
 ## Questions for the maintainer
-1. On battery, the `pmic_glink`/UCSI/`qcom-battmgr`/`battery` power-supply wakeup sources
-   appear to wake the SoC from deep sleep. Are they expected to be armed during suspend on
-   SM8550, or should they be disarmed on RP6 (analogous to the TSENS uplow-wake fix)?
+1. On battery, the `pmic_glink`/`qcom-battmgr`/`battery` path wakes the SoC from deep sleep, and
+   it can't be masked from userspace (see above). Should this wakeup be disarmed on RP6 at the
+   driver/DT level (as TSENS was), or is the AYN Thor expected to stay asleep here?
 2. Known behavior on the AYN Thor — does it stay in deep sleep on battery, or see the same
-   pmic_glink power-supply wakes?
-3. Preferred way to mask the pmic_glink power-supply wakeups for s2idle/deep on these
-   handhelds (DT `wakeup-source`, `/sys/.../power/wakeup`, or a driver-level change)?
+   pmic_glink wake?
+3. Where is the right place to disarm it — the `qcom-battmgr`/pmic_glink driver
+   (`enable_irq_wake`/`device_init_wakeup`), the SPMI/PMIC IRQ, or a DT change?
