@@ -91,11 +91,16 @@ configure() {
       "${KERNEL_DIR}/config/linux.aarch64.conf" > "${KSRC}/.config"
 
   # pocknix kernel config deltas (applied on top of the synced ROCKNIX config, so
-  # they survive `make sync`). Enable zstd-compressed firmware loading — Arch ships
-  # firmware (e.g. linux-firmware-qcom's Adreno a740 blobs) as .zst.
+  # they survive `make sync`):
+  #  - zstd-compressed firmware loading (Arch ships firmware as .zst)
+  #  - DRM_MSM as a MODULE: built-in, it probes before the rootfs is mounted and its
+  #    GPU firmware (a740_sqe.fw, on the rootfs) fails to load (-2). As a module it
+  #    loads post-root via udev, when /usr/lib/firmware is available. We have no
+  #    initramfs, so early firmware must come via a module-load-after-root, not =y.
   "${KSRC}/scripts/config" --file "${KSRC}/.config" \
     --enable FW_LOADER_COMPRESS \
-    --enable FW_LOADER_COMPRESS_ZSTD
+    --enable FW_LOADER_COMPRESS_ZSTD \
+    --module DRM_MSM
 
   # olddefconfig auto-accepts defaults for any new symbols (no prompts, no stdin).
   # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,
