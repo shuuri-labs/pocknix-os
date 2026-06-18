@@ -89,6 +89,14 @@ configure() {
   sed -e "s|@DEVICENAME@|${DEVICE}|g" \
       -e 's|@INITRAMFS_SOURCE@||g' \
       "${KERNEL_DIR}/config/linux.aarch64.conf" > "${KSRC}/.config"
+
+  # pocknix kernel config deltas (applied on top of the synced ROCKNIX config, so
+  # they survive `make sync`). Enable zstd-compressed firmware loading — Arch ships
+  # firmware (e.g. linux-firmware-qcom's Adreno a740 blobs) as .zst.
+  "${KSRC}/scripts/config" --file "${KSRC}/.config" \
+    --enable FW_LOADER_COMPRESS \
+    --enable FW_LOADER_COMPRESS_ZSTD
+
   # olddefconfig auto-accepts defaults for any new symbols (no prompts, no stdin).
   # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,
   # abort the script with exit 141.

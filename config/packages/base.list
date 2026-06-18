@@ -27,6 +27,13 @@ vulkan-icd-loader
 libdrm
 mesa-utils
 
+# --- GPU firmware (Adreno 740) ---
+# a740_sqe.fw + qcom/sm8550/a740_zap.mbn are NOT in the ROCKNIX overlay; they live
+# in linux-firmware-qcom (shipped as .zst, so the kernel needs FW_LOADER_COMPRESS_ZSTD
+# — enabled in build-kernel.sh). Required for Vulkan/GPU -> gamescope (Phase 3).
+# (wifi/audio/video firmware still comes from the ROCKNIX overlay via install_firmware.)
+linux-firmware-qcom
+
 # --- audio ---
 pipewire
 pipewire-pulse
