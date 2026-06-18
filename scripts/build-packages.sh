@@ -5,7 +5,7 @@
 # build chroot (base-devel). Results + a pacman repo DB land in build/localrepo,
 # which build-image.sh consumes via the [pocknix] repo.
 #
-# Standalone: `sudo make build-packages` (test this in isolation first).
+# Standalone: `sudo make packages` (test this in isolation first).
 # Needs a Linux host + root (chroot/mount); native makepkg on aarch64, qemu on x86.
 
 source "$(dirname "$0")/lib.sh"
@@ -25,23 +25,34 @@ trap cleanup EXIT
 setup_chroot() {
   if [ -x "${BROOT}/usr/bin/makepkg" ]; then
     log "reusing build chroot: ${BROOT}"
-    return 0
+  else
+    mkdir -p "${CACHE_DIR}"
+    [ -f "${TARBALL}" ] || { log "downloading ALARM tarball for build chroot"; \
+      curl -fL --retry 3 -o "${TARBALL}" "${ALARM_MIRROR}/${ALARM_TARBALL}"; }
+    log "creating build chroot -> ${BROOT} (one-time; ~1.5 GB with base-devel)"
+    rm -rf "${BROOT}"; mkdir -p "${BROOT}"
+    if have bsdtar; then bsdtar -xpf "${TARBALL}" -C "${BROOT}"
+    else tar -xpf "${TARBALL}" -C "${BROOT}" --numeric-owner; fi
+    maybe_install_qemu "${BROOT}"
+    cp -f "${CONFIG_DIR}/pacman.conf.in" "${BROOT}/etc/pacman.conf"   # ALARM-only base
+    chroot_mount "${BROOT}"
+    chroot "${BROOT}" pacman-key --init
+    chroot "${BROOT}" pacman-key --populate archlinuxarm
+    chroot "${BROOT}" pacman -Syu --noconfirm --needed base-devel sudo
+    chroot_umount "${BROOT}"
   fi
-  mkdir -p "${CACHE_DIR}"
-  [ -f "${TARBALL}" ] || { log "downloading ALARM tarball for build chroot"; \
-    curl -fL --retry 3 -o "${TARBALL}" "${ALARM_MIRROR}/${ALARM_TARBALL}"; }
-  log "creating build chroot -> ${BROOT} (one-time; ~1.5 GB with base-devel)"
-  rm -rf "${BROOT}"; mkdir -p "${BROOT}"
-  if have bsdtar; then bsdtar -xpf "${TARBALL}" -C "${BROOT}"
-  else tar -xpf "${TARBALL}" -C "${BROOT}" --numeric-owner; fi
-  maybe_install_qemu "${BROOT}"
-  cp -f "${CONFIG_DIR}/pacman.conf.in" "${BROOT}/etc/pacman.conf"   # ALARM-only base
-  chroot_mount "${BROOT}"
-  chroot "${BROOT}" pacman-key --init
-  chroot "${BROOT}" pacman-key --populate archlinuxarm
-  chroot "${BROOT}" pacman -Syu --noconfirm --needed base-devel
+
+  # Idempotent: ensure the 'builder' user, sudo, and passwordless sudoers exist — this
+  # also repairs chroots created by older versions of this script (which had no sudo),
+  # so `makepkg -s` (deps installed via `sudo pacman` as builder) works without a rebuild.
   chroot "${BROOT}" id builder >/dev/null 2>&1 || chroot "${BROOT}" useradd -m builder
-  chroot_umount "${BROOT}"
+  if [ ! -x "${BROOT}/usr/bin/sudo" ]; then
+    chroot_mount "${BROOT}"
+    chroot "${BROOT}" pacman -Sy --noconfirm --needed sudo
+    chroot_umount "${BROOT}"
+  fi
+  printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > "${BROOT}/etc/sudoers.d/builder"
+  chmod 0440 "${BROOT}/etc/sudoers.d/builder"
 }
 
 build_one() {
@@ -52,8 +63,9 @@ build_one() {
   cp -r "${pkgdir}" "${BROOT}/build/${name}"
   chroot "${BROOT}" chown -R builder:builder "/build/${name}"
   # makepkg refuses to run as root; build as the 'builder' user.
+  # -s syncs makedepends (gamescope needs many); pocknix-bsp has none so it's a no-op.
   chroot "${BROOT}" runuser -u builder -- \
-    bash -lc "cd /build/${name} && makepkg -f --noconfirm --nocheck --skippgpcheck"
+    bash -lc "cd /build/${name} && makepkg -s -f --noconfirm --nocheck --skippgpcheck"
   cp "${BROOT}/build/${name}"/*.pkg.tar.* "${LOCALREPO}/" 2>/dev/null \
     || { warn "no .pkg.tar.* produced for ${name}"; return 1; }
 }

@@ -1,0 +1,74 @@
+# gamescope (pocknix) — ROCKNIX-patched build for the RP6's rotated msm/DPU panel.
+#
+# Vanilla gamescope (incl. ALARM's 3.16.24) CANNOT drive the RP6 panel: the panel is
+# mounted rotated (DTS rotation=<270>), so gamescope tries a DRM *plane* rotation that
+# the msm DPU rejects -> "Failed to prepare 1-layer flip (Invalid argument)" forever
+# (upstream issue #1883/#819). ROCKNIX's patch 0005 adds --use-rotation-shader, which
+# rotates in a compute shader and skips the plane-rotation property -> the flip is
+# accepted. So we build ROCKNIX's pinned commit + their 4 patches.
+#
+# epoch=1 so this is preferred over ALARM's [extra] gamescope when both are visible.
+pkgname=gamescope
+epoch=1
+pkgver=3.16.0.rocknix.fe78bc6
+pkgrel=1
+_commit=fe78bc685f247460d02c85f4b530b9de3ed07cdd
+pkgdesc="SteamOS session compositing WM — ROCKNIX-patched (rotation shader for msm/rotated panels)"
+arch=('aarch64')
+url="https://github.com/ValveSoftware/gamescope"
+license=('BSD-2-Clause')
+provides=('gamescope')
+conflicts=('gamescope')
+# Runtime libs (makepkg also auto-adds .so deps; these are the non-obvious ones).
+depends=('wayland' 'libdrm' 'libinput' 'libxkbcommon' 'pixman' 'systemd-libs' 'libcap'
+         'luajit' 'libdecor' 'libx11' 'libxext' 'libxfixes' 'libxdamage' 'libxcomposite'
+         'libxrender' 'libxxf86vm' 'libxtst' 'libxi' 'libxcursor' 'libxmu' 'libxres'
+         'libxcb' 'xcb-util-wm' 'seatd' 'hwdata' 'sdl2' 'pipewire' 'vulkan-icd-loader'
+         'glslang' 'xorg-xwayland' 'libdisplay-info')
+makedepends=('git' 'meson' 'ninja' 'cmake' 'pkgconf' 'glslang' 'vulkan-headers'
+             'wayland-protocols' 'python' 'libxkbcommon' 'wayland'
+             # wlroots subproject build-deps (else meson tries to build them itself):
+             'xorg-xwayland' 'libdisplay-info' 'xcb-util-errors' 'xcb-util-renderutil'
+             'xcb-util-image' 'xcb-util-keysyms')
+source=("gamescope::git+https://github.com/ValveSoftware/gamescope.git#commit=${_commit}"
+        '0001-WaylandBackend-wire-up-wl_touch-implementation.patch'
+        '0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch'
+        '0005-feature-add-rotation-shader-for-rotating-output.patch'
+        '0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+prepare() {
+  cd gamescope
+  # subprojects (wlroots, libliftoff, etc.) are git submodules at this commit.
+  git submodule update --init --recursive
+  # ROCKNIX patch stack (same order/numbering as their package).
+  patch -p1 < "${srcdir}/0001-WaylandBackend-wire-up-wl_touch-implementation.patch"
+  patch -p1 < "${srcdir}/0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch"
+  patch -p1 < "${srcdir}/0005-feature-add-rotation-shader-for-rotating-output.patch"
+  patch -p1 < "${srcdir}/0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch"
+}
+
+build() {
+  cd gamescope
+  # The pinned gamescope/wlroots build with -Werror, but ALARM's libs are newer than
+  # upstream CI built against (e.g. newer libinput adds enum values -> -Werror=switch).
+  # Disable -Werror wholesale rather than chase each version-skew warning. CFLAGS
+  # propagate into the subprojects (wlroots etc.), and being last they override -Werror.
+  export CFLAGS+=" -Wno-error" CXXFLAGS+=" -Wno-error"
+  meson setup build \
+    --prefix=/usr --buildtype=release -Db_lto=false \
+    -Ddrm_backend=enabled \
+    -Dpipewire=enabled \
+    -Denable_openvr_support=false \
+    -Davif_screenshots=disabled \
+    -Dbenchmark=disabled \
+    -Dinput_emulation=disabled \
+    -Drt_cap=enabled \
+    -Dsdl2_backend=enabled
+  meson compile -C build
+}
+
+package() {
+  cd gamescope
+  meson install -C build --destdir "${pkgdir}"
+}

@@ -47,21 +47,27 @@ Server = file:///localrepo
 EOF
 }
 
-# Build the local pocknix-* packages and install pocknix-bsp into the rootfs.
+# Build the local pocknix-* packages and install them into the rootfs:
+#   pocknix-bsp (board support) + gamescope (ROCKNIX-patched, epoch=1 -> beats ALARM's;
+#   vanilla gamescope can't drive the RP6's rotated msm panel — see plan.md Phase 3).
 install_local_packages() {
   local root="$1"
   if [ ! -f "${LOCAL_REPO_DIR}/pocknix.db" ]; then
-    warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping pocknix-bsp"
+    warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping local pkgs"
     return 0
   fi
-  log "installing local pocknix packages (pocknix-bsp)"
+  log "installing local pocknix packages (pocknix-bsp, gamescope)"
   append_local_repo "${root}/etc/pacman.conf"
   mkdir -p "${root}/localrepo"
   mount --bind "${LOCAL_REPO_DIR}" "${root}/localrepo"
   chroot "${root}" pacman -Sy --noconfirm
-  chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp
+  # gamescope deps (xorg-xwayland, seatd, libdisplay-info, …) resolve from ALARM.
+  chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp gamescope
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
+  # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
+  # bind mount doesn't exist on the running device, so it would break `pacman -Sy` there.
+  sed -i '/^\[pocknix\]/,+2d' "${root}/etc/pacman.conf"
 }
 
 read_pkglist() {
@@ -138,7 +144,7 @@ main() {
   # 3. packages: base now; session lists become active in Phase 3/4. gamescope/mangohud are
   #    in ALARM (no holo needed) — see config/packages/steam.list. Activate once GPU is up.
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/base.list"
-  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"     # Phase 3 (ALARM)
+  install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"        # Phase 3 (ALARM): gamescope
   # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"   # Phase 4 (ALARM)
 
   # 4. kernel (Phase 1): use artifacts from `make kernel`. Install pocknix modules
