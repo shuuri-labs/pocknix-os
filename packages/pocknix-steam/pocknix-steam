@@ -19,7 +19,7 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
-  LD_LIBRARY_PATH="${STEAM}/lib/aarch64-linux-gnu/" \
+  LD_LIBRARY_PATH="${STEAM}/steamrtarm64:${STEAM}/lib/aarch64-linux-gnu" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     "${STEAM}/steamrtarm64/steam" -steamdeck -steamos3 -gamepadui \

@@ -51,7 +51,8 @@ if [ ! -d "${CLIENT_DIR}" ]; then
   ln -sfn "${STEAM}/linuxarm64" "${STEAM_DOT}/sdkarm64"
 fi
 
-# 3. native first launch (initializes the client, then exits)
+# 3. native first launch (initializes the client, then exits). The client's bundled libs
+#    live in steamrtarm64/ (libvpx.so.6 etc.), so that dir must be on the library path.
 log "First launch (initializing client)..."
-LD_LIBRARY_PATH="${STEAM}/lib/aarch64-linux-gnu/" "${CLIENT_DIR}/steam" -steamdeck -exitsteam || true
+LD_LIBRARY_PATH="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu" "${CLIENT_DIR}/steam" -steamdeck -exitsteam || true
 log "Native ARM64 Steam installed at ${CLIENT_DIR}."
