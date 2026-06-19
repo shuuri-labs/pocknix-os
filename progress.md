@@ -49,6 +49,16 @@ networkmanager) are declared + pulled on a clean install/image (they were hand-`
 iteration). (2) On-device **validate the boot session** end-to-end (audio in-session, gamepad, seat
 hand-off from getty). (3) First-boot **root-fs expand** service (64GB SD had 4.1G partition).
 
+**OOBE / OS-update (2026-06-19):** the Deck UI (`-steamos3 -steamdeck`) shells out to
+`steamos-update`/`steamos-select-branch`/`jupiter-biosupdate` for OS/BIOS updates; on our non-SteamOS
+base those don't exist → OOBE "required update" dead-ends (`Updater apply error: 2`, `failed to query
+current OS branch`). Fix = **`packages/pocknix-steamos-shim`** (stubs reporting "no update"; interface
+mirrors **armada-update** — `check`→7, apply→0). registry.vdf OOBE-complete seed alone wasn't enough
+on `steamdeck_publicbeta`. **Real OTA is a deferred phase** (Phase 3c): armada does it for real via
+**Fedora bootc/rpm-ostree** atomic OTA (`armada-update` wired to bootc) — we'd need an atomic/A-B or
+image-based update backend + a server hosting images; the shim is a drop-in placeholder (swap the
+body, same Steam-facing contract). Preferred eventual OTA mechanism for the distro.
+
 **Phase 3b — x86 game content via FEX + Proton (deferred, scoped):** native client/UI need NO FEX;
 **x86 games (Proton 11 ARM) DO** — Proton is NOT self-contained, FEX is OS-level. Need FEX **with
 thunks** + an **x86 rootfs** + **binfmt** + native-Vulkan (Turnip) passthrough + the **CachyOS Proton
