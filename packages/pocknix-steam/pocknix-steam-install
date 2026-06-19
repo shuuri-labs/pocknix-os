@@ -1,0 +1,57 @@
+#!/bin/bash
+# pocknix-steam-install — download Valve's NATIVE ARM64 Steam runtime + client.
+# Ported from ROCKNIX "Install Steam.sh", stripped of FEX/Proton/EmulationStation/sway —
+# native ARM64 only (x86 game content via Proton/FEX is deferred). The stock steam-launcher
+# .deb pulls the x86 client (Exec format error on aarch64); the real native client comes from
+# the steamrt3c ARM64 runtime + the publicbeta_linuxarm64 client below.
+set -e
+set -o pipefail
+
+STEAM="${STEAM:-${HOME}/.local/share/Steam}"
+STEAM_DOT="${STEAM_DOT:-${HOME}/.steam}"
+RUNTIME_DIR="${STEAM}/steam-runtime-steamrt-arm64"
+CLIENT_DIR="${STEAM}/steamrtarm64"
+RUNTIME_TAR_URL="https://repo.steampowered.com/steamrt3c/images/latest-public-beta/steam-runtime-steamrt-arm64.tar.xz"
+STEAM_MANIFEST_URL="https://client-update.fastly.steamstatic.com/steam_client_publicbeta_linuxarm64"
+STEAM_CDN="https://client-update.steamstatic.com"
+
+log() { echo -e "[\033[1;34mpocknix-steam\033[0m] $1"; }
+die() { echo -e "[\033[1;31mERROR\033[0m] $1" >&2; exit 1; }
+
+mkdir -p "${STEAM}"
+
+# 1. native ARM64 Steam runtime (steamrt3c)
+if [ ! -d "${RUNTIME_DIR}" ]; then
+  log "Downloading Steam ARM64 runtime..."
+  tar_path="${STEAM}/steam-runtime-steamrt-arm64.tar.xz"
+  wget -c -t 5 -O "${tar_path}" "${RUNTIME_TAR_URL}" || die "runtime download failed"
+  tar xf "${tar_path}" -C "${STEAM}" || die "runtime extract failed"
+  rm -f "${tar_path}"
+  target=$(echo "${STEAM}"/steam-runtime-steamrt-arm64/steamrt3c_platform_*/files/lib/aarch64-linux-gnu/libibus-1.0.so.5.* | head -n1)
+  [ -f "${target}" ] || die "libibus not found in runtime"
+  mkdir -p "${STEAM}/lib/aarch64-linux-gnu"
+  ln -sf "${target}" "${STEAM}/lib/aarch64-linux-gnu/libibus-1.0.so.5"
+fi
+
+# 2. native ARM64 Steam client (publicbeta linuxarm64). The manifest is binary VDF; split it
+#    into printable runs (strings-equivalent via tr, no binutils dep) then grab the zip name.
+if [ ! -d "${CLIENT_DIR}" ]; then
+  log "Resolving + downloading Steam ARM64 client..."
+  target_file=$(curl -fsSL "${STEAM_MANIFEST_URL}" | tr -c '[:print:]' '\n' \
+    | grep -oP 'bins_linuxarm64_linuxarm64\.zip\.(?!vz\.)[^"]+' | head -n1)
+  [ -n "${target_file}" ] || die "could not parse client zip from manifest"
+  zip_path="${STEAM}/linuxarm64.zip"
+  wget -c -t 5 -O "${zip_path}" "${STEAM_CDN}/${target_file}" || die "client download failed"
+  unzip -o "${zip_path}" -d "${STEAM}" || die "client extract failed"
+  rm -f "${zip_path}"
+  chmod +x "${CLIENT_DIR}/steam"
+  mkdir -p "${STEAM}/package"; echo publicbeta > "${STEAM}/package/beta"
+  mkdir -p "${STEAM_DOT}"
+  ln -sfn "${STEAM}" "${STEAM_DOT}/steam"
+  ln -sfn "${STEAM}/linuxarm64" "${STEAM_DOT}/sdkarm64"
+fi
+
+# 3. native first launch (initializes the client, then exits)
+log "First launch (initializing client)..."
+LD_LIBRARY_PATH="${STEAM}/lib/aarch64-linux-gnu/" "${CLIENT_DIR}/steam" -steamdeck -exitsteam || true
+log "Native ARM64 Steam installed at ${CLIENT_DIR}."

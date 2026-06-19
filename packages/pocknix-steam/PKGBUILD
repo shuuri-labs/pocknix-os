@@ -1,0 +1,21 @@
+# pocknix-steam — native ARM64 Steam (Big Picture under gamescope) for the Retroid Pocket 6.
+# Ships the native-ARM client installer (ported from ROCKNIX "Install Steam.sh") + the gamescope
+# launcher. The stock x86 steam-launcher .deb is NOT used (it pulls x86 binaries). Native ARM
+# Steam is experimental (Valve publicbeta linuxarm64).
+pkgname=pocknix-steam
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+# gamescope = our ROCKNIX-patched compositor; wget/unzip/curl/tar fetch+unpack the client.
+# seatd (gamescope seat) + pipewire (audio) come from the base image.
+depends=('gamescope' 'wget' 'unzip' 'curl' 'tar')
+source=('pocknix-steam-install' 'pocknix-steam')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-steam-install" "${pkgdir}/usr/bin/pocknix-steam-install"
+  install -Dm755 "${srcdir}/pocknix-steam"         "${pkgdir}/usr/bin/pocknix-steam"
+}

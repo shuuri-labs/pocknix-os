@@ -1,0 +1,26 @@
+#!/bin/bash
+# pocknix-steam — launch the native ARM64 Steam client in Big Picture under gamescope on the RP6.
+# Adapted from ROCKNIX start_steam_arm64.sh's steam_launch_bigpicture (native path), minus
+# FEX/EmulationStation/sway/dual-screen. Panel geometry is fixed for the RP6 instead of probed
+# from sway.
+set -e
+
+export HOME="${HOME:-/root}"
+STEAM="${HOME}/.local/share/Steam"
+
+# install the native client + runtime on first run
+if [ ! -x "${STEAM}/steamrtarm64/steam" ]; then
+  /usr/bin/pocknix-steam-install
+fi
+
+# RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
+# rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
+W=1920; H=1080; REFRESH=120; ORIENT=left
+
+exec env -u WAYLAND_DISPLAY \
+  GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
+  LD_LIBRARY_PATH="${STEAM}/lib/aarch64-linux-gnu/" \
+  gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
+    --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
+    "${STEAM}/steamrtarm64/steam" -steamdeck -steamos3 -gamepadui \
+    -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders
