@@ -15,8 +15,15 @@ source=('steamos-update' 'steamos-select-branch' 'jupiter-biosupdate' 'jupiter-d
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
+  # Steam calls the OS-update helper by its FULL polkit-helper path, not via PATH — verified in
+  # webhelper_js.txt: "… /usr/bin/steamos-polkit-helpers/steamos-update". Install it there (and the
+  # plain /usr/bin/ path the underlying check uses).
+  install -Dm755 "${srcdir}/steamos-update"        "${pkgdir}/usr/bin/steamos-polkit-helpers/steamos-update"
   install -Dm755 "${srcdir}/steamos-update"        "${pkgdir}/usr/bin/steamos-update"
   install -Dm755 "${srcdir}/steamos-select-branch" "${pkgdir}/usr/bin/steamos-select-branch"
+  # Firmware/BIOS update stubs. Steam calls jupiter-initial-firmware-update (seen in logs);
+  # keep biosupdate/dock-updater too (Deck UI references them). All report "no update".
+  install -Dm755 "${srcdir}/jupiter-biosupdate"    "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-initial-firmware-update"
   install -Dm755 "${srcdir}/jupiter-biosupdate"    "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-biosupdate"
   install -Dm755 "${srcdir}/jupiter-dock-updater"  "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-dock-updater"
 }
