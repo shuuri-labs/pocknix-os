@@ -30,16 +30,24 @@ now in `pocknix-steam` PKGBUILD: openal, libcups, lsof (+ gtk2, gdk-pixbuf2). Co
 2229a5b → 948072b → 4e3dbdf → 4bb306a. `steam-native-arm-status.md` SUPERSEDED (its x86/FEX-runtime
 hypothesis was wrong end to end).
 
-**OPEN (post-launch polish, 2026-06-19):**
-- **Setup-wizard Wi-Fi shows "no connections found"** though the device is online (iwd-managed). Steam
-  enumerates networks via **NetworkManager over D-Bus**; we disabled NM (iwd-direct) → Steam sees no
-  backend. Need to give Steam a network backend it can talk to (NM-with-iwd-backend, or accept Steam
-  can't manage Wi-Fi and pre-seed connectivity). INVESTIGATING — see below.
-- **Some CJK/foreign-language fonts not rendering** in the language selector (missing CJK font pkg —
-  likely `noto-fonts-cjk`; the Latin set works). Minor.
+**RESOLVED post-launch (2026-06-19):**
+- **Setup-wizard Wi-Fi "no connections found"** → FIXED. Steam enumerates Wi-Fi via **NetworkManager
+  over D-Bus**; we ran iwd-direct (NM disabled). Re-plumbed to **NM front-end + iwd backend**
+  (`wifi.backend=iwd`, NM keyfile creds, iwd `EnableNetworkConfiguration=false`). Verified LIVE:
+  `nmcli device status` → `wlan0 wifi connected`. Baked into `build-sd-image.sh`; static confs from
+  `overlay/` (20-wifi-backend.conf + 10-unmanage-gadget.conf). See [[steam-network-nm-iwd]].
+- **CJK fonts (tofu)** → `noto-fonts`/`-cjk`/`-emoji` deps.
+- **Boot session** → `overlay/root/.bash_profile` execs `pocknix-steam` on tty1 autologin (real PAM
+  session = XDG_RUNTIME_DIR + per-user PipeWire/audio); guarded to tty1+non-SSH; `touch /root/.no-steam`
+  to boot to a shell. (Chose this over a systemd unit so Steam gets a user session for audio.)
 - Benign noise (ignore): `steam-runtime-launcher-service not found` (present in tree, Steam disables
   it + continues), `steamrtarm32/*driverquery` (we only have arm64), `steamos-select-branch` /
   `lsb_release` / `steamos-polkit-helpers/*` (SteamOS-only helpers), `pipewire pw_context_connect`.
+
+**STILL TODO:** (1) **rebuild `pocknix-steam` in the VM** so the new deps (openal/libcups/lsof/noto*/
+networkmanager) are declared + pulled on a clean install/image (they were hand-`pacman -S`'d for
+iteration). (2) On-device **validate the boot session** end-to-end (audio in-session, gamepad, seat
+hand-off from getty). (3) First-boot **root-fs expand** service (64GB SD had 4.1G partition).
 
 ## Phase 3 — native ARM client journey (how we got to the milestone)
 What's validated on-device (2026-06-19):
