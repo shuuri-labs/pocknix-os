@@ -18,9 +18,12 @@ license=('GPL2')
 #               'bin/vgui2_s.dll'" (the .so opens but dlopen fails on the unresolved dep).
 #   libcups  -> libcups.so.2, a DT_NEEDED of steamwebhelper + libcef.so (CEF always links cups
 #               for print support); missing => steamwebhelper (the Big-Picture CEF UI) crash-loops.
+# lsof: not a lib but a runtime tool — Steam shells out to `lsof` to find the port steamwebhelper
+#   listens on for its CEF websocket (steamui<->web UI IPC); missing => "Failed to connect to
+#   websocket" and gamepadui never connects.
 # xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX). The
 # rest of the native client's deps resolve from the base image / the steamrt runtime.
-depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'xorg-server-xvfb')
+depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof' 'xorg-server-xvfb')
 source=('pocknix-steam-install' 'pocknix-steam')
 sha256sums=('SKIP' 'SKIP')
 
