@@ -93,7 +93,10 @@ install_packages() {
     mapfile -t -O "${#pkgs[@]}" pkgs < <(read_pkglist "${l}")
   done
   log "installing ${#pkgs[@]} packages from: ${lists[*]##*/}"
-  chroot "${root}" pacman -Syu --noconfirm --needed "${pkgs[@]}"
+  # -Syy (force DB refresh): a reused rootfs keeps a stale sync DB, and plain -Sy won't
+  # re-download a DB pacman thinks is current -> valid extra pkgs (vulkan-tools, alsa-utils,
+  # alsa-ucm-conf) show up as "target not found". Safe here: this is a fresh-image -Su anyway.
+  chroot "${root}" pacman -Syyu --noconfirm --needed "${pkgs[@]}"
 }
 
 # Install the SM8550 device firmware (ath12k wifi board data, adsp/cdsp, vpu, ...)
