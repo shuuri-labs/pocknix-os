@@ -1,20 +1,31 @@
 #!/bin/bash
 # pocknix-steam — launch the native ARM64 Steam client in Big Picture under gamescope on the RP6.
-# Adapted from ROCKNIX start_steam_arm64.sh's steam_launch_bigpicture (native path), minus
-# FEX/EmulationStation/sway/dual-screen. Panel geometry is fixed for the RP6 instead of probed
-# from sway.
+# Modeled on armada's system_files/usr/libexec/armada/launch-steam (native, NON-FEX): cd into
+# steamrtarm64, steamrtarm64 first on LD_LIBRARY_PATH, exec the native client. Panel geometry is
+# fixed for the RP6 (we have no sway to probe) and we wrap the client in gamescope ourselves.
 set -e
 
 export HOME="${HOME:-/root}"
 STEAM="${HOME}/.local/share/Steam"
-# Steam resolves its module paths (bin/vgui2_s.dll …) via getcwd; a stale/deleted CWD makes
-# that fail fatally. Always start from a valid directory.
-cd "${HOME}" 2>/dev/null || cd /
+CLIENT_DIR="${STEAM}/steamrtarm64"
+CLIENT="${CLIENT_DIR}/steam"
+
+# armada's LD_LIBRARY_PATH: the client's own dir FIRST (bundled libvpx.so.6 etc.), then the
+# aarch64 shim dir (libibus shim). steamrtarm64/steam re-execs into its runtime from here.
+LDLP="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu"
 
 # install the native client + runtime on first run
-if [ ! -x "${STEAM}/steamrtarm64/steam" ]; then
+if [ ! -x "${CLIENT}" ]; then
   /usr/bin/pocknix-steam-install
 fi
+
+# CRITICAL: Steam resolves its legacy module paths (bin/vgui2_s.dll …) RELATIVE TO getcwd.
+# armada cd's into steamrtarm64 before exec; cd'ing to $HOME (as we did) makes 'bin/vgui2_s'
+# unresolvable -> "Could not load module 'bin/vgui2_s.dll'". gamescope passes CWD to the client.
+cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
+
+# Decky/CEF debugger marker armada touches (harmless if unused).
+touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 
 # RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
 # rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
@@ -22,8 +33,8 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
-  LD_LIBRARY_PATH="${STEAM}/steamrtarm64:${STEAM}/lib/aarch64-linux-gnu" \
+  LD_LIBRARY_PATH="${LDLP}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
-    "${STEAM}/steamrtarm64/steam" -steamdeck -steamos3 -gamepadui \
+    "${CLIENT}" -steamdeck -steamos3 -gamepadui \
     -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders
