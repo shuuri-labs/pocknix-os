@@ -50,4 +50,8 @@ build() {
 package() {
   cd "gtk+-${pkgver}"
   make DESTDIR="${pkgdir}" install
+  # gtk-update-icon-cache is its own package in modern Arch (shared across GTK versions);
+  # drop ours to avoid a file conflict on install.
+  rm -f "${pkgdir}/usr/bin/gtk-update-icon-cache" \
+        "${pkgdir}/usr/share/man/man1/gtk-update-icon-cache.1"
 }
