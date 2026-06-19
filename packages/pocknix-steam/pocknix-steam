@@ -7,6 +7,9 @@ set -e
 
 export HOME="${HOME:-/root}"
 STEAM="${HOME}/.local/share/Steam"
+# Steam resolves its module paths (bin/vgui2_s.dll …) via getcwd; a stale/deleted CWD makes
+# that fail fatally. Always start from a valid directory.
+cd "${HOME}" 2>/dev/null || cd /
 
 # install the native client + runtime on first run
 if [ ! -x "${STEAM}/steamrtarm64/steam" ]; then
