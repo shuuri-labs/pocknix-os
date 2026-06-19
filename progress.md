@@ -9,6 +9,29 @@ _Last updated: 2026-06-18 — Phase 3: GPU + gamescope rendering on the RP6 pane
 
 ---
 
+## ▶ Phase 3 (Steam session) — native ARM client RUNS; blocked on x86/FEX bootstrap
+Validated end-to-end on-device (2026-06-19):
+- **gamescope** (ROCKNIX-patched, `packages/gamescope`) drives the RP6 panel — `pocknix-steam`
+  launches it with `--force-orientation left --use-rotation-shader`, fixed 1920x1080@120.
+- **Native ARM64 Steam** downloads + runs as aarch64 (`packages/pocknix-steam`): the installer
+  (`pocknix-steam-install`, ported from ROCKNIX `Install Steam.sh`) fetches the steamrt3c ARM64
+  runtime + the publicbeta linuxarm64 client into `~/.local/share/Steam/steamrtarm64`.
+- **steamui.so + all libs load** after fixes: built **gtk2** (`packages/gtk2`, EOL in Arch),
+  `gdk-pixbuf2` from ALARM, and put **`steamrtarm64/` on `LD_LIBRARY_PATH`** (bundled libvpx.so.6
+  etc.). Also: `seatd` for the seat, `cd` to a valid dir (Steam getcwd path resolution).
+
+**BLOCKER (Steam-internal, not pocknix):** Big Picture dies with
+`Fatal Error: Could not load module 'bin/vgui2_s.dll'` + `execl failed errno 2`. The client
+layout has no `bin/` subdir; ROCKNIX's `run_steam_first_launch()` **bootstraps the install by
+running the x86 `/usr/bin/steam -exitsteam` under FEX twice** before the native launch — which
+we skipped (no FEX). So the native client's first-time install wiring is incomplete.
+**Likely fix = add FEX-emu to bootstrap Steam** (games can still run native after). This is the
+FEX dependency plan.md deferred; revisit as the next Phase 3 step, OR investigate a FEX-free
+bootstrap. Packages done: gamescope, gtk2, inputplumber, pocknix-bsp, pocknix-steam.
+
+Build-system note: `build-packages.sh` now wires a `[pocknix]` repo into the build chroot so
+local packages can depend on each other; `make packages PKG="a b"` builds a subset.
+
 ## 🎉 MILESTONE: Steam-session compositor renders on the GPU (Phase 3)
 `gamescope --backend drm --force-orientation left --use-rotation-shader -- vkcube` shows the
 spinning cube **on the RP6 panel** (`right` rendered upside-down → use `left`). Full GPU stack
