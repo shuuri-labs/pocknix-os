@@ -20,16 +20,23 @@ Validated end-to-end on-device (2026-06-19):
   `gdk-pixbuf2` from ALARM, and put **`steamrtarm64/` on `LD_LIBRARY_PATH`** (bundled libvpx.so.6
   etc.). Also: `seatd` for the seat, `cd` to a valid dir (Steam getcwd path resolution).
 
-**FIX FOUND — native bootstrap, NO FEX.** Big Picture died with `Could not load module
-'bin/vgui2_s.dll'` because the install bootstrap was incomplete, not because of a missing x86/FEX
-step. Per **armada's `generate-steam-bootstrap.sh`**, the native arm64 client bootstraps itself:
-run `steamrtarm64/steam -exitsteam` **under Xvfb** (virtual display → updater self-updates + lays
-out the full install, `.installed`) + the **full `.steam` symlink set** (sdk32/64/arm64,
-bin32→ubuntu12_32, bin64→ubuntu12_64). Our failure: ran `-exitsteam` with no display + only
-`steam`/`sdkarm64` symlinks. Fixed in `pocknix-steam-install` (depends += xorg-server-xvfb).
-**FEX is only needed for x86 game content later (Proton), NOT the native client.** holo aarch64
-repo: gamescope yes, steam no (client comes from Valve CDN). Packages: gamescope, gtk2,
-inputplumber, pocknix-bsp, pocknix-steam.
+**BLOCKER — experimental ARM gamepad-UI init (NOT FEX). See
+[`steam-native-arm-status.md`](steam-native-arm-status.md) for the full write-up.** The native
+client downloads, runs (aarch64), loads all libs, and **bootstraps under Xvfb** (armada's method:
+`steamrtarm64/steam -exitsteam` under a virtual display + full `.steam` symlinks sdk32/64/arm64,
+bin32→ubuntu12_32, bin64→ubuntu12_64; `pocknix-steam-install`, depends += xorg-server-xvfb). But
+the `-gamepadui` launch still fatals:
+`UpdateUI CreateGlFont regular failed` (missing updater fonts) +
+`Could not load module 'bin/vgui2_s.dll'` (the .so is found per strace, but the client pulls the
+**x86_64 `steamrt64` pressure-vessel** for the VGUI module → mis-selected runtime) +
+`execl errno 2` (missing `steam_msg.sh` error dialog, harmless). **FEX does NOT fix this** (it's
+not x86 emulation — it's the native client's UI/runtime init). Tried: gtk2/gdk-pixbuf2,
+steamrtarm64 on LDLP (libvpx.so.6), seatd, cd-valid-dir, full symlinks, Xvfb bootstrap, dropping
+skip-flags, bin symlink, strace. Open leads: provide updater fonts / force a full self-update;
+pin the steamrtarm64 (arm64) runtime over steamrt64; diff against a working armada/ROCKNIX tree.
+**Decision pending:** checkpoint Steam → Phase 4 (Plasma, needs none of this), vs. keep chasing
+Valve beta internals. holo aarch64 repo: gamescope yes, steam no (client = Valve CDN). Packages:
+gamescope, gtk2, inputplumber, pocknix-bsp, pocknix-steam.
 
 Build-system note: `build-packages.sh` now wires a `[pocknix]` repo into the build chroot so
 local packages can depend on each other; `make packages PKG="a b"` builds a subset.
