@@ -56,11 +56,11 @@ the UCM).
 - **UCM-match gotcha:** `alsaucm -c AYNOdin2` fails `-2` (a bare id-string isn't opened as a
   card); `alsaucm -c 0` works — UCM matches `conf.d/sm8550/${CardLongName=AYN-Odin2}.conf`.
   PipeWire opens cards properly, so it matches.
-- **KNOWN ISSUE — headphone stereo:** right channel plays in both ears, left in neither. The
-  **codec routing is verified correct** (RX0→INT0→HPHL, RX1→INT1→HPHR, vols up, both DACs on),
-  so the left channel is lost *upstream* (PCM/soundwire DMA delivery or RP6 headphone wiring) —
-  needs hardware/DTS investigation (compare RP6 vs AYN-Odin2 audio routing), not a UCM fix.
-  Speaker is fine.
+- **KNOWN ISSUE (parked, hardware) — headphones are effectively mono.** Each amp works + carries
+  the right channel individually (HPHR off → left plays; both on → right dominates), but each
+  drives both ear cups. Codec routing verified correct + Class-H toggle didn't help → it's the
+  **RP6 headphone analog path** (the card impersonates an AYN Odin2 but the HP wiring differs).
+  Hardware/DTS follow-up, not a UCM fix. Speaker stereo is fine. Not a blocker.
 
 **Phase 2c (deferred):** fan (ROCKNIX `0500-set-boot-fanspeed` — does the RP6 have one?),
 CPU/GPU governors, thermal.
