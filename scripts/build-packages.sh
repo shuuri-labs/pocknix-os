@@ -53,6 +53,13 @@ setup_chroot() {
   fi
   printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > "${BROOT}/etc/sudoers.d/builder"
   chmod 0440 "${BROOT}/etc/sudoers.d/builder"
+
+  # Local [pocknix] repo so a package can depend on another locally-built one
+  # (e.g. pocknix-steam -> gamescope, gtk2). Points at the bind-mounted /localrepo.
+  if ! grep -q '^\[pocknix\]' "${BROOT}/etc/pacman.conf"; then
+    printf '\n[pocknix]\nSigLevel = Optional TrustAll\nServer = file:///localrepo\n' \
+      >> "${BROOT}/etc/pacman.conf"
+  fi
 }
 
 build_one() {
@@ -81,6 +88,17 @@ main() {
   setup_chroot
 
   chroot_mount "${BROOT}"
+  # Keep the local repo bind-mounted throughout so makepkg -s can resolve inter-package
+  # local deps (pocknix-steam -> gamescope, gtk2) from the [pocknix] repo as we go.
+  mkdir -p "${BROOT}/localrepo"
+  mount --bind "${LOCALREPO}" "${BROOT}/localrepo"
+  # Initialize the [pocknix] db so the repo is valid even on the first/partial run.
+  if ls "${LOCALREPO}"/*.pkg.tar.* >/dev/null 2>&1; then
+    chroot "${BROOT}" bash -lc "cd /localrepo && repo-add -q ${REPO_DB} *.pkg.tar.*"
+  else
+    chroot "${BROOT}" bash -lc "cd /localrepo && tar -czf ${REPO_DB} -T /dev/null && ln -sf ${REPO_DB} pocknix.db"
+  fi
+
   local built=0 name
   for pkgdir in "${PACKAGES_DIR}"/*/; do
     [ -f "${pkgdir}/PKGBUILD" ] || continue
@@ -88,22 +106,20 @@ main() {
     if [ "${#want[@]}" -gt 0 ]; then
       case " ${want[*]} " in *" ${name} "*) ;; *) continue ;; esac
     fi
-    build_one "${pkgdir}" && built=$((built+1)) || true
+    # refresh dbs (incl. [pocknix]) so deps built earlier this run are visible
+    chroot "${BROOT}" pacman -Sy --noconfirm >/dev/null 2>&1 || true
+    if build_one "${pkgdir}"; then
+      built=$((built+1))
+      # publish to [pocknix] immediately so later packages can depend on it
+      chroot "${BROOT}" bash -lc "cd /localrepo && repo-add -q ${REPO_DB} *.pkg.tar.*"
+    fi
   done
-  chroot_umount "${BROOT}"
 
-  [ "${built}" -gt 0 ] || die "no packages built"
-
-  # index the repo (repo-add lives in the chroot's pacman); bind-mount localrepo in
-  log "indexing local repo (${built} package(s))"
-  chroot_mount "${BROOT}"
-  mkdir -p "${BROOT}/localrepo"
-  mount --bind "${LOCALREPO}" "${BROOT}/localrepo"
-  chroot "${BROOT}" bash -lc "cd /localrepo && rm -f ${REPO_DB} pocknix.db && repo-add -q ${REPO_DB} *.pkg.tar.*"
   umount "${BROOT}/localrepo"
   chroot_umount "${BROOT}"
   trap - EXIT
 
+  [ "${built}" -gt 0 ] || die "no packages built"
   ok "local repo ready -> ${LOCALREPO}"
   ls -1 "${LOCALREPO}"/*.pkg.tar.* 2>/dev/null | sed 's#.*/#  #'
 }

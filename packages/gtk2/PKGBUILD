@@ -13,7 +13,9 @@ depends=('atk' 'cairo' 'gdk-pixbuf2' 'glib2' 'pango' 'harfbuzz' 'fontconfig'
          'libx11' 'libxext' 'libxi' 'libxrandr' 'libxcursor' 'libxcomposite'
          'libxdamage' 'libxinerama' 'libxrender' 'libepoxy' 'libxkbcommon' 'wayland'
          'shared-mime-info' 'libtiff' 'libjpeg-turbo' 'libpng' 'libffi')
-makedepends=('pkgconf')
+# glib2-devel ships glib-mkenums/glib-genmarshal (Arch split them out of glib2); intltool for
+# the autotools i18n build. (autoconf/automake/libtool/gettext come from base-devel.)
+makedepends=('pkgconf' 'glib2-devel' 'intltool')
 provides=('gtk2' 'libgtk-x11-2.0.so' 'libgdk-x11-2.0.so')
 options=('!emptydirs')
 source=("https://download.gnome.org/sources/gtk+/2.24/gtk+-${pkgver}.tar.xz"
