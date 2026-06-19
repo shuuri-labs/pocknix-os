@@ -74,8 +74,11 @@ install_local_packages() {
 }
 
 read_pkglist() {
-  # strip comments/blank lines from a package list file
-  sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$1"
+  # One package per line, optional inline "# comment". Strip the comment and take the first
+  # token: `sed 's/#.*//'` alone LEAVES the whitespace before the # (e.g. "vulkan-tools     "),
+  # which pacman then can't match -> "target not found". awk $1 drops surrounding whitespace and
+  # blank/comment-only lines cleanly.
+  awk '{ sub(/#.*/, ""); if ($1 != "") print $1 }' "$1"
 }
 
 configure_keyring() {
