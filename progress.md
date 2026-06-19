@@ -20,14 +20,16 @@ Validated end-to-end on-device (2026-06-19):
   `gdk-pixbuf2` from ALARM, and put **`steamrtarm64/` on `LD_LIBRARY_PATH`** (bundled libvpx.so.6
   etc.). Also: `seatd` for the seat, `cd` to a valid dir (Steam getcwd path resolution).
 
-**BLOCKER (Steam-internal, not pocknix):** Big Picture dies with
-`Fatal Error: Could not load module 'bin/vgui2_s.dll'` + `execl failed errno 2`. The client
-layout has no `bin/` subdir; ROCKNIX's `run_steam_first_launch()` **bootstraps the install by
-running the x86 `/usr/bin/steam -exitsteam` under FEX twice** before the native launch — which
-we skipped (no FEX). So the native client's first-time install wiring is incomplete.
-**Likely fix = add FEX-emu to bootstrap Steam** (games can still run native after). This is the
-FEX dependency plan.md deferred; revisit as the next Phase 3 step, OR investigate a FEX-free
-bootstrap. Packages done: gamescope, gtk2, inputplumber, pocknix-bsp, pocknix-steam.
+**FIX FOUND — native bootstrap, NO FEX.** Big Picture died with `Could not load module
+'bin/vgui2_s.dll'` because the install bootstrap was incomplete, not because of a missing x86/FEX
+step. Per **armada's `generate-steam-bootstrap.sh`**, the native arm64 client bootstraps itself:
+run `steamrtarm64/steam -exitsteam` **under Xvfb** (virtual display → updater self-updates + lays
+out the full install, `.installed`) + the **full `.steam` symlink set** (sdk32/64/arm64,
+bin32→ubuntu12_32, bin64→ubuntu12_64). Our failure: ran `-exitsteam` with no display + only
+`steam`/`sdkarm64` symlinks. Fixed in `pocknix-steam-install` (depends += xorg-server-xvfb).
+**FEX is only needed for x86 game content later (Proton), NOT the native client.** holo aarch64
+repo: gamescope yes, steam no (client comes from Valve CDN). Packages: gamescope, gtk2,
+inputplumber, pocknix-bsp, pocknix-steam.
 
 Build-system note: `build-packages.sh` now wires a `[pocknix]` repo into the build chroot so
 local packages can depend on each other; `make packages PKG="a b"` builds a subset.
