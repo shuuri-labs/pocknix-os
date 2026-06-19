@@ -49,6 +49,13 @@ networkmanager) are declared + pulled on a clean install/image (they were hand-`
 iteration). (2) On-device **validate the boot session** end-to-end (audio in-session, gamepad, seat
 hand-off from getty). (3) First-boot **root-fs expand** service (64GB SD had 4.1G partition).
 
+**Phase 3b — x86 game content via FEX + Proton (deferred, scoped):** native client/UI need NO FEX;
+**x86 games (Proton 11 ARM) DO** — Proton is NOT self-contained, FEX is OS-level. Need FEX **with
+thunks** + an **x86 rootfs** + **binfmt** + native-Vulkan (Turnip) passthrough + the **CachyOS Proton
+11 arm64** build + a per-game FEX-config shim. Full scoped plan + ROCKNIX-vs-armada reference table:
+[`docs/fex-proton-plan.md`](docs/fex-proton-plan.md). Crux/risk = the thunk build (ROCKNIX needs nix;
+generic distro FEX lacks thunks).
+
 ## Phase 3 — native ARM client journey (how we got to the milestone)
 What's validated on-device (2026-06-19):
 - **gamescope** (ROCKNIX-patched, `packages/gamescope`) drives the RP6 panel — `pocknix-steam`
