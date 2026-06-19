@@ -5,37 +5,41 @@ Working notes for picking this back up after a break. For the *why* behind decis
 testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
-_Last updated: 2026-06-18 — Phase 3: GPU + gamescope rendering on the RP6 panel._
+_Last updated: 2026-06-19 — Phase 3: native ARM Steam re-aligned to armada (channel + CWD fixes)._
 
 ---
 
-## ▶ Phase 3 (Steam session) — native ARM client RUNS; blocked on x86/FEX bootstrap
-Validated end-to-end on-device (2026-06-19):
+## ▶ Phase 3 (Steam session) — native ARM client RUNS; gamepadui fix PENDING ON-DEVICE TEST
+What's validated on-device (2026-06-19):
 - **gamescope** (ROCKNIX-patched, `packages/gamescope`) drives the RP6 panel — `pocknix-steam`
   launches it with `--force-orientation left --use-rotation-shader`, fixed 1920x1080@120.
 - **Native ARM64 Steam** downloads + runs as aarch64 (`packages/pocknix-steam`): the installer
-  (`pocknix-steam-install`, ported from ROCKNIX `Install Steam.sh`) fetches the steamrt3c ARM64
-  runtime + the publicbeta linuxarm64 client into `~/.local/share/Steam/steamrtarm64`.
+  fetches the steamrt3c ARM64 runtime + the linuxarm64 client into `~/.local/share/Steam/steamrtarm64`.
 - **steamui.so + all libs load** after fixes: built **gtk2** (`packages/gtk2`, EOL in Arch),
-  `gdk-pixbuf2` from ALARM, and put **`steamrtarm64/` on `LD_LIBRARY_PATH`** (bundled libvpx.so.6
-  etc.). Also: `seatd` for the seat, `cd` to a valid dir (Steam getcwd path resolution).
+  `gdk-pixbuf2` from ALARM, **`steamrtarm64/` first on `LD_LIBRARY_PATH`** (bundled libvpx.so.6
+  etc.), `seatd` for the seat.
 
-**BLOCKER — experimental ARM gamepad-UI init (NOT FEX). See
-[`steam-native-arm-status.md`](steam-native-arm-status.md) for the full write-up.** The native
-client downloads, runs (aarch64), loads all libs, and **bootstraps under Xvfb** (armada's method:
-`steamrtarm64/steam -exitsteam` under a virtual display + full `.steam` symlinks sdk32/64/arm64,
-bin32→ubuntu12_32, bin64→ubuntu12_64; `pocknix-steam-install`, depends += xorg-server-xvfb). But
-the `-gamepadui` launch still fatals:
-`UpdateUI CreateGlFont regular failed` (missing updater fonts) +
-`Could not load module 'bin/vgui2_s.dll'` (the .so is found per strace, but the client pulls the
-**x86_64 `steamrt64` pressure-vessel** for the VGUI module → mis-selected runtime) +
-`execl errno 2` (missing `steam_msg.sh` error dialog, harmless). **FEX does NOT fix this** (it's
-not x86 emulation — it's the native client's UI/runtime init). Tried: gtk2/gdk-pixbuf2,
-steamrtarm64 on LDLP (libvpx.so.6), seatd, cd-valid-dir, full symlinks, Xvfb bootstrap, dropping
-skip-flags, bin symlink, strace. Open leads: provide updater fonts / force a full self-update;
-pin the steamrtarm64 (arm64) runtime over steamrt64; diff against a working armada/ROCKNIX tree.
-**Decision pending:** checkpoint Steam → Phase 4 (Plasma, needs none of this), vs. keep chasing
-Valve beta internals. holo aarch64 repo: gamescope yes, steam no (client = Valve CDN). Packages:
+**The `-gamepadui` fatals (`CreateGlFont failed` + `Could not load module 'bin/vgui2_s.dll'` +
+`execl errno 2`) were NOT FEX/runtime problems.** Reading armada's ACTUAL source
+(`gh api repos/virtudude/armada/contents/build_files/generate-steam-bootstrap.sh` +
+`system_files/usr/libexec/armada/launch-steam`) — not the secondhand summary in
+`steam-native-arm-status.md` — surfaced the real deltas (commit `474491b`):
+- **Wrong client channel.** We pulled plain `publicbeta`; armada pulls **`steamdeck_publicbeta`**,
+  which ships the Steam Deck Big-Picture UI payload (updater **fonts** + vgui assets). → fixes
+  `CreateGlFont`. `package/beta` + manifest name now use `steamdeck_publicbeta`.
+- **Wrong CWD.** Steam loads `bin/vgui2_s.dll` **relative to getcwd**. armada `cd`s into
+  `steamrtarm64/`; we were `cd`-ing to `$HOME`. → fixes "Could not load module".
+- **Missing `.steam/root` symlink.** Steam execs `$HOME/.steam/root/steam_msg.sh`. → fixes
+  `execl errno 2`. (Also reverted a wrong-turn LDLP removal — armada keeps steamrtarm64 first.)
+- Dropped the `registry.vdf`/OOBE seed I'd tried — armada deliberately *removes* registry.vdf
+  from its seed, so it was an untested confound.
+
+**NEXT: on-device test** (build in Fedora VM → scp pkg → `pacman -U` → `rm -rf ~/.local/share/Steam
+~/.steam` to force re-pull from the new channel → `pocknix-steam-install` → `pocknix-steam`).
+Verify `package/beta` == `steamdeck_publicbeta` and the `*.installed` manifest appears. If the
+fonts/vgui fatals are gone, Steam is unblocked. `steam-native-arm-status.md` is now partly
+SUPERSEDED (its "x86 runtime mis-selection" hypothesis was wrong — it was channel + CWD).
+holo aarch64 repo: gamescope yes, steam no (client = Valve CDN). Packages:
 gamescope, gtk2, inputplumber, pocknix-bsp, pocknix-steam.
 
 Build-system note: `build-packages.sh` now wires a `[pocknix]` repo into the build chroot so
