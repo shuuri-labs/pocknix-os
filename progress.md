@@ -9,7 +9,39 @@ _Last updated: 2026-06-19 — Phase 3: native ARM Steam re-aligned to armada (ch
 
 ---
 
-## ▶ Phase 3 (Steam session) — native ARM client RUNS; gamepadui fix PENDING ON-DEVICE TEST
+## 🎉 MILESTONE: Steam Big Picture RENDERS on the RP6 (native ARM, NO FEX) — 2026-06-19
+`pocknix-steam` brings up **native ARM64 Steam gamepadui under gamescope on the panel.** The whole
+gamepadui chain was a sequence of single missing native-ARM deps / config deltas vs armada — each
+found by reading armada's real source + `ldd ... | grep 'not found'`, none needing FEX:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `CreateGlFont … failed` (missing fonts) | wrong client channel (plain `publicbeta`) | **`steamdeck_publicbeta`** channel (ships Big-Picture font payload) |
+| `execl errno 2` (`steam_msg.sh`) | missing `~/.steam/root` | add **`.steam/root`** symlink |
+| `Could not load module 'bin/vgui2_s.dll'` | `vgui2_s.so` DT_NEEDED `libopenal.so.1` unresolved (+ CWD) | dep **`openal`**; `cd steamrtarm64` (getcwd-relative module load) |
+| steamwebhelper CEF crash (`Failed creating offscreen shared JS context`) | `steamwebhelper`/`libcef.so` DT_NEEDED `libcups.so.2` | dep **`libcups`** |
+| `Failed to connect to websocket` (+ `lsof: command not found` spam) | Steam shells to `lsof` to find webhelper's CEF port | dep **`lsof`** |
+
+Also matched armada's launch flags exactly: `-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`
+(dropped ROCKNIX's `-nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders`). The
+**native arm64 steamwebhelper EXISTS** (`steamrtarm64/steamwebhelper` is aarch64) and runs native —
+**FEX is NOT needed for the client or the UI** (only later for x86 *game* content / Proton). Deps
+now in `pocknix-steam` PKGBUILD: openal, libcups, lsof (+ gtk2, gdk-pixbuf2). Commits 474491b →
+2229a5b → 948072b → 4e3dbdf → 4bb306a. `steam-native-arm-status.md` SUPERSEDED (its x86/FEX-runtime
+hypothesis was wrong end to end).
+
+**OPEN (post-launch polish, 2026-06-19):**
+- **Setup-wizard Wi-Fi shows "no connections found"** though the device is online (iwd-managed). Steam
+  enumerates networks via **NetworkManager over D-Bus**; we disabled NM (iwd-direct) → Steam sees no
+  backend. Need to give Steam a network backend it can talk to (NM-with-iwd-backend, or accept Steam
+  can't manage Wi-Fi and pre-seed connectivity). INVESTIGATING — see below.
+- **Some CJK/foreign-language fonts not rendering** in the language selector (missing CJK font pkg —
+  likely `noto-fonts-cjk`; the Latin set works). Minor.
+- Benign noise (ignore): `steam-runtime-launcher-service not found` (present in tree, Steam disables
+  it + continues), `steamrtarm32/*driverquery` (we only have arm64), `steamos-select-branch` /
+  `lsb_release` / `steamos-polkit-helpers/*` (SteamOS-only helpers), `pipewire pw_context_connect`.
+
+## Phase 3 — native ARM client journey (how we got to the milestone)
 What's validated on-device (2026-06-19):
 - **gamescope** (ROCKNIX-patched, `packages/gamescope`) drives the RP6 panel — `pocknix-steam`
   launches it with `--force-orientation left --use-rotation-shader`, fixed 1920x1080@120.
