@@ -73,17 +73,11 @@ EOF
   # wlan0; iwd does the 802.11 association. Credentials live in an NM keyfile so they show up in
   # Steam's network UI. iwd must NOT do its own netconfig here (EnableNetworkConfiguration=false),
   # else it fights NM for DHCP on wlan0 (the conflict that forced the old iwd-direct model).
+  #
+  # The static NM confs come from the OVERLAY (rsync'd above): conf.d/20-wifi-backend.conf
+  # (wifi.backend=iwd) + conf.d/10-unmanage-gadget.conf (usb0/gadget/ncm0 unmanaged, NOT wlan0).
+  # Here we only write the build-var-dependent bits: iwd regdom + the NM connection keyfile.
   install -d -m 755 "${root}/etc/NetworkManager/conf.d"
-  # use the iwd backend, not wpa_supplicant
-  cat > "${root}/etc/NetworkManager/conf.d/00-wifi-backend-iwd.conf" <<'EOF'
-[device]
-wifi.backend=iwd
-EOF
-  # keep NM off the USB-gadget interfaces, but let it MANAGE wlan0 (Steam needs that)
-  cat > "${root}/etc/NetworkManager/conf.d/10-unmanage-gadget.conf" <<'EOF'
-[keyfile]
-unmanaged-devices=interface-name:usb0;interface-name:gadget;interface-name:ncm0
-EOF
   # iwd = backend only: keep regdom Country (5 GHz) but turn its own netconfig OFF.
   install -d -m 755 "${root}/etc/iwd"
   {
