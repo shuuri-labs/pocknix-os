@@ -7,6 +7,9 @@ set -e
 
 export HOME="${HOME:-/root}"
 STEAM="${HOME}/.local/share/Steam"
+# Steam resolves its module paths (bin/vgui2_s.dll …) via getcwd; a stale/deleted CWD makes
+# that fail fatally. Always start from a valid directory.
+cd "${HOME}" 2>/dev/null || cd /
 
 # install the native client + runtime on first run
 if [ ! -x "${STEAM}/steamrtarm64/steam" ]; then
@@ -19,7 +22,7 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
-  LD_LIBRARY_PATH="${STEAM}/lib/aarch64-linux-gnu/" \
+  LD_LIBRARY_PATH="${STEAM}/steamrtarm64:${STEAM}/lib/aarch64-linux-gnu" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     "${STEAM}/steamrtarm64/steam" -steamdeck -steamos3 -gamepadui \

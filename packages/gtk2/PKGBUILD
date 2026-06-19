@@ -1,0 +1,57 @@
+# gtk2 — GTK+ 2 GUI toolkit. EOL and dropped from Arch/ALARM, but Steam's native ARM client
+# UI (steamui.so) dlopens libgtk-x11-2.0.so.0, so we build it (as ROCKNIX does). All of its
+# own deps are still in ALARM. Patches ported from ROCKNIX (incl. the gcc15 build fix; GTK2
+# predates modern compiler strictness).
+pkgname=gtk2
+pkgver=2.24.33
+pkgrel=1
+pkgdesc="GTK+ 2 GUI toolkit (built for ARM; required by Steam's native client UI)"
+arch=('aarch64')
+url="https://www.gtk.org/"
+license=('LGPL')
+depends=('atk' 'cairo' 'gdk-pixbuf2' 'glib2' 'pango' 'harfbuzz' 'fontconfig'
+         'libx11' 'libxext' 'libxi' 'libxrandr' 'libxcursor' 'libxcomposite'
+         'libxdamage' 'libxinerama' 'libxrender' 'libepoxy' 'libxkbcommon' 'wayland'
+         'shared-mime-info' 'libtiff' 'libjpeg-turbo' 'libpng' 'libffi')
+# glib2-devel ships glib-mkenums/glib-genmarshal (Arch split them out of glib2); intltool for
+# the autotools i18n build. (autoconf/automake/libtool/gettext come from base-devel.)
+makedepends=('pkgconf' 'glib2-devel' 'intltool')
+provides=('gtk2' 'libgtk-x11-2.0.so' 'libgdk-x11-2.0.so')
+options=('!emptydirs')
+source=("https://download.gnome.org/sources/gtk+/2.24/gtk+-${pkgver}.tar.xz"
+        '001-no-demos.patch'
+        '002-gentoo-fix-casts.patch'
+        '003-fix-building-with-gcc15.patch')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+prepare() {
+  cd "gtk+-${pkgver}"
+  patch -p1 < "${srcdir}/001-no-demos.patch"
+  patch -p1 < "${srcdir}/002-gentoo-fix-casts.patch"
+  patch -p1 < "${srcdir}/003-fix-building-with-gcc15.patch"
+}
+
+build() {
+  cd "gtk+-${pkgver}"
+  # GTK2 2.24.x predates gcc 14+'s default-error diagnostics; the patches cover the worst,
+  # relax the rest so the build doesn't abort on legacy C.
+  export CFLAGS+=" -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion"
+  ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
+    --with-x \
+    --enable-introspection=no \
+    --disable-cups \
+    --disable-glibtest \
+    --enable-xinerama=no \
+    --disable-maintainer-mode \
+    --disable-gtk-doc
+  make
+}
+
+package() {
+  cd "gtk+-${pkgver}"
+  make DESTDIR="${pkgdir}" install
+  # gtk-update-icon-cache is its own package in modern Arch (shared across GTK versions);
+  # drop ours to avoid a file conflict on install.
+  rm -f "${pkgdir}/usr/bin/gtk-update-icon-cache" \
+        "${pkgdir}/usr/share/man/man1/gtk-update-icon-cache.1"
+}

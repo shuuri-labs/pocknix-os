@@ -46,12 +46,25 @@ if [ ! -d "${CLIENT_DIR}" ]; then
   rm -f "${zip_path}"
   chmod +x "${CLIENT_DIR}/steam"
   mkdir -p "${STEAM}/package"; echo publicbeta > "${STEAM}/package/beta"
+  # Full .steam symlink layout (matches a real Steam install; the updater + module loader
+  # resolve runtimes/UI modules through these). Targets are populated by the bootstrap below.
   mkdir -p "${STEAM_DOT}"
-  ln -sfn "${STEAM}" "${STEAM_DOT}/steam"
-  ln -sfn "${STEAM}/linuxarm64" "${STEAM_DOT}/sdkarm64"
+  ln -sfn "${STEAM}"                "${STEAM_DOT}/steam"
+  ln -sfn "${STEAM}/linux32"        "${STEAM_DOT}/sdk32"
+  ln -sfn "${STEAM}/linux64"        "${STEAM_DOT}/sdk64"
+  ln -sfn "${STEAM}/linuxarm64"     "${STEAM_DOT}/sdkarm64"
+  ln -sfn "${STEAM}/ubuntu12_32"    "${STEAM_DOT}/bin32"
+  ln -sfn "${STEAM}/ubuntu12_64"    "${STEAM_DOT}/bin64"
 fi
 
-# 3. native first launch (initializes the client, then exits)
-log "First launch (initializing client)..."
-LD_LIBRARY_PATH="${STEAM}/lib/aarch64-linux-gnu/" "${CLIENT_DIR}/steam" -steamdeck -exitsteam || true
+# 3. Bootstrap the NATIVE client (NO FEX). Run the arm64 updater under a virtual X display
+#    (Xvfb) so it can self-update and lay out the complete install (writes .installed) — the
+#    -gamepadui launch needs that scaffolding (modules, bin/, runtimes). Running -exitsteam
+#    with no display leaves it incomplete (the 'bin/vgui2_s.dll' failure). Mirrors armada's
+#    generate-steam-bootstrap.sh. steamrtarm64/ on the path for the bundled libs (libvpx.so.6).
+log "Bootstrapping native client under Xvfb (self-update + install layout; can take minutes)..."
+STEAMOS=1 STEAM_RUNTIME=1 LD_LIBRARY_PATH="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu" \
+  timeout 900 xvfb-run -a "${CLIENT_DIR}/steam" -steamdeck -exitsteam || true
+[ -f "${STEAM}/.installed" ] && log "Bootstrap complete (.installed present)." \
+  || warn "Bootstrap may be incomplete (no .installed) — check network / rerun."
 log "Native ARM64 Steam installed at ${CLIENT_DIR}."
