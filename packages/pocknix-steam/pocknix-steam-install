@@ -15,8 +15,9 @@ RUNTIME_TAR_URL="https://repo.steampowered.com/steamrt3c/images/latest-public-be
 STEAM_MANIFEST_URL="https://client-update.fastly.steamstatic.com/steam_client_publicbeta_linuxarm64"
 STEAM_CDN="https://client-update.steamstatic.com"
 
-log() { echo -e "[\033[1;34mpocknix-steam\033[0m] $1"; }
-die() { echo -e "[\033[1;31mERROR\033[0m] $1" >&2; exit 1; }
+log()  { echo -e "[\033[1;34mpocknix-steam\033[0m] $1"; }
+warn() { echo -e "[\033[1;33mWARN\033[0m] $1" >&2; }
+die()  { echo -e "[\033[1;31mERROR\033[0m] $1" >&2; exit 1; }
 
 mkdir -p "${STEAM}"
 
