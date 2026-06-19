@@ -46,7 +46,21 @@ OUT=/var/log/pocknix-diag.txt
   printf '\n## rfkill\n'; rfkill list 2>/dev/null || echo "(rfkill n/a)"
   printf '\n## regulatory.db present?\n'; ls -l /usr/lib/firmware/regulatory.db* 2>/dev/null || echo "MISSING"
   printf '\n## ath12k dmesg\n'; dmesg 2>/dev/null | grep -i ath12k | tail -20
-  printf '\n## NetworkManager + iwd journal (recent)\n'; journalctl -u NetworkManager -u iwd --no-pager -n 150 2>/dev/null
+  printf '\n## wifi: FORCED connect attempt (prints the real activation failure reason)\n'
+  prof=$(ls /etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null | head -1)
+  if [ -n "$prof" ]; then
+    name=$(basename "${prof%.nmconnection}")
+    echo "+ nmcli --wait 25 connection up \"$name\""
+    nmcli --wait 25 connection up "$name" 2>&1
+    echo "--- wlan0 after attempt ---"
+    nmcli -f GENERAL.STATE,GENERAL.REASON,GENERAL.CONNECTION,IP4.ADDRESS device show wlan0 2>&1
+  else
+    echo "(no profile to activate)"
+  fi
+  printf '\n## NetworkManager journal (activation; iwd phy-capability spam filtered out)\n'
+  journalctl -u NetworkManager --no-pager -n 140 2>/dev/null
+  printf '\n## iwd journal (state/connect/auth/error events only)\n'
+  journalctl -u iwd --no-pager 2>/dev/null | grep -iE 'state:|connect|error|fail|auth|handshake|agent|psk|secret|disconnect' | tail -40
   printf '\n## suspend support\n'
   echo "mem_sleep: $(cat /sys/power/mem_sleep 2>/dev/null)"
   echo "state:     $(cat /sys/power/state 2>/dev/null)"
