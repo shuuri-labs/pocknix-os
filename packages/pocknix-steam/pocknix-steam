@@ -31,10 +31,14 @@ touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 # rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left
 
+# Steam client flags: match armada's gamescope-session steam CLIENTCMD EXACTLY
+# (`-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`). We previously inherited ROCKNIX's
+# extra skip-flags (-nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders) — but
+# -skipinitialbootstrap suppresses the step that extracts/places bin/vgui2_s from the .zip.vz
+# payload, so the gamepadui launch fataled with "Could not load module 'bin/vgui2_s.dll'".
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
   LD_LIBRARY_PATH="${LDLP}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
-    "${CLIENT}" -steamdeck -steamos3 -gamepadui \
-    -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders
+    "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles

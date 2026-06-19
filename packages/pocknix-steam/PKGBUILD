@@ -11,10 +11,13 @@ url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 # gamescope = our ROCKNIX-patched compositor; wget/unzip/curl/tar fetch+unpack the client.
 # seatd (gamescope seat) + pipewire (audio) come from the base image.
-# gtk2 (built by us; EOL in Arch) + gdk-pixbuf2 = the libs steamui.so dlopens. xorg-server-xvfb
-# provides the virtual X display used to bootstrap the native client (no FEX). The rest of the
-# native client's deps resolve from the base image / the steamrt runtime.
-depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'xorg-server-xvfb')
+# gtk2 (built by us; EOL in Arch) + gdk-pixbuf2 = libs steamui.so dlopens. openal: the native
+# arm64 vgui2_s.so has a DT_NEEDED on libopenal.so.1 — without it dlopen fails and gamepadui
+# fatals with "Could not load module 'bin/vgui2_s.dll'" (the .so opens but won't load). On a
+# from-scratch ALARM base nothing else pulls openal in (Fedora/armada gets it transitively).
+# xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX). The
+# rest of the native client's deps resolve from the base image / the steamrt runtime.
+depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'xorg-server-xvfb')
 source=('pocknix-steam-install' 'pocknix-steam')
 sha256sums=('SKIP' 'SKIP')
 
