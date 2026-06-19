@@ -63,9 +63,11 @@ install_local_packages() {
   chroot "${root}" pacman -Sy --noconfirm
   # gamescope deps (xorg-xwayland, seatd, libdisplay-info, …) resolve from ALARM.
   # inputplumber = gamepad -> Steam Input (RP6 config shipped by pocknix-bsp).
-  # pocknix-steam = the Steam session (launcher + installer); pulls local gtk2 + gamescope and
-  # ALARM deps (openal, libcups, lsof, noto-fonts*, networkmanager, gdk-pixbuf2, xorg-server-xvfb).
-  chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp gamescope inputplumber pocknix-steam
+  # pocknix-steam = the Steam session (launcher + installer); pulls local gtk2 + gamescope +
+  # pocknix-steamos-shim and ALARM deps (openal, libcups, lsof, noto-fonts*, networkmanager, …).
+  # pocknix-steamos-shim = steamos-update/branch/BIOS stubs so the Deck UI OOBE doesn't dead-end.
+  chroot "${root}" pacman -S --noconfirm --needed \
+        pocknix-bsp gamescope inputplumber pocknix-steamos-shim pocknix-steam
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo

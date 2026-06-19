@@ -30,7 +30,8 @@ license=('GPL2')
 # xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX). The
 # rest of the native client's deps resolve from the base image / the steamrt runtime.
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
-         'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'xorg-server-xvfb')
+         'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'pocknix-steamos-shim'
+         'xorg-server-xvfb')
 source=('pocknix-steam-install' 'pocknix-steam' 'registry.vdf')
 sha256sums=('SKIP' 'SKIP' 'SKIP')
 
