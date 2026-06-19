@@ -67,56 +67,72 @@ EOF
     chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" 2>/dev/null || true
   fi
 
-  # Wi-Fi pre-seed — provision iwd DIRECTLY. iwd is the backend and owns autoconnect;
-  # an NM keyfile profile never reaches iwd (the credentials don't get handed off), so
-  # we write iwd's own known-network file + main.conf (regulatory Country, needed for
-  # 5 GHz; EnableNetworkConfiguration so iwd does its own DHCP) and hand wlan0 to iwd
-  # by marking it unmanaged in NetworkManager.
-  if [ -n "${SD_WIFI_SSID}" ]; then
-    log "pre-seeding Wi-Fi (iwd) for SSID '${SD_WIFI_SSID}'${SD_WIFI_COUNTRY:+, country ${SD_WIFI_COUNTRY}}"
-    install -d -m 755 "${root}/etc/iwd"
-    {
-      echo "[General]"
-      [ -n "${SD_WIFI_COUNTRY}" ] && echo "Country=${SD_WIFI_COUNTRY}"
-      echo "EnableNetworkConfiguration=true"
-      echo ""
-      echo "[Network]"
-      echo "NameResolvingService=systemd"
-    } > "${root}/etc/iwd/main.conf"
-    # iwd pushes DHCP DNS to systemd-resolved; point glibc at resolved's stub.
-    ln -sf /run/systemd/resolve/stub-resolv.conf "${root}/etc/resolv.conf"
-    install -d -m 700 "${root}/var/lib/iwd"
-    printf '[Security]\nPassphrase=%s\n' "${SD_WIFI_PSK}" > "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk"
-    chmod 600 "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk"
-    # let iwd own wlan0 end-to-end (autoconnect + DHCP); keep NM off it to avoid conflict
-    cat > "${root}/etc/NetworkManager/conf.d/10-unmanage-gadget.conf" <<EOF
-[keyfile]
-unmanaged-devices=interface-name:usb0;interface-name:gadget;interface-name:ncm0;interface-name:wlan0
+  # Wi-Fi pre-seed — SteamOS topology: NetworkManager is the FRONT-END (Steam's gamepadui manages
+  # Wi-Fi ONLY through NM's D-Bus API — without it the setup wizard shows "no connections found"
+  # even when online), with iwd as the Wi-Fi BACKEND. NM owns IP config (DHCP/DNS) and MANAGES
+  # wlan0; iwd does the 802.11 association. Credentials live in an NM keyfile so they show up in
+  # Steam's network UI. iwd must NOT do its own netconfig here (EnableNetworkConfiguration=false),
+  # else it fights NM for DHCP on wlan0 (the conflict that forced the old iwd-direct model).
+  install -d -m 755 "${root}/etc/NetworkManager/conf.d"
+  # use the iwd backend, not wpa_supplicant
+  cat > "${root}/etc/NetworkManager/conf.d/00-wifi-backend-iwd.conf" <<'EOF'
+[device]
+wifi.backend=iwd
 EOF
+  # keep NM off the USB-gadget interfaces, but let it MANAGE wlan0 (Steam needs that)
+  cat > "${root}/etc/NetworkManager/conf.d/10-unmanage-gadget.conf" <<'EOF'
+[keyfile]
+unmanaged-devices=interface-name:usb0;interface-name:gadget;interface-name:ncm0
+EOF
+  # iwd = backend only: keep regdom Country (5 GHz) but turn its own netconfig OFF.
+  install -d -m 755 "${root}/etc/iwd"
+  {
+    echo "[General]"
+    [ -n "${SD_WIFI_COUNTRY}" ] && echo "Country=${SD_WIFI_COUNTRY}"
+    echo "EnableNetworkConfiguration=false"
+  } > "${root}/etc/iwd/main.conf"
+  # NM integrates DNS via systemd-resolved; point glibc at resolved's stub.
+  ln -sf /run/systemd/resolve/stub-resolv.conf "${root}/etc/resolv.conf"
+
+  if [ -n "${SD_WIFI_SSID}" ]; then
+    log "pre-seeding Wi-Fi (NetworkManager + iwd backend) for SSID '${SD_WIFI_SSID}'${SD_WIFI_COUNTRY:+, country ${SD_WIFI_COUNTRY}}"
+    install -d -m 700 "${root}/etc/NetworkManager/system-connections"
+    cat > "${root}/etc/NetworkManager/system-connections/${SD_WIFI_SSID}.nmconnection" <<EOF
+[connection]
+id=${SD_WIFI_SSID}
+type=wifi
+interface-name=wlan0
+autoconnect=true
+
+[wifi]
+mode=infrastructure
+ssid=${SD_WIFI_SSID}
+
+[wifi-security]
+key-mgmt=wpa-psk
+psk=${SD_WIFI_PSK}
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto
+EOF
+    chmod 600 "${root}/etc/NetworkManager/system-connections/${SD_WIFI_SSID}.nmconnection"
     [ -z "${SD_WIFI_COUNTRY}" ] && warn "SD_WIFI_COUNTRY unset — world regdom; 5 GHz won't associate"
-  elif [ -n "${SD_WIFI_COUNTRY}" ]; then
-    install -d -m 755 "${root}/etc/iwd"
-    printf '[General]\nCountry=%s\n' "${SD_WIFI_COUNTRY}" > "${root}/etc/iwd/main.conf"
   fi
 
   # enable services for interaction/verification with no keyboard:
   #   sshd + iwd (wifi) + systemd-resolved (DNS), usbgadget (ssh over USB-C), diag (boot report).
   #   seatd: gamescope's DRM backend needs a seat (no logind seat over SSH).
   #   inputplumber: gamepad -> Steam Input (DualSense) mapping.
-  chroot "${root}" systemctl enable sshd iwd systemd-resolved seatd inputplumber \
+  #   NetworkManager (front-end Steam talks to) + iwd (its wifi backend) BOTH run now.
+  chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
         pocknix-usbgadget.service pocknix-diag.service >/dev/null 2>&1 || true
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
   # WirePlumber applies the AYN-Odin2 UCM (shipped by pocknix-bsp) automatically.
   chroot "${root}" systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service \
         >/dev/null 2>&1 || true
-  if [ -n "${SD_WIFI_SSID}" ]; then
-    # iwd owns wifi end-to-end incl. its own DHCP. NetworkManager, if running, registers
-    # as iwd's netconfig agent and then refuses the unmanaged wlan0 -> IP never gets set.
-    # So keep NM OFF when we've iwd-preseeded.
-    chroot "${root}" systemctl disable NetworkManager >/dev/null 2>&1 || true
-  else
-    chroot "${root}" systemctl enable NetworkManager >/dev/null 2>&1 || true
-  fi
 }
 
 main() {
