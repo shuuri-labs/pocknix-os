@@ -11,9 +11,10 @@ url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 # gamescope = our ROCKNIX-patched compositor; wget/unzip/curl/tar fetch+unpack the client.
 # seatd (gamescope seat) + pipewire (audio) come from the base image.
-# gtk2 (built by us; EOL in Arch) + gdk-pixbuf2 = the libs steamui.so dlopens. The rest of
-# the native client's deps resolve from the base image / the steamrt runtime.
-depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2')
+# gtk2 (built by us; EOL in Arch) + gdk-pixbuf2 = the libs steamui.so dlopens. xorg-server-xvfb
+# provides the virtual X display used to bootstrap the native client (no FEX). The rest of the
+# native client's deps resolve from the base image / the steamrt runtime.
+depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'xorg-server-xvfb')
 source=('pocknix-steam-install' 'pocknix-steam')
 sha256sums=('SKIP' 'SKIP')
 
