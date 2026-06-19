@@ -9,6 +9,25 @@ _Last updated: 2026-06-19 — Phase 3: native ARM Steam re-aligned to armada (ch
 
 ---
 
+## 🎉 MILESTONE: Steam LOGIN reached — native ARM Big Picture fully up on the RP6 — 2026-06-19
+End-to-end: boot → tty1 autologin → `pocknix-steam` → gamescope → native ARM Steam gamepadui →
+**OOBE cleared → logged in.** Final OOBE blocker after render was the Deck UI's OS-update step:
+it shells out to `steamos-update`/`steamos-select-branch`/`jupiter-initial-firmware-update`, which
+don't exist on our non-SteamOS base → `Updater apply error: 2`. Fixed by `packages/pocknix-steamos-shim`
+(stubs reporting "no update"). KEY: Steam calls the OS-update helper by **full polkit-helper path**
+`/usr/bin/steamos-polkit-helpers/steamos-update` (NOT via PATH) — shim must live there.
+steamos-select-branch is PATH-resolved. Real OTA = deferred Phase 3c (see below).
+
+### ⬜ Phase 3 polish punch-list (in-session, 2026-06-19) — Steam works, these are the rough edges
+| Pri | Item | Notes / likely area |
+|---|---|---|
+| **HIGH** | **D-pad doesn't work** (analog sticks do) | InputPlumber RSInput mapping — `pocknix-bsp` `01-rsinput-rp6.yaml`. D-pad evdev codes (ABS_HAT0X/Y vs BTN_DPAD_*) not mapped to the DualSense target. See [[rp6-input-audio]]. |
+| **HIGH** | **No audio + volume buttons dead** ("no output devices detected") | PipeWire not exposing a sink to Steam in-session. UCM works standalone (speaker-test OK) but the session user's PipeWire/WirePlumber may not be running / wrong runtime dir; Steam reads sinks via PipeWire. Volume keys = InputPlumber/evdev → no sink to act on. |
+| MED | gamescope refresh-rate limiting doesn't drive DRM (60 cap ≠ panel 60) | gamescope `GAMESCOPE_MODE_SAVE_FILE` / mode-switch path; our DRM backend may not be re-issuing the modeset. ROCKNIX uses `GAMESCOPE_MODE_SAVE_FILE=…/modes.cfg`. |
+| MED | mangoapp/MangoHud metrics don't show | `--mangoapp` flag not passed to gamescope (we dropped it) + mangohud/mangoapp not installed. ROCKNIX launch uses `--mangoapp`. |
+| LOW | "dock update" prompt with no dock | `jupiter-initial-firmware-update` stub returns 0; make dock/firmware checks report "no update/none" so the UI stops nagging. |
+| LOW | Phantom "wired network" in Steam net settings | NM exposes `usb0` (USB-gadget) or iwd's `/net/connman/iwd/0` p2p device. Mark usb0 `unmanaged` more fully or hide the p2p device. Cosmetic. |
+
 ## 🎉 MILESTONE: Steam Big Picture RENDERS on the RP6 (native ARM, NO FEX) — 2026-06-19
 `pocknix-steam` brings up **native ARM64 Steam gamepadui under gamescope on the panel.** The whole
 gamepadui chain was a sequence of single missing native-ARM deps / config deltas vs armada — each
