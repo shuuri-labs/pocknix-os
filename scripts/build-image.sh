@@ -56,14 +56,16 @@ install_local_packages() {
     warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping local pkgs"
     return 0
   fi
-  log "installing local pocknix packages (pocknix-bsp, gamescope, inputplumber)"
+  log "installing local pocknix packages (pocknix-bsp, gamescope, inputplumber, pocknix-steam)"
   append_local_repo "${root}/etc/pacman.conf"
   mkdir -p "${root}/localrepo"
   mount --bind "${LOCAL_REPO_DIR}" "${root}/localrepo"
   chroot "${root}" pacman -Sy --noconfirm
   # gamescope deps (xorg-xwayland, seatd, libdisplay-info, …) resolve from ALARM.
   # inputplumber = gamepad -> Steam Input (RP6 config shipped by pocknix-bsp).
-  chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp gamescope inputplumber
+  # pocknix-steam = the Steam session (launcher + installer); pulls local gtk2 + gamescope and
+  # ALARM deps (openal, libcups, lsof, noto-fonts*, networkmanager, gdk-pixbuf2, xorg-server-xvfb).
+  chroot "${root}" pacman -S --noconfirm --needed pocknix-bsp gamescope inputplumber pocknix-steam
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
