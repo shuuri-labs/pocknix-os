@@ -30,9 +30,8 @@ package() {
   # strip the "don't run as root" guard (single-user appliance runs the session as root)
   sed -i '/[Dd]on.t allow running as root/,/^fi$/d' root/usr/lib/steam/bin_steam.sh 2>/dev/null || true
 
-  cp -a root/usr/bin "${pkgdir}/usr/bin"
-  cp -a root/usr/lib "${pkgdir}/usr/lib"
-  [ -d root/usr/share ] && cp -a root/usr/share "${pkgdir}/usr/share" || true
+  # copy the whole usr/ tree at once (creates ${pkgdir}/usr)
+  cp -a root/usr "${pkgdir}/usr"
   # license
   install -d "${pkgdir}/usr/share/licenses/${pkgname}"
   [ -f root/usr/share/doc/steam/copyright ] && \
