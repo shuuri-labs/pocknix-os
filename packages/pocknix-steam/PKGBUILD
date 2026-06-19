@@ -30,11 +30,16 @@ license=('GPL2')
 # xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX). The
 # rest of the native client's deps resolve from the base image / the steamrt runtime.
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
-         'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'xorg-server-xvfb')
-source=('pocknix-steam-install' 'pocknix-steam')
-sha256sums=('SKIP' 'SKIP')
+         'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'pocknix-steamos-shim'
+         'xorg-server-xvfb')
+source=('pocknix-steam-install' 'pocknix-steam' 'registry.vdf')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-steam-install" "${pkgdir}/usr/bin/pocknix-steam-install"
   install -Dm755 "${srcdir}/pocknix-steam"         "${pkgdir}/usr/bin/pocknix-steam"
+  # OOBE-complete registry seed (ROCKNIX resources/registry.vdf). Seeded to ~/.steam/registry.vdf
+  # by the installer so the gamepadui skips the Steam Deck OOBE — whose "required update" step
+  # tries to update SteamOS (which we aren't) and dead-ends with "Updater apply error: 2".
+  install -Dm644 "${srcdir}/registry.vdf"          "${pkgdir}/usr/share/pocknix-steam/registry.vdf"
 }

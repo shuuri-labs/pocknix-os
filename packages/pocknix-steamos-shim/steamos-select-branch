@@ -1,0 +1,12 @@
+#!/bin/bash
+# pocknix steamos-select-branch shim — Steam's "OS Update Channel" hook (also queried during OOBE;
+# its absence logs "failed to query current OS branch"). One fixed channel; selection is a no-op
+# until real OTA exists. Mirrors armada-select-branch's flags:
+#   -l  list available channel tokens   -c  current channel token   <branch>  set channel
+set -u
+case "${1:-}" in
+  -l) printf '%s\n' stable ;;
+  -c) printf '%s\n' stable ;;
+  *)  : ;;   # set branch: accept, no-op
+esac
+exit 0

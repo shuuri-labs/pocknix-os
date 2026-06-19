@@ -1,0 +1,4 @@
+#!/bin/bash
+# pocknix jupiter-dock-updater shim — Steam Deck dock firmware updater (Steam calls
+# /usr/bin/steamos-polkit-helpers/jupiter-dock-updater). No Deck dock on the RP6; no-op success.
+exit 0

@@ -1,0 +1,17 @@
+#!/bin/bash
+# pocknix steamos-update shim — Steam's OS-update hook (the Steam Deck UI / OOBE shells out to
+# `steamos-update`). pocknix-os is NOT SteamOS and has no atomic OTA backend yet, so we always
+# report "no update available" — otherwise the OOBE's "required update" step dead-ends with
+# "Updater apply error: 2 / unable to download required update".
+#
+# Interface mirrors Valve's steamos-update / armada-update so this is a DROP-IN for real OTA:
+#   exit 0 = update available / apply ok,  exit 7 = no update / nothing to do.
+# When real OTA lands, replace the body below; the Steam-facing contract stays identical.
+set -u
+for arg in "$@"; do
+  case "${arg}" in
+    --supports-duplicate-detection) exit 0 ;;   # capability probe
+    check) exit 7 ;;                             # no OS update available
+  esac
+done
+exit 0   # apply: nothing to do, report success
