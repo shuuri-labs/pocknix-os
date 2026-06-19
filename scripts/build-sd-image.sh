@@ -64,7 +64,8 @@ EOF
   if [ -d "${POCKNIX_ROOT}/overlay" ]; then
     log "installing overlay (usb-gadget + diag + autologin)"
     rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
-    chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" 2>/dev/null || true
+    chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" \
+             "${root}/usr/local/bin/pocknix-expand-root" 2>/dev/null || true
   fi
 
   # Wi-Fi pre-seed — SteamOS topology: NetworkManager is the FRONT-END (Steam's gamepadui manages
@@ -121,8 +122,10 @@ EOF
   #   seatd: gamescope's DRM backend needs a seat (no logind seat over SSH).
   #   inputplumber: gamepad -> Steam Input (DualSense) mapping.
   #   NetworkManager (front-end Steam talks to) + iwd (its wifi backend) BOTH run now.
+  #   pocknix-expand-root: first-boot grow of root partition+fs to fill the card.
   chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
-        pocknix-usbgadget.service pocknix-diag.service >/dev/null 2>&1 || true
+        pocknix-usbgadget.service pocknix-diag.service pocknix-expand-root.service \
+        >/dev/null 2>&1 || true
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
   # WirePlumber applies the AYN-Odin2 UCM (shipped by pocknix-bsp) automatically.
   chroot "${root}" systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service \

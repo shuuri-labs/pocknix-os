@@ -19,6 +19,7 @@ openssh
 e2fsprogs
 dosfstools
 util-linux
+cloud-guest-utils   # growpart — pocknix-expand-root grows the root partition to fill the SD on first boot
 
 # --- graphics stack (mesa from ALARM, NOT holo — see plan.md #1) ---
 mesa
