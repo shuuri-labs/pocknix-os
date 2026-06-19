@@ -1,0 +1,37 @@
+#!/bin/bash
+# pocknix-expand-root — on first boot, grow the root partition to fill the whole card, then
+# grow the ext4 filesystem online. The SD image is built as rootfs + SD_SLACK_MIB (a few GB),
+# so flashed to a bigger card it leaves the rest unallocated; without this the root fills up
+# fast (e.g. mid-Steam-download). Runs once (guarded by a flag); idempotent + safe to re-run.
+set -euo pipefail
+
+FLAG=/var/lib/pocknix/expand-root.done
+[ -e "${FLAG}" ] && exit 0
+
+log() { echo "[pocknix-expand-root] $*"; }
+
+# Resolve the real device backing / (e.g. /dev/mmcblk0p2, /dev/sda2, /dev/nvme0n1p2).
+src=$(findmnt -nro SOURCE /)
+src=$(readlink -f "${src}")
+case "${src}" in
+  */*[0-9]p[0-9]*) disk="${src%p*}"; part="${src##*p}" ;;   # mmcblk0p2 / nvme0n1p2
+  *[0-9])          disk="${src%%[0-9]*}"; part="${src##*[!0-9]}" ;;  # sda2
+  *) log "cannot parse root device '${src}' — skipping"; exit 0 ;;
+esac
+
+log "root=${src} disk=${disk} part=${part}"
+
+# growpart relocates the GPT backup header to the end of the (now larger) disk and extends the
+# last partition into the free space. Exit 2 = NOCHANGE (already full); treat as success.
+rc=0
+growpart "${disk}" "${part}" || rc=$?
+if [ "${rc}" -ne 0 ] && [ "${rc}" -ne 2 ]; then
+  log "growpart failed (rc=${rc}) — leaving partition as-is, still trying resize2fs"
+fi
+
+# Online-grow the ext4 root to the (possibly) larger partition. No-op if already full.
+resize2fs "${src}" || log "resize2fs returned non-zero (already at max?)"
+
+mkdir -p "$(dirname "${FLAG}")"
+date -u +%FT%TZ > "${FLAG}"
+log "done — root filesystem expanded to fill the disk"

@@ -1,0 +1,17 @@
+[Unit]
+Description=Expand root partition + filesystem to fill the disk (first boot)
+DefaultDependencies=no
+After=systemd-remount-fs.service local-fs.target
+# Finish before the autologin getty hands off to the Steam session, so the client's first-run
+# download has the full card to use, not just the image's slack.
+Before=getty@tty1.service getty.target shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=!/var/lib/pocknix/expand-root.done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/pocknix-expand-root
+
+[Install]
+WantedBy=multi-user.target
