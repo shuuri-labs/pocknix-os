@@ -1,12 +1,15 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/composite_device_v1.json
 # InputPlumber composite device for the Retroid Pocket 6 gamepad.
 #
-# The RP6 gamepad is the in-kernel RSInput driver (CONFIG_JOYSTICK_RETROID), which
-# enumerates with phys "rsinput-gamepad/input0" and emits STANDARD evdev gamepad codes
-# (BTN_SOUTH/EAST/NORTH/WEST, BTN_TL/TR, ABS_Z/RZ triggers, ABS_X/Y + ABS_RX/RY sticks,
-# BTN_DPAD_*, BTN_THUMBL/R, BTN_MODE, BTN_SELECT/START). So no capability_map is needed —
-# InputPlumber's built-in evdev->gamepad translation handles it. We emulate a DualSense so
-# Steam Input gets a first-class controller (Guide button, rumble, gyro-ready).
+# The RP6 gamepad is the in-kernel RSInput driver (CONFIG_JOYSTICK_RETROID), phys
+# "rsinput-gamepad/input0". Verified on-device (/proc/bus/input/devices + evtest): X/Y are
+# swapped at the driver, and the d-pad (BTN_DPAD_*) didn't reach the target under InputPlumber's
+# auto-detect. So we apply an explicit capability_map (rp6-gamepad.yaml, id rp6_gamepad — armada's
+# AYN/Odin map, which matches the RP6 on the same source) to fix X/Y + d-pad + Guide/QuickAccess.
+#
+# Target = `deck` (Steam Deck controller) so Steam Input gets a first-class Steam-native pad.
+# (No back paddles or gyro on this RP6 hardware — see rp6-gamepad.yaml — so those Deck features
+# are simply unused.)
 version: 1
 kind: CompositeDevice
 name: Retroid Pocket 6 (RSInput)
@@ -20,10 +23,11 @@ source_devices:
     evdev:
       phys_path: rsinput-gamepad/input0
       handler: event*
+    capability_map_id: rp6_gamepad
 
 options:
   auto_manage: true
 
 target_devices:
-  - ds5
+  - deck
   - keyboard
