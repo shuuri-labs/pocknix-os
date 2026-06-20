@@ -27,6 +27,15 @@ cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
 # Decky/CEF debugger marker armada touches (harmless if unused).
 touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 
+# Steam's built-in performance overlay = gamescope's --mangoapp spawning the `mangoapp` process,
+# whose display level Steam controls by writing to MANGOHUD_CONFIGFILE. Both gamescope/mangoapp AND
+# steam must inherit this env var, else Steam logs "Failed to determine mangoapp config path" and
+# the overlay never draws even though mangoapp is running. Seed it "no_display" so nothing shows
+# until Steam sets a level. (This is exactly what ChimeraOS gamescope-session-plus does; ROCKNIX
+# only passes --mangoapp and relies on a default $HOME path.)
+export MANGOHUD_CONFIGFILE="$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/mangohud.XXXXXX")"
+echo "no_display" > "${MANGOHUD_CONFIGFILE}"
+
 # RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
 # rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left
@@ -38,6 +47,7 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 # payload, so the gamepadui launch fataled with "Could not load module 'bin/vgui2_s.dll'".
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
+  MANGOHUD_CONFIGFILE="${MANGOHUD_CONFIGFILE}" \
   LD_LIBRARY_PATH="${LDLP}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
