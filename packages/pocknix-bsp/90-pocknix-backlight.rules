@@ -1,0 +1,7 @@
+# pocknix: allow the non-root session user (group 'video') to set panel brightness.
+# Steam's brightness slider writes /sys/class/backlight/*/brightness (+ bl_power for screen
+# on/off), which are root-owned by default — so as the non-root 'deck' session user the slider
+# has no effect. Grant group 'video' write access (deck is in 'video'). SteamOS/handheld-standard.
+ACTION=="add", SUBSYSTEM=="backlight", \
+  RUN+="/usr/bin/chgrp video /sys/class/backlight/%k/brightness /sys/class/backlight/%k/bl_power", \
+  RUN+="/usr/bin/chmod g+w /sys/class/backlight/%k/brightness /sys/class/backlight/%k/bl_power"
