@@ -39,6 +39,6 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
   LD_LIBRARY_PATH="${LDLP}" \
-  gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
+  gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles
