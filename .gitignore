@@ -14,8 +14,9 @@
 # local Claude Code settings
 /.claude/
 
-# personal learning journal — not part of the project
+# personal learning journal + working-conventions doc — not part of the project
 /learnings.md
+/conventions.md
 
 # macOS / editor cruft
 .DS_Store
