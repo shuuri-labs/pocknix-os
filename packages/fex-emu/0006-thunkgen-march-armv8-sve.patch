@@ -1,0 +1,57 @@
+From: virtudude <virtudude@protonmail.com>
+Subject: thunkgen: fix Fedora 44 host header leakage for both clang passes
+
+glibc >= 2.41 uses ARM SVE intrinsic types unconditionally in
+<bits/math-vector.h>, breaking thunkgen on Fedora 44 two ways: (1) the host
+(aarch64) pass can't parse __SVFloat32_t without SVE → add -march=armv8.2-a+sve;
+(2) the x86 guest pass parses the host's math.h because CMake's -isystem
+/usr/include is searched before the x86 sysroot → prepend -isystem
+<x86_rootfs>/usr/include. Parse-time only; no SVE emitted, no x86 rerouted.
+
+--- a/ThunkLibs/Generator/main.cpp
++++ b/ThunkLibs/Generator/main.cpp
+@@ -67,6 +67,18 @@ int main(int argc, char* const argv[]) {
+
+   ClangTool GuestTool = Tool;
+
++  auto prepend_x86_rootfs_isystem = [&x86_rootfs](clang::tooling::CommandLineArguments& Args) {
++    if (x86_rootfs == "/") {
++      return;
++    }
++    // Insert just after Args[0] (compiler name) so the x86 sysroot's
++    // /usr/include wins clang's search-order race against any host
++    // -isystem /usr/include leaked in from CMake.
++    auto pos = Args.begin() + (Args.empty() ? 0 : 1);
++    pos = Args.insert(pos, "-isystem");
++    Args.insert(pos + 1, x86_rootfs + "/usr/include");
++  };
++
+   auto append_x86_rootfs_includes = [&x86_rootfs](clang::tooling::CommandLineArguments& Args, const char* triple) {
+     if (x86_rootfs == "/") {
+       return;
+@@ -85,6 +97,7 @@ int main(int argc, char* const argv[]) {
+   const bool is_32bit_guest = (argv[6] == std::string_view {"-for-32bit-guest"});
+   GuestTool.appendArgumentsAdjuster([&](const clang::tooling::CommandLineArguments& Args, clang::StringRef) {
+     clang::tooling::CommandLineArguments AdjustedArgs = Args;
++    prepend_x86_rootfs_isystem(AdjustedArgs);
+     const char* platform = is_32bit_guest ? "i686-linux-gnu" : "x86_64-linux-gnu";
+     if (is_32bit_guest) {
+       AdjustedArgs.push_back("-m32");
+@@ -107,9 +120,17 @@ int main(int argc, char* const argv[]) {
+   Tool.appendArgumentsAdjuster([&](const clang::tooling::CommandLineArguments& Args, clang::StringRef) {
+     clang::tooling::CommandLineArguments AdjustedArgs = Args;
+     AdjustedArgs.push_back("-DIS_HOST_THUNKGEN_PASS");
++    if (target_abi == "-host") {
++#if defined(__aarch64__)
++      // glibc >= 2.41 on aarch64 uses SVE intrinsic types unconditionally
++      // in <bits/math-vector.h>; enable SVE so clang recognizes them.
++      AdjustedArgs.push_back("-march=armv8.2-a+sve");
++#endif
++    }
+     if (target_abi == "-guest") {
+       const char* platform = is_32bit_guest ? "i686-linux-gnu" : "x86_64-linux-gnu";
+       append_x86_rootfs_includes(AdjustedArgs, platform);
++      prepend_x86_rootfs_isystem(AdjustedArgs);
+     }
+
+     return AdjustedArgs;

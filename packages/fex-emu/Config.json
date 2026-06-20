@@ -1,0 +1,15 @@
+{
+  "Config": {
+    "X87ReducedPrecision": "1",
+    "ThunkHostLibs": "/usr/lib/fex-emu/HostThunks",
+    "ThunkGuestLibs": "/usr/share/fex-emu/GuestThunks"
+  },
+  "ThunksDB": {
+    "Vulkan": 1,
+    "GL": 1,
+    "EGL": 1,
+    "drm": 1,
+    "WaylandClient": 1,
+    "asound": 1
+  }
+}

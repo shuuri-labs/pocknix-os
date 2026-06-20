@@ -27,11 +27,14 @@ license=('GPL2')
 #   (like SteamOS; ROCKNIX's steam pkg depends on it too). Without an NM backend the setup wizard
 #   shows "no connections found" even when online. NB: NM must actually run + manage wlan0 (via the
 #   iwd backend) — see build-sd-image.sh network plumbing, not just this dep.
+# mangohud: provides the `mangoapp` overlay binary that gamescope --mangoapp spawns; this is
+#   Steam's built-in performance overlay (FPS/frametime/CPU; GPU stats are limited on Adreno/msm).
+#   Without it gamescope's --mangoapp has nothing to launch and the overlay never appears.
 # xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX). The
 # rest of the native client's deps resolve from the base image / the steamrt runtime.
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
-         'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'pocknix-steamos-shim'
-         'xorg-server-xvfb')
+         'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
+         'pocknix-steamos-shim' 'xorg-server-xvfb')
 source=('pocknix-steam-install' 'pocknix-steam' 'registry.vdf')
 sha256sums=('SKIP' 'SKIP' 'SKIP')
 

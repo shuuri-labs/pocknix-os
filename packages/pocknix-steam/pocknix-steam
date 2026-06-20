@@ -1,8 +1,14 @@
 #!/bin/bash
 # pocknix-steam — launch the native ARM64 Steam client in Big Picture under gamescope on the RP6.
-# Modeled on armada's system_files/usr/libexec/armada/launch-steam (native, NON-FEX): cd into
-# steamrtarm64, steamrtarm64 first on LD_LIBRARY_PATH, exec the native client. Panel geometry is
-# fixed for the RP6 (we have no sway to probe) and we wrap the client in gamescope ourselves.
+# Client setup modeled on armada's launch-steam (native, NON-FEX): cd into steamrtarm64,
+# steamrtarm64 first on LD_LIBRARY_PATH. Panel geometry fixed for the RP6.
+#
+# Performance overlay: gamescope --mangoapp spawns the `mangoapp` process (from the mangohud dep)
+# that Steam's built-in 'Performance' overlay drives. IMPORTANT: it only renders once you enable
+# Steam Settings > In Game > Performance > "Show performance metrics in this game" — the overlay
+# being blank in earlier testing was that toggle being OFF, NOT a mangoapp/gamescope coupling
+# problem. So this is just `--mangoapp` + the mangohud dep; no MANGOHUD_CONFIGFILE plumbing needed.
+# GPU stats are limited on Adreno/msm but FPS/CPU/frametime render. See progress.md.
 set -e
 
 export HOME="${HOME:-/root}"
@@ -20,8 +26,8 @@ if [ ! -x "${CLIENT}" ]; then
 fi
 
 # CRITICAL: Steam resolves its legacy module paths (bin/vgui2_s.dll …) RELATIVE TO getcwd.
-# armada cd's into steamrtarm64 before exec; cd'ing to $HOME (as we did) makes 'bin/vgui2_s'
-# unresolvable -> "Could not load module 'bin/vgui2_s.dll'". gamescope passes CWD to the client.
+# armada cd's into steamrtarm64 before launch; cd'ing to $HOME makes 'bin/vgui2_s' unresolvable
+# -> "Could not load module 'bin/vgui2_s.dll'". gamescope passes CWD to the client.
 cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
 
 # Decky/CEF debugger marker armada touches (harmless if unused).
@@ -31,14 +37,11 @@ touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 # rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left
 
-# Steam client flags: match armada's gamescope-session steam CLIENTCMD EXACTLY
-# (`-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`). We previously inherited ROCKNIX's
-# extra skip-flags (-nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders) — but
-# -skipinitialbootstrap suppresses the step that extracts/places bin/vgui2_s from the .zip.vz
-# payload, so the gamepadui launch fataled with "Could not load module 'bin/vgui2_s.dll'".
+# Steam client flags = armada's gamescope-session CLIENTCMD exactly
+# (`-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`). `-e` = gamescope --steam.
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
   LD_LIBRARY_PATH="${LDLP}" \
-  gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
+  gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles

@@ -76,7 +76,11 @@ build_one() {
   # keep only the freshly built version in the repo (avoids stale dupes accumulating,
   # which otherwise break `pacman -U pkg-*.tar` with "duplicate target").
   rm -f "${LOCALREPO}/${name}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${name}"-*:*.pkg.tar.* 2>/dev/null || true
-  cp "${BROOT}/build/${name}"/*.pkg.tar.* "${LOCALREPO}/" 2>/dev/null \
+  # Copy ONLY the built package(s), matched by pkgname — NOT every *.pkg.tar.* in the
+  # build dir, which would also sweep up any .pkg.tar.* files a PKGBUILD downloads as
+  # *sources* (e.g. fex-emu's pinned x86 sysroot pkgs). That both polluted the repo
+  # and masked build failures as success.
+  cp "${BROOT}/build/${name}/${name}"-*.pkg.tar.* "${LOCALREPO}/" 2>/dev/null \
     || { warn "no .pkg.tar.* produced for ${name}"; return 1; }
 }
 

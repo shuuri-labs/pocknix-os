@@ -67,7 +67,7 @@ install_local_packages() {
   # pocknix-steamos-shim and ALARM deps (openal, libcups, lsof, noto-fonts*, networkmanager, …).
   # pocknix-steamos-shim = steamos-update/branch/BIOS stubs so the Deck UI OOBE doesn't dead-end.
   chroot "${root}" pacman -S --noconfirm --needed \
-        pocknix-bsp gamescope inputplumber pocknix-steamos-shim pocknix-steam
+        pocknix-bsp gamescope inputplumber pocknix-steamos-shim mangohud pocknix-steam
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
