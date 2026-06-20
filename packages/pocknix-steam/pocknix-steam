@@ -3,9 +3,12 @@
 # Client setup modeled on armada's launch-steam (native, NON-FEX): cd into steamrtarm64,
 # steamrtarm64 first on LD_LIBRARY_PATH. Panel geometry fixed for the RP6.
 #
-# NOTE: the mangoapp performance overlay is DEFERRED — mangoapp's glfw-Wayland init fails against
-# gamescope's nested compositor (libdecor 'could not get required globals' -> X11 fallback). See
-# progress.md; revisit with the broader SteamOS-session integration. So no --mangoapp / stats FIFO.
+# Performance overlay: gamescope --mangoapp spawns the `mangoapp` process (from the mangohud dep)
+# that Steam's built-in 'Performance' overlay drives. IMPORTANT: it only renders once you enable
+# Steam Settings > In Game > Performance > "Show performance metrics in this game" — the overlay
+# being blank in earlier testing was that toggle being OFF, NOT a mangoapp/gamescope coupling
+# problem. So this is just `--mangoapp` + the mangohud dep; no MANGOHUD_CONFIGFILE plumbing needed.
+# GPU stats are limited on Adreno/msm but FPS/CPU/frametime render. See progress.md.
 set -e
 
 export HOME="${HOME:-/root}"
@@ -39,6 +42,6 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
   LD_LIBRARY_PATH="${LDLP}" \
-  gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
+  gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles
