@@ -1,7 +1,12 @@
 #!/bin/bash
 # pocknix-steam — launch the native ARM64 Steam client in Big Picture under gamescope on the RP6.
-# Modeled on armada's launch-steam (native, NON-FEX) for the client, and on ChimeraOS's
-# gamescope-session-plus (which armada uses) for the gamescope + mangoapp performance overlay.
+# Client setup modeled on armada's launch-steam (native, NON-FEX): cd into steamrtarm64,
+# steamrtarm64 first on LD_LIBRARY_PATH. Panel geometry fixed for the RP6.
+#
+# NOTE: the mangoapp performance overlay is DEFERRED — mangoapp's glfw-Wayland init fails against
+# gamescope's nested compositor (libdecor 'could not get required globals' -> X11 fallback). See
+# progress.md; revisit with the broader SteamOS-session integration. So no --mangoapp / stats FIFO.
+set -e
 
 export HOME="${HOME:-/root}"
 STEAM="${HOME}/.local/share/Steam"
@@ -25,50 +30,15 @@ cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
 # Decky/CEF debugger marker armada touches (harmless if unused).
 touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 
-# --- Performance overlay (mangoapp), the armada / gamescope-session-plus way ---
-# We do NOT use `gamescope --mangoapp` (it spawns mangoapp internally and is tightly version-coupled
-# to gamescope's build — our build gave a mangoapp that ran + read its config but never composited).
-# Instead, like ChimeraOS gamescope-session-plus: run gamescope with a STATS FIFO (-T) but no
-# --mangoapp, then run `mangoapp` as a SEPARATE overlay client that reads GAMESCOPE_STATS and
-# connects to the gamescope wayland display. Steam drives the overlay level by writing
-# MANGOHUD_CONFIGFILE (seeded "no_display" so nothing shows until Steam sets a level).
-RT="${XDG_RUNTIME_DIR:-/tmp}"
-export MANGOHUD_CONFIGFILE="$(mktemp "${RT}/mangohud.XXXXXX")"
-echo "no_display" > "${MANGOHUD_CONFIGFILE}"
-export GAMESCOPE_STATS="$(mktemp -u "${RT}/gamescope-stats.XXXXXX")"
-mkfifo "${GAMESCOPE_STATS}"
-WLDISP="gamescope-0"   # gamescope's wayland display; the separate mangoapp connects here
-
 # RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
 # rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left
 
-cleanup() { rm -f "${GAMESCOPE_STATS}" "${MANGOHUD_CONFIGFILE}" 2>/dev/null || true; }
-trap cleanup EXIT
-
-# 1. gamescope (+ the native client), backgrounded, with the stats FIFO but NOT --mangoapp.
-#    Steam client flags = armada's CLIENTCMD exactly (-gamepadui -steamos3 -steampal -steamdeck
-#    -noverifyfiles). `-e` is gamescope's --steam (Steam integration, incl. mangoapp overlay).
-env -u WAYLAND_DISPLAY \
+# Steam client flags = armada's gamescope-session CLIENTCMD exactly
+# (`-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`). `-e` = gamescope --steam.
+exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
-  GAMESCOPE_WAYLAND_DISPLAY="${WLDISP}" \
-  MANGOHUD_CONFIGFILE="${MANGOHUD_CONFIGFILE}" \
-  GAMESCOPE_STATS="${GAMESCOPE_STATS}" \
   LD_LIBRARY_PATH="${LDLP}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --backend drm \
-    --force-orientation "${ORIENT}" --use-rotation-shader -T "${GAMESCOPE_STATS}" -e -- \
-    "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles &
-gamescope_pid=$!
-
-# 2. once gamescope's wayland display is up, run mangoapp as a sibling overlay (respawn while alive).
-if command -v mangoapp >/dev/null 2>&1; then
-  ( for _ in $(seq 100); do [ -S "${RT}/${WLDISP}" ] && break; sleep 0.1; done
-    while kill -0 "${gamescope_pid}" 2>/dev/null; do
-      WAYLAND_DISPLAY="${WLDISP}" GAMESCOPE_STATS="${GAMESCOPE_STATS}" \
-        MANGOHUD_CONFIGFILE="${MANGOHUD_CONFIGFILE}" mangoapp
-      sleep 0.5
-    done ) &
-fi
-
-# 3. tie the session lifetime to gamescope.
-wait "${gamescope_pid}"
+    --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
+    "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles
