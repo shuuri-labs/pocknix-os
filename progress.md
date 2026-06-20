@@ -5,7 +5,7 @@ Working notes for picking this back up after a break. For the *why* behind decis
 testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
-_Last updated: 2026-06-19 — Phase 3: native ARM Steam re-aligned to armada (channel + CWD fixes)._
+_Last updated: 2026-06-20 — Phase 3b STARTED: FEX-with-thunks build scaffolded (`packages/fex-emu`)._
 
 ---
 
@@ -81,12 +81,27 @@ on `steamdeck_publicbeta`. **Real OTA is a deferred phase** (Phase 3c): armada d
 image-based update backend + a server hosting images; the shim is a drop-in placeholder (swap the
 body, same Steam-facing contract). Preferred eventual OTA mechanism for the distro.
 
-**Phase 3b — x86 game content via FEX + Proton (deferred, scoped):** native client/UI need NO FEX;
-**x86 games (Proton 11 ARM) DO** — Proton is NOT self-contained, FEX is OS-level. Need FEX **with
-thunks** + an **x86 rootfs** + **binfmt** + native-Vulkan (Turnip) passthrough + the **CachyOS Proton
-11 arm64** build + a per-game FEX-config shim. Full scoped plan + ROCKNIX-vs-armada reference table:
-[`docs/fex-proton-plan.md`](docs/fex-proton-plan.md). Crux/risk = the thunk build (ROCKNIX needs nix;
-generic distro FEX lacks thunks).
+## ⬜→🔨 Phase 3b STARTED — FEX + Proton for x86 games — 2026-06-20
+Native client/UI need NO FEX; **x86 games (Proton 11 ARM) DO** — Proton is NOT self-contained,
+FEX is OS-level. Six pieces: FEX **with thunks** + **x86 rootfs** + **binfmt** + native-Vulkan
+(Turnip) passthrough + **CachyOS Proton 11 arm64** + a per-game FEX-config shim. Full scoped plan +
+ROCKNIX-vs-armada table: [`docs/fex-proton-plan.md`](docs/fex-proton-plan.md).
+
+**Crux RESOLVED (the thunk build).** Option A (prebuilt ALARM/AUR/holo fex-with-thunks) is dead:
+AUR has the ALARM no-x86-cross-toolchain blocker (FEX #1996); **holo-core-aarch64-preview ships no
+fex at all** (swept 4,550 pkgs). We port **armada's no-nix recipe** (`virtudude/armada-packages/fex`):
+it cross-compiles the x86 guest thunks with plain `clang -target x86_64/i686 --sysroot=<x86 dev
+sysroot>` + `toolchain_x86_{32,64}.cmake`, dropping ROCKNIX's nix patch 0004. We assemble the dev
+sysroot from **pinned Arch x86_64 + lib32 packages** (archive.archlinux.org) so it builds inside
+`make packages`. Patches 0001/0002/0003/0005/**0006** (0006 fixes glibc≥2.41 SVE header leakage —
+our Arch glibc is 2.43). FEX commit `a04b0241` (= ROCKNIX/armada).
+
+**Piece 1 scaffolded:** `packages/fex-emu/` (PKGBUILD + 5 patches + 2 toolchain cmakes + base
+Config.json). **NEXT: build it in the VM** (`make packages PKG=fex-emu`) and paste output — expect
+to iterate on the 32-bit guest-thunk link (Arch /usr/lib32 vs Fedora /usr/lib; toolchain file
+already adds `-L.../usr/lib32`). Then pieces 2–6 (rootfs / binfmt+Turnip / Proton / wrapper /
+on-device validate). Recommended x86 runtime RootFS = **Arch x86_64** (matches our sysroot glibc
+2.43 + ROCKNIX's `RootFS="ArchLinux"`).
 
 ## Phase 3 — native ARM client journey (how we got to the milestone)
 What's validated on-device (2026-06-19):
