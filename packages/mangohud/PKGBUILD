@@ -4,8 +4,11 @@
 # vkroots, vulkan-headers, vulkan-utility-libraries) are meson WRAPS — downloaded during
 # `meson setup` (the build chroot has network, as gamescope's git build does). mangoapp itself
 # links system glfw3 (src meson: dependency('glfw3')).
+# Pin to v0.8.3 — the version ROCKNIX pairs with the SAME gamescope commit (fe78bc6) we build.
+# gamescope --mangoapp is tightly coupled to the mangoapp/imgui versions; 0.8.4 + floating wrapdb
+# subprojects gave a mangoapp that runs + reads its config but won't composite the overlay.
 pkgname=mangohud
-pkgver=0.8.4
+pkgver=0.8.3
 pkgrel=1
 pkgdesc="Vulkan/OpenGL FPS/frametime/CPU/GPU overlay + mangoapp for the gamescope Steam session"
 arch=('aarch64')
