@@ -85,8 +85,13 @@ prepare() {
   rm -rf "${srcdir}/sysroot"; mkdir -p "${srcdir}/sysroot"
   local pkg
   for pkg in "${srcdir}"/fexsysroot-*.pkg.tar.zst; do
-    bsdtar -xpf "${pkg}" -C "${srcdir}/sysroot" usr
+    # Extract the whole pkg (not just a `usr` member): some of these pkgs have no
+    # bare `usr/` directory entry, so a `usr` filter fails with "usr: Not found in
+    # archive". LC_ALL=C silences bsdtar's locale warning in the minimal chroot.
+    LC_ALL=C bsdtar -xpf "${pkg}" -C "${srcdir}/sysroot"
   done
+  # Drop the pacman package metadata that lands at the sysroot root (just tidy).
+  rm -f "${srcdir}/sysroot"/.{BUILDINFO,INSTALL,MTREE,PKGINFO} 2>/dev/null || true
   # clang links -lstdc++ for the guest thunks; ensure the unversioned link exists
   # for both bitnesses (gcc-libs ships only libstdc++.so.6).
   [ -e "${srcdir}/sysroot/usr/lib/libstdc++.so" ]   || ln -sf libstdc++.so.6 "${srcdir}/sysroot/usr/lib/libstdc++.so"
