@@ -32,8 +32,13 @@ depends=('systemd-libs' 'squashfuse' 'erofs-utils' 'fuse2'
 makedepends=('git' 'clang' 'lld' 'llvm' 'cmake' 'ninja' 'pkgconf'
              'python' 'python-setuptools'
              'qt6-base' 'qt6-declarative'
-             'catch2' 'fmt' 'libepoxy' 'sdl2-compat' 'xxhash'
+             'libepoxy' 'sdl2-compat'
              'alsa-lib' 'libdrm' 'libglvnd' 'libx11' 'libxrandr' 'openssl' 'wayland' 'zlib')
+# NB: fmt/xxhash/Catch2 deliberately NOT makedepends. FEX does `find_package(<x> QUIET)` and only
+# falls back to its version-pinned `External/<x>` submodule if the system one is ABSENT. Arch's
+# rolling fmt (v11) is too new — its stricter formattability checks reject FEX's join_view<std::byte*>
+# format calls (CodeCache.cpp / Dispatcher.cpp) → build error. So we force FEX's bundled copies via
+# CMAKE_DISABLE_FIND_PACKAGE_* below (this is effectively what armada/ROCKNIX get — no system fmt).
 provides=('fex-emu')
 conflicts=('fex-emu')
 options=('!lto')   # FEX manages its own LTO; let the upstream build decide.
@@ -120,7 +125,10 @@ build() {
     -DENABLE_CLANG_THUNKS=ON \
     -DX86_DEV_ROOTFS="${srcdir}/sysroot" \
     -DX86_64_TOOLCHAIN_FILE="${srcdir}/toolchain_x86_64.cmake" \
-    -DX86_32_TOOLCHAIN_FILE="${srcdir}/toolchain_x86_32.cmake"
+    -DX86_32_TOOLCHAIN_FILE="${srcdir}/toolchain_x86_32.cmake" \
+    -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_xxhash=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Catch2=ON
   # Cap ninja parallelism. FEXCore's OpcodeDispatcher TUs (Vector.cpp, X87*.cpp …) each
   # peak at ~2-3 GB RSS under clang -O2/Release; an unbounded `ninja` (= nproc, e.g. 8)
   # OOMs a typical build VM (systemd-oomd reaps the cgroup → "subcommand failed" with no
