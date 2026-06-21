@@ -137,12 +137,15 @@ our Arch glibc is 2.43). FEX commit `a04b0241` (= ROCKNIX/armada).
   `CMAKE_DISABLE_FIND_PACKAGE_*` → FEX uses its pinned `External/*` (what armada/ROCKNIX get).
 - **Re-downloaded sources every build** → persistent `SRCDEST=/build/srccache` in `build-packages.sh`.
 
-**NEXT (immediate): verify the package actually shipped the THUNKS** (the whole point) —
-`bsdtar -tf build/localrepo/fex-emu-*.pkg.tar.xz | grep -iE 'Thunk|FEX|binfmt'` should show
-`usr/bin/FEX*`, `usr/lib/fex-emu/HostThunks{,_32}`, `usr/share/fex-emu/GuestThunks{,_32}`,
-`usr/lib/binfmt.d/FEX*`. **Then pieces 2–6:** (2) x86 **RootFS** = **Arch x86_64** (matches our
-sysroot glibc 2.43 + ROCKNIX `RootFS="ArchLinux"`), fetched as squashfs/erofs, mounted RO; (3)
-**binfmt** drop-in (systemd-binfmt → FEXInterpreter for x86/x86_64); (4) **CachyOS Proton 11 arm64**
+**✅ Thunks VERIFIED (2026-06-21) — piece 1/6 DONE.** Package ships `usr/bin/FEX*` + `libFEXCore.so`,
+`HostThunks{,_32}` + `GuestThunks{,_32}` **incl. `libvulkan-host`+`libvulkan-guest`** (the Turnip
+passthrough path), `binfmt.d/FEX-x86{,_64}.conf`, plus `ThunksDB.json`, base `Config.json`,
+`AppConfig/{client,steamwebhelper}.json`, an empty `RootFS/`, and the **`FEXRootFSFetcher`** tool.
+(Minor: 32-bit GuestThunks omit vulkan/asound/drm — matches upstream; 32-bit Vulkan is niche.)
+
+**NEXT — pieces 2–6:** (2) x86 **RootFS** = **Arch x86_64** (matches our sysroot glibc 2.43 + ROCKNIX
+`RootFS="ArchLinux"`), fetched as squashfs/erofs, mounted RO, `Config.json RootFS=` pointed at it; (3)
+**binfmt** enable (systemd-binfmt → FEXInterpreter for x86/x86_64); (4) **CachyOS Proton 11 arm64**
 → `compatibilitytools.d`; (5) per-game **FEX-config wrapper**; (6) default compat + on-device validate
 (run an x86 title, confirm Turnip via the Vulkan thunk).
 
