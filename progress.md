@@ -31,6 +31,37 @@ steamos-select-branch is PATH-resolved. Real OTA = deferred Phase 3c (see below)
 | LOW | "dock update" prompt with no dock | `jupiter-initial-firmware-update` stub returns 0; make dock/firmware checks report "no update/none" so the UI stops nagging. |
 | LOW | Phantom "wired network" in Steam net settings | NM exposes `usb0` (USB-gadget) or iwd's `/net/connman/iwd/0` p2p device. Mark usb0 `unmanaged` more fully or hide the p2p device. Cosmetic. |
 
+### ⬜ PLANNED (decided 2026-06-21) — bake the Steam client at BUILD time → drop the first-boot Wi-Fi preseed
+**Intention, not yet implemented.** Today `pocknix-steam` runs `pocknix-steam-install` on **first boot**
+(`if [ ! -x "${CLIENT}" ]`), which downloads `steamrtarm64` from Valve's CDN → first boot needs network
+→ which is *why* `build-sd-image.sh` has to pre-seed Wi-Fi creds. **Goal: no network needed on first
+boot to reach Big Picture;** Wi-Fi becomes login/games-only, configured in-session (via the existing
+NM+iwd path — see [[steam-network-nm-iwd]]).
+
+**Reference — armada does exactly this (and needs no preseed):** `build_files/generate-steam-bootstrap.sh`
+runs the *whole* bootstrap at build time in the aarch64 VM (which has network): downloads the ARM seed +
+runtime, unzips into a staging `…/Steam`, then **runs Steam headless under Xvfb** (`steam -steamdeck
+-exitsteam`) so it self-updates into a *complete* tree (`steamui.so` + a `.installed` manifest), strips
+logs/tokens/caches, and ships that in the OS image. It even **fails the build if `.installed` is missing**
+("the seed would re-install on first boot") — i.e. avoiding our exact situation is the point.
+
+**Approach for pocknix (when we do it):**
+1. Run `pocknix-steam-install`'s download + **Xvfb bootstrap** during the image build
+   (`build-sd-image.sh`/`build-image.sh`), into a staging `HOME` in the VM — we already have both pieces.
+2. **Keep the headless "run Steam once" step** — a bare seed unzip isn't a complete client; that run is
+   what produces `steamui.so` + `.installed`, else it re-bootstraps (wants network) on first boot anyway.
+3. **Copy the finished tree into the rootfs** at the session user's home — `/home/deck/.local/share/Steam`
+   (owned `deck:deck`, per the non-root `deck` migration) + the `.steam/{root,steam,sdk*}` symlinks.
+4. **Strip the seed clean** before baking (logs, `appcache/httpcache`, `config/htmlcache`, `ssfn*`,
+   `registry.vdf`, `*.token`/`*.pid`) — mirror armada's cleanup block.
+5. **Demote the launcher's `pocknix-steam-install` to a fallback** (only fires if the baked tree is absent).
+6. Then **drop the Wi-Fi preseed requirement** from `build-sd-image.sh` (keep it optional).
+
+**Trade-offs:** image grows by the client (~few hundred MB → bump `SD_SLACK_MIB`); baked client may be
+slightly behind latest (self-updates on first online launch — harmless); VM build needs network (already
+has it). **Sequencing:** do this together with the **non-root `deck` migration bake-in** (the tree must
+land in `deck`'s home with correct ownership), which is still a manual on-device change today.
+
 ## 🎉 MILESTONE: Steam Big Picture RENDERS on the RP6 (native ARM, NO FEX) — 2026-06-19
 `pocknix-steam` brings up **native ARM64 Steam gamepadui under gamescope on the panel.** The whole
 gamepadui chain was a sequence of single missing native-ARM deps / config deltas vs armada — each
