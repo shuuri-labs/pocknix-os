@@ -1,5 +1,6 @@
 {
   "Config": {
+    "RootFS": "ArchLinux.sqsh",
     "X87ReducedPrecision": "1",
     "ThunkHostLibs": "/usr/lib/fex-emu/HostThunks",
     "ThunkGuestLibs": "/usr/share/fex-emu/GuestThunks"

@@ -143,11 +143,20 @@ passthrough path), `binfmt.d/FEX-x86{,_64}.conf`, plus `ThunksDB.json`, base `Co
 `AppConfig/{client,steamwebhelper}.json`, an empty `RootFS/`, and the **`FEXRootFSFetcher`** tool.
 (Minor: 32-bit GuestThunks omit vulkan/asound/drm — matches upstream; 32-bit Vulkan is niche.)
 
-**NEXT — pieces 2–6:** (2) x86 **RootFS** = **Arch x86_64** (matches our sysroot glibc 2.43 + ROCKNIX
-`RootFS="ArchLinux"`), fetched as squashfs/erofs, mounted RO, `Config.json RootFS=` pointed at it; (3)
-**binfmt** enable (systemd-binfmt → FEXInterpreter for x86/x86_64); (4) **CachyOS Proton 11 arm64**
-→ `compatibilitytools.d`; (5) per-game **FEX-config wrapper**; (6) default compat + on-device validate
-(run an x86 title, confirm Turnip via the Vulkan thunk).
+**🔨 Piece 2/6 SCAFFOLDED (2026-06-21):** `packages/fex-rootfs/` — pinned **ArchLinux x86_64 squashfs**
+(`rootfs.fex-emu.gg/ArchLinux/2026-01-08/ArchLinux.sqsh`, immutable dated URL; FEX checks it with
+xxh3_64 not sha256 → SKIP for now, pin sha256 after first VM download). Mirrors ROCKNIX (squashfs +
+`squashfuse`, `RootFS="ArchLinux"`) + armada (bake the image in, `ThunksDB` all-on). package() ships
+the `.sqsh` to `/usr/share/fex-emu/RootFS/ArchLinux.sqsh` (FEXServer FUSE-mounts it RO) and copies
+ALARM's Turnip `libvulkan_freedreno.so` into `/usr/share/fex-emu/` for the Vulkan host-thunk
+(ROCKNIX-style GPU passthrough). `packages/fex-emu/Config.json` now sets `"RootFS": "ArchLinux.sqsh"`.
+**NEXT:** `make packages PKG=fex-rootfs` in the VM (expect a ~hundreds-of-MB download once, then
+SRCDEST-cached); then on-device smoke test (install fex-emu+fex-rootfs, enable binfmt, `FEXBash`).
+NOT yet in the image `install_local_packages` list — add after on-device validation (piece 6).
+
+**Pieces 3–6:** (3) **binfmt** enable (systemd-binfmt → FEXInterpreter for x86/x86_64); (4) **CachyOS
+Proton 11 arm64** → `compatibilitytools.d` (pin sha512); (5) per-game **FEX-config wrapper**; (6)
+default compat + on-device validate (run an x86 title, confirm Turnip via the Vulkan thunk).
 
 ## Phase 3 — native ARM client journey (how we got to the milestone)
 What's validated on-device (2026-06-19):
