@@ -68,11 +68,17 @@ build_one() {
   rm -rf "${BROOT}/build/${name}"
   mkdir -p "${BROOT}/build"
   cp -r "${pkgdir}" "${BROOT}/build/${name}"
+  # Persistent source cache: SRCDEST lives OUTSIDE the per-package build dir (which is wiped
+  # every run), so makepkg downloads each source ONCE and reuses it. File sources (e.g.
+  # fex-emu's pinned x86 sysroot .pkg.tar.zst, ~70 MB) are kept by name; the git source becomes
+  # a cached clone that only `git fetch`es deltas instead of re-cloning 100k+ objects each build.
+  mkdir -p "${BROOT}/build/srccache"
   chroot "${BROOT}" chown -R builder:builder "/build/${name}"
+  chroot "${BROOT}" chown builder:builder /build/srccache
   # makepkg refuses to run as root; build as the 'builder' user.
   # -s syncs makedepends (gamescope needs many); pocknix-bsp has none so it's a no-op.
   chroot "${BROOT}" runuser -u builder -- \
-    bash -lc "cd /build/${name} && makepkg -s -f --noconfirm --nocheck --skippgpcheck"
+    bash -lc "cd /build/${name} && SRCDEST=/build/srccache makepkg -s -f --noconfirm --nocheck --skippgpcheck"
   # keep only the freshly built version in the repo (avoids stale dupes accumulating,
   # which otherwise break `pacman -U pkg-*.tar` with "duplicate target").
   rm -f "${LOCALREPO}/${name}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${name}"-*:*.pkg.tar.* 2>/dev/null || true
