@@ -109,21 +109,40 @@ main() {
     chroot "${BROOT}" bash -lc "cd /localrepo && tar -czf ${REPO_DB} -T /dev/null && ln -sf ${REPO_DB} pocknix.db"
   fi
 
+  # Build a package, publishing it to [pocknix] on success so later packages see it.
+  try_build() {
+    chroot "${BROOT}" pacman -Sy --noconfirm >/dev/null 2>&1 || true   # refresh dbs incl. [pocknix]
+    if build_one "$1"; then
+      built=$((built+1))
+      chroot "${BROOT}" bash -lc "cd /localrepo && repo-add -q ${REPO_DB} *.pkg.tar.*"
+      return 0
+    fi
+    return 1
+  }
+
   local built=0 name
+  local -a failed=()
   for pkgdir in "${PACKAGES_DIR}"/*/; do
     [ -f "${pkgdir}/PKGBUILD" ] || continue
     name="$(basename "${pkgdir}")"
     if [ "${#want[@]}" -gt 0 ]; then
       case " ${want[*]} " in *" ${name} "*) ;; *) continue ;; esac
     fi
-    # refresh dbs (incl. [pocknix]) so deps built earlier this run are visible
-    chroot "${BROOT}" pacman -Sy --noconfirm >/dev/null 2>&1 || true
-    if build_one "${pkgdir}"; then
-      built=$((built+1))
-      # publish to [pocknix] immediately so later packages can depend on it
-      chroot "${BROOT}" bash -lc "cd /localrepo && repo-add -q ${REPO_DB} *.pkg.tar.*"
-    fi
+    try_build "${pkgdir}" || failed+=("${pkgdir}")
   done
+
+  # Dependency order != alphabetical: a package can depend on a sibling the glob builds LATER
+  # (e.g. pocknix-steam depends on pocknix-steamos-shim, which sorts after it), so its first
+  # `makepkg -s` aborts with "target not found". Retry failures — once a dep lands in [pocknix]
+  # the dependent builds. Loop until a full pass makes no progress (then they're real failures).
+  while [ "${#failed[@]}" -gt 0 ]; do
+    local -a retry=("${failed[@]}"); failed=(); local progress=0
+    for pkgdir in "${retry[@]}"; do
+      if try_build "${pkgdir}"; then progress=1; else failed+=("${pkgdir}"); fi
+    done
+    [ "${progress}" -eq 1 ] || break
+  done
+  [ "${#failed[@]}" -eq 0 ] || warn "still failing after dep-order retries: ${failed[*]##*/}"
 
   umount "${BROOT}/localrepo"
   chroot_umount "${BROOT}"
