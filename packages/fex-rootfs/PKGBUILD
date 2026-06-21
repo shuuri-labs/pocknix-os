@@ -1,0 +1,52 @@
+# Maintainer: pocknix-os
+#
+# fex-rootfs — Phase 3b piece 2/6: the x86_64 userland FEX presents to translated x86 programs.
+#
+# WHAT/WHY: FEX translates x86 *CPU* instructions to ARM, but x86 programs (Proton/Wine + games)
+# still load x86 *libraries* (libc, libstdc++, ld-linux, …). Our device's /usr/lib is all ARM, which
+# x86 code can't load. So FEX needs a complete x86 Linux userland — the "RootFS" — to resolve those
+# libs from. FEXServer mounts this squashfs read-only at runtime (hence the `squashfuse` dep) and
+# presents it as / to every x86 process.
+#
+# MIRRORS the references:
+#   - ROCKNIX (compat/fex-emu): RootFS="ArchLinux", squashfs + squashfuse, and copies the native
+#     Turnip driver (libvulkan_freedreno.so) into /usr/share/fex-emu/ for the Vulkan host-thunk.
+#   - armada (30-install-steam-session.sh): ships a rootfs image (default.erofs) baked into the OS +
+#     Config.json RootFS=<image>, ThunksDB all enabled.
+# We use the *Arch* x86_64 rootfs (its glibc matches our build sysroot, like ROCKNIX), as squashfs,
+# baked into the package (no first-boot fetch — same reasoning as the build-time Steam bake).
+#
+# The matching base Config.json (RootFS + thunk wiring + ThunksDB) ships from packages/fex-emu.
+
+pkgname=fex-rootfs
+_rootfsdate=2026-01-08             # pinned dated image from FEX's rootfs CDN (immutable path)
+pkgver=${_rootfsdate//-/}          # 20260108
+pkgrel=1
+pkgdesc="x86_64 ArchLinux RootFS for FEX (x86 game userland + native Turnip GPU passthrough)"
+arch=('aarch64')
+url="https://rootfs.fex-emu.gg/"
+license=('custom')                 # a full Arch x86 userland — mixed upstream licensing
+# squashfuse: FEXServer FUSE-mounts the .sqsh at runtime. vulkan-freedreno: the native Adreno
+# (Turnip) Vulkan driver the FEX Vulkan host-thunk loads for GPU passthrough. fex-emu: the consumer.
+depends=('fex-emu' 'squashfuse')
+makedepends=('vulkan-freedreno')   # provides /usr/lib/libvulkan_freedreno.so to bundle (ROCKNIX-style)
+options=('!strip' '!debug')
+
+# FEX verifies rootfs images with xxh3_64 (its own check at fetch), NOT sha256 — and the dated URL
+# path is immutable. So SKIP makepkg's hash for now; pin a real sha256 after the first VM download
+# (TODO, same discipline as the Proton sha512 pin in piece 4).
+source=("ArchLinux-${_rootfsdate}.sqsh::https://rootfs.fex-emu.gg/ArchLinux/${_rootfsdate}/ArchLinux.sqsh")
+noextract=("ArchLinux-${_rootfsdate}.sqsh")   # the runtime image — ship as-is, never unpack
+sha256sums=('SKIP')
+
+package() {
+  # Ship the rootfs where FEX looks (Config.json RootFS="ArchLinux.sqsh" resolves under here, the
+  # same /usr/share/fex-emu/RootFS dir fex-emu's package() pre-creates — armada's default.erofs model).
+  install -Dm0644 "${srcdir}/ArchLinux-${_rootfsdate}.sqsh" \
+    "${pkgdir}/usr/share/fex-emu/RootFS/ArchLinux.sqsh"
+
+  # Native GPU passthrough: the Vulkan HOST thunk must reach the real Adreno driver. ROCKNIX copies
+  # libvulkan_freedreno.so (Turnip) into /usr/share/fex-emu/ for exactly this; mirror it with ALARM's.
+  install -Dm0644 /usr/lib/libvulkan_freedreno.so \
+    "${pkgdir}/usr/share/fex-emu/libvulkan_freedreno.so"
+}
