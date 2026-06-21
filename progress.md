@@ -149,10 +149,15 @@ xxh3_64 not sha256 → SKIP for now, pin sha256 after first VM download). Mirror
 `squashfuse`, `RootFS="ArchLinux"`) + armada (bake the image in, `ThunksDB` all-on). package() ships
 the `.sqsh` to `/usr/share/fex-emu/RootFS/ArchLinux.sqsh` (FEXServer FUSE-mounts it RO) and copies
 ALARM's Turnip `libvulkan_freedreno.so` into `/usr/share/fex-emu/` for the Vulkan host-thunk
-(ROCKNIX-style GPU passthrough). `packages/fex-emu/Config.json` now sets `"RootFS": "ArchLinux.sqsh"`.
-**NEXT:** `make packages PKG=fex-rootfs` in the VM (expect a ~hundreds-of-MB download once, then
-SRCDEST-cached); then on-device smoke test (install fex-emu+fex-rootfs, enable binfmt, `FEXBash`).
-NOT yet in the image `install_local_packages` list — add after on-device validation (piece 6).
+(ROCKNIX-style GPU passthrough).
+
+**✅ Pieces 1+2 VALIDATED ON HARDWARE (2026-06-21):** `FEXBash -c 'uname -m'` → **`x86_64` + `NAME="Arch
+Linux"`** on the RP6 — FEX translates x86 AND mounts the Arch rootfs. **Config gotcha fixed:** FEX
+resolves a *bare* `RootFS` name against the per-user dir (`/root/.fex-emu/RootFS/`), which doesn't exist
+→ empty RootFS path. Set `Config.json` `"RootFS"` to the **absolute** path
+`/usr/share/fex-emu/RootFS/ArchLinux.sqsh` (env probe `FEX_ROOTFS=<abs> FEXBash` proved it). (Also note:
+the first on-device fex-emu was stale — built before the RootFS key existed; rebuild to bake it in.)
+NOT yet in the image `install_local_packages` list — add after the full Proton path validates (piece 6).
 
 **Pieces 3–6:** (3) **binfmt** enable (systemd-binfmt → FEXInterpreter for x86/x86_64); (4) **CachyOS
 Proton 11 arm64** → `compatibilitytools.d` (pin sha512); (5) per-game **FEX-config wrapper**; (6)
