@@ -121,7 +121,13 @@ build() {
     -DX86_DEV_ROOTFS="${srcdir}/sysroot" \
     -DX86_64_TOOLCHAIN_FILE="${srcdir}/toolchain_x86_64.cmake" \
     -DX86_32_TOOLCHAIN_FILE="${srcdir}/toolchain_x86_32.cmake"
-  ninja -C build
+  # Cap ninja parallelism. FEXCore's OpcodeDispatcher TUs (Vector.cpp, X87*.cpp …) each
+  # peak at ~2-3 GB RSS under clang -O2/Release; an unbounded `ninja` (= nproc, e.g. 8)
+  # OOMs a typical build VM (systemd-oomd reaps the cgroup → "subcommand failed" with no
+  # compiler error). Default -j2 fits ~7-8 GB RAM; override per host, e.g.
+  #   FEX_NINJA_JOBS=1 make packages PKG=fex-emu   (tighter)
+  #   FEX_NINJA_JOBS=6 …                            (lots of RAM)
+  ninja -C build -j"${FEX_NINJA_JOBS:-2}"
 }
 
 package() {
