@@ -5,7 +5,7 @@ Working notes for picking this back up after a break. For the *why* behind decis
 testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
-_Last updated: 2026-06-20 — Phase 3b STARTED: FEX-with-thunks build scaffolded (`packages/fex-emu`)._
+_Last updated: 2026-06-21 — Phase 3b: FEX-with-thunks package BUILT (piece 1/6); next = verify thunks + x86 rootfs._
 
 ---
 
@@ -127,12 +127,24 @@ sysroot from **pinned Arch x86_64 + lib32 packages** (archive.archlinux.org) so 
 `make packages`. Patches 0001/0002/0003/0005/**0006** (0006 fixes glibc≥2.41 SVE header leakage —
 our Arch glibc is 2.43). FEX commit `a04b0241` (= ROCKNIX/armada).
 
-**Piece 1 scaffolded:** `packages/fex-emu/` (PKGBUILD + 5 patches + 2 toolchain cmakes + base
-Config.json). **NEXT: build it in the VM** (`make packages PKG=fex-emu`) and paste output — expect
-to iterate on the 32-bit guest-thunk link (Arch /usr/lib32 vs Fedora /usr/lib; toolchain file
-already adds `-L.../usr/lib32`). Then pieces 2–6 (rootfs / binfmt+Turnip / Proton / wrapper /
-on-device validate). Recommended x86 runtime RootFS = **Arch x86_64** (matches our sysroot glibc
-2.43 + ROCKNIX's `RootFS="ArchLinux"`).
+**✅ Piece 1 BUILT (2026-06-21):** `fex-emu-2605.20260520.a04b0241-1-aarch64.pkg.tar.xz` in
+`build/localrepo`. Three fixes got it compiling in the VM (all committed):
+- **OOM** on `FEXCore/.../OpcodeDispatcher/Vector.cpp` — unbounded `ninja` (=nproc 8) × ~2-3 GB/TU
+  blew the 7.7 GB VM (systemd-oomd reaped it). Fix: `ninja -j"${FEX_NINJA_JOBS:-2}"`.
+- **System fmt v11 shadowed FEX's bundled fmt** — FEX does `find_package(fmt QUIET)` then falls back
+  to `External/fmt` only if absent; Arch's v11 was found and its stricter `type_is_unformattable_for`
+  rejected FEX's `join_view<std::byte*>` formats. Fix: drop fmt/xxhash/Catch2 makedepends +
+  `CMAKE_DISABLE_FIND_PACKAGE_*` → FEX uses its pinned `External/*` (what armada/ROCKNIX get).
+- **Re-downloaded sources every build** → persistent `SRCDEST=/build/srccache` in `build-packages.sh`.
+
+**NEXT (immediate): verify the package actually shipped the THUNKS** (the whole point) —
+`bsdtar -tf build/localrepo/fex-emu-*.pkg.tar.xz | grep -iE 'Thunk|FEX|binfmt'` should show
+`usr/bin/FEX*`, `usr/lib/fex-emu/HostThunks{,_32}`, `usr/share/fex-emu/GuestThunks{,_32}`,
+`usr/lib/binfmt.d/FEX*`. **Then pieces 2–6:** (2) x86 **RootFS** = **Arch x86_64** (matches our
+sysroot glibc 2.43 + ROCKNIX `RootFS="ArchLinux"`), fetched as squashfs/erofs, mounted RO; (3)
+**binfmt** drop-in (systemd-binfmt → FEXInterpreter for x86/x86_64); (4) **CachyOS Proton 11 arm64**
+→ `compatibilitytools.d`; (5) per-game **FEX-config wrapper**; (6) default compat + on-device validate
+(run an x86 title, confirm Turnip via the Vulkan thunk).
 
 ## Phase 3 — native ARM client journey (how we got to the milestone)
 What's validated on-device (2026-06-19):
