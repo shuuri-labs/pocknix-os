@@ -3,7 +3,7 @@
 # InputPlumber composite-device config for the RP6 gamepad. Grows with audio/thermal.
 pkgname=pocknix-bsp
 pkgver=0.1.0
-pkgrel=7
+pkgrel=9
 pkgdesc="pocknix board support (RP6/SM8550): suspend hooks, SDAM breadcrumb, InputPlumber + audio UCM"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -15,8 +15,9 @@ optdepends=('inputplumber: gamepad -> Steam Input mapping (uses 01-rsinput-rp6.y
 # RP6 spurious deep-sleep wake is kernel-level (not gated by any power/wakeup
 # toggle); see docs/sm8550-suspend-wake-report.md. Needs a kernel/DT fix upstream.
 source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post' '01-rsinput-rp6.yaml'
-        'rp6-gamepad.yaml' '90-pocknix-backlight.rules' 'AYN-Odin2.conf' 'HiFi.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'rp6-gamepad.yaml' '90-pocknix-backlight.rules' '60-pocknix-controllers.rules'
+        'AYN-Odin2.conf' 'HiFi.conf')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -40,6 +41,10 @@ package() {
   # so Steam's brightness slider works as the deck user.
   install -Dm644 "${srcdir}/90-pocknix-backlight.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/90-pocknix-backlight.rules"
+  # Controller uaccess for the non-root deck session (ALARM has no game-devices-udev). Critical for
+  # the InputPlumber 'deck' target (Valve 28de) hidraw that Steam Input reads.
+  install -Dm644 "${srcdir}/60-pocknix-controllers.rules" \
+    "${pkgdir}/usr/lib/udev/rules.d/60-pocknix-controllers.rules"
 
   # ALSA UCM for the RP6 sound card (reports as "AYN-Odin2"). The codec include
   # sequences (/lib, /codecs/wcd938x, /codecs/qcom-lpass) come from base alsa-ucm-conf.

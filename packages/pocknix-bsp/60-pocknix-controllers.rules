@@ -1,0 +1,30 @@
+# pocknix-os: grant the active (deck) session access to game controllers via uaccess.
+#
+# The Arch `steam`/`game-devices-udev` controller rules aren't in the ALARM repos, and native ARM
+# Steam doesn't ship them, so the non-root `deck` session couldn't open the gamepad device nodes
+# (it worked as root, which ignores uaccess). `deck` is in the `input` group so it can already read
+# the evdev /dev/input/event* nodes — the gap is /dev/hidraw* (root:root 0600), which Steam Input
+# uses for the full controller. The KEY entry is Valve 28de: InputPlumber's `deck` target presents
+# the gamepad as a Valve "Steam Deck Controller" (28de:12f0), which is what Steam actually reads.
+
+# /dev/uinput: Steam Input creates the EMULATED gamepad it hands to games via uinput. deck (input
+# group) needs write access or input works in the Steam UI (read-only nav) but NOT in-game.
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+
+# Valve — Steam Controller / Steam Deck / InputPlumber 'deck' virtual target
+KERNEL=="hidraw*", ATTRS{idVendor}=="28de", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="input", ATTRS{idVendor}=="28de", MODE="0660", TAG+="uaccess"
+
+# Common external controllers, so plugged-in pads work in the deck session too.
+# Sony (DualShock 3/4, DualSense)
+KERNEL=="hidraw*", ATTRS{idVendor}=="054c", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="input", ATTRS{idVendor}=="054c", MODE="0660", TAG+="uaccess"
+# Microsoft (Xbox)
+KERNEL=="hidraw*", ATTRS{idVendor}=="045e", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="input", ATTRS{idVendor}=="045e", MODE="0660", TAG+="uaccess"
+# Nintendo (Switch Pro / Joy-Con)
+KERNEL=="hidraw*", ATTRS{idVendor}=="057e", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="input", ATTRS{idVendor}=="057e", MODE="0660", TAG+="uaccess"
+# 8BitDo
+KERNEL=="hidraw*", ATTRS{idVendor}=="2dc8", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="input", ATTRS{idVendor}=="2dc8", MODE="0660", TAG+="uaccess"

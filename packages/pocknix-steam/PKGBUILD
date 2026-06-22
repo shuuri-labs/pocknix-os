@@ -30,8 +30,10 @@ license=('GPL2')
 # mangohud: provides the `mangoapp` overlay binary that gamescope --mangoapp spawns; this is
 #   Steam's built-in performance overlay (FPS/frametime/CPU; GPU stats are limited on Adreno/msm).
 #   Without it gamescope's --mangoapp has nothing to launch and the overlay never appears.
-# xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX). The
-# rest of the native client's deps resolve from the base image / the steamrt runtime.
+# xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX).
+# Controller uaccess: the Arch steam/game-devices-udev rules aren't in ALARM, so pocknix-bsp ships
+# its own 60-pocknix-controllers.rules (the deck session needs uaccess to the gamepad hidraw nodes).
+# The rest of the native client's deps resolve from the base image / the steamrt runtime.
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
          'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
          'pocknix-steamos-shim' 'xorg-server-xvfb')
