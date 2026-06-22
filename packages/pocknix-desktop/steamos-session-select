@@ -2,17 +2,17 @@
 # steamos-session-select — switch between the Steam game session (gamescope) and the Plasma Mobile
 # desktop session on pocknix-os.
 #
-# This is the real implementation of the SteamOS contract that the Steam Deck UI's "Switch to
-# Desktop" button invokes (`steamos-session-select desktop`) and that the Plasma "Return to Game
-# Mode" tile invokes (`steamos-session-select gamescope`). pocknix has NO display manager — the
-# session is chosen by ~deck/.bash_profile at tty1 autologin — so the switch is just:
-#   1. persist the choice to a state file that .bash_profile reads, then
-#   2. restart getty@tty1 so it re-runs autologin -> .bash_profile -> the chosen launcher.
+# This is the SteamOS contract: Steam's "Switch to Desktop" button runs `steamos-session-select
+# desktop`, and the Plasma "Return to Game Mode" tile runs `steamos-session-select gamescope`.
 #
-# 'deck' is in the 'wheel' group and the 50-pocknix-deck.rules polkit rule grants it
-# org.freedesktop.systemd1.* (manage units), so `systemctl restart getty@tty1` needs no password.
-# We use --no-block: the restart SIGTERMs our own session (we are a child of getty@tty1), so we
-# hand the job to systemd (PID1) and return immediately rather than waiting to be killed mid-wait.
+# pocknix has no display manager — the tty1 ~deck/.bash_profile is a SUPERVISOR LOOP that launches
+# the session named in the choice file and relaunches when its compositor exits. So switching is:
+#   1. write the new choice to the state file, then
+#   2. SIGTERM the current compositor — the loop then relaunches into the new choice.
+# Crucially this keeps the SAME long-lived logind session active on seat0, which is what lets kwin
+# get DRM master after a switch (restarting getty churned the session and broke that — see
+# ~deck/.bash_profile and docs/plasma-mobile-plan.md). No getty restart, no polkit: we only signal
+# our own user's processes.
 set -u
 
 STATE_HOME="${XDG_STATE_HOME:-${HOME:-/home/deck}/.local/state}"
@@ -23,13 +23,17 @@ usage() { echo "usage: steamos-session-select [gamescope|desktop|plasma]" >&2; e
 case "${1:-}" in
   desktop|plasma)        sel=plasma    ;;
   gamescope|game|steam)  sel=gamescope ;;
-  "")                    usage         ;;
-  *)                     usage         ;;
+  ""|*)                  usage         ;;
 esac
 
 mkdir -p "${STATE_HOME}"
 printf '%s\n' "${sel}" > "${CHOICE_FILE}"
-echo "steamos-session-select: next session = ${sel} (restarting getty@tty1)" >&2
+echo "steamos-session-select: next session = ${sel} (signalling current compositor to exit)" >&2
 
-# Re-run the autologin so .bash_profile picks up the new choice. --no-block: this kills our session.
-exec systemctl --no-block restart getty@tty1.service
+# Terminate whichever compositor is currently running (the other match is a no-op). SIGTERM lets it
+# shut down cleanly; the supervisor loop relaunches into ${sel}. No -x: the patterns also catch the
+# wrappers (kwin_wayland_wrapper, etc.). We run as the session user, so no privilege is needed.
+uid="$(id -u)"
+pkill -u "${uid}" -TERM gamescope    2>/dev/null || true
+pkill -u "${uid}" -TERM kwin_wayland 2>/dev/null || true
+exit 0

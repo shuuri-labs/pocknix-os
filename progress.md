@@ -49,9 +49,27 @@ needs its own pocknix package later (like gtk2/inputplumber). Scripts:
 Built `pocknix-desktop`, hot-deployed to the device. **Plasma Mobile renders with correct
 orientation** (`POCKNIX_ROTATE=left` was right first try — the rotate helper works). Session
 switching works **in all paths**: the Plasma "Return to Game Mode" tile, Steam's built-in
-gamepadui **"Switch to Desktop"** power-menu button (it calls `/usr/bin/steamos-session-select
-plasma` as deck — confirmed by instrumenting), and manual root-SSH. The getty-restart mechanism is
-solid (no supervisor loop needed after all).
+gamepadui **"Switch to Desktop"** power-menu button, and manual.
+
+**The switch mechanism: a SUPERVISOR LOOP, not getty-restart (the key fix).** Initial design had
+`steamos-session-select` write a choice file + `systemctl restart getty@tty1`. That switched, but
+**Steam→Plasma hung** — kwin came up (process alive, owned the DRM fd) but the panel stayed on the
+console: `kwin_wayland: atomic commit failed: Permission denied` + `Failed to open …event11
+(login1/session/_NN Unknown object)`. Root cause: restarting getty **churns the logind session** —
+the old (gamescope) session is torn down as a new one is created, logind reuses session id "1", and
+kwin inherits a **stale/closed** session → not `active` on seat0 → no DRM master. Cold boot worked
+(one clean active session) which is what isolated it. Steam *did* call the script correctly
+(confirmed by instrumenting: `args='plasma' uid=1001`), so the bug was the switch action, not the
+invocation. `LIBSEAT_BACKEND=seatd` (kwin via seatd like gamescope) did NOT fix it — the problem was
+session activeness, not the seat backend.
+
+**Fix (`~deck/.bash_profile` is now a loop):** the bash login shell stays the session leader and
+loops — launch the chosen session, and when its compositor exits, re-read the choice file and launch
+the other — so **one long-lived logind session stays active on seat0** the whole time (every switch
+now behaves like a cold boot → kwin always gets master). `steamos-session-select` just writes the
+choice + `pkill -TERM gamescope/kwin_wayland`; the loop relaunches. **No getty restart, no polkit.**
+The gamescope `drmModeRmFB failed` / xkbcomp spam on the console during a switch is just gamescope's
+teardown noise — cosmetic. (`LIBSEAT_BACKEND=seatd` kept in the launcher; harmless, known-good.)
 
 **Gotchas resolved on the way:**
 - The choice-file `.bash_profile` ships via the image **overlay**, not a package — hot-deploying

@@ -28,4 +28,12 @@ if ! command -v startplasmamobile >/dev/null 2>&1; then
   exit 1
 fi
 
+# Seat backend: this device runs seatd (the Steam/gamescope session uses it), and the getty
+# autologin session is NOT reliably "active" on seat0 for logind-based clients. kwin_wayland
+# defaults to libseat's logind backend, which then can't get DRM master ("atomic commit failed:
+# Permission denied") or open input ("login1/session/_NN Unknown object") -> the panel stays on
+# the console while kwin spins. Forcing libseat to seatd makes kwin acquire the seat exactly the
+# way gamescope does (deck is in the 'seat' group -> can reach /run/seatd.sock). See progress.md.
+export LIBSEAT_BACKEND=seatd
+
 exec startplasmamobile

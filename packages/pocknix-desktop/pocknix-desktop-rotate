@@ -43,12 +43,12 @@ if [ -z "${outputs}" ]; then
   exit 1
 fi
 
-# Autodetect the connected output if not pinned. `kscreen-doctor -o` prints lines like:
-#   Output: 1 DSI-1 enabled connected ...
-# Prefer a DSI output (the built-in panel); else fall back to the first connected one.
+# Autodetect the output if not pinned. `kscreen-doctor -o` prints one "Output: <id> <name> …" line
+# per output (the "enabled"/"connected" tokens are on SEPARATE following lines, so they can't be
+# matched on the same line). Field $3 is the connector name. Prefer the DSI panel; else first output.
 if [ -z "${OUTPUT}" ]; then
-  OUTPUT="$(printf '%s\n' "${outputs}" | awk '/connected/ && /DSI/   {print $3; exit}')"
-  [ -z "${OUTPUT}" ] && OUTPUT="$(printf '%s\n' "${outputs}" | awk '/connected/ {print $3; exit}')"
+  OUTPUT="$(printf '%s\n' "${outputs}" | awk '/^Output:/ && /DSI/ {print $3; exit}')"
+  [ -z "${OUTPUT}" ] && OUTPUT="$(printf '%s\n' "${outputs}" | awk '/^Output:/ {print $3; exit}')"
 fi
 if [ -z "${OUTPUT}" ]; then
   log "could not determine a connected output from:"; printf '%s\n' "${outputs}" >&2
