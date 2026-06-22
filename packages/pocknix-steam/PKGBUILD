@@ -4,7 +4,7 @@
 # Steam is experimental (Valve publicbeta linuxarm64).
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -37,13 +37,18 @@ license=('GPL2')
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
          'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
          'pocknix-steamos-shim' 'xorg-server-xvfb')
-source=('pocknix-steam-install' 'pocknix-steam' 'registry.vdf'
+source=('pocknix-steam-install' 'pocknix-steam' 'steam' 'steam.desktop' 'registry.vdf'
         'proton-toolmanifest.vdf' 'proton-compatibilitytool.vdf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-steam-install" "${pkgdir}/usr/bin/pocknix-steam-install"
   install -Dm755 "${srcdir}/pocknix-steam"         "${pkgdir}/usr/bin/pocknix-steam"
+  # Desktop-mode Steam: `/usr/bin/steam` runs the native client as a normal window (Plasma session)
+  # and is the `steam` command per-game shortcuts call; steam.desktop puts it in the app grid +
+  # registers the steam:// URL handler. (Game mode uses pocknix-steam/gamescope instead.)
+  install -Dm755 "${srcdir}/steam"                 "${pkgdir}/usr/bin/steam"
+  install -Dm644 "${srcdir}/steam.desktop"         "${pkgdir}/usr/share/applications/steam.desktop"
   # OOBE-complete registry seed (ROCKNIX resources/registry.vdf). Seeded to ~/.steam/registry.vdf
   # by the installer so the gamepadui skips the Steam Deck OOBE — whose "required update" step
   # tries to update SteamOS (which we aren't) and dead-ends with "Updater apply error: 2".

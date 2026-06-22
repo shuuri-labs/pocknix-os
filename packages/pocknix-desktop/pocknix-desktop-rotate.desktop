@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=pocknix RP6 panel rotation
+Comment=Apply the RP6 panel rotation + scale once the Plasma Mobile session is up
+Exec=/usr/bin/pocknix-desktop-rotate
+# Only meaningful inside a Plasma session (kscreen-doctor needs the running KScreen daemon).
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2

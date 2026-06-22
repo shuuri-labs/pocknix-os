@@ -1,13 +1,43 @@
-# pocknix-os — boot-to-Steam hook (non-root 'deck' session).
-# getty@tty1 autologins 'deck' on the built-in display, which (via PAM/pam_systemd) gives a REAL
-# login session: XDG_RUNTIME_DIR=/run/user/1001 + the per-user PipeWire stack (pipewire.socket /
-# wireplumber) come up — Steam needs that runtime dir, and PipeWire (audio) ONLY runs for a non-root
-# user (ConditionUser=!root), which is why the session user is 'deck', not root. We then exec into
-# the gamescope Big-Picture session.
+# pocknix-os — session supervisor (non-root 'deck' autologin on tty1).
+# getty@tty1 autologins 'deck', giving a REAL login session (XDG_RUNTIME_DIR=/run/user/1001 + the
+# per-user PipeWire stack). PipeWire only runs for a non-root user, which is why the session user is
+# 'deck'. This script is the session SUPERVISOR.
 #
-# Guards: only the physical console (tty1), and NOT over SSH ($SSH_CONNECTION set) or other VTs.
-# Escape hatch: `touch ~/.no-steam` to get a shell on tty1 instead (for debugging the session).
-if [ "$(tty)" = "/dev/tty1" ] && [ -z "${SSH_CONNECTION:-}" ] && [ ! -e "${HOME}/.no-steam" ] \
-   && command -v pocknix-steam >/dev/null 2>&1; then
-  exec pocknix-steam
+# It is a LOOP, not an `exec`: it launches the chosen session and, when that compositor exits,
+# re-reads the choice file and launches the next one — all while THIS bash stays the session leader,
+# so the single logind session stays `active` on seat0 the whole time. That is the fix for switching:
+# previously the switch did `systemctl restart getty@tty1`, which tore down + recreated the login
+# session; kwin then inherited a stale/closed logind session id ("login1/session/_NN Unknown object")
+# and could not become DRM master ("atomic commit failed: Permission denied"), so Plasma hung on a
+# black/console screen. Keeping one long-lived session makes every switch behave like a cold boot.
+#
+# Switching: steamos-session-select writes the choice file ($XDG_STATE_HOME/pocknix-session =
+# gamescope|plasma) and SIGTERMs the current compositor; this loop then relaunches into the new
+# choice. No getty restart, no polkit. Default = gamescope (game mode); desktop is opt-in.
+#
+# Guards: physical console (tty1) only, NOT over SSH or other VTs. Escape hatch: `touch ~/.no-steam`
+# to get a plain shell on tty1 for debugging.
+if [ "$(tty)" = "/dev/tty1" ] && [ -z "${SSH_CONNECTION:-}" ] && [ ! -e "${HOME}/.no-steam" ]; then
+  POCKNIX_STATE="${XDG_STATE_HOME:-${HOME}/.local/state}/pocknix-session"
+  pocknix_fastfails=0
+  while true; do
+    POCKNIX_SESSION="$(cat "${POCKNIX_STATE}" 2>/dev/null || echo gamescope)"
+    pocknix_start="$(date +%s)"
+    case "${POCKNIX_SESSION}" in
+      plasma|desktop) command -v pocknix-desktop >/dev/null 2>&1 && pocknix-desktop ;;
+      *)              command -v pocknix-steam   >/dev/null 2>&1 && pocknix-steam   ;;
+    esac
+    # A session that exits in <5s is almost certainly broken (missing stack, crash). Tolerate the
+    # odd quick exit, but if it happens 3x in a row drop to a shell instead of hot-looping.
+    if [ "$(( $(date +%s) - pocknix_start ))" -lt 5 ]; then
+      pocknix_fastfails="$(( pocknix_fastfails + 1 ))"
+      if [ "${pocknix_fastfails}" -ge 3 ]; then
+        echo "pocknix: session '${POCKNIX_SESSION}' keeps exiting immediately — dropping to a shell." >&2
+        echo "        (fix it, then re-login; or 'touch ~/.no-steam' to stay at a shell.)" >&2
+        break
+      fi
+    else
+      pocknix_fastfails=0
+    fi
+  done
 fi

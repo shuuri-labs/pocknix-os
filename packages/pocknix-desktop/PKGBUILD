@@ -1,0 +1,54 @@
+# pocknix-desktop — the Plasma Mobile "desktop" session for the Retroid Pocket 6, plus the
+# game<->desktop session switch. The Steam half is pocknix-steam; this is its symmetric twin.
+#
+# The heavy Plasma Mobile stack itself is NOT a depends() here — it's installed into the rootfs at
+# image time from config/packages/desktop.list (the repo's base.list/steam.list pattern). Reason:
+# makepkg -s would otherwise pull the entire KDE/Qt stack into the BUILD chroot just to build this
+# no-op arch=any data package (hundreds of MB, no purpose). So this package ships only the scripts;
+# build-image.sh installs desktop.list alongside it. It ships:
+#   - pocknix-desktop            the launcher (.bash_profile execs it when the choice = plasma)
+#   - pocknix-desktop-rotate     applies the RP6 panel rotation+scale to the live kwin session
+#                                (autostarted via /etc/xdg/autostart) — the rotated-DSI crux
+#   - steamos-session-select     the REAL game<->desktop switch (Steam "Switch to Desktop" + the
+#                                Plasma "Return to Game Mode" tile both call this)
+#   - return-to-gamemode.desktop an app-grid tile that runs `steamos-session-select gamescope`
+#
+# Plasma Mobile runs on kwin_wayland (its own compositor), NOT in Sway — locked decision; see
+# docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
+pkgname=pocknix-desktop
+pkgver=0.1.0
+pkgrel=2
+pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+# depends() is intentionally JUST 'bash'. The Plasma Mobile runtime stack (plasma-mobile +
+# startplasmamobile, plasma-workspace, kwin, plasma-nano, plasma-nm, powerdevil, plasma-settings,
+# kscreen/kscreen-doctor) is delivered via config/packages/desktop.list into the rootfs, NOT as
+# depends here — listing plasma-mobile/kscreen would drag the entire KDE/Qt stack into the BUILD
+# chroot at makepkg time for no reason. The launcher + rotate scripts `command -v`-guard their
+# callees (startplasmamobile, kscreen-doctor) and fail gracefully if the stack is absent.
+depends=('bash')
+source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'
+        'steamos-session-select' 'return-to-gamemode.desktop'
+        'pocknix-flathub-setup' 'pocknix-flathub.service' 'ksplashrc')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
+  install -Dm755 "${srcdir}/pocknix-desktop-rotate"   "${pkgdir}/usr/bin/pocknix-desktop-rotate"
+  install -Dm755 "${srcdir}/steamos-session-select"   "${pkgdir}/usr/bin/steamos-session-select"
+  # Autostart the rotation transform once the Plasma session (and kscreen kded) is up.
+  install -Dm644 "${srcdir}/pocknix-desktop-rotate.desktop" \
+    "${pkgdir}/etc/xdg/autostart/pocknix-desktop-rotate.desktop"
+  # "Return to Game Mode" tile in the Plasma app grid.
+  install -Dm644 "${srcdir}/return-to-gamemode.desktop" \
+    "${pkgdir}/usr/share/applications/return-to-gamemode.desktop"
+  # Flathub remote setup for Discover/flatpak (enabled by build-sd-image.sh firstboot_config).
+  install -Dm755 "${srcdir}/pocknix-flathub-setup"    "${pkgdir}/usr/bin/pocknix-flathub-setup"
+  install -Dm644 "${srcdir}/pocknix-flathub.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-flathub.service"
+  # Disable the 30s KSplash fallback (Plasma Mobile never dismisses it) so a session switch isn't
+  # stuck behind a splash. System-wide default; only the deck Plasma session reads it.
+  install -Dm644 "${srcdir}/ksplashrc"                "${pkgdir}/etc/xdg/ksplashrc"
+}

@@ -1,12 +1,28 @@
-# Desktop session stack — Plasma Mobile (Phase 4), all from Arch Linux ARM.
+# Desktop session stack — Plasma Mobile, all from Arch Linux ARM (aarch64).
 # Plasma Mobile runs on its own compositor (kwin_wayland); NOT hosted in Sway.
+#
+# build-image.sh installs this list into the rootfs (Phase 4). The pocknix-desktop package ships
+# only the launcher/switch scripts — it does NOT depend() on this stack, to keep makepkg from
+# dragging the whole KDE/Qt tree into the build chroot (see packages/pocknix-desktop/PKGBUILD).
 
-plasma-mobile
-plasma-workspace
-kwin
-plasma-nano
-plasma-nm
-powerdevil
-maliit-keyboard
+plasma-mobile        # mobile shell + the startplasmamobile session entrypoint
+plasma-workspace     # startplasma-wayland + plasmashell (the shell host)
+kwin                 # the Wayland compositor Plasma Mobile runs on
+plasma-nano          # minimal shell container the mobile shell builds on
+plasma-nm            # Wi-Fi / network applet (touch UI)
+powerdevil           # power / brightness / suspend management
+plasma-settings      # mobile settings app
+kscreen              # kscreen-doctor -> the panel rotation/scale transform (rotated-DSI crux)
+
+# --- app store (Flatpak) ---
+# Discover is the native KDE store and ships a Flatpak backend; flatpak provides the runtime.
+# Flathub is added by pocknix-flathub.service (pocknix-desktop) on first online boot. A GTK store
+# like Bazaar is NOT in Arch repos — install it AS a flatpak from Flathub once this is up.
+flatpak              # the Flatpak runtime + CLI
+discover             # plasma-discover — KDE app store with the Flatpak backend
+
+# On-screen keyboard: maliit-keyboard is AUR-only (NOT in Arch/ALARM repos) -> needs its own
+# pocknix package (build from AUR, like gtk2/inputplumber). Deferred; not needed to validate
+# render/rotation. Plasma's built-in virtualkeyboard can be a stopgap. TODO: packages/maliit-keyboard.
 # minimal app set — keep lean, no full Plasma desktop
-# discover            # optional app store; uncomment if wanted
+# discover           # optional app store; uncomment if wanted

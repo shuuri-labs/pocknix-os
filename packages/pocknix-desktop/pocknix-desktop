@@ -1,0 +1,39 @@
+#!/bin/bash
+# pocknix-desktop — launch the Plasma Mobile desktop session on the RP6.
+#
+# This is the Desktop half of the two-session model (the Steam half is pocknix-steam). It is
+# exec'd by ~deck/.bash_profile on tty1 when the session-choice file says "plasma" — exactly the
+# same autologin path the game session uses, so we inherit the non-root 'deck' PAM session
+# (XDG_RUNTIME_DIR=/run/user/1001 + the per-user PipeWire stack) with no extra setup.
+#
+# Compositor: Plasma Mobile IS its own compositor (kwin_wayland + plasmashell mobileshell) — it is
+# NOT hosted in Sway or a bare compositor (locked decision; see the plasma-mobile-compositor memory
+# and docs/plasma-mobile-plan.md). The upstream entrypoint /usr/bin/startplasmamobile sets the
+# phone/handset env (PLASMA_PLATFORM, mobile QQC2 style, …), runs plasma-mobile-envmanager, then
+# execs startplasma-wayland, which brings up kwin_wayland on the DRM backend (default on a tty) and
+# launches the mobile shell. It self-handles the D-Bus session (plasma-dbus-run-session-if-needed),
+# so no dbus-run-session wrapper is needed here.
+#
+# Display rotation (the RP6 panel is portrait 1080x1920 mounted rotated): unlike gamescope, kwin
+# drives DRM directly and needs a REAL output transform, not a shader. That is applied once the
+# compositor is up by pocknix-desktop-rotate (shipped as an /etc/xdg/autostart entry), NOT here —
+# kscreen needs the running session to talk to. See pocknix-desktop-rotate.
+set -e
+
+export HOME="${HOME:-/home/deck}"
+
+# Fail loudly if the mobile stack isn't installed (e.g. game-only image): better than a black VT.
+if ! command -v startplasmamobile >/dev/null 2>&1; then
+  echo "pocknix-desktop: startplasmamobile not found — is the plasma-mobile stack installed?" >&2
+  exit 1
+fi
+
+# Seat backend: this device runs seatd (the Steam/gamescope session uses it), and the getty
+# autologin session is NOT reliably "active" on seat0 for logind-based clients. kwin_wayland
+# defaults to libseat's logind backend, which then can't get DRM master ("atomic commit failed:
+# Permission denied") or open input ("login1/session/_NN Unknown object") -> the panel stays on
+# the console while kwin spins. Forcing libseat to seatd makes kwin acquire the seat exactly the
+# way gamescope does (deck is in the 'seat' group -> can reach /run/seatd.sock). See progress.md.
+export LIBSEAT_BACKEND=seatd
+
+exec startplasmamobile

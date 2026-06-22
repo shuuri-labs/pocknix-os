@@ -1,0 +1,9 @@
+# pocknix-os — disable KSplash in the Plasma Mobile session.
+# On Plasma Mobile, plasmashell does NOT send KSplash the "desktop ready" D-Bus signal, so the
+# splash never gets dismissed early and runs its full 30s fallback timeout — covering an already-
+# running shell and making a session switch look hung for ~30s (see progress.md / journal). With
+# no splash, the shell shows as soon as kwin+plasmashell are up (a few seconds). System-wide
+# default in /etc/xdg; only the deck Plasma session reads it.
+[KSplash]
+Theme=None
+Engine=none
