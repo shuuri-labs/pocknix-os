@@ -45,10 +45,38 @@ needs its own pocknix package later (like gtk2/inputplumber). Scripts:
 `build-image.sh install_local_packages` installs `pocknix-desktop` (+ build guard);
 `config/packages/desktop.list` updated to the confirmed set (kept as docs — the package pulls it).
 
-**NEXT:** (1) `make packages PKG=pocknix-desktop` in the VM; (2) on device,
-`steamos-session-select desktop` → confirm Plasma Mobile renders **and orientation/scale are
-right** (fix `POCKNIX_ROTATE`/output if not); (3) touch + Maliit OSK; (4) switch back via the tile;
-(5) round-trip robustness (watch for getty start-limit — the bare restart may need a supervisor).
+### ✅ Validated on hardware (2026-06-22, same session)
+Built `pocknix-desktop`, hot-deployed to the device. **Plasma Mobile renders with correct
+orientation** (`POCKNIX_ROTATE=left` was right first try — the rotate helper works). Session
+switching works **in all paths**: the Plasma "Return to Game Mode" tile, Steam's built-in
+gamepadui **"Switch to Desktop"** power-menu button (it calls `/usr/bin/steamos-session-select
+plasma` as deck — confirmed by instrumenting), and manual root-SSH. The getty-restart mechanism is
+solid (no supervisor loop needed after all).
+
+**Gotchas resolved on the way:**
+- The choice-file `.bash_profile` ships via the image **overlay**, not a package — hot-deploying
+  `pocknix-desktop` left the device on the OLD unconditional-`exec pocknix-steam` profile, so the
+  switch silently relaunched Steam. Fixed by copying the new `.bash_profile` to the device (the
+  clean flash bakes it). LESSON: overlay changes don't ride along with a `pacman -U` of a package.
+- **Steam was unlaunchable in desktop mode** — the native ARM client is bootstrapped into
+  `~deck/.local/share/Steam`, not a package, so no `steam` on PATH and game shortcuts
+  (`steam steam://rungameid/...`) couldn't fire. Added `/usr/bin/steam` (desktop-mode launcher,
+  no gamescope) + `steam.desktop` to `pocknix-steam` (pkgrel 3).
+- **Switch to Plasma looked hung for ~30s** but wasn't: kwin+plasmashell came up fine (kwin owns
+  `/dev/dri/card0`); the delay was **KSplash running its full 30s fallback** because Plasma Mobile
+  never sends it the "ready" signal. Disabled via `/etc/xdg/ksplashrc` (`Theme=None`) in
+  `pocknix-desktop`. Also generated `en_US.UTF-8` (build-image.sh `configure_locale`) — ALARM base
+  was `C`-only, so every Qt/Plasma app warned + fell back to C.UTF-8.
+
+**Added (this session):** Flatpak app store — `flatpak` + `discover` (desktop.list) +
+`pocknix-flathub.service` (registers Flathub on first online boot). Discover is the native KDE
+store; Bazaar (GTK) isn't in Arch → install it as a flatpak from Flathub.
+
+**STILL OPEN / next:** (1) **on-screen keyboard** — `maliit-keyboard` is AUR-only; needs its own
+pocknix package (Plasma's built-in virtualkeyboard is a stopgap). (2) cosmetic: `powerdevil` spams
+"recently resumed from sleep" on session start (false clock-jump detection) — harmless. (3) bake it
+all into a clean image (`make build` → `make sd-image`) and re-validate from a fresh flash. (4) fold
+Proton/binfmt prep into the desktop `steam` launcher if x86 games misbehave when launched there.
 
 ---
 

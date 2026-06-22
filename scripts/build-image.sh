@@ -118,6 +118,15 @@ configure_keyring() {
   chroot "${root}" pacman-key --populate archlinuxarm
 }
 
+# Generate a UTF-8 locale (ALARM base is "C" only). Qt/Plasma warn + fall back to C.UTF-8 otherwise.
+configure_locale() {
+  local root="$1"
+  log "generating en_US.UTF-8 locale"
+  sed -i 's/^#\(en_US.UTF-8 UTF-8\)/\1/' "${root}/etc/locale.gen"
+  chroot "${root}" locale-gen
+  echo 'LANG=en_US.UTF-8' > "${root}/etc/locale.conf"
+}
+
 install_packages() {
   local root="$1"; shift
   local lists=("$@")
@@ -185,6 +194,10 @@ main() {
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/base.list"
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"        # Phase 3 (ALARM): gamescope
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"      # Phase 4 (ALARM): Plasma Mobile stack
+
+  # Generate a UTF-8 locale. The ALARM base ships only "C"; Qt apps (all of Plasma) warn and fall
+  # back to C.UTF-8 on every launch, and the C path is slower. Set en_US.UTF-8 system-wide.
+  configure_locale "${ROOTFS_DIR}"
 
   # 4. kernel (Phase 1): use artifacts from `make kernel`. Install pocknix modules
   #    into the rootfs and drop the generic ALARM kernel (we boot qcom-abl KERNEL).

@@ -31,8 +31,8 @@ license=('GPL2')
 depends=('bash')
 source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'
         'steamos-session-select' 'return-to-gamemode.desktop'
-        'pocknix-flathub-setup' 'pocknix-flathub.service')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'pocknix-flathub-setup' 'pocknix-flathub.service' 'ksplashrc')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
@@ -48,4 +48,7 @@ package() {
   install -Dm755 "${srcdir}/pocknix-flathub-setup"    "${pkgdir}/usr/bin/pocknix-flathub-setup"
   install -Dm644 "${srcdir}/pocknix-flathub.service" \
     "${pkgdir}/usr/lib/systemd/system/pocknix-flathub.service"
+  # Disable the 30s KSplash fallback (Plasma Mobile never dismisses it) so a session switch isn't
+  # stuck behind a splash. System-wide default; only the deck Plasma session reads it.
+  install -Dm644 "${srcdir}/ksplashrc"                "${pkgdir}/etc/xdg/ksplashrc"
 }
