@@ -68,6 +68,16 @@ install_local_packages() {
   # pocknix-steamos-shim = steamos-update/branch/BIOS stubs so the Deck UI OOBE doesn't dead-end.
   chroot "${root}" pacman -S --noconfirm --needed \
         pocknix-bsp gamescope inputplumber pocknix-steamos-shim mangohud pocknix-steam
+  # GUARD: gamescope MUST be our epoch-1 ROCKNIX-patched build, NOT ALARM's vanilla. If the local
+  # build wasn't in [pocknix] when this ran (failed to build / built later), pacman SILENTLY falls
+  # back to ALARM's vanilla gamescope — which lacks --use-rotation-shader, so the session
+  # black-screens on the RP6. This has bitten us 3x; fail loud in the VM instead of on the device.
+  local gs_ver; gs_ver="$(chroot "${root}" pacman -Q gamescope 2>/dev/null | awk '{print $2}')"
+  case "${gs_ver}" in
+    1:*rocknix*) log "gamescope OK: ${gs_ver} (epoch-1 patched build)" ;;
+    *) umount "${root}/localrepo" 2>/dev/null || true
+       die "gamescope is '${gs_ver}', NOT the epoch-1 [pocknix] rocknix build. Vanilla gamescope can't drive the RP6 panel (no --use-rotation-shader) -> black screen. Build it first: 'make packages PKG=gamescope' and confirm build/localrepo/gamescope-1:*.pkg.tar.* exists, then re-run." ;;
+  esac
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
