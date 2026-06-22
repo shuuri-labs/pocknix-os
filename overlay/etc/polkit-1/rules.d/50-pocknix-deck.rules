@@ -1,0 +1,13 @@
+// pocknix-os — let the non-root 'deck' session perform the actions the Steam Deck UI needs
+// (suspend/reboot/poweroff, Wi-Fi via NetworkManager, timezone, per-user service control) without a
+// password prompt. 'deck' is in the 'wheel' group; we scope this to the relevant action namespaces.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id.indexOf("org.freedesktop.login1.")          == 0 ||  // suspend/reboot/poweroff
+        action.id.indexOf("org.freedesktop.NetworkManager.")  == 0 ||  // Wi-Fi from Steam's net UI
+        action.id.indexOf("org.freedesktop.timedate1.")       == 0 ||  // timezone (OOBE)
+        action.id.indexOf("org.freedesktop.systemd1.")        == 0 ||  // manage units
+        action.id.indexOf("org.freedesktop.UDisks2.")         == 0) {  // removable storage
+        return polkit.Result.YES;
+    }
+});

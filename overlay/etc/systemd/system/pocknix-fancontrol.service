@@ -1,0 +1,13 @@
+[Unit]
+Description=pocknix RP6 (SM8550) fan curve
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pocknix-fancontrol
+Restart=on-failure
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

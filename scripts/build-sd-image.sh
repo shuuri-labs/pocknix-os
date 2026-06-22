@@ -65,8 +65,24 @@ EOF
     log "installing overlay (usb-gadget + diag + autologin)"
     rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
     chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" \
-             "${root}/usr/local/bin/pocknix-expand-root" 2>/dev/null || true
+             "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" 2>/dev/null || true
   fi
+
+  # --- non-root 'deck' session user ---
+  # PipeWire refuses to run as root (ConditionUser=!root), so audio ("no output devices detected" in
+  # Steam) only works for a normal user; bwrap/pressure-vessel (Proton) prefer non-root too. uid 1001
+  # (ALARM ships 'alarm' at 1000). Groups: video/render (GPU), input (gamepad), audio, seat (seatd),
+  # wheel (polkit admin via 50-pocknix-deck.rules). The overlay (rsync'd above) already placed
+  # /home/deck/.bash_profile (boot-to-Steam) + the tty1 autologin=deck drop-in; useradd -m reuses
+  # that home, then we chown it.
+  log "creating non-root 'deck' session user (audio + Proton need a normal user)"
+  chroot "${root}" useradd -m -u 1001 -U -s /bin/bash -G video,render,input,audio,seat,wheel deck 2>/dev/null || true
+  echo "deck:${SD_DECK_PASSWORD:-${SD_ROOT_PASSWORD}}" | chroot "${root}" chpasswd
+  chroot "${root}" chown -R deck:deck /home/deck
+  # PipeWire/WirePlumber for deck's session (global-enable so its --user units start on login).
+  chroot "${root}" systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service 2>/dev/null || true
+  # Root services: RP6 fan curve + FEX-binfmt-off (deck can't write /proc/sys/fs/binfmt_misc).
+  chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt-off.service 2>/dev/null || true
 
   # Wi-Fi pre-seed — SteamOS topology: NetworkManager is the FRONT-END (Steam's gamepadui manages
   # Wi-Fi ONLY through NM's D-Bus API — without it the setup wizard shows "no connections found"

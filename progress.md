@@ -185,6 +185,27 @@ on launch, `cp` a `require_tool_appid`-free `toolmanifest.vdf` into the Proton d
 binfmt; re-enable on exit. Ship the `compatibilitytool.vdf` + clean `toolmanifest.vdf` as package
 resources, and add the runtime-install step. Then add `fex-emu`/`fex-rootfs` to the image. Also: verify
 **Turnip GPU passthrough** is actually used (mangohud FPS) vs software render; check perf.
+**GPU passthrough confirmed working on-device (2026-06-22).**
+
+## ✅ Baked in (2026-06-22): non-root `deck` user, fan curve, FEX-binfmt-off service
+After a reflash the image now sets these up so they survive (were all manual on-device before):
+- **Non-root `deck` user (uid 1001)** in `build-sd-image.sh` — groups video/render/input/audio/seat/
+  wheel; **tty1 autologin → deck**; `/home/deck/.bash_profile` boot-to-Steam; **PipeWire global-enabled**
+  (`pipewire.socket`/`pipewire-pulse.socket`/`wireplumber`). **Fixes audio** — PipeWire is
+  `ConditionUser=!root` so "no output devices detected" was just Steam-as-root with no PipeWire; bwrap/
+  pressure-vessel (Proton) also prefer non-root. Polkit `overlay/etc/polkit-1/rules.d/50-pocknix-deck.rules`
+  lets wheel (deck) do login1/NetworkManager/timedate1/systemd1/UDisks2 actions (suspend/reboot/Wi-Fi/
+  timezone) without a password. Steam data now lives under `/home/deck/.local/share/Steam`.
+- **RP6 fan curve** — `overlay/usr/local/bin/pocknix-fancontrol` + `pocknix-fancontrol.service`, ported
+  from ROCKNIX `hardware/quirks/platforms/SM8550/{bin/fancontrol,005-thermal_path,020-fan_control}`:
+  finds `hwmon*/pwm1` + cpu*/gpuss* thermal zones, drives the fan from the "moderate" temp→PWM curve
+  (full at 85°C, off ≤55°C). The fan never spun because nothing took PWM control. Deployable to a live
+  device without reflash (scp the script + unit + `systemctl enable --now`).
+- **binfmt-needs-root, documented + solved:** `overlay/etc/systemd/system/pocknix-fex-binfmt-off.service`
+  disables the FEX x86 binfmt at boot **as root**, because the `deck` session **can't write
+  `/proc/sys/fs/binfmt_misc`**. The launcher's old in-session `echo 0 > …binfmt` step is removed (it
+  would silently no-op as deck → Proton would break again). Leaving FEX binfmt on breaks Steam's Proton
+  compat-tool setup; x86 game content goes Wine→FEX directly, not via Linux binfmt, so off is correct.
 
 **Pieces 3–6:** (3) **binfmt** enable (systemd-binfmt → FEXInterpreter for x86/x86_64); (4) **CachyOS
 Proton 11 arm64** → `compatibilitytools.d` (pin sha512); (5) per-game **FEX-config wrapper**; (6)
