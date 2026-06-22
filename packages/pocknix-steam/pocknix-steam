@@ -33,6 +33,27 @@ cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
 # Decky/CEF debugger marker armada touches (harmless if unused).
 touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 
+# --- FEX/Proton prep for x86 game content (mirrors ROCKNIX steam_arm64_binfmt_and_proton_prep) ---
+# Re-applied EVERY launch because Steam restores Valve's files on a Proton update and binfmt resets on
+# boot. Needs root for the binfmt write (the boot-to-Steam session runs as root). See the 2026-06-22
+# milestone in progress.md for the why.
+PROTON_DIR="${STEAM}/steamapps/common/Proton 11.0 (ARM64)"
+if [ -d "${PROTON_DIR}" ]; then
+  # 1) Replace Valve's toolmanifest with our require_tool_appid-free one so Proton runs DIRECTLY
+  #    (Valve's runs it inside the SteamLinuxRuntime_4-arm64 container, which Steam can't set up here).
+  install -Dm644 /usr/share/pocknix-steam/proton-toolmanifest.vdf "${PROTON_DIR}/toolmanifest.vdf" 2>/dev/null || true
+  # 2) Register the (gated) library ARM Proton as a selectable compat tool: symlink the dist in +
+  #    drop our compatibilitytool.vdf (install_path ".").
+  TOOLDIR="${STEAM}/compatibilitytools.d/proton-11-arm64"
+  mkdir -p "${TOOLDIR}"
+  ln -sfn "${PROTON_DIR}"/* "${TOOLDIR}/" 2>/dev/null || true
+  install -Dm644 /usr/share/pocknix-steam/proton-compatibilitytool.vdf "${TOOLDIR}/compatibilitytool.vdf" 2>/dev/null || true
+fi
+# 3) Disable the FEX binfmt for the session: x86 Windows code goes Wine->FEX directly (not via Linux
+#    binfmt), and leaving it on breaks Steam's compat-tool setup. systemd-binfmt re-enables on boot.
+echo 0 > /proc/sys/fs/binfmt_misc/FEX-x86_64 2>/dev/null || true
+echo 0 > /proc/sys/fs/binfmt_misc/FEX-x86    2>/dev/null || true
+
 # RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
 # rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left

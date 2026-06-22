@@ -4,7 +4,7 @@
 # Steam is experimental (Valve publicbeta linuxarm64).
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -35,8 +35,9 @@ license=('GPL2')
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
          'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
          'pocknix-steamos-shim' 'xorg-server-xvfb')
-source=('pocknix-steam-install' 'pocknix-steam' 'registry.vdf')
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+source=('pocknix-steam-install' 'pocknix-steam' 'registry.vdf'
+        'proton-toolmanifest.vdf' 'proton-compatibilitytool.vdf')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-steam-install" "${pkgdir}/usr/bin/pocknix-steam-install"
@@ -45,4 +46,8 @@ package() {
   # by the installer so the gamepadui skips the Steam Deck OOBE — whose "required update" step
   # tries to update SteamOS (which we aren't) and dead-ends with "Updater apply error: 2".
   install -Dm644 "${srcdir}/registry.vdf"          "${pkgdir}/usr/share/pocknix-steam/registry.vdf"
+  # Proton-11-ARM compat-tool resources the launcher re-applies each start (x86 game content):
+  # a require_tool_appid-free toolmanifest + the custom compatibilitytool.vdf. See pocknix-steam.
+  install -Dm644 "${srcdir}/proton-toolmanifest.vdf"       "${pkgdir}/usr/share/pocknix-steam/proton-toolmanifest.vdf"
+  install -Dm644 "${srcdir}/proton-compatibilitytool.vdf"  "${pkgdir}/usr/share/pocknix-steam/proton-compatibilitytool.vdf"
 }
