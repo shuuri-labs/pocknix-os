@@ -7,6 +7,10 @@
 # uses for the full controller. The KEY entry is Valve 28de: InputPlumber's `deck` target presents
 # the gamepad as a Valve "Steam Deck Controller" (28de:12f0), which is what Steam actually reads.
 
+# /dev/uinput: Steam Input creates the EMULATED gamepad it hands to games via uinput. deck (input
+# group) needs write access or input works in the Steam UI (read-only nav) but NOT in-game.
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+
 # Valve — Steam Controller / Steam Deck / InputPlumber 'deck' virtual target
 KERNEL=="hidraw*", ATTRS{idVendor}=="28de", MODE="0660", TAG+="uaccess"
 SUBSYSTEM=="input", ATTRS{idVendor}=="28de", MODE="0660", TAG+="uaccess"
