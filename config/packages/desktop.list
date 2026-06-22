@@ -13,6 +13,14 @@ plasma-nm            # Wi-Fi / network applet (touch UI)
 powerdevil           # power / brightness / suspend management
 plasma-settings      # mobile settings app
 kscreen              # kscreen-doctor -> the panel rotation/scale transform (rotated-DSI crux)
+
+# --- app store (Flatpak) ---
+# Discover is the native KDE store and ships a Flatpak backend; flatpak provides the runtime.
+# Flathub is added by pocknix-flathub.service (pocknix-desktop) on first online boot. A GTK store
+# like Bazaar is NOT in Arch repos — install it AS a flatpak from Flathub once this is up.
+flatpak              # the Flatpak runtime + CLI
+discover             # plasma-discover — KDE app store with the Flatpak backend
+
 # On-screen keyboard: maliit-keyboard is AUR-only (NOT in Arch/ALARM repos) -> needs its own
 # pocknix package (build from AUR, like gtk2/inputplumber). Deferred; not needed to validate
 # render/rotation. Plasma's built-in virtualkeyboard can be a stopgap. TODO: packages/maliit-keyboard.

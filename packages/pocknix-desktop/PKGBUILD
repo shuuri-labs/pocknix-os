@@ -30,8 +30,9 @@ license=('GPL2')
 # callees (startplasmamobile, kscreen-doctor) and fail gracefully if the stack is absent.
 depends=('bash')
 source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'
-        'steamos-session-select' 'return-to-gamemode.desktop')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'steamos-session-select' 'return-to-gamemode.desktop'
+        'pocknix-flathub-setup' 'pocknix-flathub.service')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
@@ -43,4 +44,8 @@ package() {
   # "Return to Game Mode" tile in the Plasma app grid.
   install -Dm644 "${srcdir}/return-to-gamemode.desktop" \
     "${pkgdir}/usr/share/applications/return-to-gamemode.desktop"
+  # Flathub remote setup for Discover/flatpak (enabled by build-sd-image.sh firstboot_config).
+  install -Dm755 "${srcdir}/pocknix-flathub-setup"    "${pkgdir}/usr/bin/pocknix-flathub-setup"
+  install -Dm644 "${srcdir}/pocknix-flathub.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-flathub.service"
 }

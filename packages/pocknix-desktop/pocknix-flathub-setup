@@ -1,0 +1,5 @@
+#!/bin/bash
+# pocknix-flathub-setup — register the Flathub remote (system-wide) so Discover / `flatpak install`
+# can fetch apps. Run once on the first online boot by pocknix-flathub.service. Idempotent:
+# `--if-not-exists` is a no-op (no network) once the remote is present, so later boots cost nothing.
+exec flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
