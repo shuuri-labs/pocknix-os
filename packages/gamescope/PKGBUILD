@@ -11,8 +11,10 @@
 pkgname=gamescope
 epoch=1
 pkgver=3.16.0.rocknix.fe78bc6
-pkgrel=1
+pkgrel=2
 _commit=fe78bc685f247460d02c85f4b530b9de3ed07cdd
+# Grant CAP_SYS_NICE to the installed binary (realtime scheduling) — see gamescope.install.
+install=gamescope.install
 pkgdesc="SteamOS session compositing WM — ROCKNIX-patched (rotation shader for msm/rotated panels)"
 arch=('aarch64')
 url="https://github.com/ValveSoftware/gamescope"

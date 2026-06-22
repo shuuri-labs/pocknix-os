@@ -61,9 +61,16 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 
 # Steam client flags = armada's gamescope-session CLIENTCMD exactly
 # (`-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`). `-e` = gamescope --steam.
+#
+# LD_LIBRARY_PATH is set on the CLIENT via an INNER `env`, NOT on gamescope's environment. gamescope
+# carries CAP_SYS_NICE (a file capability, for realtime scheduling — see packages/gamescope), which
+# puts it in glibc secure-execution mode (AT_SECURE). In that mode glibc *removes* LD_LIBRARY_PATH
+# from the environment entirely; the steam client (gamescope's child) would then inherit an env
+# WITHOUT it and fail to load steamui.so's bundled libvpx.so.6 from steamrtarm64. Re-injecting it
+# with `env` right before the client restores it for the (non-secure) client. gamescope itself does
+# not need LD_LIBRARY_PATH (its libs are in the system paths).
 exec env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
-  LD_LIBRARY_PATH="${LDLP}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
-    "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles
+    env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles
