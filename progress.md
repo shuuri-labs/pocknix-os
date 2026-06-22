@@ -162,12 +162,18 @@ the first on-device fex-emu was stale — built before the RootFS key existed; r
 **Gravity Circuit (x86 Win64) launched** through Proton 11 ARM + FEX + the Arch rootfs on the device.
 Phase 3b proven end-to-end. The working recipe (mirrors ROCKNIX exactly — see
 `vendor/rocknix-sm8550/reference/emulators/standalone/steam/scripts/`):
-- **Proton:** Steam's **library** Proton 11 ARM (appid **4628740**) + runtime **`SteamLinuxRuntime_4-arm64`**
-  (appid **4185400**). NOT CachyOS. The library ARM Proton is **gated** (doesn't self-register as a
-  selectable tool on a custom distro) → register a **custom `compatibilitytool.vdf`** in
-  `compatibilitytools.d/` (display_name shows as "Proton 11.0 (ARM64)"; symlink the Proton dist in,
-  `install_path "."`). A custom tool's `require_tool_appid` isn't auto-pulled — install the runtime once
-  via `steamrtarm64/steam steam://install/4185400`.
+- **Proton + the two appids (both start with `4`):** Steam's **library** Proton 11 ARM, NOT CachyOS.
+  - **`4628740`** = **Proton 11.0 (ARM64)** — the compat tool itself. Download it from the Steam library.
+    It's **gated** (doesn't self-register as a selectable tool on a custom distro) → register a **custom
+    `compatibilitytool.vdf`** in `compatibilitytools.d/` (display_name "Proton 11.0 (ARM64)"; symlink the
+    Proton dist in, `install_path "."`).
+  - **`4185400`** = **`SteamLinuxRuntime_4-arm64`** — the runtime Valve's Proton declares as
+    `require_tool_appid` (the pressure-vessel container Proton would run *inside*). We installed it while
+    debugging (`steamrtarm64/steam steam://install/4185400`, since a custom tool's `require_tool_appid`
+    isn't auto-pulled) — **but it was a DEAD END: installing it did NOT fix the launch.** The real fix
+    (below) strips `require_tool_appid` so Proton runs *without* the container, which means **`4185400` is
+    not actually required** (ROCKNIX never installs it either). The launcher bake-in does **not** install
+    it; a fresh reflash should run x86 games with `4185400` absent (worth confirming once on the next flash).
 - **THE KEY UNLOCK:** **strip `require_tool_appid` from the Proton `toolmanifest.vdf`.** Valve's manifest
   makes Proton run *inside* the `SteamLinuxRuntime_4-arm64` **pressure-vessel container**, and Steam can't
   set that container up on pocknix → fails at `CreatingProcess` / `AppError_51` *before* Proton even runs
