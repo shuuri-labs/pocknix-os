@@ -49,10 +49,10 @@ if [ -d "${PROTON_DIR}" ]; then
   ln -sfn "${PROTON_DIR}"/* "${TOOLDIR}/" 2>/dev/null || true
   install -Dm644 /usr/share/pocknix-steam/proton-compatibilitytool.vdf "${TOOLDIR}/compatibilitytool.vdf" 2>/dev/null || true
 fi
-# 3) Disable the FEX binfmt for the session: x86 Windows code goes Wine->FEX directly (not via Linux
-#    binfmt), and leaving it on breaks Steam's compat-tool setup. systemd-binfmt re-enables on boot.
-echo 0 > /proc/sys/fs/binfmt_misc/FEX-x86_64 2>/dev/null || true
-echo 0 > /proc/sys/fs/binfmt_misc/FEX-x86    2>/dev/null || true
+# 3) (binfmt) The FEX x86 binfmt handlers are disabled at BOOT by pocknix-fex-binfmt-off.service —
+#    done there, as root, because the non-root 'deck' session can't write /proc/sys/fs/binfmt_misc.
+#    Leaving binfmt on breaks Steam's Proton compat-tool setup (x86 game content goes Wine->FEX
+#    directly, not via Linux binfmt). See overlay/etc/systemd/system/pocknix-fex-binfmt-off.service.
 
 # RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
 # rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.

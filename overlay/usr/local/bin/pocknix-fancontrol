@@ -1,0 +1,44 @@
+#!/bin/sh
+# pocknix-fancontrol — RP6 (SM8550) fan curve.
+# Ported from ROCKNIX hardware/quirks/platforms/SM8550/bin/fancontrol (+ 005-thermal_path /
+# 020-fan_control). Without this nothing takes PWM control of the fan, so it never spins and the
+# device cooks. Discovers the hwmon PWM fan + the CPU/GPU thermal zones, then drives pwm1 from a
+# temp->speed table every few seconds. Runs as root (writes /sys). Curve = ROCKNIX "moderate".
+set -u
+
+# Fan PWM (hwmon pwm1) — ROCKNIX 020-fan_control.
+FAN_PWM="$(ls /sys/class/hwmon/hwmon*/pwm1 2>/dev/null | head -1)"
+[ -n "${FAN_PWM}" ] || { echo "pocknix-fancontrol: no hwmon pwm1 fan found, exiting"; exit 0; }
+FAN_EN="${FAN_PWM}_enable"
+
+# CPU + GPU thermal zones only — ROCKNIX 005-thermal_path (type cpu*/gpuss*).
+SENSORS=""
+for z in /sys/devices/virtual/thermal/thermal_zone*/; do
+  case "$(cat "${z}type" 2>/dev/null)" in
+    cpu*|gpuss*) SENSORS="${SENSORS} ${z}temp" ;;
+  esac
+done
+[ -n "${SENSORS}" ] || { echo "pocknix-fancontrol: no cpu/gpu thermal zones, exiting"; exit 0; }
+
+# ROCKNIX "moderate" curve: PWM (0-255) vs temperature (millidegC), highest first.
+SPEEDS="255 204 153 119 102 77 51 0"
+TEMPS="85000 80000 75000 70000 65000 60000 55000 0"
+
+# Take manual PWM control; restore automatic on exit.
+[ -e "${FAN_EN}" ] && echo 1 > "${FAN_EN}" 2>/dev/null
+trap '[ -e "${FAN_EN}" ] && echo 0 > "${FAN_EN}" 2>/dev/null; exit 0' INT TERM
+
+LAST=""
+while :; do
+  TEMP="$(awk '{s+=$1;n++} END{printf "%d", (n? s/n : 0)}' ${SENSORS} 2>/dev/null)"
+  i=1; SPEED=0
+  for th in ${TEMPS}; do
+    if [ "${TEMP}" -gt "${th}" ]; then SPEED="$(echo ${SPEEDS} | cut -d' ' -f${i})"; break; fi
+    i=$((i+1))
+  done
+  if [ "${SPEED}" != "${LAST}" ]; then
+    echo "${SPEED}" > "${FAN_PWM}" 2>/dev/null
+    LAST="${SPEED}"
+  fi
+  sleep 3
+done
