@@ -1,9 +1,11 @@
 # pocknix-desktop — the Plasma Mobile "desktop" session for the Retroid Pocket 6, plus the
 # game<->desktop session switch. The Steam half is pocknix-steam; this is its symmetric twin.
 #
-# Like pocknix-steam, it pulls its session stack as package deps (so installing pocknix-desktop
-# brings the whole Plasma Mobile stack from Arch Linux ARM — no separate package-list wiring
-# needed). It ships:
+# The heavy Plasma Mobile stack itself is NOT a depends() here — it's installed into the rootfs at
+# image time from config/packages/desktop.list (the repo's base.list/steam.list pattern). Reason:
+# makepkg -s would otherwise pull the entire KDE/Qt stack into the BUILD chroot just to build this
+# no-op arch=any data package (hundreds of MB, no purpose). So this package ships only the scripts;
+# build-image.sh installs desktop.list alongside it. It ships:
 #   - pocknix-desktop            the launcher (.bash_profile execs it when the choice = plasma)
 #   - pocknix-desktop-rotate     applies the RP6 panel rotation+scale to the live kwin session
 #                                (autostarted via /etc/xdg/autostart) — the rotated-DSI crux
@@ -20,18 +22,13 @@ pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session swit
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-# Plasma Mobile stack (all from Arch Linux ARM aarch64):
-#   plasma-mobile    the mobile shell + startplasmamobile entrypoint
-#   plasma-workspace startplasma-wayland + plasmashell (the shell host)
-#   kwin             the Wayland compositor Plasma Mobile runs on
-#   plasma-nano      the minimal shell container the mobile shell builds on
-#   plasma-nm        Wi-Fi/network applet (touch UI)
-#   powerdevil       power/brightness/suspend management
-#   plasma-settings  the mobile settings app
-#   maliit-keyboard  on-screen keyboard (touch-first device)
-#   kscreen          provides kscreen-doctor -> the panel rotation/scale transform (rotate crux)
-depends=('bash' 'plasma-mobile' 'plasma-workspace' 'kwin' 'plasma-nano' 'plasma-nm'
-         'powerdevil' 'plasma-settings' 'maliit-keyboard' 'kscreen')
+# depends() is intentionally JUST 'bash'. The Plasma Mobile runtime stack (plasma-mobile +
+# startplasmamobile, plasma-workspace, kwin, plasma-nano, plasma-nm, powerdevil, plasma-settings,
+# kscreen/kscreen-doctor) is delivered via config/packages/desktop.list into the rootfs, NOT as
+# depends here — listing plasma-mobile/kscreen would drag the entire KDE/Qt stack into the BUILD
+# chroot at makepkg time for no reason. The launcher + rotate scripts `command -v`-guard their
+# callees (startplasmamobile, kscreen-doctor) and fail gracefully if the stack is absent.
+depends=('bash')
 source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'
         'steamos-session-select' 'return-to-gamemode.desktop')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')

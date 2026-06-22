@@ -20,9 +20,12 @@ hardware yet** — next is a VM build + on-device test, starting with the rotati
 `plasma-workspace`) → kwin_wayland on the DRM backend + the mobile shell. It self-handles the D-Bus
 session (`plasma-dbus-run-session-if-needed`), so no `dbus-run-session` wrapper is needed.
 
-**New `packages/pocknix-desktop/`** (mirrors `pocknix-steam`; pulls the Plasma Mobile stack as
-`depends()` from ALARM — plasma-mobile/-workspace, kwin, plasma-nano/-nm, powerdevil,
-plasma-settings, maliit-keyboard, kscreen):
+**New `packages/pocknix-desktop/`** (ships only the launcher/switch scripts; `depends=('bash')`).
+The Plasma Mobile stack is installed into the rootfs from `config/packages/desktop.list`
+(plasma-mobile/-workspace, kwin, plasma-nano/-nm, powerdevil, plasma-settings, kscreen) — NOT a
+`depends()`, because that would drag the whole KDE/Qt tree into the build chroot at makepkg time
+(this was the first build failure). **maliit-keyboard is AUR-only** (not in Arch/ALARM) → dropped;
+needs its own pocknix package later (like gtk2/inputplumber). Scripts:
 - `pocknix-desktop` — launcher, execs `startplasmamobile` as the deck PAM session (same autologin
   path as the game session).
 - `pocknix-desktop-rotate` (+ `/etc/xdg/autostart` entry) — **the rotated-DSI crux.** gamescope

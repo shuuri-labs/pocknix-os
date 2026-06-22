@@ -6,7 +6,9 @@ below); the next step is a VM build + on-device test of the rotation crux.
 
 ## Progress (2026-06-22) — what's built
 
-`packages/pocknix-desktop/` created (mirrors `pocknix-steam`, pulls the Plasma Mobile stack as deps):
+`packages/pocknix-desktop/` created (ships only the scripts; the Plasma Mobile stack is installed
+into the rootfs from `config/packages/desktop.list` — NOT a `depends()`, so makepkg doesn't drag the
+whole KDE/Qt tree into the build chroot). Contents:
 - **`pocknix-desktop`** — launcher; execs `startplasmamobile` (the confirmed Plasma 6 entrypoint:
   sets phone/handset env + runs `plasma-mobile-envmanager`, then execs `startplasma-wayland` →
   kwin_wayland on the DRM backend + the mobile shell; self-handles the D-Bus session).
@@ -21,15 +23,17 @@ below); the next step is a VM build + on-device test of the rotation crux.
 Wiring:
 - `overlay/home/deck/.bash_profile` now reads `$XDG_STATE_HOME/pocknix-session` (`gamescope`|`plasma`,
   **default gamescope** — game mode unchanged) and execs the matching launcher.
-- `scripts/build-image.sh install_local_packages` installs `pocknix-desktop` (+ build guard).
-- `config/packages/desktop.list` updated to the confirmed set (kept as docs; the package pulls it).
+- `scripts/build-image.sh` installs `config/packages/desktop.list` (the Plasma stack) into the
+  rootfs + `install_local_packages` installs `pocknix-desktop` (+ build guard).
+- `config/packages/desktop.list` = the confirmed set. **maliit-keyboard is AUR-only** (not in
+  Arch/ALARM) → dropped for now; needs its own pocknix package later. Not needed to test render.
 
 **To test (VM build → device):**
 ```
 make packages PKG=pocknix-desktop      # then sudo make build && sudo make sd-image, OR hot-deploy:
 scp build/localrepo/pocknix-desktop-*.pkg.tar.* root@<rp6>:/tmp/ && pacman -U /tmp/pocknix-desktop-*
 # pull the Plasma stack too if not in the image: pacman -S plasma-mobile plasma-workspace kwin \
-#   plasma-nano plasma-nm powerdevil plasma-settings maliit-keyboard kscreen
+#   plasma-nano plasma-nm powerdevil plasma-settings kscreen
 steamos-session-select desktop         # (as deck) → restarts getty → boots Plasma Mobile
 # check orientation; if upside-down/sideways: POCKNIX_ROTATE=right (or DSI output name) and re-test
 steamos-session-select gamescope       # switch back

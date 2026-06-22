@@ -184,7 +184,7 @@ main() {
   #    in ALARM (no holo needed) — see config/packages/steam.list. Activate once GPU is up.
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/base.list"
   install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"        # Phase 3 (ALARM): gamescope
-  # install_packages  "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"   # Phase 4 (ALARM)
+  install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"      # Phase 4 (ALARM): Plasma Mobile stack
 
   # 4. kernel (Phase 1): use artifacts from `make kernel`. Install pocknix modules
   #    into the rootfs and drop the generic ALARM kernel (we boot qcom-abl KERNEL).
