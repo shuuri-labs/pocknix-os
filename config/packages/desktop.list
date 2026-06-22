@@ -1,12 +1,19 @@
-# Desktop session stack — Plasma Mobile (Phase 4), all from Arch Linux ARM.
+# Desktop session stack — Plasma Mobile, all from Arch Linux ARM (aarch64).
 # Plasma Mobile runs on its own compositor (kwin_wayland); NOT hosted in Sway.
+#
+# NOTE: build-image.sh does NOT install this list directly — the pocknix-desktop package declares
+# these as runtime depends(), so installing pocknix-desktop pulls the whole stack (mirrors how
+# pocknix-steam pulls its deps). This file is kept as the canonical documentation of the set; keep
+# it in sync with packages/pocknix-desktop/PKGBUILD depends().
 
-plasma-mobile
-plasma-workspace
-kwin
-plasma-nano
-plasma-nm
-powerdevil
-maliit-keyboard
+plasma-mobile        # mobile shell + the startplasmamobile session entrypoint
+plasma-workspace     # startplasma-wayland + plasmashell (the shell host)
+kwin                 # the Wayland compositor Plasma Mobile runs on
+plasma-nano          # minimal shell container the mobile shell builds on
+plasma-nm            # Wi-Fi / network applet (touch UI)
+powerdevil           # power / brightness / suspend management
+plasma-settings      # mobile settings app
+maliit-keyboard      # on-screen keyboard (touch-first device)
+kscreen              # kscreen-doctor -> the panel rotation/scale transform (rotated-DSI crux)
 # minimal app set — keep lean, no full Plasma desktop
-# discover            # optional app store; uncomment if wanted
+# discover           # optional app store; uncomment if wanted

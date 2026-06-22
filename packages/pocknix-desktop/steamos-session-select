@@ -1,0 +1,35 @@
+#!/bin/bash
+# steamos-session-select — switch between the Steam game session (gamescope) and the Plasma Mobile
+# desktop session on pocknix-os.
+#
+# This is the real implementation of the SteamOS contract that the Steam Deck UI's "Switch to
+# Desktop" button invokes (`steamos-session-select desktop`) and that the Plasma "Return to Game
+# Mode" tile invokes (`steamos-session-select gamescope`). pocknix has NO display manager — the
+# session is chosen by ~deck/.bash_profile at tty1 autologin — so the switch is just:
+#   1. persist the choice to a state file that .bash_profile reads, then
+#   2. restart getty@tty1 so it re-runs autologin -> .bash_profile -> the chosen launcher.
+#
+# 'deck' is in the 'wheel' group and the 50-pocknix-deck.rules polkit rule grants it
+# org.freedesktop.systemd1.* (manage units), so `systemctl restart getty@tty1` needs no password.
+# We use --no-block: the restart SIGTERMs our own session (we are a child of getty@tty1), so we
+# hand the job to systemd (PID1) and return immediately rather than waiting to be killed mid-wait.
+set -u
+
+STATE_HOME="${XDG_STATE_HOME:-${HOME:-/home/deck}/.local/state}"
+CHOICE_FILE="${STATE_HOME}/pocknix-session"
+
+usage() { echo "usage: steamos-session-select [gamescope|desktop|plasma]" >&2; exit 2; }
+
+case "${1:-}" in
+  desktop|plasma)        sel=plasma    ;;
+  gamescope|game|steam)  sel=gamescope ;;
+  "")                    usage         ;;
+  *)                     usage         ;;
+esac
+
+mkdir -p "${STATE_HOME}"
+printf '%s\n' "${sel}" > "${CHOICE_FILE}"
+echo "steamos-session-select: next session = ${sel} (restarting getty@tty1)" >&2
+
+# Re-run the autologin so .bash_profile picks up the new choice. --no-block: this kills our session.
+exec systemctl --no-block restart getty@tty1.service

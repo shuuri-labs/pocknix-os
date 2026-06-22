@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Return to Game Mode
+Comment=Switch back to the Steam game session
+Icon=steamdeck-gaming-return
+Exec=steamos-session-select gamescope
+Terminal=false
+Categories=Game;System;
+Keywords=steam;gamescope;gaming;session;

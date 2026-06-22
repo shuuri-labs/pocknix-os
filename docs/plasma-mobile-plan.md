@@ -1,7 +1,43 @@
 # Plan: Plasma Mobile desktop session + session switching (pocknix-os)
 
-Status: **not started** (game mode is done as of 2026-06-22). This is the next major feature —
-adding a Plasma Mobile "desktop" half to the device and a Game ↔ Desktop switch.
+Status: **Phase 1 scaffolded + Phase 2 skeleton in place (2026-06-22); UNTESTED on hardware.**
+Game mode is done. The desktop half + the Game ↔ Desktop switch now exist as code (see "Progress"
+below); the next step is a VM build + on-device test of the rotation crux.
+
+## Progress (2026-06-22) — what's built
+
+`packages/pocknix-desktop/` created (mirrors `pocknix-steam`, pulls the Plasma Mobile stack as deps):
+- **`pocknix-desktop`** — launcher; execs `startplasmamobile` (the confirmed Plasma 6 entrypoint:
+  sets phone/handset env + runs `plasma-mobile-envmanager`, then execs `startplasma-wayland` →
+  kwin_wayland on the DRM backend + the mobile shell; self-handles the D-Bus session).
+- **`pocknix-desktop-rotate`** + `…-rotate.desktop` (xdg-autostart) — applies the panel
+  rotation+scale via `kscreen-doctor` **after** the session is up (kscreen needs the running
+  daemon). Autodetects the connected DSI output; overridable via `POCKNIX_ROTATE/SCALE/OUTPUT`.
+  **This is the rotated-DSI crux (risk #1) and is the thing to validate first on hardware.**
+- **`steamos-session-select`** — the REAL switch (was never implemented): writes the choice file +
+  `systemctl --no-block restart getty@tty1` (deck is wheel → polkit `systemd1.*` = no password).
+- **`return-to-gamemode.desktop`** — Plasma app-grid tile → `steamos-session-select gamescope`.
+
+Wiring:
+- `overlay/home/deck/.bash_profile` now reads `$XDG_STATE_HOME/pocknix-session` (`gamescope`|`plasma`,
+  **default gamescope** — game mode unchanged) and execs the matching launcher.
+- `scripts/build-image.sh install_local_packages` installs `pocknix-desktop` (+ build guard).
+- `config/packages/desktop.list` updated to the confirmed set (kept as docs; the package pulls it).
+
+**To test (VM build → device):**
+```
+make packages PKG=pocknix-desktop      # then sudo make build && sudo make sd-image, OR hot-deploy:
+scp build/localrepo/pocknix-desktop-*.pkg.tar.* root@<rp6>:/tmp/ && pacman -U /tmp/pocknix-desktop-*
+# pull the Plasma stack too if not in the image: pacman -S plasma-mobile plasma-workspace kwin \
+#   plasma-nano plasma-nm powerdevil plasma-settings maliit-keyboard kscreen
+steamos-session-select desktop         # (as deck) → restarts getty → boots Plasma Mobile
+# check orientation; if upside-down/sideways: POCKNIX_ROTATE=right (or DSI output name) and re-test
+steamos-session-select gamescope       # switch back
+```
+
+---
+
+### Original plan below (kept for reference)
 
 > Scope: **pocknix-os only**. A parallel armada fork also targets Plasma Mobile (see that repo's
 > `PLAN.md`), but its switch plumbing is SDDM-based and does **not** port here — read the

@@ -1,0 +1,61 @@
+#!/bin/bash
+# pocknix-desktop-rotate — apply the RP6 panel rotation + scale to the live Plasma Mobile session.
+#
+# WHY this exists: the RP6 DSI panel is physically portrait (1080x1920) mounted rotated, so an
+# un-transformed Plasma session comes up sideways. gamescope side-steps this with a rotation SHADER
+# (--use-rotation-shader); kwin_wayland instead drives DRM directly and needs a REAL output
+# transform. kscreen-doctor can set that transform and PERSISTS it (~/.local/share/kscreen/...), so
+# this only has to run once per fresh home — but it's safe to run every session (idempotent).
+#
+# It is launched from /etc/xdg/autostart/pocknix-desktop-rotate.desktop (i.e. AFTER the shell +
+# kscreen kded are up), because kscreen-doctor talks to the running KScreen daemon over D-Bus; it
+# can't be done from the launcher before the compositor exists.
+#
+# Overridable via the environment (e.g. from the autostart .desktop or a drop-in):
+#   POCKNIX_ROTATE  rotation token for kscreen-doctor (none|left|right|inverted)   default: left
+#   POCKNIX_SCALE   output scale factor for the 6" 1080x1920 panel                 default: 2
+#   POCKNIX_OUTPUT  output name to target (e.g. DSI-1); default = autodetect the connected one
+#
+# NOTE (left vs right): the game session uses `--force-orientation left` (right rendered
+# upside-down — see gamescope-rp6-gpu memory). kscreen's transform is a different axis convention,
+# so `left` here is the starting guess; if Plasma comes up upside-down, set POCKNIX_ROTATE=right.
+# This is the single biggest unknown in the desktop session and must be confirmed on hardware.
+set -u
+
+ROTATE="${POCKNIX_ROTATE:-left}"
+SCALE="${POCKNIX_SCALE:-2}"
+OUTPUT="${POCKNIX_OUTPUT:-}"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+have kscreen-doctor || { echo "pocknix-desktop-rotate: kscreen-doctor not found (install kscreen)" >&2; exit 1; }
+
+log() { echo "pocknix-desktop-rotate: $*" >&2; }
+
+# kscreen kded can take a moment after login to register outputs over D-Bus. Poll briefly.
+outputs=""
+for _ in $(seq 1 30); do
+  outputs="$(kscreen-doctor -o 2>/dev/null)" || outputs=""
+  [ -n "${outputs}" ] && break
+  sleep 0.5
+done
+if [ -z "${outputs}" ]; then
+  log "kscreen reported no outputs after ~15s — giving up (panel left untransformed)"
+  exit 1
+fi
+
+# Autodetect the connected output if not pinned. `kscreen-doctor -o` prints lines like:
+#   Output: 1 DSI-1 enabled connected ...
+# Prefer a DSI output (the built-in panel); else fall back to the first connected one.
+if [ -z "${OUTPUT}" ]; then
+  OUTPUT="$(printf '%s\n' "${outputs}" | awk '/connected/ && /DSI/   {print $3; exit}')"
+  [ -z "${OUTPUT}" ] && OUTPUT="$(printf '%s\n' "${outputs}" | awk '/connected/ {print $3; exit}')"
+fi
+if [ -z "${OUTPUT}" ]; then
+  log "could not determine a connected output from:"; printf '%s\n' "${outputs}" >&2
+  exit 1
+fi
+
+log "configuring output '${OUTPUT}': rotation=${ROTATE} scale=${SCALE}"
+# One transaction so kwin applies rotation + scale together (avoids an intermediate bad mode).
+kscreen-doctor "output.${OUTPUT}.rotation.${ROTATE}" "output.${OUTPUT}.scale.${SCALE}" \
+  || { log "kscreen-doctor failed — try POCKNIX_OUTPUT/POCKNIX_ROTATE overrides"; exit 1; }

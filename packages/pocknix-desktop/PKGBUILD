@@ -1,0 +1,49 @@
+# pocknix-desktop — the Plasma Mobile "desktop" session for the Retroid Pocket 6, plus the
+# game<->desktop session switch. The Steam half is pocknix-steam; this is its symmetric twin.
+#
+# Like pocknix-steam, it pulls its session stack as package deps (so installing pocknix-desktop
+# brings the whole Plasma Mobile stack from Arch Linux ARM — no separate package-list wiring
+# needed). It ships:
+#   - pocknix-desktop            the launcher (.bash_profile execs it when the choice = plasma)
+#   - pocknix-desktop-rotate     applies the RP6 panel rotation+scale to the live kwin session
+#                                (autostarted via /etc/xdg/autostart) — the rotated-DSI crux
+#   - steamos-session-select     the REAL game<->desktop switch (Steam "Switch to Desktop" + the
+#                                Plasma "Return to Game Mode" tile both call this)
+#   - return-to-gamemode.desktop an app-grid tile that runs `steamos-session-select gamescope`
+#
+# Plasma Mobile runs on kwin_wayland (its own compositor), NOT in Sway — locked decision; see
+# docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
+pkgname=pocknix-desktop
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+# Plasma Mobile stack (all from Arch Linux ARM aarch64):
+#   plasma-mobile    the mobile shell + startplasmamobile entrypoint
+#   plasma-workspace startplasma-wayland + plasmashell (the shell host)
+#   kwin             the Wayland compositor Plasma Mobile runs on
+#   plasma-nano      the minimal shell container the mobile shell builds on
+#   plasma-nm        Wi-Fi/network applet (touch UI)
+#   powerdevil       power/brightness/suspend management
+#   plasma-settings  the mobile settings app
+#   maliit-keyboard  on-screen keyboard (touch-first device)
+#   kscreen          provides kscreen-doctor -> the panel rotation/scale transform (rotate crux)
+depends=('bash' 'plasma-mobile' 'plasma-workspace' 'kwin' 'plasma-nano' 'plasma-nm'
+         'powerdevil' 'plasma-settings' 'maliit-keyboard' 'kscreen')
+source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'
+        'steamos-session-select' 'return-to-gamemode.desktop')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
+  install -Dm755 "${srcdir}/pocknix-desktop-rotate"   "${pkgdir}/usr/bin/pocknix-desktop-rotate"
+  install -Dm755 "${srcdir}/steamos-session-select"   "${pkgdir}/usr/bin/steamos-session-select"
+  # Autostart the rotation transform once the Plasma session (and kscreen kded) is up.
+  install -Dm644 "${srcdir}/pocknix-desktop-rotate.desktop" \
+    "${pkgdir}/etc/xdg/autostart/pocknix-desktop-rotate.desktop"
+  # "Return to Game Mode" tile in the Plasma app grid.
+  install -Dm644 "${srcdir}/return-to-gamemode.desktop" \
+    "${pkgdir}/usr/share/applications/return-to-gamemode.desktop"
+}

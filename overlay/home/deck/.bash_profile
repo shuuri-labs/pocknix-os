@@ -5,9 +5,18 @@
 # user (ConditionUser=!root), which is why the session user is 'deck', not root. We then exec into
 # the gamescope Big-Picture session.
 #
+# Which session to launch is read from a choice file written by steamos-session-select:
+#   $XDG_STATE_HOME/pocknix-session  (i.e. ~/.local/state/pocknix-session)  =  gamescope | plasma
+# Missing/unknown => gamescope (game mode stays the default; desktop is opt-in via the switch).
+# Steam's "Switch to Desktop" and the Plasma "Return to Game Mode" tile both rewrite this file and
+# restart getty@tty1, so the next autologin lands in the chosen session. See docs/plasma-mobile-plan.md.
+#
 # Guards: only the physical console (tty1), and NOT over SSH ($SSH_CONNECTION set) or other VTs.
-# Escape hatch: `touch ~/.no-steam` to get a shell on tty1 instead (for debugging the session).
-if [ "$(tty)" = "/dev/tty1" ] && [ -z "${SSH_CONNECTION:-}" ] && [ ! -e "${HOME}/.no-steam" ] \
-   && command -v pocknix-steam >/dev/null 2>&1; then
-  exec pocknix-steam
+# Escape hatch: `touch ~/.no-steam` to get a shell on tty1 instead (for debugging either session).
+if [ "$(tty)" = "/dev/tty1" ] && [ -z "${SSH_CONNECTION:-}" ] && [ ! -e "${HOME}/.no-steam" ]; then
+  POCKNIX_SESSION="$(cat "${XDG_STATE_HOME:-${HOME}/.local/state}/pocknix-session" 2>/dev/null || echo gamescope)"
+  case "${POCKNIX_SESSION}" in
+    plasma|desktop) command -v pocknix-desktop >/dev/null 2>&1 && exec pocknix-desktop ;;
+  esac
+  command -v pocknix-steam >/dev/null 2>&1 && exec pocknix-steam
 fi

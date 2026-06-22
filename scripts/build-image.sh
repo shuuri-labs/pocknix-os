@@ -68,9 +68,14 @@ install_local_packages() {
   # pocknix-steamos-shim = steamos-update/branch/BIOS stubs so the Deck UI OOBE doesn't dead-end.
   # fex-emu + fex-rootfs = x86 game content via Proton (FEX emulator + thunks + the ~1.1 GB Arch x86
   # squashfs the games' libraries resolve from). Validated on hardware 2026-06-22; +~1.1 GB to the image.
+  # pocknix-desktop = the Plasma Mobile desktop session + the game<->desktop switch
+  # (steamos-session-select). Pulls the whole Plasma Mobile stack (plasma-mobile/-workspace, kwin,
+  # plasma-nano/-nm, powerdevil, plasma-settings, maliit-keyboard, kscreen) from ALARM as deps —
+  # like pocknix-steam pulls its stack. Boot default stays game mode (the choice file defaults to
+  # gamescope); desktop is opt-in via the switch. See docs/plasma-mobile-plan.md.
   chroot "${root}" pacman -S --noconfirm --needed \
         pocknix-bsp gamescope inputplumber pocknix-steamos-shim mangohud pocknix-steam \
-        fex-emu fex-rootfs
+        fex-emu fex-rootfs pocknix-desktop
   # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
   # especially: ALARM's vanilla lacks --use-rotation-shader and black-screens on the RP6 (bitten 3x).
   local gs_ver; gs_ver="$(chroot "${root}" pacman -Q gamescope 2>/dev/null | awk '{print $2}')"
@@ -86,6 +91,11 @@ install_local_packages() {
       die "${lp} not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=${lp}' (fex-rootfs downloads the ~1.1 GB Arch x86 squashfs once), confirm build/localrepo/${lp}-*.pkg.tar.* exists, then re-run."
     }
   done
+  # pocknix-desktop must come from [pocknix] too (it pulls the Plasma Mobile stack from ALARM).
+  chroot "${root}" pacman -Q pocknix-desktop >/dev/null 2>&1 || {
+    umount "${root}/localrepo" 2>/dev/null || true
+    die "pocknix-desktop not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=pocknix-desktop', confirm build/localrepo/pocknix-desktop-*.pkg.tar.* exists, then re-run."
+  }
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo

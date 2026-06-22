@@ -5,7 +5,47 @@ Working notes for picking this back up after a break. For the *why* behind decis
 testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
-_Last updated: 2026-06-21 — Phase 3b: FEX-with-thunks package BUILT (piece 1/6); next = verify thunks + x86 rootfs._
+_Last updated: 2026-06-22 — Phase 4 STARTED: Plasma Mobile desktop session + game↔desktop switch scaffolded (untested)._
+
+---
+
+## ⬜→🔨 Phase 4 STARTED — Plasma Mobile desktop session + session switch — 2026-06-22
+First code for the Desktop half of the two-session model and the Game↔Desktop switch. Plan +
+risks: [`docs/plasma-mobile-plan.md`](docs/plasma-mobile-plan.md). **All written, NONE tested on
+hardware yet** — next is a VM build + on-device test, starting with the rotation crux.
+
+**Entrypoint confirmed (not guessed):** the Plasma 6 mobile session is `/usr/bin/startplasmamobile`
+(from `plasma-mobile` 6.7.0, in Arch `extra`/ALARM). It sets the phone/handset env + runs
+`plasma-mobile-envmanager --apply-settings`, then execs `startplasma-wayland` (from
+`plasma-workspace`) → kwin_wayland on the DRM backend + the mobile shell. It self-handles the D-Bus
+session (`plasma-dbus-run-session-if-needed`), so no `dbus-run-session` wrapper is needed.
+
+**New `packages/pocknix-desktop/`** (mirrors `pocknix-steam`; pulls the Plasma Mobile stack as
+`depends()` from ALARM — plasma-mobile/-workspace, kwin, plasma-nano/-nm, powerdevil,
+plasma-settings, maliit-keyboard, kscreen):
+- `pocknix-desktop` — launcher, execs `startplasmamobile` as the deck PAM session (same autologin
+  path as the game session).
+- `pocknix-desktop-rotate` (+ `/etc/xdg/autostart` entry) — **the rotated-DSI crux.** gamescope
+  rotates in a shader; kwin drives DRM directly so it needs a REAL output transform. Applies
+  rotation+scale via `kscreen-doctor` *after* the session is up (kscreen needs the running daemon),
+  autodetects the connected DSI output, overridable `POCKNIX_ROTATE`(left)/`POCKNIX_SCALE`(2)/
+  `POCKNIX_OUTPUT`. **Highest risk — validate first; left/right axis differs from gamescope's.**
+- `steamos-session-select` — the **real** switch (it was never implemented; the shim only ever
+  shipped update/branch/bios stubs). Writes `$XDG_STATE_HOME/pocknix-session` then
+  `systemctl --no-block restart getty@tty1` (deck∈wheel → `50-pocknix-deck.rules` grants polkit
+  `systemd1.*` so no password; `--no-block` because the restart SIGTERMs our own session). This is
+  what Steam's "Switch to Desktop" button invokes.
+- `return-to-gamemode.desktop` — Plasma app-grid tile → `steamos-session-select gamescope`.
+
+**Wiring:** `overlay/home/deck/.bash_profile` now reads the choice file (`gamescope`|`plasma`,
+**default gamescope** — game mode unchanged) and execs the right launcher;
+`build-image.sh install_local_packages` installs `pocknix-desktop` (+ build guard);
+`config/packages/desktop.list` updated to the confirmed set (kept as docs — the package pulls it).
+
+**NEXT:** (1) `make packages PKG=pocknix-desktop` in the VM; (2) on device,
+`steamos-session-select desktop` → confirm Plasma Mobile renders **and orientation/scale are
+right** (fix `POCKNIX_ROTATE`/output if not); (3) touch + Maliit OSK; (4) switch back via the tile;
+(5) round-trip robustness (watch for getty start-limit — the bare restart may need a supervisor).
 
 ---
 
