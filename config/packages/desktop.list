@@ -19,11 +19,24 @@ kscreen              # kscreen-doctor -> the panel rotation/scale transform (rot
 # AUR-only anyway).
 
 # --- desktop apps ---
-# Plasma Mobile ships only the shell; it does NOT pull a terminal/editor/file-manager. Add the few
+# Plasma Mobile ships only the shell; it does NOT pull a terminal/editor/file-manager. Add the
 # standard KDE apps the user expects. (These are desktop apps but run fine touch/mobile.)
 konsole              # terminal emulator
 kate                 # advanced text editor — ALSO provides /usr/bin/kwrite (no standalone kwrite pkg)
 dolphin              # KDE file manager
+kcalc                # calculator
+ark                  # archive manager
+gwenview             # image viewer
+okular               # document / PDF viewer
+
+# --- browsers ---
+firefox              # Firefox
+angelfish            # Plasma Mobile's touch-first web browser
+
+# --- Plasma Mobile gear (touch-first apps) ---
+koko                 # image gallery
+kclock               # clock / alarms / timers
+kweather             # weather
 
 # --- app store (Flatpak) ---
 # Discover is the native KDE store and ships a Flatpak backend; flatpak provides the runtime.
