@@ -66,8 +66,26 @@ install_local_packages() {
   # pocknix-steam = the Steam session (launcher + installer); pulls local gtk2 + gamescope +
   # pocknix-steamos-shim and ALARM deps (openal, libcups, lsof, noto-fonts*, networkmanager, …).
   # pocknix-steamos-shim = steamos-update/branch/BIOS stubs so the Deck UI OOBE doesn't dead-end.
+  # fex-emu + fex-rootfs = x86 game content via Proton (FEX emulator + thunks + the ~1.1 GB Arch x86
+  # squashfs the games' libraries resolve from). Validated on hardware 2026-06-22; +~1.1 GB to the image.
   chroot "${root}" pacman -S --noconfirm --needed \
-        pocknix-bsp gamescope inputplumber pocknix-steamos-shim mangohud pocknix-steam
+        pocknix-bsp gamescope inputplumber pocknix-steamos-shim mangohud pocknix-steam \
+        fex-emu fex-rootfs
+  # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
+  # especially: ALARM's vanilla lacks --use-rotation-shader and black-screens on the RP6 (bitten 3x).
+  local gs_ver; gs_ver="$(chroot "${root}" pacman -Q gamescope 2>/dev/null | awk '{print $2}')"
+  case "${gs_ver}" in
+    1:*rocknix*) log "gamescope OK: ${gs_ver} (epoch-1 patched build)" ;;
+    *) umount "${root}/localrepo" 2>/dev/null || true
+       die "gamescope is '${gs_ver}', NOT the epoch-1 [pocknix] rocknix build. Vanilla gamescope can't drive the RP6 panel (no --use-rotation-shader) -> black screen. Build it first: 'make packages PKG=gamescope' and confirm build/localrepo/gamescope-1:*.pkg.tar.* exists, then re-run." ;;
+  esac
+  local lp
+  for lp in fex-emu fex-rootfs; do
+    chroot "${root}" pacman -Q "${lp}" >/dev/null 2>&1 || {
+      umount "${root}/localrepo" 2>/dev/null || true
+      die "${lp} not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=${lp}' (fex-rootfs downloads the ~1.1 GB Arch x86 squashfs once), confirm build/localrepo/${lp}-*.pkg.tar.* exists, then re-run."
+    }
+  done
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
