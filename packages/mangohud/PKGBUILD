@@ -7,9 +7,16 @@
 # Pin to v0.8.3 — the version ROCKNIX pairs with the SAME gamescope commit (fe78bc6) we build.
 # gamescope --mangoapp is tightly coupled to the mangoapp/imgui versions; 0.8.4 + floating wrapdb
 # subprojects gave a mangoapp that runs + reads its config but won't composite the overlay.
+#
+# patches/ = the ROCKNIX/armada Adreno+Qualcomm readers (armada release 20260621: "MangoHud shows
+# previously missing GPU and power metrics"). Vanilla mangohud has NO reader for the msm/freedreno
+# GPU or the Qualcomm battery, so GPU load/clock/temp + power draw render blank. They apply cleanly
+# to 0.8.3 IN ORDER (0001 reworks msm detection -> msm_drm/msm_dpu; 0002 points it at the SM8550
+# devfreq node 3d00000.gpu + gpuss_0_thermal hwmon; 0004 fixes the Qualcomm power_now path/scale).
+# 0006 (SM8750) is intentionally omitted — we're SM8550. See packages/mangohud/patches/.
 pkgname=mangohud
 pkgver=0.8.3
-pkgrel=1
+pkgrel=2
 pkgdesc="Vulkan/OpenGL FPS/frametime/CPU/GPU overlay + mangoapp for the gamescope Steam session"
 arch=('aarch64')
 url="https://github.com/flightlessmango/MangoHud"
@@ -19,8 +26,23 @@ depends=('gcc-libs' 'glibc' 'vulkan-icd-loader' 'libdrm' 'libcap' 'glfw' 'libglv
 makedepends=('meson' 'ninja' 'git' 'glslang' 'vulkan-headers' 'libglvnd' 'libdrm' 'libcap'
              'glfw' 'wayland' 'wayland-protocols' 'libxkbcommon' 'libx11' 'libxrandr'
              'python-mako' 'mesa')
-source=("git+https://github.com/flightlessmango/MangoHud.git#tag=v${pkgver}")
-sha256sums=('SKIP')
+source=("git+https://github.com/flightlessmango/MangoHud.git#tag=v${pkgver}"
+        'patches/0001-Qualcomm-GPU-support.patch'
+        'patches/0002-SM8550-GPU.patch'
+        'patches/0003-Battery-name.patch'
+        'patches/0004-Qualcomm-battery-power-now.patch'
+        'patches/0005-RAM-name.patch')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+prepare() {
+  cd MangoHud
+  # Adreno/Qualcomm GPU + battery readers — order matters (0001 must precede 0002).
+  for p in 0001-Qualcomm-GPU-support 0002-SM8550-GPU 0003-Battery-name \
+           0004-Qualcomm-battery-power-now 0005-RAM-name; do
+    echo "  applying ${p}.patch"
+    git apply -p1 "${srcdir}/${p}.patch"
+  done
+}
 
 build() {
   cd MangoHud
