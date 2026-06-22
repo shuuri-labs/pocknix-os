@@ -157,7 +157,34 @@ resolves a *bare* `RootFS` name against the per-user dir (`/root/.fex-emu/RootFS
 → empty RootFS path. Set `Config.json` `"RootFS"` to the **absolute** path
 `/usr/share/fex-emu/RootFS/ArchLinux.sqsh` (env probe `FEX_ROOTFS=<abs> FEXBash` proved it). (Also note:
 the first on-device fex-emu was stale — built before the RootFS key existed; rebuild to bake it in.)
-NOT yet in the image `install_local_packages` list — add after the full Proton path validates (piece 6).
+
+## 🎉🎉 MILESTONE: x86 Windows GAME RUNS via Proton+FEX on the RP6 — 2026-06-22
+**Gravity Circuit (x86 Win64) launched** through Proton 11 ARM + FEX + the Arch rootfs on the device.
+Phase 3b proven end-to-end. The working recipe (mirrors ROCKNIX exactly — see
+`vendor/rocknix-sm8550/reference/emulators/standalone/steam/scripts/`):
+- **Proton:** Steam's **library** Proton 11 ARM (appid **4628740**) + runtime **`SteamLinuxRuntime_4-arm64`**
+  (appid **4185400**). NOT CachyOS. The library ARM Proton is **gated** (doesn't self-register as a
+  selectable tool on a custom distro) → register a **custom `compatibilitytool.vdf`** in
+  `compatibilitytools.d/` (display_name shows as "Proton 11.0 (ARM64)"; symlink the Proton dist in,
+  `install_path "."`). A custom tool's `require_tool_appid` isn't auto-pulled — install the runtime once
+  via `steamrtarm64/steam steam://install/4185400`.
+- **THE KEY UNLOCK:** **strip `require_tool_appid` from the Proton `toolmanifest.vdf`.** Valve's manifest
+  makes Proton run *inside* the `SteamLinuxRuntime_4-arm64` **pressure-vessel container**, and Steam can't
+  set that container up on pocknix → fails at `CreatingProcess` / `AppError_51` *before* Proton even runs
+  (a wrapper on the runtime `_v2-entry-point` never fired = proof). ROCKNIX **replaces the toolmanifest
+  with a `require_tool_appid`-free one** (`/usr/share/steam/toolmanifest.vdf`) so Proton runs **directly
+  on the host, no container.** That's the whole fix.
+- **binfmt:** ROCKNIX **DISABLES** the FEX binfmt during the Steam session (`echo 0 >
+  /proc/sys/fs/binfmt_misc/FEX-x86{,_64}`), re-enabling on exit. The x86 Windows code goes Wine→FEX
+  directly, not via Linux binfmt, so binfmt isn't needed and gets in the way of Steam's setup.
+- **RootFS:** absolute path in `Config.json` (the bare-name gotcha above).
+
+**⬜ NEXT — bake it permanent (currently all manual on-device, won't survive a Proton update/reflash):**
+mirror ROCKNIX's `steam_arm64_binfmt_and_proton_prep` in `packages/pocknix-steam/pocknix-steam`:
+on launch, `cp` a `require_tool_appid`-free `toolmanifest.vdf` into the Proton dir + disable `FEX-x86*`
+binfmt; re-enable on exit. Ship the `compatibilitytool.vdf` + clean `toolmanifest.vdf` as package
+resources, and add the runtime-install step. Then add `fex-emu`/`fex-rootfs` to the image. Also: verify
+**Turnip GPU passthrough** is actually used (mangohud FPS) vs software render; check perf.
 
 **Pieces 3–6:** (3) **binfmt** enable (systemd-binfmt → FEXInterpreter for x86/x86_64); (4) **CachyOS
 Proton 11 arm64** → `compatibilitytools.d` (pin sha512); (5) per-game **FEX-config wrapper**; (6)
