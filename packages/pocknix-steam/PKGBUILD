@@ -4,7 +4,7 @@
 # Steam is experimental (Valve publicbeta linuxarm64).
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -30,11 +30,14 @@ license=('GPL2')
 # mangohud: provides the `mangoapp` overlay binary that gamescope --mangoapp spawns; this is
 #   Steam's built-in performance overlay (FPS/frametime/CPU; GPU stats are limited on Adreno/msm).
 #   Without it gamescope's --mangoapp has nothing to launch and the overlay never appears.
-# xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX). The
-# rest of the native client's deps resolve from the base image / the steamrt runtime.
+# xorg-server-xvfb provides the virtual X display used to bootstrap the client (no FEX).
+# game-devices-udev: the controller uaccess udev rules the Arch `steam` package normally pulls in —
+#   native ARM Steam doesn't, so the non-root `deck` session can't open the gamepad device nodes
+#   (worked as root, which ignores uaccess). Required for the controller to work in the deck session.
+# The rest of the native client's deps resolve from the base image / the steamrt runtime.
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
          'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
-         'pocknix-steamos-shim' 'xorg-server-xvfb')
+         'pocknix-steamos-shim' 'xorg-server-xvfb' 'game-devices-udev')
 source=('pocknix-steam-install' 'pocknix-steam' 'registry.vdf'
         'proton-toolmanifest.vdf' 'proton-compatibilitytool.vdf')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
