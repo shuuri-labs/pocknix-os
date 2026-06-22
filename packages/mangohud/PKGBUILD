@@ -13,7 +13,8 @@
 # GPU or the Qualcomm battery, so GPU load/clock/temp + power draw render blank. They apply cleanly
 # to 0.8.3 IN ORDER (0001 reworks msm detection -> msm_drm/msm_dpu; 0002 points it at the SM8550
 # devfreq node 3d00000.gpu + gpuss_0_thermal hwmon; 0004 fixes the Qualcomm power_now path/scale).
-# 0006 (SM8750) is intentionally omitted — we're SM8550. See packages/mangohud/patches/.
+# 0006 (SM8750) is intentionally omitted — we're SM8550. Patches are flat in the package dir
+# (makepkg strips local source entries to basename, so a patches/ subdir wouldn't be found).
 pkgname=mangohud
 pkgver=0.8.3
 pkgrel=2
@@ -27,11 +28,11 @@ makedepends=('meson' 'ninja' 'git' 'glslang' 'vulkan-headers' 'libglvnd' 'libdrm
              'glfw' 'wayland' 'wayland-protocols' 'libxkbcommon' 'libx11' 'libxrandr'
              'python-mako' 'mesa')
 source=("git+https://github.com/flightlessmango/MangoHud.git#tag=v${pkgver}"
-        'patches/0001-Qualcomm-GPU-support.patch'
-        'patches/0002-SM8550-GPU.patch'
-        'patches/0003-Battery-name.patch'
-        'patches/0004-Qualcomm-battery-power-now.patch'
-        'patches/0005-RAM-name.patch')
+        '0001-Qualcomm-GPU-support.patch'
+        '0002-SM8550-GPU.patch'
+        '0003-Battery-name.patch'
+        '0004-Qualcomm-battery-power-now.patch'
+        '0005-RAM-name.patch')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
