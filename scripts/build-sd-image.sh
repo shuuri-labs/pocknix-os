@@ -65,7 +65,8 @@ EOF
     log "installing overlay (usb-gadget + diag + autologin)"
     rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
     chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" \
-             "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" 2>/dev/null || true
+             "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" \
+             "${root}/usr/local/bin/pocknix-volumed" 2>/dev/null || true
   fi
 
   # --- non-root 'deck' session user ---
@@ -81,8 +82,10 @@ EOF
   chroot "${root}" chown -R deck:deck /home/deck
   # PipeWire/WirePlumber for deck's session (global-enable so its --user units start on login).
   chroot "${root}" systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service 2>/dev/null || true
-  # Root services: RP6 fan curve + FEX-binfmt-off (deck can't write /proc/sys/fs/binfmt_misc).
-  chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt-off.service 2>/dev/null || true
+  # Root services: RP6 fan curve + FEX-binfmt-off (deck can't write /proc/sys/fs/binfmt_misc) +
+  # the volume-rocker handler (Steam shows the OSD but doesn't change volume on KEY_VOLUME*).
+  chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt-off.service \
+        pocknix-volumed.service 2>/dev/null || true
 
   # Wi-Fi pre-seed — SteamOS topology: NetworkManager is the FRONT-END (Steam's gamepadui manages
   # Wi-Fi ONLY through NM's D-Bus API — without it the setup wizard shows "no connections found"

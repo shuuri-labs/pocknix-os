@@ -1,0 +1,12 @@
+[Unit]
+Description=pocknix volume rocker -> PipeWire volume
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pocknix-volumed
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
