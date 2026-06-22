@@ -1,0 +1,18 @@
+// pocknix-steam: registers Steam's library "Proton 11.0 (ARM64)" as a selectable compatibility tool.
+// Valve's ARM Proton is GATED — it downloads but doesn't self-register as a force-able tool on a
+// custom distro. Dropping this (with the Proton dist symlinked alongside, install_path ".") into
+// compatibilitytools.d/proton-11-arm64/ makes it appear in the per-game compatibility dropdown.
+// The launcher creates the symlinks + installs this every start.
+"compatibilitytools"
+{
+  "compat_tools"
+  {
+    "proton_11_arm64"
+    {
+      "install_path" "."
+      "display_name" "Proton 11.0 (ARM64)"
+      "from_oslist"  "windows"
+      "to_oslist"    "linux"
+    }
+  }
+}
