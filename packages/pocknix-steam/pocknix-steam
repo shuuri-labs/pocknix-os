@@ -8,7 +8,8 @@
 # Steam Settings > In Game > Performance > "Show performance metrics in this game" — the overlay
 # being blank in earlier testing was that toggle being OFF, NOT a mangoapp/gamescope coupling
 # problem. So this is just `--mangoapp` + the mangohud dep; no MANGOHUD_CONFIGFILE plumbing needed.
-# GPU stats are limited on Adreno/msm but FPS/CPU/frametime render. See progress.md.
+# GPU load/clock/temp + power draw now render too (mangohud carries the ROCKNIX/armada Adreno+
+# Qualcomm reader patches — vanilla mangohud has no msm/freedreno reader). See progress.md.
 set -e
 
 export HOME="${HOME:-/root}"

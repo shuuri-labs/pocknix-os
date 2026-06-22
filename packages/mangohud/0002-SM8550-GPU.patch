@@ -1,0 +1,34 @@
+From 6980e956be449122ed8aa8554273a4c3ed6ac4d3 Mon Sep 17 00:00:00 2001
+From: John Williams <porschemad911@gmail.com>
+Date: Tue, 12 May 2026 10:12:28 +1000
+Subject: [PATCH] SM8550 GPU
+
+---
+ src/gpu_fdinfo.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/gpu_fdinfo.cpp b/src/gpu_fdinfo.cpp
+index c4d63f5..9ce029a 100644
+--- a/src/gpu_fdinfo.cpp
++++ b/src/gpu_fdinfo.cpp
+@@ -192,7 +192,7 @@ void GPU_fdinfo::find_hwmon_sensors()
+     std::string hwmon;
+ 
+     if (module == "msm_drm" || module == "msm_dpu" )
+-        hwmon = find_hwmon_sensor_dir("gpu");
++        hwmon = find_hwmon_sensor_dir("gpuss_0_thermal");
+     else if (module == "panfrost" || module == "panthor")
+         hwmon = find_hwmon_sensor_dir("gpu_thermal");
+     else
+@@ -655,7 +655,7 @@ float GPU_fdinfo::amdgpu_helper_get_proc_vram() {
+ }
+ 
+ void GPU_fdinfo::init_kgsl() {
+-    const std::string sys_path = "/sys/class/kgsl/kgsl-3d0";
++    const std::string sys_path = "/sys/class/devfreq/3d00000.gpu";
+ 
+     try {
+         if (!fs::exists(sys_path)) {
+-- 
+2.47.3
+
