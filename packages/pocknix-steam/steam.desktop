@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Steam
+Comment=Launch the Steam client (desktop mode)
+Exec=steam %U
+Icon=steam
+Terminal=false
+Categories=Game;
+MimeType=x-scheme-handler/steam;
+# Also registers `steam` as the handler for steam:// URLs so per-game shortcuts launch.
+StartupNotify=true

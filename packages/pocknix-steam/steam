@@ -1,0 +1,34 @@
+#!/bin/bash
+# steam — desktop-mode launcher for the native ARM64 Steam client on the RP6.
+#
+# pocknix-steam launches the client under gamescope in Big Picture (game mode). This is the OTHER
+# entry point: a plain `/usr/bin/steam` that runs the SAME native client as a normal windowed app
+# inside the Plasma Mobile (kwin_wayland) desktop session, and forwards arguments. Two reasons it's
+# needed in desktop mode:
+#   1. there's no Steam menu entry otherwise (the client is bootstrapped into ~/.local/share/Steam,
+#      not installed as a package, so nothing puts `steam` on PATH or a steam.desktop in the menu);
+#   2. the per-game shortcuts Steam writes call `steam steam://rungameid/<id>` — without a `steam`
+#      command on PATH those shortcuts appear but can't launch. This provides that command.
+#
+# Same client dir / LD_LIBRARY_PATH / cwd contract as pocknix-steam (see the comments there), minus
+# gamescope and the -gamepadui/-steamos3 Big-Picture flags — we want the normal desktop UI here.
+set -e
+
+export HOME="${HOME:-/home/deck}"
+STEAM="${HOME}/.local/share/Steam"
+CLIENT_DIR="${STEAM}/steamrtarm64"
+CLIENT="${CLIENT_DIR}/steam"
+
+# client's own dir FIRST (bundled libvpx.so.6 etc.), then the aarch64 shim dir — as in pocknix-steam.
+export LD_LIBRARY_PATH="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu"
+
+# Bootstrap the native client on first use if game mode never ran (shared installer).
+if [ ! -x "${CLIENT}" ]; then
+  /usr/bin/pocknix-steam-install
+fi
+
+# Steam resolves legacy module paths (bin/vgui2_s.dll …) relative to getcwd — cd in like pocknix-steam.
+cd "${CLIENT_DIR}" 2>/dev/null || { echo "steam: missing ${CLIENT_DIR}" >&2; exit 1; }
+
+# Forward args (e.g. `steam steam://rungameid/<id>` from game shortcuts, or none to open the window).
+exec "${CLIENT}" "$@"
