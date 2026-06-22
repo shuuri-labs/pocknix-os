@@ -86,6 +86,20 @@ teardown noise — cosmetic. (`LIBSEAT_BACKEND=seatd` kept in the launcher; harm
   `pocknix-desktop`. Also generated `en_US.UTF-8` (build-image.sh `configure_locale`) — ALARM base
   was `C`-only, so every Qt/Plasma app warned + fell back to C.UTF-8.
 
+**gamescope CAP_SYS_NICE (realtime priority) — + an AT_SECURE gotcha:** gamescope (built
+`-Drt_cap=enabled`) logged `No CAP_SYS_NICE … Performance will be affected`. Granted it as a file
+capability on `/usr/bin/gamescope` via a pacman `.install` scriptlet (`setcap cap_sys_nice+ep`;
+`build-sd-image.sh` `rsync -aHAX` preserves the xattr into the image). **GOTCHA that broke game
+mode:** a file capability puts the binary in glibc **secure-execution mode (AT_SECURE)**, and glibc
+then **strips `LD_LIBRARY_PATH` out of the environment entirely**. `pocknix-steam` set
+`LD_LIBRARY_PATH=…/steamrtarm64` on *gamescope's* env; the steam client (gamescope's child)
+inherited the scrubbed env and `steamui.so` couldn't load its bundled `libvpx.so.6` →
+`dlmopen … libvpx.so.6: cannot open shared object file` → client exits → supervisor loop fast-fails
+to a shell. **Fix:** re-inject `LD_LIBRARY_PATH` via an INNER `env` on the client
+(`gamescope … -- env LD_LIBRARY_PATH=… steam …`), set fresh for the non-secure client after
+gamescope's env was scrubbed. gamescope doesn't need it (system libs). LESSON: never set
+`LD_LIBRARY_PATH` on a setcap'd/AT_SECURE process's env if a child needs it — set it on the child.
+
 **Added (this session):** Flatpak app store — `flatpak` + `discover` (desktop.list) +
 `pocknix-flathub.service` (registers Flathub on first online boot). Discover is the native KDE
 store; Bazaar (GTK) isn't in Arch → install it as a flatpak from Flathub.
