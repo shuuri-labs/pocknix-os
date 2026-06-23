@@ -60,11 +60,11 @@ EOF
     sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' "${root}/etc/ssh/sshd_config"
   fi
 
-  # install the committed test-image overlay (usb gadget, diag dump, autologin, NM conf)
+  # install the committed test-image overlay (diag dump, autologin, NM conf, fan/volume helpers)
   if [ -d "${POCKNIX_ROOT}/overlay" ]; then
-    log "installing overlay (usb-gadget + diag + autologin)"
+    log "installing overlay (diag + autologin + helpers)"
     rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
-    chmod +x "${root}/usr/local/bin/pocknix-usbgadget" "${root}/usr/local/bin/pocknix-diag" \
+    chmod +x "${root}/usr/local/bin/pocknix-diag" \
              "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" \
              "${root}/usr/local/bin/pocknix-volumed" 2>/dev/null || true
   fi
@@ -103,9 +103,9 @@ EOF
   # Steam's network UI. iwd must NOT do its own netconfig here (EnableNetworkConfiguration=false),
   # else it fights NM for DHCP on wlan0 (the conflict that forced the old iwd-direct model).
   #
-  # The static NM confs come from the OVERLAY (rsync'd above): conf.d/20-wifi-backend.conf
-  # (wifi.backend=iwd) + conf.d/10-unmanage-gadget.conf (usb0/gadget/ncm0 unmanaged, NOT wlan0).
-  # Here we only write the build-var-dependent bits: iwd regdom + the NM connection keyfile.
+  # The static NM conf comes from the OVERLAY (rsync'd above): conf.d/20-wifi-backend.conf
+  # (wifi.backend=iwd). Here we only write the build-var-dependent bits: iwd regdom + the NM
+  # connection keyfile.
   install -d -m 755 "${root}/etc/NetworkManager/conf.d"
   # iwd = backend only: keep regdom Country (5 GHz) but turn its own netconfig OFF.
   install -d -m 755 "${root}/etc/iwd"
@@ -163,13 +163,16 @@ EOF
   fi
 
   # enable services for interaction/verification with no keyboard:
-  #   sshd + iwd (wifi) + systemd-resolved (DNS), usbgadget (ssh over USB-C), diag (boot report).
+  #   sshd + iwd (wifi) + systemd-resolved (DNS), diag (boot report).
   #   seatd: gamescope's DRM backend needs a seat (no logind seat over SSH).
   #   inputplumber: gamepad -> Steam Input (DualSense) mapping.
   #   NetworkManager (front-end Steam talks to) + iwd (its wifi backend) BOTH run now.
   #   pocknix-expand-root: first-boot grow of root partition+fs to fill the card.
+  # NOTE: the USB-C network gadget (ssh over USB) is intentionally gone — it showed as a phantom
+  # "wired" connection in Steam, and the port is dual-role (DTS data-role="dual"), so leaving it
+  # free lets the USB-C port act as a host for peripherals (keyboard, storage, …).
   chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
-        pocknix-usbgadget.service pocknix-diag.service pocknix-expand-root.service \
+        pocknix-diag.service pocknix-expand-root.service \
         >/dev/null 2>&1 || true
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
   # WirePlumber applies the AYN-Odin2 UCM (shipped by pocknix-bsp) automatically.
