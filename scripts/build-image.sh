@@ -69,20 +69,26 @@ install_local_packages() {
   # fex-emu + fex-rootfs = x86 game content via Proton (FEX emulator + thunks + the ~1.1 GB Arch x86
   # squashfs the games' libraries resolve from). Validated on hardware 2026-06-22; +~1.1 GB to the image.
   # pocknix-desktop = the Plasma Mobile desktop session + the game<->desktop switch
-  # (steamos-session-select). Pulls the whole Plasma Mobile stack (plasma-mobile/-workspace, kwin,
-  # plasma-nano/-nm, powerdevil, plasma-settings, maliit-keyboard, kscreen) from ALARM as deps —
-  # like pocknix-steam pulls its stack. Boot default stays game mode (the choice file defaults to
+  # (steamos-session-select). The Plasma Mobile stack itself comes from desktop.list (installed
+  # above), not as deps of this package. Boot default stays game mode (the choice file defaults to
   # gamescope); desktop is opt-in via the switch. See docs/plasma-mobile-plan.md.
+  #
+  # QUALIFY every target with `pocknix/`: `pacman -S <name>` selects the FIRST repo in pacman.conf
+  # order that has the name (NOT the highest version), and [pocknix] is appended LAST — so an
+  # unqualified `gamescope`/`mangohud` would resolve to ALARM's [extra] copy (gamescope's vanilla
+  # build black-screens the rotated panel; our patched mangohud has the Adreno reader). epoch=1 only
+  # affects `-Syu` upgrades, not `-S` selection. Qualifying forces our builds and errors loudly if a
+  # local package is genuinely missing from [pocknix] instead of silently grabbing ALARM's.
   chroot "${root}" pacman -S --noconfirm --needed \
-        pocknix-bsp gamescope inputplumber pocknix-steamos-shim mangohud pocknix-steam \
-        fex-emu fex-rootfs pocknix-desktop
+        pocknix/pocknix-bsp pocknix/gamescope pocknix/inputplumber pocknix/pocknix-steamos-shim \
+        pocknix/mangohud pocknix/pocknix-steam pocknix/fex-emu pocknix/fex-rootfs pocknix/pocknix-desktop
   # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
   # especially: ALARM's vanilla lacks --use-rotation-shader and black-screens on the RP6 (bitten 3x).
   local gs_ver; gs_ver="$(chroot "${root}" pacman -Q gamescope 2>/dev/null | awk '{print $2}')"
   case "${gs_ver}" in
     1:*rocknix*) log "gamescope OK: ${gs_ver} (epoch-1 patched build)" ;;
     *) umount "${root}/localrepo" 2>/dev/null || true
-       die "gamescope is '${gs_ver}', NOT the epoch-1 [pocknix] rocknix build. Vanilla gamescope can't drive the RP6 panel (no --use-rotation-shader) -> black screen. Build it first: 'make packages PKG=gamescope' and confirm build/localrepo/gamescope-1:*.pkg.tar.* exists, then re-run." ;;
+       die "gamescope resolved to '${gs_ver}', NOT our epoch-1 [pocknix] rocknix build. Vanilla gamescope can't drive the RP6's rotated panel (no --use-rotation-shader) -> black screen. The install pins pocknix/gamescope, so reaching here means [pocknix] is missing it: confirm build/localrepo/gamescope-1:*.pkg.tar.* exists AND is registered in pocknix.db ('make packages PKG=gamescope' rebuilds + repo-adds it), then re-run." ;;
   esac
   local lp
   for lp in fex-emu fex-rootfs; do
