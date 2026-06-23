@@ -19,7 +19,10 @@ DEVICE="/dev/sda"                 # internal userdata LUN on SM8550 (sda17 = And
 BOOT_MIB=256                      # FAT boot partition size (matches the SD layout)
 ROOT_MIN_GIB=8                    # reserve at least this much for POCKNIX_ROOT
 ANDROID_MIN_GIB=1                 # smallest Android userdata we'll leave
-BOOT_GPT_NAME="ROCKNIX"           # GPT name + FAT label the ABL boots (DO NOT change)
+# Match the WORKING SD boot partition exactly (build-sd-image.sh) — this device's ABL boots that.
+# (Do NOT use armada's ROCKNIX-name + ESP-boot convention; armada uses a modified ABL.)
+BOOT_GPT_NAME="system"            # GPT partition name of the FAT boot partition (= SD_BOOT_PARTNAME)
+BOOT_FAT_LABEL="ROCKNIX"          # FAT label the ABL looks for (= SD_FAT_LABEL)
 ROOT_GPT_NAME="POCKNIX_ROOT"      # matches the kernel cmdline root=PARTLABEL=POCKNIX_ROOT
 DRY_RUN=0; ASSUME_YES=0; UD_GIB=""
 
@@ -62,7 +65,7 @@ partdev() { case "$DEVICE" in *mmcblk*|*nvme*) echo "${DEVICE}p$1" ;; *) echo "$
 
 # --- idempotency: bail if a pocknix install already exists on the internal disk ---
 existing="$(parted -m -s "$DEVICE" print 2>/dev/null | tail -n +2 | cut -d: -f6 || true)"
-if echo "$existing" | grep -qx -e "$ROOT_GPT_NAME" -e "$BOOT_GPT_NAME" -e STORAGE; then
+if echo "$existing" | grep -qx -e "$ROOT_GPT_NAME"; then
   die "an existing install was found on $DEVICE (a $ROOT_GPT_NAME/$BOOT_GPT_NAME/STORAGE partition).
   This installer only does a fresh install. To reinstall, delete those partitions first
   (carefully, with parted) or restore Android, then re-run."
@@ -119,9 +122,9 @@ BOOT_NUM=$(( UD_NUM + 1 )); ROOT_NUM=$(( UD_NUM + 2 ))
 cat <<EOF
 
   PLAN for $DEVICE (nothing before userdata #$UD_NUM is touched: abl/xbl/modem/persist all safe):
-    #$UD_NUM  userdata      ${UD_START_MIB}..${NEW_UD_END_MIB} MiB    (Android, ${UD_GIB} GiB — RESET)
-    #$BOOT_NUM  $BOOT_GPT_NAME  ${BOOT_START_MIB}..${BOOT_END_MIB} MiB    (FAT, boot flag — pocknix KERNEL)
-    #$ROOT_NUM  $ROOT_GPT_NAME  ${ROOT_START_MIB}..${UD_END_MIB} MiB    (ext4, ~${ROOT_GIB} GiB — pocknix rootfs)
+    #$UD_NUM  userdata               ${UD_START_MIB}..${NEW_UD_END_MIB} MiB    (Android, ${UD_GIB} GiB — RESET)
+    #$BOOT_NUM  ${BOOT_GPT_NAME}/${BOOT_FAT_LABEL} (legacy_boot)  ${BOOT_START_MIB}..${BOOT_END_MIB} MiB    (FAT — pocknix KERNEL+KERNEL.md5)
+    #$ROOT_NUM  $ROOT_GPT_NAME           ${ROOT_START_MIB}..${UD_END_MIB} MiB    (ext4, ~${ROOT_GIB} GiB — pocknix rootfs)
 EOF
 
 if [ "$DRY_RUN" = 1 ]; then say "--dry-run: no changes made."; exit 0; fi
@@ -155,8 +158,7 @@ parted -a optimal -s "$DEVICE" mkpart primary ext4   "${UD_START_MIB}MiB"  "${NE
 parted -s "$DEVICE" name "$UD_NUM" userdata
 parted -a optimal -s "$DEVICE" mkpart primary fat32  "${BOOT_START_MIB}MiB" "${BOOT_END_MIB}MiB"
 parted -s "$DEVICE" name "$BOOT_NUM" "$BOOT_GPT_NAME"
-parted -s "$DEVICE" set  "$BOOT_NUM" boot on
-parted -s "$DEVICE" set  "$BOOT_NUM" msftdata on
+parted -s "$DEVICE" set  "$BOOT_NUM" legacy_boot on   # match the working SD (NOT ESP `boot`)
 parted -a optimal -s "$DEVICE" mkpart primary ext4   "${ROOT_START_MIB}MiB" "${UD_END_MIB}MiB"
 parted -s "$DEVICE" name "$ROOT_NUM" "$ROOT_GPT_NAME"
 partprobe "$DEVICE"; sleep 1
@@ -164,7 +166,7 @@ partprobe "$DEVICE"; sleep 1
 say "Formatting boot ($BOOT_PART) + root ($ROOT_PART) ..."
 umount_quiet "$BOOT_PART"; umount_quiet "$ROOT_PART"
 dd if=/dev/zero of="$UD_PART" bs=1M count=8 status=none   # wipe stale Android fs signature
-mkfs.vfat -F 32 -n "$BOOT_GPT_NAME" "$BOOT_PART" >/dev/null
+mkfs.vfat -F 32 -n "$BOOT_FAT_LABEL" "$BOOT_PART" >/dev/null
 mkfs.ext4 -F -q -L "$ROOT_GPT_NAME" -m 1 "$ROOT_PART"
 
 BMNT="$(mktemp -d)"; RMNT="$(mktemp -d)"; SDMNT="$(mktemp -d)"
@@ -172,15 +174,16 @@ cleanup_mnt() { for m in "$BMNT" "$RMNT" "$SDMNT"; do umount "$m" 2>/dev/null ||
 trap 'on_err; cleanup_mnt' ERR
 mount "$BOOT_PART" "$BMNT"; mount "$ROOT_PART" "$RMNT"
 
-# Copy the current KERNEL (qcom-abl boot image) from the SD boot partition onto the internal FAT.
-# The SD's boot FAT is the only ROCKNIX-labelled FAT that isn't on the internal $DEVICE.
-SD_BOOT="$(blkid -t LABEL="$BOOT_GPT_NAME" -o device 2>/dev/null | grep -v "^${DEVICE}" | head -1 || true)"
-[ -n "$SD_BOOT" ] || die "couldn't find the SD boot partition (LABEL=$BOOT_GPT_NAME) to copy KERNEL from"
+# Copy the ENTIRE current boot partition (KERNEL + KERNEL.md5 — the ABL verifies KERNEL against its
+# md5, so a missing KERNEL.md5 = "installation corrupt") from the SD onto the internal FAT. The SD's
+# boot FAT is the only ROCKNIX-labelled FAT that isn't on the internal $DEVICE.
+SD_BOOT="$(blkid -t LABEL="$BOOT_FAT_LABEL" -o device 2>/dev/null | grep -v "^${DEVICE}" | head -1 || true)"
+[ -n "$SD_BOOT" ] || die "couldn't find the SD boot partition (LABEL=$BOOT_FAT_LABEL) to copy KERNEL from"
 mount -o ro "$SD_BOOT" "$SDMNT"
 [ -f "$SDMNT/KERNEL" ] || die "no KERNEL on the SD boot partition ($SD_BOOT)"
-say "Copying KERNEL from $SD_BOOT ..."
-cp "$SDMNT/KERNEL" "$BMNT/KERNEL"
-cp "$SDMNT/KERNEL" "$BMNT/KERNEL.bak"     # initial rollback copy
+say "Copying boot files (KERNEL + KERNEL.md5) from $SD_BOOT ..."
+cp -a "$SDMNT/." "$BMNT/"                  # KERNEL, KERNEL.md5, and anything else the ABL needs
+cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"       # rollback copy (Phase 3b hook keeps this updated)
 umount "$SDMNT"
 
 # Clone the running rootfs onto the internal ext4 (stay on the root fs; skip virtual + mountpoints).
