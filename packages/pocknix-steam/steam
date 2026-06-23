@@ -30,5 +30,11 @@ fi
 # Steam resolves legacy module paths (bin/vgui2_s.dll …) relative to getcwd — cd in like pocknix-steam.
 cd "${CLIENT_DIR}" 2>/dev/null || { echo "steam: missing ${CLIENT_DIR}" >&2; exit 1; }
 
+# Keep the native ARM client pinned to steamdeck_publicbeta even in desktop mode — otherwise plain
+# `steam` can flip package/beta to steamdeck_stable, which then breaks the next game-mode launch
+# (steamwebhelper crash-loop / endless "Installing update"). See pocknix-steam.
+mkdir -p "${STEAM}/package"
+echo steamdeck_publicbeta > "${STEAM}/package/beta"
+
 # Forward args (e.g. `steam steam://rungameid/<id>` from game shortcuts, or none to open the window).
 exec "${CLIENT}" "$@"

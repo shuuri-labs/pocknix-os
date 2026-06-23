@@ -26,7 +26,24 @@ log()  { echo -e "[\033[1;34mpocknix-steam\033[0m] $1"; }
 warn() { echo -e "[\033[1;33mWARN\033[0m] $1" >&2; }
 die()  { echo -e "[\033[1;31mERROR\033[0m] $1" >&2; exit 1; }
 
+# Wait for the network/DNS before downloading. On FIRST BOOT the deck session autologins and runs
+# this immediately, but Wi-Fi (iwd association + DHCP) takes ~15-30s to come up — so wget would hit
+# "Temporary failure in name resolution" and the whole session would fast-fail to a shell. Poll
+# until the Steam host resolves (generous timeout) rather than racing the network. wget's own -t 5
+# only covers transient errors once DNS exists; it can't wait for the interface to come up at all.
+wait_for_network() {
+  local host="repo.steampowered.com" i
+  getent hosts "${host}" >/dev/null 2>&1 && return 0
+  log "Waiting for network/DNS to come up (first boot: Wi-Fi takes ~15-30s to associate)..."
+  for i in $(seq 1 90); do
+    sleep 2
+    getent hosts "${host}" >/dev/null 2>&1 && { log "Network is up."; return 0; }
+  done
+  warn "network/DNS still down after ~180s — attempting the download anyway"
+}
+
 mkdir -p "${STEAM}"
+wait_for_network
 
 # 1. native ARM64 Steam runtime (steamrt3c)
 if [ ! -d "${RUNTIME_DIR}" ]; then
