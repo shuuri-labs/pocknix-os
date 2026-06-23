@@ -18,6 +18,18 @@ binder/binderfs/ashmem etc., NO guessing] → **(4) steam bootstrap at build** [
 first boot needs no network; revisit the OOBE/setup-wizard, which we currently skip via a seeded
 OOBE-complete `registry.vdf`]. Internal install is the priority (SD is slow).
 
+### ✅ (2) install-to-internal WORKS (2026-06-24) — on fast internal UFS at last
+`overlay/usr/local/bin/pocknix-install-internal` clones the running system to internal `/dev/sda`
+(shrink Android `userdata` → append `ROCKNIX` FAT + `POCKNIX_ROOT` ext4; ABL/xbl/modem/persist
+untouched). The boot-partition layout was the hard part — 4 things all had to match ROCKNIX's
+`installtointernal`, NOT the SD and NOT armada (armada uses a modified ABL). Full details +
+gotchas in the [[rp6-internal-boot]] memory; in short: GPT name `ROCKNIX`, **FAT32 made with
+`-S 4096`** (UFS is 4K-sector; SD is 512), **≥512 MiB** boot FAT (`-s 1`) for a valid FAT32
+cluster count, and **`KERNEL`+`KERNEL.md5`** (ABL verifies the md5 → missing = "corrupt"). Recovery
+during bring-up was a boot-FAT reformat/enlarge that preserved the 27 GB clone (no re-clone).
+**Next on internal:** Phase 3b kernel hook so `pacman -U linux-pocknix` rebuilds `/flash/KERNEL`
+(now `/flash` = internal boot FAT, mounted via fstab), then waydroid + steam-bake.
+
 ### 🔨 (1) Kernel package — Phase 3a DONE in code (untested)
 `linux-pocknix` is a **thin** package: it does NOT compile (Fedora host has no makepkg; `make kernel`
 already compiles natively). `build-packages.sh` stages `build/kernel/out` into the package
