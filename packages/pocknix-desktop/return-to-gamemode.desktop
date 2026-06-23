@@ -2,7 +2,7 @@
 Type=Application
 Name=Return to Game Mode
 Comment=Switch back to the Steam game session
-Icon=steamdeck-gaming-return
+Icon=steam
 Exec=steamos-session-select gamescope
 Terminal=false
 Categories=Game;System;

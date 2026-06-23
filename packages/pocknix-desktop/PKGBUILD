@@ -17,7 +17,7 @@
 # docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
