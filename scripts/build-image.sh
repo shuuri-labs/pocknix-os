@@ -88,7 +88,7 @@ install_local_packages() {
   case "${gs_ver}" in
     1:*rocknix*) log "gamescope OK: ${gs_ver} (epoch-1 patched build)" ;;
     *) umount "${root}/localrepo" 2>/dev/null || true
-       die "gamescope is '${gs_ver}', NOT the epoch-1 [pocknix] rocknix build. Vanilla gamescope can't drive the RP6 panel (no --use-rotation-shader) -> black screen. Build it first: 'make packages PKG=gamescope' and confirm build/localrepo/gamescope-1:*.pkg.tar.* exists, then re-run." ;;
+       die "gamescope resolved to '${gs_ver}', NOT our epoch-1 [pocknix] rocknix build. Vanilla gamescope can't drive the RP6's rotated panel (no --use-rotation-shader) -> black screen. The install pins pocknix/gamescope, so reaching here means [pocknix] is missing it: confirm build/localrepo/gamescope-1:*.pkg.tar.* exists AND is registered in pocknix.db ('make packages PKG=gamescope' rebuilds + repo-adds it), then re-run." ;;
   esac
   local lp
   for lp in fex-emu fex-rootfs; do

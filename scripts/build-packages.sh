@@ -77,17 +77,26 @@ build_one() {
   chroot "${BROOT}" chown builder:builder /build/srccache
   # makepkg refuses to run as root; build as the 'builder' user.
   # -s syncs makedepends (gamescope needs many); pocknix-bsp has none so it's a no-op.
-  chroot "${BROOT}" runuser -u builder -- \
-    bash -lc "cd /build/${name} && SRCDEST=/build/srccache makepkg -s -f --noconfirm --nocheck --skippgpcheck"
-  # keep only the freshly built version in the repo (avoids stale dupes accumulating,
-  # which otherwise break `pacman -U pkg-*.tar` with "duplicate target").
+  if ! chroot "${BROOT}" runuser -u builder -- \
+      bash -lc "cd /build/${name} && SRCDEST=/build/srccache makepkg -s -f --noconfirm --nocheck --skippgpcheck"; then
+    warn "makepkg failed for ${name} — keeping any previous build in ${LOCALREPO##*/}"
+    return 1
+  fi
+  # Confirm the build produced a package, matched by pkgname — NOT every *.pkg.tar.* in the build
+  # dir, which would also sweep up any .pkg.tar.* a PKGBUILD downloads as *sources* (e.g. fex-emu's
+  # pinned x86 sysroot pkgs). A non-matching glob leaves the literal pattern, so `-e` is false.
+  local built_pkgs=("${BROOT}/build/${name}/${name}"-*.pkg.tar.*)
+  if [ ! -e "${built_pkgs[0]}" ]; then
+    warn "no .pkg.tar.* produced for ${name} — keeping any previous build"
+    return 1
+  fi
+  # ONLY NOW touch the repo. Removing the previous version(s) and publishing the new one happens
+  # AFTER a confirmed successful build, so a failed/transient rebuild never wipes a known-good
+  # package (build-to-temp-then-swap). The rm also clears stale dupes that would otherwise break
+  # `pacman -U pkg-*.tar` with "duplicate target". (rm before cp: the new file's own epoch'd name
+  # matches the *:* pattern, so cp-then-rm would delete what we just copied.)
   rm -f "${LOCALREPO}/${name}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${name}"-*:*.pkg.tar.* 2>/dev/null || true
-  # Copy ONLY the built package(s), matched by pkgname — NOT every *.pkg.tar.* in the
-  # build dir, which would also sweep up any .pkg.tar.* files a PKGBUILD downloads as
-  # *sources* (e.g. fex-emu's pinned x86 sysroot pkgs). That both polluted the repo
-  # and masked build failures as success.
-  cp "${BROOT}/build/${name}/${name}"-*.pkg.tar.* "${LOCALREPO}/" 2>/dev/null \
-    || { warn "no .pkg.tar.* produced for ${name}"; return 1; }
+  cp "${built_pkgs[@]}" "${LOCALREPO}/"
 }
 
 main() {
