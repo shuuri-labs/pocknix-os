@@ -34,6 +34,14 @@ cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
 # Decky/CEF debugger marker armada touches (harmless if unused).
 touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 
+# Pin the client beta channel EVERY launch. The native ARM64 Big-Picture client only works on
+# steamdeck_publicbeta; if anything flips package/beta to steamdeck_stable (e.g. a desktop-mode
+# `steam` launch, or a server-side channel change), Steam sees "installed version 0" for the new
+# channel and dead-ends forever on "Installing update" with steamwebhelper crash-looping -> the
+# session hangs. Re-asserting it here makes the session self-heal on the next launch.
+mkdir -p "${STEAM}/package"
+echo steamdeck_publicbeta > "${STEAM}/package/beta"
+
 # --- FEX/Proton prep for x86 game content (mirrors ROCKNIX steam_arm64_binfmt_and_proton_prep) ---
 # Re-applied EVERY launch because Steam restores Valve's files on a Proton update and binfmt resets on
 # boot. Needs root for the binfmt write (the boot-to-Steam session runs as root). See the 2026-06-22
