@@ -97,10 +97,18 @@ configure() {
   #    GPU firmware (a740_sqe.fw, on the rootfs) fails to load (-2). As a module it
   #    loads post-root via udev, when /usr/lib/firmware is available. We have no
   #    initramfs, so early firmware must come via a module-load-after-root, not =y.
+  #  - Android binder + binderfs for Waydroid: the synced config has
+  #    ANDROID_BINDER_IPC off, so the Waydroid container can't start ("Failed to
+  #    initialize Waydroid"). MEMFD_CREATE is already on, so modern Waydroid needs no
+  #    ASHMEM. binderfs creates the binder/hwbinder/vndbinder devices dynamically.
   "${KSRC}/scripts/config" --file "${KSRC}/.config" \
     --enable FW_LOADER_COMPRESS \
     --enable FW_LOADER_COMPRESS_ZSTD \
-    --module DRM_MSM
+    --module DRM_MSM \
+    --enable ANDROID \
+    --enable ANDROID_BINDER_IPC \
+    --enable ANDROID_BINDERFS \
+    --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder"
 
   # olddefconfig auto-accepts defaults for any new symbols (no prompts, no stdin).
   # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,
