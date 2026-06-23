@@ -1,0 +1,40 @@
+#!/bin/bash
+# pocknix-build-bootimg — (re)assemble the qcom-abl /flash/KERNEL from the installed kernel.
+#
+# Run by the linux-pocknix alpm hook after a kernel install/upgrade (and runnable by hand). Mirrors
+# scripts/build-kernel.sh's assemble_bootimg: gzip(/boot/Image) with all /boot/dtbs appended, an
+# empty ramdisk, then mkbootimg (header v0, offsets 0) with the baked cmdline -> /flash/KERNEL. Keeps
+# a /flash/KERNEL.bak and writes /flash/KERNEL.md5 (the RP6 ABL verifies KERNEL against its md5).
+set -euo pipefail
+
+FLASH="${FLASH:-/flash}"
+MKBOOTIMG=/usr/lib/pocknix/mkbootimg/mkbootimg.py
+CMDLINE_FILE=/usr/lib/pocknix/kernel-cmdline
+
+[ -f /boot/Image ] || { echo "pocknix-build-bootimg: no /boot/Image — nothing to do"; exit 0; }
+[ -f "$MKBOOTIMG" ] && [ -f "$CMDLINE_FILE" ] || { echo "pocknix-build-bootimg: mkbootimg/cmdline missing"; exit 0; }
+# In the image-build chroot /flash isn't a real mount; build-sd-image.sh/install.sh assemble KERNEL
+# there instead, so skip. On the device /flash is the FAT boot partition (fstab) -> rebuild.
+mountpoint -q "$FLASH" || { echo "pocknix-build-bootimg: $FLASH not mounted — skipping (build chroot?)"; exit 0; }
+
+cmdline="$(cat "$CMDLINE_FILE")"
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+
+gzip -c /boot/Image > "$tmp/kernel.gz"
+for d in /boot/dtbs/*.dtb; do [ -f "$d" ] && cat "$d" >> "$tmp/kernel.gz"; done
+# valid empty cpio ramdisk (no initramfs; UFS/ext4 are built-in) so the kernel unpacks it cleanly
+if command -v cpio >/dev/null 2>&1; then printf '' | cpio -o -H newc --quiet > "$tmp/ramdisk" 2>/dev/null
+else printf 'dummy' > "$tmp/ramdisk"; fi
+
+python3 "$MKBOOTIMG" \
+  --kernel "$tmp/kernel.gz" --ramdisk "$tmp/ramdisk" \
+  --kernel_offset 0x00000000 --ramdisk_offset 0x00000000 --tags_offset 0x00000000 \
+  --os_version 12.0.0 --os_patch_level "$(date '+%Y-%m')" --header_version 0 \
+  --cmdline "$cmdline" -o "$tmp/KERNEL"
+
+mount -o remount,rw "$FLASH" 2>/dev/null || true
+[ -f "$FLASH/KERNEL" ] && cp -f "$FLASH/KERNEL" "$FLASH/KERNEL.bak"
+cp -f "$tmp/KERNEL" "$FLASH/KERNEL"
+( cd "$FLASH" && md5sum KERNEL > KERNEL.md5 )
+sync
+echo "pocknix-build-bootimg: rebuilt $FLASH/KERNEL (kernel $(cat /usr/lib/pocknix/kernelrelease 2>/dev/null || echo '?'); KERNEL.bak kept)"

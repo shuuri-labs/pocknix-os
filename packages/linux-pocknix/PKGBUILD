@@ -13,7 +13,7 @@
 # build-sd-image.sh / install.sh assemble /flash/KERNEL from build/image/KERNEL as before.
 pkgname=linux-pocknix
 pkgver=7.0.11
-pkgrel=1
+pkgrel=2
 pkgdesc="RP6/SM8550 kernel (stock ${pkgver} + ROCKNIX patch stack) — packaged from 'make kernel' output"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -22,11 +22,14 @@ license=('GPL-2.0-only')
 provides=("linux=${pkgver}")
 conflicts=('linux-aarch64')
 replaces=('linux-aarch64')
-# depmod runs in the install scriptlet; modules are already built so no makedepends.
+# python3 + cpio run the on-device /flash/KERNEL rebuild hook; depmod runs in the install scriptlet.
+depends=('python' 'cpio')
 install=linux-pocknix.install
 options=('!strip')          # don't strip the kernel Image / DTBs (modules are already stripped by modules_install)
-source=()                   # all inputs are staged by build-packages.sh (./staged), not fetched
-sha256sums=()
+# The kernel artifacts are staged by build-packages.sh (./staged); these two ship the on-device
+# boot-image rebuild path (Phase 3b): pacman -U linux-pocknix -> alpm hook -> rebuild /flash/KERNEL.
+source=('pocknix-build-bootimg' '90-linux-pocknix.hook')
+sha256sums=('SKIP' 'SKIP')
 
 package() {
   local out="${startdir}/staged"     # = build/kernel/out, copied in by scripts/build-packages.sh
@@ -47,6 +50,14 @@ package() {
   install -d "${pkgdir}/usr/lib/modules"
   cp -a "${out}/modroot/lib/modules/${kver}" "${pkgdir}/usr/lib/modules/${kver}"
 
-  # record the kver so the install scriptlet (and the future /flash/KERNEL hook) know the modules dir.
+  # record the kver so the install scriptlet (and the /flash/KERNEL hook) know the modules dir.
   install -Dm644 /dev/stdin "${pkgdir}/usr/lib/pocknix/kernelrelease" <<<"${kver}"
+
+  # Phase 3b — on-device /flash/KERNEL rebuild: the mkbootimg tool + the baked cmdline (staged from
+  # build-kernel.sh), the rebuild script, and the alpm hook that runs it after a kernel pacman txn.
+  [ -d "${out}/mkbootimg" ] || { echo "linux-pocknix: ${out}/mkbootimg missing — re-run 'make kernel'"; return 1; }
+  cp -r "${out}/mkbootimg" "${pkgdir}/usr/lib/pocknix/mkbootimg"
+  install -Dm644 "${out}/cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
+  install -Dm755 "${srcdir}/pocknix-build-bootimg"  "${pkgdir}/usr/bin/pocknix-build-bootimg"
+  install -Dm644 "${srcdir}/90-linux-pocknix.hook"  "${pkgdir}/usr/share/libalpm/hooks/90-linux-pocknix.hook"
 }

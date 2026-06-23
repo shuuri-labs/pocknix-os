@@ -175,6 +175,12 @@ main() {
   build_kernel
   stage
   assemble_bootimg "$@"
+  # Stage the on-device boot-image rebuild inputs into out/ for the linux-pocknix package: the
+  # mkbootimg tool + the cmdline, so the package's alpm hook can rebuild /flash/KERNEL on the device
+  # (pacman -U linux-pocknix) exactly the way this build does. See packages/linux-pocknix.
+  rm -rf "${KBUILD}/out/mkbootimg"
+  cp -r "${KBUILD}/mkbootimg" "${KBUILD}/out/mkbootimg"
+  printf '%s' "${KERNEL_CMDLINE}" > "${KBUILD}/out/cmdline"
   ok "linux-pocknix build complete"
 }
 main "$@"
