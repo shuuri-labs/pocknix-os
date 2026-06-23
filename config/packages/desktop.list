@@ -13,6 +13,7 @@ plasma-nm            # Wi-Fi / network applet (touch UI)
 powerdevil           # power / brightness / suspend management
 plasma-settings      # mobile settings app
 kscreen              # kscreen-doctor -> the panel rotation/scale transform (rotated-DSI crux)
+xdg-user-dirs        # ~/Documents,Pictures,Videos,… integration (Dolphin Places, file dialogs)
 
 # On-screen keyboard: provided by plasma-mobile itself (the `plasma-keyboard` component) and works
 # out of the box — pops up when a text field is focused. No standalone maliit-keyboard needed (it's

@@ -4,7 +4,7 @@
 # Steam is experimental (Valve publicbeta linuxarm64).
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=6
+pkgrel=8
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -37,9 +37,10 @@ license=('GPL2')
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
          'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
          'pocknix-steamos-shim' 'xorg-server-xvfb')
-source=('pocknix-steam-install' 'pocknix-steam' 'steam' 'steam.desktop' 'registry.vdf'
+source=('pocknix-steam-install' 'pocknix-steam' 'steam' 'steam.desktop'
+        'steam-256.png' 'steam-512.png' 'registry.vdf'
         'proton-toolmanifest.vdf' 'proton-compatibilitytool.vdf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-steam-install" "${pkgdir}/usr/bin/pocknix-steam-install"
@@ -49,6 +50,11 @@ package() {
   # registers the steam:// URL handler. (Game mode uses pocknix-steam/gamescope instead.)
   install -Dm755 "${srcdir}/steam"                 "${pkgdir}/usr/bin/steam"
   install -Dm644 "${srcdir}/steam.desktop"         "${pkgdir}/usr/share/applications/steam.desktop"
+  # `steam` themed icon for the app grid (steam.desktop + pocknix-desktop's return-to-gamemode.desktop
+  # both use Icon=steam). The native ARM client isn't a system package, so nothing else provides it.
+  # Official Steam icon (Wikimedia Commons), pre-sized to the two common hicolor app sizes.
+  install -Dm644 "${srcdir}/steam-256.png"         "${pkgdir}/usr/share/icons/hicolor/256x256/apps/steam.png"
+  install -Dm644 "${srcdir}/steam-512.png"         "${pkgdir}/usr/share/icons/hicolor/512x512/apps/steam.png"
   # OOBE-complete registry seed (ROCKNIX resources/registry.vdf). Seeded to ~/.steam/registry.vdf
   # by the installer so the gamepadui skips the Steam Deck OOBE — whose "required update" step
   # tries to update SteamOS (which we aren't) and dead-ends with "Updater apply error: 2".
