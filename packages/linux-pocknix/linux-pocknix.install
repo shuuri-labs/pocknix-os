@@ -1,0 +1,12 @@
+# Re-run depmod against the live module tree after install/upgrade/remove so modules.dep,
+# modules.alias, etc. are correct on the device (modules_install already generated them at build
+# time, but this guarantees consistency against /usr/lib/modules on the running system).
+_depmod() {
+  local kver
+  kver="$(cat /usr/lib/pocknix/kernelrelease 2>/dev/null)"
+  [ -n "${kver}" ] && [ -d "/usr/lib/modules/${kver}" ] || return 0
+  depmod "${kver}" 2>/dev/null || true
+}
+
+post_install() { _depmod; }
+post_upgrade() { _depmod; }

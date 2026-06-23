@@ -1,0 +1,52 @@
+# linux-pocknix — the RP6/SM8550 kernel as a pacman package.
+#
+# THIN package by design: it does NOT compile the kernel. The Fedora build host has no makepkg
+# (packages build in a separate ALARM chroot), and `make kernel` (scripts/build-kernel.sh) already
+# compiles the kernel natively + assembles the qcom-abl boot image. build-packages.sh stages that
+# script's output (build/kernel/out) into this package's build dir as ./staged, and package() lays
+# it out as /boot/Image + /boot/dtbs + /usr/lib/modules/<ver>.
+#
+# Why package it at all: it makes the kernel a normal `pacman -U`-able artifact — Image + modules
+# versioned together atomically (no more "updated Image but not /lib/modules" boot-or-die footgun),
+# `.pkg` rollback for the scariest failure (bad kernel), and uniform deploy. The on-device
+# /flash/KERNEL regeneration hook is Phase 3b (lands with install.sh, which mounts /flash); for now
+# build-sd-image.sh / install.sh assemble /flash/KERNEL from build/image/KERNEL as before.
+pkgname=linux-pocknix
+pkgver=7.0.11
+pkgrel=1
+pkgdesc="RP6/SM8550 kernel (stock ${pkgver} + ROCKNIX patch stack) — packaged from 'make kernel' output"
+arch=('aarch64')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-only')
+# We own the kernel on this device; drop ALARM's generic one (pre-installed in the base tarball).
+provides=("linux=${pkgver}")
+conflicts=('linux-aarch64')
+replaces=('linux-aarch64')
+# depmod runs in the install scriptlet; modules are already built so no makedepends.
+install=linux-pocknix.install
+options=('!strip')          # don't strip the kernel Image / DTBs (modules are already stripped by modules_install)
+source=()                   # all inputs are staged by build-packages.sh (./staged), not fetched
+sha256sums=()
+
+package() {
+  local out="${startdir}/staged"     # = build/kernel/out, copied in by scripts/build-packages.sh
+  if [ ! -f "${out}/Image" ] || [ ! -f "${out}/kernelrelease" ]; then
+    echo "linux-pocknix: no staged kernel at ${out}." >&2
+    echo "  Run 'make kernel' first (it produces build/kernel/out), then rebuild this package." >&2
+    return 1
+  fi
+  local kver; kver="$(cat "${out}/kernelrelease")"
+
+  # kernel image + device trees
+  install -Dm644 "${out}/Image" "${pkgdir}/boot/Image"
+  install -d "${pkgdir}/boot/dtbs"
+  cp "${out}/dtbs/"*.dtb "${pkgdir}/boot/dtbs/"
+
+  # modules (already depmod'd by modules_install during `make kernel`; the .install re-runs depmod
+  # post-transaction so modules.dep is correct against the live /usr/lib/modules path).
+  install -d "${pkgdir}/usr/lib/modules"
+  cp -a "${out}/modroot/lib/modules/${kver}" "${pkgdir}/usr/lib/modules/${kver}"
+
+  # record the kver so the install scriptlet (and the future /flash/KERNEL hook) know the modules dir.
+  install -Dm644 /dev/stdin "${pkgdir}/usr/lib/pocknix/kernelrelease" <<<"${kver}"
+}

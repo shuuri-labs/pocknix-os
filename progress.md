@@ -9,6 +9,31 @@ _Last updated: 2026-06-22 — Phase 4 STARTED: Plasma Mobile desktop session + g
 
 ---
 
+## ⬜→🔨 Roadmap started (2026-06-23): kernel pkg → install-to-internal → waydroid → steam-bake
+Agreed order (each de-risks the next): **(1) package the kernel** [keystone: uniform `pacman -U`
+deploy, atomic Image+modules, rollback, cheap kernel iteration for waydroid/DTS] → **(2) install.sh
+to internal** [fast UFS iteration; ref ROCKNIX `installtointernal`/`update.sh` + armada; ABL/Android
+untouched; `KERNEL.bak` rollback] → **(3) waydroid** [research the real missing kernel config —
+binder/binderfs/ashmem etc., NO guessing] → **(4) steam bootstrap at build** [bake the client so
+first boot needs no network; revisit the OOBE/setup-wizard, which we currently skip via a seeded
+OOBE-complete `registry.vdf`]. Internal install is the priority (SD is slow).
+
+### 🔨 (1) Kernel package — Phase 3a DONE in code (untested)
+`linux-pocknix` is a **thin** package: it does NOT compile (Fedora host has no makepkg; `make kernel`
+already compiles natively). `build-packages.sh` stages `build/kernel/out` into the package
+(`./staged`); `package()` lays it out as `/boot/Image` + `/boot/dtbs` + `/usr/lib/modules/<ver>`,
+`provides=linux`, `replaces/conflicts=linux-aarch64`, `.install` runs depmod. `install_local_packages`
+now installs `pocknix/linux-pocknix` (deterministic `-Rdd linux-aarch64` then `-S`), and the old
+hand-rolled `install_kernel()` is gone. `/flash/KERNEL` is still assembled from `build/image/KERNEL`
+(make kernel) by build-sd-image — UNCHANGED for now.
+**Phase 3b (with install.sh):** an alpm hook + shipped mkbootimg that rebuild `/flash/KERNEL` on
+`pacman -U linux-pocknix` on the device (needs `/flash` mounted, which install.sh sets up).
+**Test:** `make kernel && sudo make build && sudo make sd-image` — confirm `pacman -Q linux-pocknix`
+in the rootfs, `uname -r` ↔ shipped modules match after boot.
+
+Also this session: removed the **USB-C ssh gadget** (phantom "wired" conn; port is dual-role so it's
+free for host-mode peripherals) and added the **deck XDG home dirs** + official Steam **icon**.
+
 ## ✅ Clean-flash validation (2026-06-23) — surfaced FIVE real bugs, all fixed on-device
 First end-to-end `make build → make sd-image → flash` (everything before was hot-deployed onto a
 hand-patched device, which hid these). After fixing all five, the full distro works from a clean

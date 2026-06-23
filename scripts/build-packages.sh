@@ -68,6 +68,17 @@ build_one() {
   rm -rf "${BROOT}/build/${name}"
   mkdir -p "${BROOT}/build"
   cp -r "${pkgdir}" "${BROOT}/build/${name}"
+  # linux-pocknix is a THIN package: it doesn't compile the kernel (no makepkg/toolchain in the
+  # chroot for that), it just packages `make kernel`'s output. Stage build/kernel/out into the
+  # package build dir as ./staged so its package() can lay it out as /boot + /usr/lib/modules.
+  if [ "${name}" = "linux-pocknix" ]; then
+    local kout="${BUILD_DIR}/kernel/out"
+    if [ ! -f "${kout}/Image" ] || [ ! -f "${kout}/kernelrelease" ]; then
+      warn "linux-pocknix: no kernel build at ${kout} — run 'make kernel' first; skipping"
+      return 1
+    fi
+    cp -a "${kout}" "${BROOT}/build/${name}/staged"
+  fi
   # Persistent source cache: SRCDEST lives OUTSIDE the per-package build dir (which is wiped
   # every run), so makepkg downloads each source ONCE and reuses it. File sources (e.g.
   # fex-emu's pinned x86 sysroot .pkg.tar.zst, ~70 MB) are kept by name; the git source becomes
