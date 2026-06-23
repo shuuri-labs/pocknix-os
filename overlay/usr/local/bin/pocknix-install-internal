@@ -1,0 +1,227 @@
+#!/bin/bash
+# pocknix-install-internal — install the running pocknix system to internal UFS storage.
+#
+# Run this ON THE DEVICE (the SD-booted pocknix), as root. It mirrors ROCKNIX's installtointernal
+# and armada-installer: shrink the Android `userdata` partition on the internal disk, then create a
+# FAT boot partition named ROCKNIX (the existing ROCKNIX ABL boots whatever partition is named
+# ROCKNIX with the boot flag — that's why your SD boots) + an ext4 POCKNIX_ROOT, copy the current
+# KERNEL onto the FAT, and clone the running rootfs onto the ext4. The ABL, xbl, modem, persist and
+# everything before `userdata` are NEVER touched, so this is far lower-risk than flashing a
+# bootloader. After it finishes, power off, remove the SD card, and boot — internal boots first.
+#
+# Iterating after install: you do NOT re-run this. Update in place — scp + pacman -U / -S a package,
+# rsync the overlay, or (kernel) pacman -U linux-pocknix. This is the one-time gateway only.
+#
+# Usage: pocknix-install-internal [--dry-run] [--yes] [--userdata-gib N] [--device /dev/sdX]
+set -euo pipefail
+
+DEVICE="/dev/sda"                 # internal userdata LUN on SM8550 (sda17 = Android userdata)
+BOOT_MIB=512                      # FAT boot partition size. 512 (not the SD's 256) so the boot FAT is
+                                  # a valid FAT32 at the UFS's 4096-byte sectors: a 256 MiB partition
+                                  # at 4K sectors has too few clusters for FAT32 (mkfs.fat warns and
+                                  # the ABL may read it as corrupt). 512 MiB clears the FAT32 minimum.
+ROOT_MIN_GIB=8                    # reserve at least this much for POCKNIX_ROOT
+ANDROID_MIN_GIB=1                 # smallest Android userdata we'll leave
+# Match ROCKNIX's INTERNAL installer (installtointernal) — the proven internal-boot config on this
+# device — NOT the SD layout and NOT armada (armada uses a modified ABL). The two things that bit us:
+#   * the internal UFS has 4096-byte logical sectors, so the boot FAT MUST be made with -S 4096
+#     (the SD is 512-byte; a default mkfs.vfat creates a 512-sector FAT the ABL reads as corrupt).
+#   * ROCKNIX names the internal boot partition ROCKNIX (the removable SD uses "system").
+BOOT_GPT_NAME="ROCKNIX"           # GPT partition name (ROCKNIX's internal convention)
+BOOT_FAT_LABEL="ROCKNIX"          # FAT label the ABL looks for
+ROOT_GPT_NAME="POCKNIX_ROOT"      # matches the kernel cmdline root=PARTLABEL=POCKNIX_ROOT
+DRY_RUN=0; ASSUME_YES=0; UD_GIB=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1 ;;
+    --yes|-y)  ASSUME_YES=1 ;;
+    --userdata-gib) UD_GIB="${2:-}"; shift ;;
+    --device) DEVICE="${2:-}"; shift ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+say()  { echo -e "\033[1;34m[install]\033[0m $*"; }
+warn() { echo -e "\033[1;33m[install] WARN\033[0m $*" >&2; }
+die()  { echo -e "\033[1;31m[install] ERROR\033[0m $*" >&2; exit 1; }
+
+[ "$(id -u)" = 0 ] || die "must run as root"
+for c in parted partprobe blkid blockdev mkfs.vfat mkfs.ext4 rsync findmnt awk; do
+  command -v "$c" >/dev/null 2>&1 || die "missing required tool: $c"
+done
+[ -b "$DEVICE" ] || die "internal device $DEVICE not found (override with --device)"
+
+# Refuse a REMOVABLE disk — the internal UFS is non-removable; a plugged USB drive (now possible
+# with host mode) or the SD card is removable. Guards against repartitioning the wrong disk.
+if [ "$(cat "/sys/block/$(basename "$DEVICE")/removable" 2>/dev/null || echo 1)" != 0 ]; then
+  die "$DEVICE is removable — refusing (this installer only targets the internal UFS). Unplug USB drives."
+fi
+
+# Refuse to install onto the disk we're running from (that's the SD, not internal).
+ROOT_SRC="$(findmnt -no SOURCE / || true)"
+case "$ROOT_SRC" in
+  "$DEVICE"*) die "$DEVICE is the disk we booted from — that's the SD, not internal. Aborting." ;;
+esac
+
+# Partition naming helper (sdaN vs mmcblkXpN).
+partdev() { case "$DEVICE" in *mmcblk*|*nvme*) echo "${DEVICE}p$1" ;; *) echo "${DEVICE}$1" ;; esac; }
+
+# --- idempotency: bail if a pocknix install already exists on the internal disk ---
+existing="$(parted -m -s "$DEVICE" print 2>/dev/null | tail -n +2 | cut -d: -f6 || true)"
+if echo "$existing" | grep -qx -e "$ROOT_GPT_NAME"; then
+  die "an existing install was found on $DEVICE (a $ROOT_GPT_NAME/$BOOT_GPT_NAME/STORAGE partition).
+  This installer only does a fresh install. To reinstall, delete those partitions first
+  (carefully, with parted) or restore Android, then re-run."
+fi
+
+# --- find the Android userdata partition (exactly one) ---
+mapfile -t ud < <(parted -m -s "$DEVICE" unit B print | awk -F: 'NR>2 && $6=="userdata"')
+[ "${#ud[@]}" -eq 1 ] || { parted -s "$DEVICE" print >&2; die "could not uniquely find an Android 'userdata' partition on $DEVICE"; }
+IFS=: read -r UD_NUM UD_STARTB UD_ENDB _ <<< "${ud[0]}"
+UD_START="${UD_STARTB%B}"; UD_END="${UD_ENDB%B}"
+
+# --- require userdata to be the LAST partition (we shrink it and append after it) ---
+last_end=0
+while IFS=: read -r _ _ eb _; do eb="${eb%B}"; [ "$eb" -gt "$last_end" ] && last_end="$eb"; done \
+  < <(parted -m -s "$DEVICE" unit B print | awk -F: 'NR>2')
+if [ "$UD_END" -lt "$last_end" ]; then
+  parted -s "$DEVICE" print >&2
+  die "userdata (#$UD_NUM) is not the last partition on $DEVICE — refusing (this installer assumes it is)."
+fi
+
+# --- size math (MiB-aligned, like ROCKNIX) ---
+MiB=$((1024*1024)); GiB=$((1024*1024*1024))
+UD_START_MIB=$(( (UD_START + MiB - 1) / MiB ))
+UD_END_MIB=$(( UD_END / MiB ))
+ORIG_MIB=$(( UD_END_MIB - UD_START_MIB ))
+ORIG_GIB=$(( ORIG_MIB / 1024 ))
+MIN_UD_GIB=$ANDROID_MIN_GIB
+MAX_UD_GIB=$(( (ORIG_MIB - BOOT_MIB - ROOT_MIN_GIB*1024) / 1024 ))
+[ "$MAX_UD_GIB" -ge "$MIN_UD_GIB" ] || die "not enough space on $DEVICE (userdata is only ${ORIG_GIB} GiB)"
+
+say "Internal disk $DEVICE: Android userdata #$UD_NUM is ${ORIG_GIB} GiB."
+say "You can shrink it to between ${MIN_UD_GIB} and ${MAX_UD_GIB} GiB; pocknix gets the rest."
+
+# --- choose Android userdata size (prompt like ROCKNIX, or --userdata-gib) ---
+if [ -n "$UD_GIB" ]; then
+  [[ "$UD_GIB" =~ ^[0-9]+$ ]] || die "--userdata-gib must be an integer"
+else
+  while :; do
+    read -rp "New Android userdata size in GiB [${MIN_UD_GIB}..${MAX_UD_GIB}]: " UD_GIB || die "no input"
+    [[ "$UD_GIB" =~ ^[0-9]+$ ]] || { echo "enter an integer"; continue; }
+    break
+  done
+fi
+{ [ "$UD_GIB" -ge "$MIN_UD_GIB" ] && [ "$UD_GIB" -le "$MAX_UD_GIB" ]; } \
+  || die "userdata size ${UD_GIB} out of range (${MIN_UD_GIB}..${MAX_UD_GIB})"
+
+NEW_UD_END_MIB=$(( UD_START_MIB + UD_GIB*1024 ))
+BOOT_START_MIB=$NEW_UD_END_MIB
+BOOT_END_MIB=$(( BOOT_START_MIB + BOOT_MIB ))
+ROOT_START_MIB=$BOOT_END_MIB
+ROOT_GIB=$(( (UD_END_MIB - ROOT_START_MIB) / 1024 ))
+BOOT_NUM=$(( UD_NUM + 1 )); ROOT_NUM=$(( UD_NUM + 2 ))
+
+cat <<EOF
+
+  PLAN for $DEVICE (nothing before userdata #$UD_NUM is touched: abl/xbl/modem/persist all safe):
+    #$UD_NUM  userdata               ${UD_START_MIB}..${NEW_UD_END_MIB} MiB    (Android, ${UD_GIB} GiB — RESET)
+    #$BOOT_NUM  ${BOOT_GPT_NAME}           ${BOOT_START_MIB}..${BOOT_END_MIB} MiB    (FAT, 4K-sector — pocknix KERNEL+KERNEL.md5)
+    #$ROOT_NUM  $ROOT_GPT_NAME           ${ROOT_START_MIB}..${UD_END_MIB} MiB    (ext4, ~${ROOT_GIB} GiB — pocknix rootfs)
+EOF
+
+if [ "$DRY_RUN" = 1 ]; then say "--dry-run: no changes made."; exit 0; fi
+
+if [ "$ASSUME_YES" != 1 ]; then
+  echo
+  warn "This WIPES Android userdata on $DEVICE and writes pocknix to internal storage."
+  read -rp "Type 'INSTALL' to proceed: " ans || die "no input"
+  [ "$ans" = "INSTALL" ] || die "aborted."
+fi
+
+UD_PART="$(partdev "$UD_NUM")"; BOOT_PART="$(partdev "$BOOT_NUM")"; ROOT_PART="$(partdev "$ROOT_NUM")"
+
+# Past this point internal storage is being modified — arm a recovery message on any failure.
+DESTRUCTIVE=0
+on_err() {
+  [ "$DESTRUCTIVE" = 1 ] && cat >&2 <<EOF
+
+[install] ERROR: install did not finish after internal storage was modified.
+  Do NOT boot internal storage. Re-run this installer from the SD card to finish.
+  Only if the device won't boot the SD at all: recover with a PC (fastboot erase / re-flash userdata).
+EOF
+}
+trap on_err ERR
+
+umount_quiet() { mount | grep -q "^$1 " && umount "$1" || true; }
+say "Repartitioning $DEVICE ..."; DESTRUCTIVE=1
+umount_quiet "$UD_PART"
+parted -s "$DEVICE" rm "$UD_NUM"
+parted -a optimal -s "$DEVICE" mkpart primary ext4   "${UD_START_MIB}MiB"  "${NEW_UD_END_MIB}MiB"
+parted -s "$DEVICE" name "$UD_NUM" userdata
+parted -a optimal -s "$DEVICE" mkpart primary fat32  "${BOOT_START_MIB}MiB" "${BOOT_END_MIB}MiB"
+parted -s "$DEVICE" name "$BOOT_NUM" "$BOOT_GPT_NAME"   # fat32 mkpart auto-sets the msftdata type (= ROCKNIX)
+parted -a optimal -s "$DEVICE" mkpart primary ext4   "${ROOT_START_MIB}MiB" "${UD_END_MIB}MiB"
+parted -s "$DEVICE" name "$ROOT_NUM" "$ROOT_GPT_NAME"
+partprobe "$DEVICE"; sleep 1
+
+say "Formatting boot ($BOOT_PART) + root ($ROOT_PART) ..."
+umount_quiet "$BOOT_PART"; umount_quiet "$ROOT_PART"
+dd if=/dev/zero of="$UD_PART" bs=1M count=8 status=none   # wipe stale Android fs signature
+# CRITICAL: format the boot FAT with the device's logical sector size (4096 on UFS). A default
+# mkfs.vfat assumes 512-byte sectors; on a 4K-sector UFS the ABL reads that FAT as corrupt.
+BOOT_SS="$(blockdev --getss "$BOOT_PART")"
+# -s 1 (one logical sector per cluster) gives the MOST clusters, so a 512 MiB FAT at 4K sectors
+# clears the FAT32 minimum (~131K clusters) — a clean FAT32 with no "too few clusters" warning.
+# (A fixed -s 4 needs a multi-GiB partition to clear it; auto-pick can land on too-large clusters.)
+mkfs.vfat -F 32 -S "$BOOT_SS" -s 1 -n "$BOOT_FAT_LABEL" "$BOOT_PART" >/dev/null
+mkfs.ext4 -F -q -L "$ROOT_GPT_NAME" -m 1 "$ROOT_PART"
+
+BMNT="$(mktemp -d)"; RMNT="$(mktemp -d)"; SDMNT="$(mktemp -d)"
+cleanup_mnt() { for m in "$BMNT" "$RMNT" "$SDMNT"; do umount "$m" 2>/dev/null || true; rmdir "$m" 2>/dev/null || true; done; }
+trap 'on_err; cleanup_mnt' ERR
+mount "$BOOT_PART" "$BMNT"; mount "$ROOT_PART" "$RMNT"
+
+# Copy the ENTIRE current boot partition (KERNEL + KERNEL.md5 — the ABL verifies KERNEL against its
+# md5, so a missing KERNEL.md5 = "installation corrupt") from the SD onto the internal FAT. The SD's
+# boot FAT is the only ROCKNIX-labelled FAT that isn't on the internal $DEVICE.
+SD_BOOT="$(blkid -t LABEL="$BOOT_FAT_LABEL" -o device 2>/dev/null | grep -v "^${DEVICE}" | head -1 || true)"
+[ -n "$SD_BOOT" ] || die "couldn't find the SD boot partition (LABEL=$BOOT_FAT_LABEL) to copy KERNEL from"
+mount -o ro "$SD_BOOT" "$SDMNT"
+[ -f "$SDMNT/KERNEL" ] || die "no KERNEL on the SD boot partition ($SD_BOOT)"
+say "Copying boot files (KERNEL + KERNEL.md5) from $SD_BOOT ..."
+cp -a "$SDMNT/." "$BMNT/"                  # KERNEL, KERNEL.md5, and anything else the ABL needs
+cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"       # rollback copy (Phase 3b hook keeps this updated)
+umount "$SDMNT"
+
+# Clone the running rootfs onto the internal ext4 (stay on the root fs; skip virtual + mountpoints).
+say "Cloning rootfs to $ROOT_PART (this takes a few minutes) ..."
+rsync -aHAXx \
+  --exclude='/proc/*' --exclude='/sys/*' --exclude='/dev/*' --exclude='/run/*' \
+  --exclude='/tmp/*'  --exclude='/mnt/*' --exclude='/media/*' --exclude='/lost+found' \
+  / "$RMNT/"
+for d in proc sys dev run tmp mnt media flash; do mkdir -p "$RMNT/$d"; done
+
+# fstab on the internal install: root by PARTLABEL (already), plus the internal FAT at /flash so the
+# kernel-update hook can rebuild /flash/KERNEL there later.
+cat > "$RMNT/etc/fstab" <<EOF
+# pocknix-os — internal install
+PARTLABEL=${ROOT_GPT_NAME}  /       ext4  rw,relatime  0 1
+PARTLABEL=${BOOT_GPT_NAME}  /flash  vfat  rw,noatime   0 2
+EOF
+
+sync
+cleanup_mnt; trap - ERR
+say "Done. New layout on $DEVICE:"
+parted -s "$DEVICE" print | awk 'NR>6'
+cat <<EOF
+
+  Internal install complete. Now:
+    1) Power off.
+    2) Remove the SD card.
+    3) Power on — the ABL boots the internal $BOOT_GPT_NAME partition (internal boots before SD).
+  (Leaving the SD in causes two ${ROOT_GPT_NAME} partitions; remove it to avoid an ambiguous root.)
+EOF

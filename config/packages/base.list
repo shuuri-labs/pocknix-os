@@ -19,6 +19,8 @@ openssh
 e2fsprogs
 dosfstools
 util-linux
+parted              # pocknix-install-internal repartitions the internal UFS (+ partprobe)
+rsync               # pocknix-install-internal clones the running rootfs to the internal ext4
 cloud-guest-utils   # growpart — pocknix-expand-root grows the root partition to fill the SD on first boot
 
 # --- graphics stack (mesa from ALARM, NOT holo — see plan.md #1) ---

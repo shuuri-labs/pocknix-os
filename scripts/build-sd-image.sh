@@ -66,7 +66,8 @@ EOF
     rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
     chmod +x "${root}/usr/local/bin/pocknix-diag" \
              "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" \
-             "${root}/usr/local/bin/pocknix-volumed" 2>/dev/null || true
+             "${root}/usr/local/bin/pocknix-volumed" \
+             "${root}/usr/local/bin/pocknix-install-internal" 2>/dev/null || true
   fi
 
   # --- non-root 'deck' session user ---
