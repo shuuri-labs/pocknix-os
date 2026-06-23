@@ -53,7 +53,8 @@ firstboot_config() {
   echo "root:${SD_ROOT_PASSWORD}" | chroot "${root}" chpasswd
   cat > "${root}/etc/fstab" <<EOF
 # pocknix-os test image
-PARTLABEL=${ROOT_LABEL}  /  ext4  rw,relatime  0 1
+PARTLABEL=${ROOT_LABEL}        /       ext4  rw,relatime        0 1
+PARTLABEL=${SD_BOOT_PARTNAME}  /flash  vfat  rw,noatime,nofail  0 2
 EOF
   echo "pocknix" > "${root}/etc/hostname"
   if [ -f "${root}/etc/ssh/sshd_config" ]; then

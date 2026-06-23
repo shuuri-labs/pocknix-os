@@ -209,8 +209,8 @@ for d in proc sys dev run tmp mnt media flash; do mkdir -p "$RMNT/$d"; done
 # kernel-update hook can rebuild /flash/KERNEL there later.
 cat > "$RMNT/etc/fstab" <<EOF
 # pocknix-os — internal install
-PARTLABEL=${ROOT_GPT_NAME}  /       ext4  rw,relatime  0 1
-PARTLABEL=${BOOT_GPT_NAME}  /flash  vfat  rw,noatime   0 2
+PARTLABEL=${ROOT_GPT_NAME}  /       ext4  rw,relatime         0 1
+PARTLABEL=${BOOT_GPT_NAME}  /flash  vfat  rw,noatime,nofail   0 2
 EOF
 
 sync
