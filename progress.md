@@ -30,6 +30,13 @@ during bring-up was a boot-FAT reformat/enlarge that preserved the 27 GB clone (
 **Next on internal:** Phase 3b kernel hook so `pacman -U linux-pocknix` rebuilds `/flash/KERNEL`
 (now `/flash` = internal boot FAT, mounted via fstab), then waydroid + steam-bake.
 
+### ✅ (1) Kernel package — Phase 3a + 3b DONE in code (untested on a real pacman txn)
+Phase 3b: `pacman -U linux-pocknix` now rebuilds `/flash/KERNEL` on-device via an alpm hook +
+shipped mkbootimg (`packages/linux-pocknix/pocknix-build-bootimg`; writes KERNEL.bak + KERNEL.md5).
+So a kernel change = `make kernel` → rebuild pkg → `pacman -U linux-pocknix`, no manual copy. `/flash`
+(the boot FAT) is now mounted via fstab on both SD + internal (nofail). First real exercise of this
+loop will be the **waydroid** kernel-config change below.
+
 ### 🔨 (1) Kernel package — Phase 3a DONE in code (untested)
 `linux-pocknix` is a **thin** package: it does NOT compile (Fedora host has no makepkg; `make kernel`
 already compiles natively). `build-packages.sh` stages `build/kernel/out` into the package
