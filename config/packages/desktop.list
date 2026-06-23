@@ -39,6 +39,12 @@ koko                 # image gallery
 kclock               # clock / alarms / timers
 kweather             # weather
 
+# --- Android apps (Waydroid) ---
+# Plasma Mobile ships the "Waydroid support" settings KCM but NOT the daemon. waydroid is in Arch
+# extra/ALARM (pulls lxc, python-gbinder, nftables, dnsmasq…). Needs the kernel's binder+binderfs
+# (added in build-kernel.sh). First run still needs `waydroid init` (downloads the Android image).
+waydroid
+
 # --- app store (Flatpak) ---
 # Discover is the native KDE store and ships a Flatpak backend; flatpak provides the runtime.
 # Flathub is added by pocknix-flathub.service (pocknix-desktop) on first online boot. A GTK store
