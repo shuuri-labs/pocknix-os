@@ -9,9 +9,13 @@ _Last updated: 2026-06-22 — Phase 4 STARTED: Plasma Mobile desktop session + g
 
 ---
 
-## 🔨 Clean-flash validation surfaced two real bugs (2026-06-23) — both fixed
+## ✅ Clean-flash validation (2026-06-23) — surfaced FIVE real bugs, all fixed on-device
 First end-to-end `make build → make sd-image → flash` (everything before was hot-deployed onto a
-hand-patched device, which hid these):
+hand-patched device, which hid these). After fixing all five, the full distro works from a clean
+build: game mode (Steam + games), Plasma Mobile desktop + full app set, two-way session switching,
+Wi-Fi, audio, CAP_SYS_NICE, and desktop-mode Steam/X11. (Device is still hand-patched with the fixes;
+a final fresh flash is the only remaining confirmation — all fixes are committed/baked.)
+Bugs 4-5 (channel pin, XWayland) below; 1-3 here:
 1. **`pacman -S` repo selection** — local pkgs resolved to ALARM's copy because `[pocknix]` is
    appended last and `-S <name>` takes the first repo with the name (not highest version/epoch).
    Fixed by qualifying `pocknix/<name>` in `install_local_packages` (commit bbc1a96).
@@ -29,6 +33,20 @@ hand-patched device, which hid these):
    outlast bring-up). Fix: `pocknix-steam-install` `wait_for_network()` polls `getent hosts
    repo.steampowered.com` (up to ~180s) before downloading. (Proper long-term fix is still to bake
    the Steam client at BUILD time so first boot needs no network — PLANNED, see below.)
+4. **Steam beta channel flip → game mode hang.** Launching Steam in *desktop* mode (plain
+   `/usr/bin/steam`, no `-steamdeck`) flipped `package/beta` from `steamdeck_publicbeta` to
+   `steamdeck_stable`; game mode then saw `installed version 0`, dead-ended on "Installing update"
+   with steamwebhelper crash-looping, and hung across reboots. The native ARM Big-Picture client
+   only works on `steamdeck_publicbeta`. Fix: both launchers re-assert
+   `echo steamdeck_publicbeta > package/beta` on EVERY launch (commit 0466ad4). Recovery from a
+   flipped state needed `rm -rf ~/.local/share/Steam ~/.steam` + re-bootstrap.
+5. **Desktop-mode Steam: "Unable to open display".** The Plasma Mobile session runs kwin WITHOUT
+   XWayland — kwin logged `/tmp/.X11-unix does not exist … Failed to establish X11 socket` and ran
+   Wayland-only, so X11 Steam had no DISPLAY. gamescope creates that dir itself (game mode fine);
+   kwin expects it to exist, and the minimal ALARM base has no xorg-server to ship the tmpfiles
+   rule. Fix: pocknix-desktop ships `usr/lib/tmpfiles.d/pocknix-x11.conf`
+   (`d /tmp/.X11-unix 1777 root root -`) so systemd-tmpfiles creates it at boot → kwin starts
+   XWayland → all X11 apps (incl. desktop Steam) get a DISPLAY (commit e12d2dd).
 
 ## ⬜→🔨 Phase 4 STARTED — Plasma Mobile desktop session + session switch — 2026-06-22
 First code for the Desktop half of the two-session model and the Game↔Desktop switch. Plan +
