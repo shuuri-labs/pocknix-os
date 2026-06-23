@@ -174,10 +174,10 @@ dd if=/dev/zero of="$UD_PART" bs=1M count=8 status=none   # wipe stale Android f
 # CRITICAL: format the boot FAT with the device's logical sector size (4096 on UFS). A default
 # mkfs.vfat assumes 512-byte sectors; on a 4K-sector UFS the ABL reads that FAT as corrupt.
 BOOT_SS="$(blockdev --getss "$BOOT_PART")"
-# No fixed -s (sectors/cluster): let mkfs.fat choose a cluster size that yields a valid FAT32 for
-# this size at this sector size. (A fixed -s 4 at 4K sectors needs a multi-GiB partition to clear
-# the FAT32 cluster minimum; with BOOT_MIB=512 the auto-pick gives ~4K clusters = a clean FAT32.)
-mkfs.vfat -F 32 -S "$BOOT_SS" -n "$BOOT_FAT_LABEL" "$BOOT_PART" >/dev/null
+# -s 1 (one logical sector per cluster) gives the MOST clusters, so a 512 MiB FAT at 4K sectors
+# clears the FAT32 minimum (~131K clusters) — a clean FAT32 with no "too few clusters" warning.
+# (A fixed -s 4 needs a multi-GiB partition to clear it; auto-pick can land on too-large clusters.)
+mkfs.vfat -F 32 -S "$BOOT_SS" -s 1 -n "$BOOT_FAT_LABEL" "$BOOT_PART" >/dev/null
 mkfs.ext4 -F -q -L "$ROOT_GPT_NAME" -m 1 "$ROOT_PART"
 
 BMNT="$(mktemp -d)"; RMNT="$(mktemp -d)"; SDMNT="$(mktemp -d)"
