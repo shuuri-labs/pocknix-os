@@ -102,6 +102,22 @@ install_local_packages() {
     umount "${root}/localrepo" 2>/dev/null || true
     die "pocknix-desktop not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=pocknix-desktop', confirm build/localrepo/pocknix-desktop-*.pkg.tar.* exists, then re-run."
   }
+  # Kernel: swap ALARM's generic linux-aarch64 for our linux-pocknix (Image + modules, built by
+  # `make kernel` -> staged into the package). Its own step (not bundled above) so a missing kernel
+  # build errors clearly, and the replace is deterministic. linux-pocknix `provides=linux`.
+  if chroot "${root}" pacman -Si pocknix/linux-pocknix >/dev/null 2>&1; then
+    chroot "${root}" pacman -Rdd --noconfirm linux-aarch64 2>/dev/null || true
+    rm -rf "${root}/boot/initramfs-linux"*.img 2>/dev/null || true
+    chroot "${root}" pacman -S --noconfirm pocknix/linux-pocknix
+    chroot "${root}" pacman -Q linux-pocknix >/dev/null 2>&1 || {
+      umount "${root}/localrepo" 2>/dev/null || true
+      die "linux-pocknix failed to install — check the pacman output above."
+    }
+    log "kernel OK: $(chroot "${root}" pacman -Q linux-pocknix)"
+  else
+    umount "${root}/localrepo" 2>/dev/null || true
+    die "linux-pocknix not in [pocknix] — run 'make kernel' first (build-packages.sh stages build/kernel/out into the package), then re-run. Without it the rootfs has no matching modules for the booted kernel."
+  fi
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
@@ -162,23 +178,8 @@ install_firmware() {
   fi
 }
 
-# Install the linux-pocknix modules into the rootfs and remove the generic ALARM
-# kernel. Requires `make kernel` to have produced build/kernel/out first.
-install_kernel() {
-  local root="$1"
-  local out="${BUILD_DIR}/kernel/out"
-  if [ ! -d "${out}/modroot/lib/modules" ]; then
-    warn "no kernel artifacts in ${out} — run 'make kernel' first; skipping kernel integration"
-    return 0
-  fi
-  local kver; kver="$(cat "${out}/kernelrelease" 2>/dev/null)"
-  log "installing pocknix kernel modules (${kver}) + removing generic ALARM kernel"
-  # the RP6 boots our qcom-abl /flash/KERNEL, not an ALARM initramfs kernel
-  chroot "${root}" pacman -Rdd --noconfirm linux-aarch64 2>/dev/null || true
-  rm -rf "${root}/boot/initramfs-linux"*.img 2>/dev/null || true
-  rsync -a "${out}/modroot/lib/modules/" "${root}/usr/lib/modules/"
-  [ -n "${kver}" ] && chroot "${root}" depmod "${kver}" 2>/dev/null || true
-}
+# NOTE: kernel integration (modules + Image, and replacing ALARM's linux-aarch64) is now done by
+# the linux-pocknix PACKAGE, installed in install_local_packages() — no separate install_kernel().
 
 main() {
   # 1. base rootfs
@@ -205,12 +206,9 @@ main() {
   # back to C.UTF-8 on every launch, and the C path is slower. Set en_US.UTF-8 system-wide.
   configure_locale "${ROOTFS_DIR}"
 
-  # 4. kernel (Phase 1): use artifacts from `make kernel`. Install pocknix modules
-  #    into the rootfs and drop the generic ALARM kernel (we boot qcom-abl KERNEL).
-  install_kernel "${ROOTFS_DIR}"
-
-  # 5. device support (Phase 2): SM8550 firmware + pocknix-bsp (suspend hooks etc.).
-  #    Session packages (Phase 3/4) get added here later.
+  # 4. device support (Phase 2): SM8550 firmware + pocknix-bsp (suspend hooks etc.).
+  #    The kernel (linux-pocknix: Image + modules, replacing ALARM's linux-aarch64) is installed
+  #    inside install_local_packages from build/kernel/out — run `make kernel` first.
   install_firmware "${ROOTFS_DIR}"
   install_local_packages "${ROOTFS_DIR}"
 
