@@ -9,6 +9,27 @@ _Last updated: 2026-06-22 — Phase 4 STARTED: Plasma Mobile desktop session + g
 
 ---
 
+## 🔨 Clean-flash validation surfaced two real bugs (2026-06-23) — both fixed
+First end-to-end `make build → make sd-image → flash` (everything before was hot-deployed onto a
+hand-patched device, which hid these):
+1. **`pacman -S` repo selection** — local pkgs resolved to ALARM's copy because `[pocknix]` is
+   appended last and `-S <name>` takes the first repo with the name (not highest version/epoch).
+   Fixed by qualifying `pocknix/<name>` in `install_local_packages` (commit bbc1a96).
+2. **Wi-Fi dead on clean flash** — config was all correct (backend=iwd, creds, firmware, regdom GB,
+   AP scanned) but NM activation dead-ended: `need-auth (no-secrets)` → "No agents were available"
+   → iwd aborted. **NetworkManager 1.56's iwd backend does NOT hand the keyfile PSK to iwd.** The
+   old device only worked because of a leftover `/var/lib/iwd/<SSID>.psk` from the original
+   iwd-direct phase. Fix: `firstboot_config` now ALSO writes `/var/lib/iwd/${SD_WIFI_SSID}.psk`
+   (Passphrase) so iwd holds the credential and autoconnects; NM still reflects it for Steam. Plus a
+   guard that fails the build if `SD_WIFI_SSID` is set but `SD_WIFI_PSK` is empty. See
+   [[steam-network-nm-iwd]].
+3. **First-boot network race** — the deck autologin runs `pocknix-steam` immediately, but Wi-Fi
+   (iwd assoc + DHCP) takes ~15-30s, so `pocknix-steam-install`'s wget hit "Temporary failure in
+   name resolution" and the supervisor loop fast-failed to a shell (its 3 retries are too fast to
+   outlast bring-up). Fix: `pocknix-steam-install` `wait_for_network()` polls `getent hosts
+   repo.steampowered.com` (up to ~180s) before downloading. (Proper long-term fix is still to bake
+   the Steam client at BUILD time so first boot needs no network — PLANNED, see below.)
+
 ## ⬜→🔨 Phase 4 STARTED — Plasma Mobile desktop session + session switch — 2026-06-22
 First code for the Desktop half of the two-session model and the Game↔Desktop switch. Plan +
 risks: [`docs/plasma-mobile-plan.md`](docs/plasma-mobile-plan.md). **All written, NONE tested on

@@ -112,6 +112,9 @@ EOF
   ln -sf /run/systemd/resolve/stub-resolv.conf "${root}/etc/resolv.conf"
 
   if [ -n "${SD_WIFI_SSID}" ]; then
+    # Guard: a Wi-Fi SSID with no password silently ships an unusable image (the SSID is logged but
+    # an empty PSK only surfaces as a boot-time association failure). Fail the build instead.
+    [ -n "${SD_WIFI_PSK}" ] || die "SD_WIFI_SSID='${SD_WIFI_SSID}' is set but SD_WIFI_PSK is empty. Pass SD_WIFI_PSK='<password>' (note: 'sudo VAR=… make' must not drop it)."
     log "pre-seeding Wi-Fi (NetworkManager + iwd backend) for SSID '${SD_WIFI_SSID}'${SD_WIFI_COUNTRY:+, country ${SD_WIFI_COUNTRY}}"
     install -d -m 700 "${root}/etc/NetworkManager/system-connections"
     cat > "${root}/etc/NetworkManager/system-connections/${SD_WIFI_SSID}.nmconnection" <<EOF
@@ -136,6 +139,20 @@ method=auto
 method=auto
 EOF
     chmod 600 "${root}/etc/NetworkManager/system-connections/${SD_WIFI_SSID}.nmconnection"
+
+    # Provision the credential DIRECTLY into iwd (KnownNetwork) too. NetworkManager 1.56's iwd
+    # backend does NOT hand the keyfile PSK to iwd — activation dead-ends at
+    # need-auth/no-secrets ("No agents were available"), so wlan0 never associates on a clean flash.
+    # With iwd holding the passphrase it autoconnects on its own and NM reflects the connection (so
+    # Steam still sees Wi-Fi through NM). This is the project's original proven iwd-direct credential.
+    # NOTE: filename is <SSID>.psk for plain-ASCII SSIDs; iwd hex-encodes names containing
+    # non-alphanumerics (e.g. spaces) as '=<hex>.psk' — not handled here (uncommon for test SSIDs).
+    install -d -m 700 "${root}/var/lib/iwd"
+    cat > "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk" <<EOF
+[Security]
+Passphrase=${SD_WIFI_PSK}
+EOF
+    chmod 600 "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk"
     [ -z "${SD_WIFI_COUNTRY}" ] && warn "SD_WIFI_COUNTRY unset — world regdom; 5 GHz won't associate"
   fi
 
