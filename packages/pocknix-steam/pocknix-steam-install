@@ -22,6 +22,12 @@ STEAM_ARM_CHANNEL="steamdeck_publicbeta"
 STEAM_ARM_MANIFEST_NAME="steam_client_${STEAM_ARM_CHANNEL}_linuxarm64"
 STEAM_MANIFEST_URL="${STEAM_CDN}/${STEAM_ARM_MANIFEST_NAME}"
 
+# Resilient wget flags: the Steam CDN (client-update.steamstatic.com) intermittently drops the
+# connection mid-stream and returns 502/503, especially on the big client zip. Default wget gives up
+# on the first HTTP error, so retry those codes too, keep resuming (-c), and wait between tries.
+WGET_RETRY=(-c --tries=20 --waitretry=15 --retry-connrefused --read-timeout=30 --timeout=30
+            --retry-on-http-error=408,429,500,502,503,504)
+
 log()  { echo -e "[\033[1;34mpocknix-steam\033[0m] $1"; }
 warn() { echo -e "[\033[1;33mWARN\033[0m] $1" >&2; }
 die()  { echo -e "[\033[1;31mERROR\033[0m] $1" >&2; exit 1; }
@@ -49,7 +55,7 @@ wait_for_network
 if [ ! -d "${RUNTIME_DIR}" ]; then
   log "Downloading Steam ARM64 runtime..."
   tar_path="${STEAM}/steam-runtime-steamrt-arm64.tar.xz"
-  wget -c -t 5 -O "${tar_path}" "${RUNTIME_TAR_URL}" || die "runtime download failed"
+  wget "${WGET_RETRY[@]}" -O "${tar_path}" "${RUNTIME_TAR_URL}" || die "runtime download failed"
   tar xf "${tar_path}" -C "${STEAM}" || die "runtime extract failed"
   rm -f "${tar_path}"
   target=$(echo "${STEAM}"/steam-runtime-steamrt-arm64/steamrt3c_platform_*/files/lib/aarch64-linux-gnu/libibus-1.0.so.5.* | head -n1)
@@ -66,7 +72,7 @@ if [ ! -d "${CLIENT_DIR}" ]; then
     | grep -oP 'bins_linuxarm64_linuxarm64\.zip\.(?!vz\.)[^"]+' | head -n1)
   [ -n "${target_file}" ] || die "could not parse client zip from manifest"
   zip_path="${STEAM}/linuxarm64.zip"
-  wget -c -t 5 -O "${zip_path}" "${STEAM_CDN}/${target_file}" || die "client download failed"
+  wget "${WGET_RETRY[@]}" -O "${zip_path}" "${STEAM_CDN}/${target_file}" || die "client download failed"
   unzip -o "${zip_path}" -d "${STEAM}" || die "client extract failed"
   rm -f "${zip_path}"
   chmod +x "${CLIENT_DIR}/steam"
