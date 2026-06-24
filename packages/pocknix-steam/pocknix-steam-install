@@ -61,7 +61,11 @@ if [ ! -d "${RUNTIME_DIR}" ]; then
   target=$(echo "${STEAM}"/steam-runtime-steamrt-arm64/steamrt3c_platform_*/files/lib/aarch64-linux-gnu/libibus-1.0.so.5.* | head -n1)
   [ -f "${target}" ] || die "libibus not found in runtime"
   mkdir -p "${STEAM}/lib/aarch64-linux-gnu"
-  ln -sf "${target}" "${STEAM}/lib/aarch64-linux-gnu/libibus-1.0.so.5"
+  # RELATIVE symlink (../../ back to ${STEAM}), like armada — HOME-agnostic so it survives the
+  # build-time bake (staging HOME) being tarred + extracted into ~deck. An ABSOLUTE target points at
+  # the bake's staging path and dangles after extraction, leaving steamwebhelper unable to load
+  # libibus-1.0.so.5 → it crash-loops and the Big-Picture UI never comes up.
+  ln -sfn "../../${target#"${STEAM}/"}" "${STEAM}/lib/aarch64-linux-gnu/libibus-1.0.so.5"
 fi
 
 # 2. native ARM64 Steam client (steamdeck_publicbeta linuxarm64). The manifest is binary VDF;
