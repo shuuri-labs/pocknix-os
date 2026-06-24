@@ -101,6 +101,10 @@ configure() {
   #    ANDROID_BINDER_IPC off, so the Waydroid container can't start ("Failed to
   #    initialize Waydroid"). MEMFD_CREATE is already on, so modern Waydroid needs no
   #    ASHMEM. binderfs creates the binder/hwbinder/vndbinder devices dynamically.
+  #  - USB/IP vhci-hcd: InputPlumber emulates the "Valve Steam Deck Controller"
+  #    target as a virtual USB device via vhci-hcd; without it InputPlumber hides the
+  #    physical gamepad but fails to create the virtual one, so Steam sees no controller
+  #    ("modprobe: FATAL: Module vhci-hcd not found"). =m so InputPlumber modprobes it.
   "${KSRC}/scripts/config" --file "${KSRC}/.config" \
     --enable FW_LOADER_COMPRESS \
     --enable FW_LOADER_COMPRESS_ZSTD \
@@ -108,7 +112,9 @@ configure() {
     --enable ANDROID \
     --enable ANDROID_BINDER_IPC \
     --enable ANDROID_BINDERFS \
-    --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder"
+    --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" \
+    --module USBIP_CORE \
+    --module USBIP_VHCI_HCD
 
   # olddefconfig auto-accepts defaults for any new symbols (no prompts, no stdin).
   # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,
