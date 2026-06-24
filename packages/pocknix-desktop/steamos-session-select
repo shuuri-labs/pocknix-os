@@ -36,4 +36,12 @@ echo "steamos-session-select: next session = ${sel} (signalling current composit
 uid="$(id -u)"
 pkill -u "${uid}" -TERM gamescope    2>/dev/null || true
 pkill -u "${uid}" -TERM kwin_wayland 2>/dev/null || true
+# Leaving game mode: also stop the Steam client. gamescope dying doesn't take Steam with it (it
+# re-parents + keeps its single-instance lock), which wastes resources during the Plasma session and
+# makes the NEXT game-mode launch bail "Steam is already running". Best-effort TERM here; the game
+# launcher (pocknix-steam) force-clears any survivor on the way back.
+if [ "${sel}" = plasma ]; then
+  pkill -u "${uid}" -TERM steam          2>/dev/null || true
+  pkill -u "${uid}" -TERM steamwebhelper 2>/dev/null || true
+fi
 exit 0
