@@ -10,6 +10,12 @@ _Last updated: 2026-06-22 — Phase 4 STARTED: Plasma Mobile desktop session + g
 ---
 
 ## ⬜→🔨 Roadmap started (2026-06-23): kernel pkg → install-to-internal → waydroid → steam-bake
+> ⚠️ **TEMP DEBUG — REMOVE after the gamescope "Creating headless backend" hang is fixed:**
+> `overlay/usr/local/bin/pocknix-gamescope-diag` + its `.service` (straces gamescope every boot, dumps
+> to the FAT), the service-enable line in `scripts/build-sd-image.sh`, and `strace` in
+> `config/packages/base.list`. Keep the `pocknix-steam`→`~deck/pocknix-steam.log` tee + pocknix-diag's
+> graphical section (generally useful). See memory `gamescope-diag-temp-debug`.
+
 STATUS: ✅ (1) kernel package (3a+3b) · ✅ (2) install-to-internal · ✅ (3) waydroid · 🔨 (4) steam-bake (code, untested)
 - **(4) Steam build-time bake DONE in code (2026-06-24, untested):** `build-image.sh`
   `bootstrap_steam_seed()` runs `pocknix-steam-install` in the rootfs chroot under a STAGING HOME
