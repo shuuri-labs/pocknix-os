@@ -57,6 +57,11 @@ PARTLABEL=${ROOT_LABEL}        /       ext4  rw,relatime        0 1
 PARTLABEL=${SD_BOOT_PARTNAME}  /flash  vfat  rw,noatime,nofail  0 2
 EOF
   echo "pocknix" > "${root}/etc/hostname"
+  # Default timezone: the ALARM base ships NO /etc/localtime, so libc (and thus the SteamOS/Plasma
+  # clock) silently falls back to UTC and changing the zone in the UI "has no effect" — there's no
+  # file for it to land in. Ship a default symlink (overridable via SD_TIMEZONE); the user can change
+  # it in the OOBE / Settings (deck is authorised via overlay 50-pocknix-deck.rules -> timedate1).
+  chroot "${root}" ln -sfn "/usr/share/zoneinfo/${SD_TIMEZONE:-UTC}" /etc/localtime
   if [ -f "${root}/etc/ssh/sshd_config" ]; then
     sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' "${root}/etc/ssh/sshd_config"
   fi
