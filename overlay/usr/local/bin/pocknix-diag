@@ -74,7 +74,11 @@ OUT=/var/log/pocknix-diag.txt
   cat /home/deck/.local/state/pocknix-session 2>/dev/null || echo "(none -> default gamescope)"
   printf '\n## failed systemd units\n'; systemctl --failed --no-legend 2>/dev/null || true
   printf '\n## gamescope/steam launch log (tail — DRM/seat/atomic errors land here)\n'
-  tail -n 100 /var/log/pocknix-steam.log 2>/dev/null || echo "(no /var/log/pocknix-steam.log yet — session never reached the gamescope exec)"
+  tail -n 120 /home/deck/pocknix-steam.log 2>/dev/null || echo "(no ~deck/pocknix-steam.log yet — extract still running, or session not launched)"
+  printf '\n## gamescope: what is it blocked on? (wchan = kernel wait; D = uninterruptible)\n'
+  for p in $(pgrep -x gamescope 2>/dev/null); do
+    echo "gamescope pid $p: state=$(cut -d' ' -f3 /proc/$p/stat 2>/dev/null) wchan=$(cat /proc/$p/wchan 2>/dev/null)"
+  done || echo "(no gamescope process)"
   printf '\n## steam client logs (tail)\n'
   for L in /home/deck/.local/share/Steam/logs/bootstrap_log.txt /home/deck/.local/share/Steam/logs/stderr.txt /home/deck/.steam/steam/logs/bootstrap_log.txt; do
     [ -f "$L" ] && { echo "--- $L ---"; tail -n 25 "$L" 2>/dev/null; }
