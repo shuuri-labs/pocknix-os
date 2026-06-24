@@ -1,0 +1,120 @@
+#!/bin/bash
+# pocknix-uninstall-internal — reverse pocknix-install-internal.
+#
+# Two stages, because you CANNOT repartition the disk your root is mounted from:
+#
+#   Stage 1 (run FROM the internal install):  pocknix-uninstall-internal --disable-boot
+#     Removes ONLY the internal ROCKNIX boot FAT (it is not the root, so it's safe to drop while
+#     running). After a reboot the ABL can no longer boot internal, so the device boots the SD.
+#     (Equivalent to the ABL menu's "Uninstall ROCKNIX" — our boot partition is GPT-named ROCKNIX.)
+#
+#   Stage 2 (run FROM the SD, after rebooting to it):  pocknix-uninstall-internal
+#     Removes the leftover POCKNIX_ROOT and grows Android userdata back to fill the disk. Refuses to
+#     run if / is on the target device (i.e. don't run the full uninstall from internal).
+#
+# Never touches abl/xbl/modem/persist/super — only ROCKNIX, POCKNIX_ROOT, and userdata.
+set -euo pipefail
+
+DEVICE="${DEVICE:-/dev/sda}"
+BOOT_NAME="ROCKNIX"          # GPT name of the boot FAT  (pocknix-install-internal)
+ROOT_NAME="POCKNIX_ROOT"     # GPT name of the ext4 root
+DISABLE_BOOT=0 ; DRY_RUN=0 ; ASSUME_YES=0
+
+say()  { echo -e "[\033[1;34mpocknix-uninstall\033[0m] $*"; }
+die()  { echo -e "[\033[1;31mERROR\033[0m] $*" >&2; exit 1; }
+run()  { if [ "$DRY_RUN" = 1 ]; then echo "  + $*"; else "$@"; fi; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --disable-boot) DISABLE_BOOT=1 ;;
+    --dry-run)      DRY_RUN=1 ;;
+    --yes|-y)       ASSUME_YES=1 ;;
+    --device)       DEVICE="$2"; shift ;;
+    *) die "unknown arg: $1 (use --disable-boot | --dry-run | --yes | --device DEV)" ;;
+  esac
+  shift
+done
+
+[ "$(id -u)" = 0 ] || die "must run as root"
+for t in parted blkid lsblk findmnt wipefs; do command -v "$t" >/dev/null 2>&1 || die "missing tool: $t"; done
+[ -b "$DEVICE" ] || die "$DEVICE is not a block device"
+
+# partition lookup helper: echo the partition NUMBER for a GPT name (empty if absent)
+partnum() { parted -m -s "$DEVICE" print 2>/dev/null | awk -F: -v n="$1" '$6==n{print $1}'; }
+partdev() { case "$DEVICE" in *[0-9]) echo "${DEVICE}p$1" ;; *) echo "${DEVICE}$1" ;; esac; }
+
+BOOT_NUM="$(partnum "$BOOT_NAME" || true)"
+ROOT_NUM="$(partnum "$ROOT_NAME" || true)"
+
+# ---------------------------------------------------------------------------------------------------
+# Stage 1: disable internal boot (safe from the running internal system)
+# ---------------------------------------------------------------------------------------------------
+if [ "$DISABLE_BOOT" = 1 ]; then
+  [ -n "$BOOT_NUM" ] || die "no '$BOOT_NAME' boot partition on $DEVICE — already disabled?"
+  bdev="$(partdev "$BOOT_NUM")"
+  say "Stage 1: removing the internal boot FAT ($bdev, '$BOOT_NAME' #$BOOT_NUM)."
+  say "POCKNIX_ROOT is left intact; finish cleanup from the SD with: pocknix-uninstall-internal"
+  if [ "$ASSUME_YES" != 1 ] && [ "$DRY_RUN" != 1 ]; then
+    read -rp "Proceed? After reboot the device will boot the SD. [y/N]: " c; [[ $c =~ ^[Yy]$ ]] || die "aborted"
+  fi
+  mountpoint -q /flash && run umount /flash || true
+  run parted -s "$DEVICE" rm "$BOOT_NUM"   # kernel can't re-read a busy disk; the on-disk GPT IS updated
+  say "Done. The partition table is updated on disk (the running kernel keeps the old view)."
+  say "Now: power off, REMOVE then RE-INSERT the SD if needed, and boot — it should come up on the SD."
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------------------------------
+# Stage 2: full uninstall (must NOT be the disk we're booted from)
+# ---------------------------------------------------------------------------------------------------
+root_src="$(findmnt -no SOURCE / || true)"
+case "$root_src" in
+  "$DEVICE"|"$DEVICE"p[0-9]*|"$DEVICE"[0-9]*)
+    die "/ is on $DEVICE — you're booted from the internal install. Run with --disable-boot first, reboot to the SD, then re-run this." ;;
+esac
+
+[ -n "$ROOT_NUM" ] || [ -n "$BOOT_NUM" ] || die "no pocknix install found on $DEVICE (no $BOOT_NAME / $ROOT_NAME)"
+
+UD_NUM="$(partnum userdata || true)"
+[ -n "$UD_NUM" ] || die "no Android 'userdata' partition on $DEVICE — refusing to guess the layout"
+
+# userdata start + the highest end among userdata/ROCKNIX/POCKNIX_ROOT (in MiB), so we grow userdata
+# back over exactly the space install took. Read boundaries in MiB.
+read_mib() { parted -m -s "$DEVICE" unit MiB print | awk -F: -v n="$1" '$1==n{gsub("MiB","");print $2" "$3}'; }
+UD_START="$(read_mib "$UD_NUM" | awk '{printf "%d", $1}')"
+END=0
+for n in "$UD_NUM" "$BOOT_NUM" "$ROOT_NUM"; do
+  [ -n "$n" ] || continue
+  e="$(read_mib "$n" | awk '{printf "%d", $2}')"; [ "$e" -gt "$END" ] && END="$e"
+done
+[ "$UD_START" -gt 0 ] && [ "$END" -gt "$UD_START" ] || die "could not compute userdata boundaries"
+
+say "Plan on $DEVICE:"
+say "  remove ${ROOT_NAME:+$ROOT_NAME #$ROOT_NUM}  ${BOOT_NAME:+$BOOT_NAME #$BOOT_NUM}"
+say "  grow  userdata #$UD_NUM  ->  ${UD_START}MiB .. ${END}MiB  (reclaims the pocknix space)"
+say "  Android will reformat userdata on its next boot (its contents are wiped)."
+if [ "$ASSUME_YES" != 1 ] && [ "$DRY_RUN" != 1 ]; then
+  read -rp "Proceed? [y/N]: " c; [[ $c =~ ^[Yy]$ ]] || die "aborted"
+fi
+
+if [ -n "$ROOT_NUM" ]; then run parted -s "$DEVICE" rm "$ROOT_NUM"; fi
+BOOT_NUM="$(partnum "$BOOT_NAME" || true)"            # re-read: numbers can shift after an rm
+if [ -n "$BOOT_NUM" ]; then run parted -s "$DEVICE" rm "$BOOT_NUM"; fi
+UD_NUM="$(partnum userdata || true)"
+run parted -s "$DEVICE" rm "$UD_NUM"
+run parted -a optimal -s "$DEVICE" mkpart primary ext4 "${UD_START}MiB" "${END}MiB"
+
+if [ "$DRY_RUN" = 1 ]; then
+  say "(dry-run) would: name the new ${UD_START}MiB partition 'userdata' and wipe its fs signature"
+  exit 0
+fi
+
+# locate the just-created partition by its start offset, name it userdata, wipe any stale signature
+newnum="$(parted -m -s "$DEVICE" unit MiB print \
+  | awk -F: -v s="$UD_START" '$1 ~ /^[0-9]+$/ { st=$2; gsub("MiB","",st); if (int(st)==s) print $1 }' | head -1)"
+[ -n "$newnum" ] || die "could not locate the recreated userdata partition at ${UD_START}MiB"
+parted -s "$DEVICE" name "$newnum" userdata
+partprobe "$DEVICE" 2>/dev/null || true
+wipefs -a "$(partdev "$newnum")" 2>/dev/null || true   # Android reformats userdata on its next boot
+say "Done: userdata restored as partition #$newnum (${UD_START}–${END}MiB). Power off and boot."
+say "The SD/Android now boots; reinstall a fresh pocknix later with pocknix-install-internal."
