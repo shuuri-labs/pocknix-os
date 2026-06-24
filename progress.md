@@ -10,6 +10,12 @@ _Last updated: 2026-06-22 — Phase 4 STARTED: Plasma Mobile desktop session + g
 ---
 
 ## ⬜→🔨 Roadmap started (2026-06-23): kernel pkg → install-to-internal → waydroid → steam-bake
+STATUS: ✅ (1) kernel package (3a+3b) · ✅ (2) install-to-internal · ✅ (3) waydroid · ⬜ (4) steam-bake
+- **(3) Waydroid WORKS (2026-06-24):** two layers — kernel binder (ANDROID_BINDER_IPC+BINDERFS, now
+  in build-kernel.sh; `/proc/filesystems` shows binder) + the daemon (`waydroid` is in Arch
+  extra/ALARM, added to desktop.list; plasma-mobile only ships the settings KCM). `waydroid init`
+  downloads the Android image. Verified booting on the internal install.
+
 Agreed order (each de-risks the next): **(1) package the kernel** [keystone: uniform `pacman -U`
 deploy, atomic Image+modules, rollback, cheap kernel iteration for waydroid/DTS] → **(2) install.sh
 to internal** [fast UFS iteration; ref ROCKNIX `installtointernal`/`update.sh` + armada; ABL/Android
