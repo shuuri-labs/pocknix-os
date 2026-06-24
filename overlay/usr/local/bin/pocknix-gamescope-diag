@@ -1,0 +1,73 @@
+#!/bin/sh
+# pocknix-gamescope-diag — capture WHY gamescope is hung, to the FAT boot partition (macOS-readable),
+# so the "Creating headless backend" hang is debuggable with no keyboard/network. Runs as root (via
+# pocknix-gamescope-diag.service) so it can read every thread's kernel stack + strace. It waits for
+# gamescope to appear (the first-boot seed extract delays it on slow SD), lets it settle/hang, then
+# dumps the per-thread wait-channel + kernel stack + a short strace + seat/DRM state.
+OUT=/var/log/pocknix-gamescope-diag.txt
+
+copy_to_flash() {
+  if mountpoint -q /flash 2>/dev/null && cp "$OUT" /flash/pocknix-gamescope-diag.txt 2>/dev/null; then
+    sync; return
+  fi
+  mp=$(mktemp -d)
+  if mount /dev/disk/by-partlabel/system "$mp" 2>/dev/null || mount -L ROCKNIX "$mp" 2>/dev/null; then
+    cp "$OUT" "$mp/pocknix-gamescope-diag.txt" 2>/dev/null; sync; umount "$mp" 2>/dev/null
+  fi
+  rmdir "$mp" 2>/dev/null
+}
+
+# Wait up to ~6 min for gamescope (covers a slow first-boot seed extract).
+pid=""
+for _ in $(seq 1 180); do
+  pid=$(pgrep -x gamescope | head -1)
+  [ -n "$pid" ] && break
+  sleep 2
+done
+
+if [ -z "$pid" ]; then
+  { echo "=== pocknix gamescope hang diagnostic ==="; date
+    echo "gamescope never appeared within ~6 min."
+    echo "## pocknix-steam launch log (~deck)"; tail -n 150 /home/deck/pocknix-steam.log 2>/dev/null
+    echo "## steam/tar procs"; ps -eo pid,ppid,stat,etimes,comm | grep -iE 'steam|tar|zstd|gamescope' | grep -v grep
+  } > "$OUT" 2>&1
+  copy_to_flash; exit 0
+fi
+
+# Let it either render or hang.
+sleep 30
+pid=$(pgrep -x gamescope | head -1)
+
+{
+  echo "=== pocknix gamescope hang diagnostic ==="; date
+  echo "gamescope pid: ${pid:-<gone>}"
+  if [ -n "$pid" ]; then
+    echo
+    echo "## cmdline";  tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null; echo
+    echo "## state";    awk '{print "state="$3" ("$0")"}' "/proc/$pid/stat" 2>/dev/null | cut -c1-120
+    echo "## main wchan";   cat "/proc/$pid/wchan" 2>/dev/null; echo
+    echo "## main syscall"; cat "/proc/$pid/syscall" 2>/dev/null
+    echo
+    echo "## PER-THREAD wchan + kernel stack (the blocked thread is the smoking gun)"
+    for t in "/proc/$pid/task/"*; do
+      [ -d "$t" ] || continue
+      echo "-- tid $(basename "$t")  comm=$(cat "$t/comm" 2>/dev/null)  state=$(awk '{print $3}' "$t/stat" 2>/dev/null)  wchan=$(cat "$t/wchan" 2>/dev/null)"
+      cat "$t/stack" 2>/dev/null
+    done
+    echo
+    echo "## strace (5s, all threads)"; timeout 5 strace -p "$pid" -f 2>&1 | head -60
+    echo
+    echo "## who holds the GPU"; lsof /dev/dri/card0 2>/dev/null || echo "(lsof n/a)"
+  else
+    echo "gamescope exited during the settle window (crashed rather than hung)."
+  fi
+  echo
+  echo "## seat / logind"; loginctl 2>/dev/null; loginctl session-status 2>/dev/null | head -20
+  echo "## gamescope version + package"; pacman -Q gamescope 2>/dev/null; gamescope --version 2>&1 | head -3
+  echo
+  echo "## pocknix-steam launch log (~deck, tail)"; tail -n 150 /home/deck/pocknix-steam.log 2>/dev/null
+  echo
+  echo "## dmesg drm/msm/atomic/fence (tail)"; dmesg 2>/dev/null | grep -iE 'msm|drm|adreno|atomic|gpu|fence|dpu' | tail -50
+} > "$OUT" 2>&1
+
+copy_to_flash
