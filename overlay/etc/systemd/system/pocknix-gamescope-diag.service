@@ -1,0 +1,11 @@
+[Unit]
+Description=pocknix gamescope hang diagnostic (dumps why gamescope is stuck to the FAT boot partition)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pocknix-gamescope-diag
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

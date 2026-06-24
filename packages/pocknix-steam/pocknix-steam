@@ -27,9 +27,14 @@ LDLP="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu"
 SEED=/usr/share/pocknix-steam/steam-seed.tar.zst
 if [ ! -x "${CLIENT}" ]; then
   if [ -f "${SEED}" ]; then
-    echo "[pocknix-steam] seeding the baked Steam client (offline)..."
+    echo "[pocknix-steam] seeding the baked Steam client (offline, $(du -h "${SEED}" 2>/dev/null | cut -f1) — can take a FEW MINUTES on a slow SD, faster on internal)..."
     mkdir -p "${HOME}"
-    tar -C "${HOME}" -xf "${SEED}" || { echo "[pocknix-steam] seed extract failed; falling back to download" >&2; /usr/bin/pocknix-steam-install; }
+    # --checkpoint prints progress every N records so a slow SD extract isn't a silent "hang".
+    if tar -C "${HOME}" --checkpoint=2000 --checkpoint-action=echo='[pocknix-steam]   extracting… (%u records)' -xf "${SEED}"; then
+      echo "[pocknix-steam] seed extracted."
+    else
+      echo "[pocknix-steam] seed extract failed; falling back to download" >&2; /usr/bin/pocknix-steam-install
+    fi
   else
     /usr/bin/pocknix-steam-install
   fi
@@ -86,8 +91,15 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 # WITHOUT it and fail to load steamui.so's bundled libvpx.so.6 from steamrtarm64. Re-injecting it
 # with `env` right before the client restores it for the (non-secure) client. gamescope itself does
 # not need LD_LIBRARY_PATH (its libs are in the system paths).
-exec env -u WAYLAND_DISPLAY \
+# Tee gamescope's output to a log (it otherwise goes to tty1 and is lost). Write it in the deck HOME
+# (deck can't write /var/log — that failed with "Permission denied" and lost the log). pocknix-diag
+# picks it up. Truncated each launch. NOT exec'd so the pipe stays intact; pkill -TERM gamescope
+# (session switch) still works (targets by name).
+GS_LOG="${HOME}/pocknix-steam.log"
+set -o pipefail
+env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
-    env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles
+    env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles \
+  2>&1 | tee "${GS_LOG}"

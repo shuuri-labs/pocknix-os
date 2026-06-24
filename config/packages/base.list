@@ -58,3 +58,4 @@ htop
 jq
 zstd
 python-evdev
+strace               # debug: pocknix-gamescope-diag straces the hung gamescope

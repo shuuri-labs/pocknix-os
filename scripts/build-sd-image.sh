@@ -66,9 +66,11 @@ EOF
     log "installing overlay (diag + autologin + helpers)"
     rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
     chmod +x "${root}/usr/local/bin/pocknix-diag" \
+             "${root}/usr/local/bin/pocknix-gamescope-diag" \
              "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" \
              "${root}/usr/local/bin/pocknix-volumed" \
-             "${root}/usr/local/bin/pocknix-install-internal" 2>/dev/null || true
+             "${root}/usr/local/bin/pocknix-install-internal" \
+             "${root}/usr/local/bin/pocknix-uninstall-internal" 2>/dev/null || true
   fi
 
   # --- non-root 'deck' session user ---
@@ -174,7 +176,7 @@ EOF
   # "wired" connection in Steam, and the port is dual-role (DTS data-role="dual"), so leaving it
   # free lets the USB-C port act as a host for peripherals (keyboard, storage, …).
   chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
-        pocknix-diag.service pocknix-expand-root.service \
+        pocknix-diag.service pocknix-gamescope-diag.service pocknix-expand-root.service \
         >/dev/null 2>&1 || true
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
   # WirePlumber applies the AYN-Odin2 UCM (shipped by pocknix-bsp) automatically.

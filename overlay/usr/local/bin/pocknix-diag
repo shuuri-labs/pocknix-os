@@ -61,6 +61,31 @@ OUT=/var/log/pocknix-diag.txt
   journalctl -u NetworkManager --no-pager -n 140 2>/dev/null
   printf '\n## iwd journal (state/connect/auth/error events only)\n'
   journalctl -u iwd --no-pager 2>/dev/null | grep -iE 'state:|connect|error|fail|auth|handshake|agent|psk|secret|disconnect' | tail -40
+  printf '\n## graphical session: seat / logind (gamescope needs an ACTIVE seat0 session)\n'
+  loginctl 2>/dev/null || echo "(loginctl n/a)"
+  loginctl session-status 2>/dev/null | head -25 || true
+  echo "seatd: $(systemctl is-active seatd 2>/dev/null)  systemd-logind: $(systemctl is-active systemd-logind 2>/dev/null)"
+  printf '\n## graphical session: processes (etimes = seconds alive; STAT D/Z = stuck; tar/zstd = seed extract)\n'
+  ps -eo pid,ppid,stat,etimes,comm 2>/dev/null | grep -iE 'gamescope|steam|Xwayland|kwin|seatd|plasma|tar|zstd|cpio' | grep -v grep || echo "(no gamescope/steam/kwin/tar running)"
+  printf '\n## seed extract: Steam dir size (re-run the diag; growing = extract in progress, not hung)\n'
+  du -sh /home/deck/.local/share/Steam 2>/dev/null || echo "(no ~deck Steam dir yet)"
+  ls -1 /usr/share/pocknix-steam/steam-seed.tar.zst 2>/dev/null && echo "seed present (offline first-boot)" || echo "(no seed -> first boot downloads)"
+  printf '\n## graphical session: which session is selected\n'
+  cat /home/deck/.local/state/pocknix-session 2>/dev/null || echo "(none -> default gamescope)"
+  printf '\n## failed systemd units\n'; systemctl --failed --no-legend 2>/dev/null || true
+  printf '\n## gamescope/steam launch log (tail — DRM/seat/atomic errors land here)\n'
+  tail -n 120 /home/deck/pocknix-steam.log 2>/dev/null || echo "(no ~deck/pocknix-steam.log yet — extract still running, or session not launched)"
+  printf '\n## gamescope: what is it blocked on? (wchan = kernel wait; D = uninterruptible)\n'
+  for p in $(pgrep -x gamescope 2>/dev/null); do
+    echo "gamescope pid $p: state=$(cut -d' ' -f3 /proc/$p/stat 2>/dev/null) wchan=$(cat /proc/$p/wchan 2>/dev/null)"
+  done || echo "(no gamescope process)"
+  printf '\n## steam client logs (tail)\n'
+  for L in /home/deck/.local/share/Steam/logs/bootstrap_log.txt /home/deck/.local/share/Steam/logs/stderr.txt /home/deck/.steam/steam/logs/bootstrap_log.txt; do
+    [ -f "$L" ] && { echo "--- $L ---"; tail -n 25 "$L" 2>/dev/null; }
+  done
+  printf '\n## dmesg DRM/msm/gpu (gamescope display acquisition)\n'
+  dmesg 2>/dev/null | grep -iE 'msm|drm|adreno|gpu|atomic|a740' | tail -40
+
   printf '\n## suspend support\n'
   echo "mem_sleep: $(cat /sys/power/mem_sleep 2>/dev/null)"
   echo "state:     $(cat /sys/power/state 2>/dev/null)"

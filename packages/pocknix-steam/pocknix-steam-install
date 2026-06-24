@@ -61,7 +61,11 @@ if [ ! -d "${RUNTIME_DIR}" ]; then
   target=$(echo "${STEAM}"/steam-runtime-steamrt-arm64/steamrt3c_platform_*/files/lib/aarch64-linux-gnu/libibus-1.0.so.5.* | head -n1)
   [ -f "${target}" ] || die "libibus not found in runtime"
   mkdir -p "${STEAM}/lib/aarch64-linux-gnu"
-  ln -sf "${target}" "${STEAM}/lib/aarch64-linux-gnu/libibus-1.0.so.5"
+  # RELATIVE symlink (../../ back to ${STEAM}), like armada — HOME-agnostic so it survives the
+  # build-time bake (staging HOME) being tarred + extracted into ~deck. An ABSOLUTE target points at
+  # the bake's staging path and dangles after extraction, leaving steamwebhelper unable to load
+  # libibus-1.0.so.5 → it crash-loops and the Big-Picture UI never comes up.
+  ln -sfn "../../${target#"${STEAM}/"}" "${STEAM}/lib/aarch64-linux-gnu/libibus-1.0.so.5"
 fi
 
 # 2. native ARM64 Steam client (steamdeck_publicbeta linuxarm64). The manifest is binary VDF;
@@ -91,14 +95,11 @@ if [ ! -d "${CLIENT_DIR}" ]; then
   ln -sfn "../.local/share/Steam/ubuntu12_64" "${STEAM_DOT}/bin64"
 fi
 
-# 2b. Seed the OOBE-complete registry BEFORE first launch so the gamepadui skips the Steam Deck
-#     OOBE. Its "required update" step tries to update SteamOS (YieldingCheckForUpdateOS) — which
-#     we are not — and dead-ends with "Updater apply error: 2 / unable to download required update".
-#     Seed only if absent so we never clobber a live registry (login state etc.).
-if [ ! -f "${STEAM_DOT}/registry.vdf" ] && [ -f /usr/share/pocknix-steam/registry.vdf ]; then
-  cp /usr/share/pocknix-steam/registry.vdf "${STEAM_DOT}/registry.vdf"
-  log "Seeded OOBE-complete registry.vdf."
-fi
+# 2b. OOBE: we deliberately do NOT seed an OOBE-complete registry.vdf — the gamepadui OOBE RUNS so
+#     the user configures Wi-Fi (and language) on first boot, like SteamOS/armada. The OOBE's
+#     "required update" step (YieldingCheckForUpdateOS) no longer dead-ends because pocknix-steamos-shim
+#     ships a steamos-update that reports "no update available" (exit 7) instead of erroring. (To skip
+#     the OOBE instead, copy /usr/share/pocknix-steam/registry.vdf to ${STEAM_DOT}/registry.vdf.)
 
 # 3. Bootstrap the NATIVE client (NO FEX), exactly as armada: run the arm64 updater under a
 #    virtual X display (Xvfb) with steamrtarm64 FIRST on LD_LIBRARY_PATH (client-bundled libs:
