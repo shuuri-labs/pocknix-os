@@ -1,9 +1,0 @@
-#!/bin/bash
-# pocknix jupiter-biosupdate shim — Steam Deck BIOS/firmware update check (Steam calls
-# /usr/bin/steamos-polkit-helpers/jupiter-biosupdate; YieldingCheckForUpdateBIOS). The RP6 has no
-# Deck BIOS, so always "no update". Mirrors the steamos-update semantics: check -> 7, else 0.
-set -u
-case "${1:-}" in
-  check) exit 7 ;;   # no BIOS update available
-  *) exit 0 ;;
-esac
