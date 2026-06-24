@@ -97,8 +97,10 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 # (session switch) still works (targets by name).
 GS_LOG="${HOME}/pocknix-steam.log"
 set -o pipefail
+# Steam's gamepadui sizes its UI from the output's physical mm (DPI). 177x100 = armada's tested RP6
+# value (~275 DPI, handheld-correct UI); the old 508x286 was ~96 DPI -> a desktop monitor -> tiny UI.
 env -u WAYLAND_DISPLAY \
-  GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
+  GAMESCOPE_FAKE_OUTPUT_MM=177x100 \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles \
