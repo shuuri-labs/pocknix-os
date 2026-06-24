@@ -36,4 +36,13 @@ fi
 # way gamescope does (deck is in the 'seat' group -> can reach /run/seatd.sock). See progress.md.
 export LIBSEAT_BACKEND=seatd
 
+# XWayland socket dir: kwin only starts XWayland (needed by X11 apps — the native Steam client in
+# desktop mode) if /tmp/.X11-unix is a STICKY dir owned by root or us. The boot tmpfiles rule
+# (root:1777, pocknix-x11.conf) doesn't reliably survive a prior game-mode session: gamescope creates
+# /tmp/.X11-unix as deck:0755 (no sticky), which XWayland refuses -> kwin runs Wayland-only -> Steam
+# dies with "Unable to open a connection to X" (leaving orphan steam procs). Re-assert it here, right
+# before kwin: we run as deck, so chmod works when we or gamescope own it, and no-ops on root:1777.
+mkdir -p /tmp/.X11-unix 2>/dev/null || true
+chmod 1777 /tmp/.X11-unix 2>/dev/null || true
+
 exec startplasmamobile

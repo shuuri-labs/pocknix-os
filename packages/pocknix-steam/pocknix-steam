@@ -77,6 +77,20 @@ fi
 #    Leaving binfmt on breaks Steam's Proton compat-tool setup (x86 game content goes Wine->FEX
 #    directly, not via Linux binfmt). See overlay/etc/systemd/system/pocknix-fex-binfmt-off.service.
 
+# Self-heal a session SWITCH: steamos-session-select SIGTERMs gamescope to go to Plasma, but the
+# Steam client re-parents and keeps running (with its single-instance lock). On the way back the new
+# steam logs "Steam is already running, exiting", gamescope's primary child dies instantly, and the
+# supervisor hot-loops (black flashes). Clear any leftover Steam before launching so this instance
+# owns the session. Only ever runs at game-session START, when no legit Steam should be alive.
+uid="$(id -u)"
+if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhelper >/dev/null 2>&1; then
+  echo "[pocknix-steam] clearing a stale Steam from a previous session..."
+  env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -shutdown >/dev/null 2>&1 || true
+  for _ in $(seq 1 8); do pgrep -u "${uid}" -x steam >/dev/null 2>&1 || break; sleep 1; done
+  pkill -u "${uid}" -KILL -x steam        2>/dev/null || true
+  pkill -u "${uid}" -KILL -f steamwebhelper 2>/dev/null || true
+fi
+
 # RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
 # rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left

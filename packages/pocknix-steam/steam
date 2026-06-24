@@ -30,6 +30,21 @@ fi
 # Steam resolves legacy module paths (bin/vgui2_s.dll …) relative to getcwd — cd in like pocknix-steam.
 cd "${CLIENT_DIR}" 2>/dev/null || { echo "steam: missing ${CLIENT_DIR}" >&2; exit 1; }
 
+# The Steam client is X11-only — under the Plasma (kwin) desktop it needs DISPLAY -> XWayland, else it
+# dies with "Unable to open a connection to X" (and leaves orphan steam procs that wreck the next game
+# session). kwin starts XWayland because /tmp/.X11-unix exists (pocknix-x11.conf). Don't RELY on Plasma
+# exporting DISPLAY into our env (it isn't reliably propagated to app-grid launches) — derive it from
+# the live XWayland socket ourselves. Game mode doesn't need this (gamescope sets DISPLAY directly).
+if [ -z "${DISPLAY:-}" ]; then
+  for _s in /tmp/.X11-unix/X*; do
+    [ -S "${_s}" ] || continue
+    export DISPLAY=":${_s##*/X}"
+    echo "steam: derived DISPLAY=${DISPLAY} from the XWayland socket" >&2
+    break
+  done
+  [ -n "${DISPLAY:-}" ] || echo "steam: WARNING no XWayland socket in /tmp/.X11-unix — is the Plasma session up + kwin's XWayland running?" >&2
+fi
+
 # Keep the native ARM client pinned to steamdeck_publicbeta even in desktop mode — otherwise plain
 # `steam` can flip package/beta to steamdeck_stable, which then breaks the next game-mode launch
 # (steamwebhelper crash-loop / endless "Installing update"). See pocknix-steam.
