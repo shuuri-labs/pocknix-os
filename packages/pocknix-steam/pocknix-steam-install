@@ -73,14 +73,16 @@ if [ ! -d "${CLIENT_DIR}" ]; then
   mkdir -p "${STEAM}/package"; echo "${STEAM_ARM_CHANNEL}" > "${STEAM}/package/beta"
   # Full .steam symlink layout (matches a real Steam install + armada's generate-steam-bootstrap).
   # 'root' is the one we were missing: Steam execs $HOME/.steam/root/steam_msg.sh on errors.
+  # RELATIVE targets (../.local/share/Steam), like armada: makes the whole tree HOME-agnostic so a
+  # build-time bake into a staging HOME can be tarred and re-extracted into ~deck (the steam seed).
   mkdir -p "${STEAM_DOT}"
-  ln -sfn "${STEAM}"                "${STEAM_DOT}/steam"
-  ln -sfn "${STEAM}"                "${STEAM_DOT}/root"
-  ln -sfn "${STEAM}/linux32"        "${STEAM_DOT}/sdk32"
-  ln -sfn "${STEAM}/linux64"        "${STEAM_DOT}/sdk64"
-  ln -sfn "${STEAM}/linuxarm64"     "${STEAM_DOT}/sdkarm64"
-  ln -sfn "${STEAM}/ubuntu12_32"    "${STEAM_DOT}/bin32"
-  ln -sfn "${STEAM}/ubuntu12_64"    "${STEAM_DOT}/bin64"
+  ln -sfn "../.local/share/Steam"             "${STEAM_DOT}/steam"
+  ln -sfn "../.local/share/Steam"             "${STEAM_DOT}/root"
+  ln -sfn "../.local/share/Steam/linux32"     "${STEAM_DOT}/sdk32"
+  ln -sfn "../.local/share/Steam/linux64"     "${STEAM_DOT}/sdk64"
+  ln -sfn "../.local/share/Steam/linuxarm64"  "${STEAM_DOT}/sdkarm64"
+  ln -sfn "../.local/share/Steam/ubuntu12_32" "${STEAM_DOT}/bin32"
+  ln -sfn "../.local/share/Steam/ubuntu12_64" "${STEAM_DOT}/bin64"
 fi
 
 # 2b. Seed the OOBE-complete registry BEFORE first launch so the gamepadui skips the Steam Deck

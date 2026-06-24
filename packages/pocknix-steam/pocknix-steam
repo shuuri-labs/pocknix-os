@@ -21,9 +21,18 @@ CLIENT="${CLIENT_DIR}/steam"
 # aarch64 shim dir (libibus shim). steamrtarm64/steam re-execs into its runtime from here.
 LDLP="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu"
 
-# install the native client + runtime on first run
+# First run: lay down the native client + runtime. Prefer the BUILD-TIME bake (offline) — a seed
+# tarball of a fully-bootstrapped, HOME-agnostic Steam tree shipped in the image — so first boot
+# needs no network. Fall back to the network installer only if no seed is present.
+SEED=/usr/share/pocknix-steam/steam-seed.tar.zst
 if [ ! -x "${CLIENT}" ]; then
-  /usr/bin/pocknix-steam-install
+  if [ -f "${SEED}" ]; then
+    echo "[pocknix-steam] seeding the baked Steam client (offline)..."
+    mkdir -p "${HOME}"
+    tar -C "${HOME}" -xf "${SEED}" || { echo "[pocknix-steam] seed extract failed; falling back to download" >&2; /usr/bin/pocknix-steam-install; }
+  else
+    /usr/bin/pocknix-steam-install
+  fi
 fi
 
 # CRITICAL: Steam resolves its legacy module paths (bin/vgui2_s.dll …) RELATIVE TO getcwd.

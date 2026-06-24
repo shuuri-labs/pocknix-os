@@ -10,7 +10,17 @@ _Last updated: 2026-06-22 — Phase 4 STARTED: Plasma Mobile desktop session + g
 ---
 
 ## ⬜→🔨 Roadmap started (2026-06-23): kernel pkg → install-to-internal → waydroid → steam-bake
-STATUS: ✅ (1) kernel package (3a+3b) · ✅ (2) install-to-internal · ✅ (3) waydroid · ⬜ (4) steam-bake
+STATUS: ✅ (1) kernel package (3a+3b) · ✅ (2) install-to-internal · ✅ (3) waydroid · 🔨 (4) steam-bake (code, untested)
+- **(4) Steam build-time bake DONE in code (2026-06-24, untested):** `build-image.sh`
+  `bootstrap_steam_seed()` runs `pocknix-steam-install` in the rootfs chroot under a STAGING HOME
+  (armada's generate-steam-bootstrap model — Xvfb self-update, verify steamui.so + channel
+  `.installed`), strips per-session cruft (KEEPS registry.vdf = OOBE-skip), tars the HOME-agnostic
+  tree (pocknix-steam-install now uses RELATIVE `.steam` symlinks) into a re-seedable
+  `/usr/share/pocknix-steam/steam-seed.tar.zst`. The launcher extracts it offline on first run
+  (falls back to the network installer if no seed). Cached in `${CACHE_DIR}` (runs once;
+  `POCKNIX_REBOOTSTRAP_STEAM=1` rebakes); `POCKNIX_SKIP_STEAM_BAKE=1` skips → first boot downloads.
+  ⇒ first boot needs NO network (Wi-Fi preseed now truly optional). Risk to shake down in the VM:
+  running Steam headless in a chroot (Xvfb + private `/dev/shm` tmpfs + bwrap as root).
 - **(3) Waydroid WORKS (2026-06-24):** two layers — kernel binder (ANDROID_BINDER_IPC+BINDERFS, now
   in build-kernel.sh; `/proc/filesystems` shows binder) + the daemon (`waydroid` is in Arch
   extra/ALARM, added to desktop.list; plasma-mobile only ships the settings KCM). `waydroid init`

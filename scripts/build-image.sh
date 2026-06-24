@@ -181,6 +181,60 @@ install_firmware() {
 # NOTE: kernel integration (modules + Image, and replacing ALARM's linux-aarch64) is now done by
 # the linux-pocknix PACKAGE, installed in install_local_packages() — no separate install_kernel().
 
+# Bake the native ARM Steam client at BUILD time (armada's generate-steam-bootstrap model) so first
+# boot needs no network (drops the Wi-Fi-preseed requirement). Runs the on-device installer in the
+# rootfs chroot — which already has the steam deps + Xvfb — under a STAGING HOME, verifies the tree
+# is complete (steamui.so + the channel .installed manifest, else the seed would re-install online),
+# strips per-session cruft, and tars the HOME-agnostic tree (relative .steam symlinks) into a
+# re-seedable seed at /usr/share/pocknix-steam/steam-seed.tar.zst. pocknix-steam extracts it offline
+# on first run. Cached in ${CACHE_DIR} so it runs once (POCKNIX_REBOOTSTRAP_STEAM=1 forces a rebake);
+# POCKNIX_SKIP_STEAM_BAKE=1 skips entirely (no seed -> first boot downloads it, needs network).
+bootstrap_steam_seed() {
+  local root="$1"
+  local seed="${CACHE_DIR}/steam-seed.tar.zst"
+  local home="/var/lib/pocknix/steam-seed-home"
+  local steam="${home}/.local/share/Steam"
+
+  if [ -n "${POCKNIX_SKIP_STEAM_BAKE:-}" ]; then
+    warn "POCKNIX_SKIP_STEAM_BAKE set — not baking Steam; first boot will download it (needs network)"
+    return 0
+  fi
+
+  if [ ! -f "${seed}" ] || [ -n "${POCKNIX_REBOOTSTRAP_STEAM:-}" ]; then
+    log "baking native ARM Steam client (downloads + Xvfb self-update; can take several minutes)..."
+    # steam/bwrap need a real writable /dev/shm. chroot_mount binds host /dev (non-recursive), so the
+    # chroot has none. Make the chroot's /dev private FIRST so this tmpfs can't propagate up and
+    # shadow the HOST's /dev/shm (the bind aliases the same path), then mount a private tmpfs.
+    mount --make-rprivate "${root}/dev" 2>/dev/null || true
+    mount -t tmpfs tmpfs "${root}/dev/shm"
+    chroot "${root}" rm -rf "${home}"; chroot "${root}" mkdir -p "${home}"
+    if ! chroot "${root}" env HOME="${home}" /usr/bin/pocknix-steam-install; then
+      umount "${root}/dev/shm" 2>/dev/null || true
+      die "steam bake failed (pocknix-steam-install in chroot). Check network, or POCKNIX_SKIP_STEAM_BAKE=1 to defer to first boot."
+    fi
+    if ! chroot "${root}" test -f "${steam}/steamrtarm64/steamui.so" \
+       || ! chroot "${root}" test -f "${steam}/package/steam_client_steamdeck_publicbeta_linuxarm64.installed"; then
+      umount "${root}/dev/shm" 2>/dev/null || true
+      die "steam bake incomplete (no steamui.so / .installed) — seed would re-install on first boot. Re-run, or POCKNIX_SKIP_STEAM_BAKE=1."
+    fi
+    # strip per-session cruft (KEEP registry.vdf = OOBE-skip), then tar the HOME-agnostic tree
+    chroot "${root}" bash -c "set -e; cd '${home}'
+      rm -rf .local/share/Steam/logs .local/share/Steam/appcache/httpcache \
+             .local/share/Steam/appcache/cefdata .local/share/Steam/config/htmlcache
+      find . \( -name '*.log' -o -name '*.pid' -o -name '*.token' -o -name '*.crash' \) -delete
+      find . \( -type s -o -type p \) -delete
+      rm -f .local/share/Steam/ssfn* .steam/steam.pid .steam/steam.token
+      tar -caf /steam-seed.tar.zst .local .steam"
+    mkdir -p "${CACHE_DIR}"; cp "${root}/steam-seed.tar.zst" "${seed}"
+    chroot "${root}" rm -f /steam-seed.tar.zst; chroot "${root}" rm -rf "${home}"
+    umount "${root}/dev/shm" 2>/dev/null || true
+    ok "steam seed baked: ${seed} ($(du -h "${seed}" | cut -f1))"
+  else
+    log "using cached steam seed: ${seed} ($(du -h "${seed}" | cut -f1))"
+  fi
+  install -Dm644 "${seed}" "${root}/usr/share/pocknix-steam/steam-seed.tar.zst"
+}
+
 main() {
   # 1. base rootfs
   "${POCKNIX_ROOT}/scripts/bootstrap.sh"
@@ -211,6 +265,9 @@ main() {
   #    inside install_local_packages from build/kernel/out — run `make kernel` first.
   install_firmware "${ROOTFS_DIR}"
   install_local_packages "${ROOTFS_DIR}"
+
+  # 5. bake the native ARM Steam client into a re-seedable seed (offline first boot)
+  bootstrap_steam_seed "${ROOTFS_DIR}"
 
   chroot_umount "${ROOTFS_DIR}"; trap - EXIT
 
