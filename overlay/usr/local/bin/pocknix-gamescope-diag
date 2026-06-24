@@ -65,6 +65,14 @@ pid=$(pgrep -x gamescope | head -1)
   echo "## seat / logind"; loginctl 2>/dev/null; loginctl session-status 2>/dev/null | head -20
   echo "## gamescope version + package"; pacman -Q gamescope 2>/dev/null; gamescope --version 2>&1 | head -3
   echo
+  echo "## steam client logs (~deck/.local/share/Steam/logs — the webhelper/client crash lands here)"
+  for L in /home/deck/.local/share/Steam/logs/console_log.txt /home/deck/.local/share/Steam/logs/cef_log.txt \
+           /home/deck/.local/share/Steam/logs/bootstrap_log.txt /home/deck/.local/share/Steam/logs/webhelper.txt; do
+    [ -f "$L" ] && { echo "--- $L (tail 50) ---"; tail -n 50 "$L" 2>/dev/null; }
+  done
+  echo "## steam logs dir listing"; ls -la /home/deck/.local/share/Steam/logs/ 2>/dev/null
+  echo "## runtime launcher-service present?"; find /home/deck/.local/share/Steam -name 'steam-runtime-launcher-service*' 2>/dev/null | head
+  echo
   echo "## pocknix-steam launch log (~deck, tail)"; tail -n 150 /home/deck/pocknix-steam.log 2>/dev/null
   echo
   echo "## dmesg drm/msm/atomic/fence (tail)"; dmesg 2>/dev/null | grep -iE 'msm|drm|adreno|atomic|gpu|fence|dpu' | tail -50
