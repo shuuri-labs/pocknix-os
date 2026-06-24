@@ -217,13 +217,16 @@ bootstrap_steam_seed() {
       umount "${root}/dev/shm" 2>/dev/null || true
       die "steam bake incomplete (no steamui.so / .installed) — seed would re-install on first boot. Re-run, or POCKNIX_SKIP_STEAM_BAKE=1."
     fi
-    # strip per-session cruft (KEEP registry.vdf = OOBE-skip), then tar the HOME-agnostic tree
+    # strip per-session cruft AND registry.vdf (like armada) so the seed shows the OOBE on first boot
+    # — the user configures Wi-Fi there; pocknix-steamos-shim's steamos-update keeps the OOBE's
+    # required-update step from dead-ending. Then tar the HOME-agnostic tree.
     chroot "${root}" bash -c "set -e; cd '${home}'
       rm -rf .local/share/Steam/logs .local/share/Steam/appcache/httpcache \
              .local/share/Steam/appcache/cefdata .local/share/Steam/config/htmlcache
       find . \( -name '*.log' -o -name '*.pid' -o -name '*.token' -o -name '*.crash' \) -delete
       find . \( -type s -o -type p \) -delete
-      rm -f .local/share/Steam/ssfn* .steam/steam.pid .steam/steam.token
+      rm -f .local/share/Steam/ssfn* .local/share/Steam/registry.vdf \
+            .steam/registry.vdf .steam/steam.pid .steam/steam.token
       tar -caf /steam-seed.tar.zst .local .steam"
     mkdir -p "${CACHE_DIR}"; cp "${root}/steam-seed.tar.zst" "${seed}"
     chroot "${root}" rm -f /steam-seed.tar.zst; chroot "${root}" rm -rf "${home}"

@@ -86,8 +86,14 @@ W=1920; H=1080; REFRESH=120; ORIENT=left
 # WITHOUT it and fail to load steamui.so's bundled libvpx.so.6 from steamrtarm64. Re-injecting it
 # with `env` right before the client restores it for the (non-secure) client. gamescope itself does
 # not need LD_LIBRARY_PATH (its libs are in the system paths).
-exec env -u WAYLAND_DISPLAY \
+# Tee gamescope's output to a log (it otherwise goes to tty1 and is lost). pocknix-diag picks this up
+# so a hung/failed session is debuggable by pulling the SD. Truncated each launch. NOT exec'd so the
+# pipe stays intact; pkill -TERM gamescope (session switch) still works (targets by name).
+GS_LOG=/var/log/pocknix-steam.log
+set -o pipefail
+env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=508x286 \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
-    env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles
+    env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles \
+  2>&1 | tee "${GS_LOG}"
