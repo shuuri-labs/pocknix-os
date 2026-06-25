@@ -110,7 +110,10 @@ configure() {
   #    ALARM scx-scheds package, run --autopilot by pocknix-lavd.service) can load. BPF
   #    syscall/JIT are already on; a sched_ext program only attaches if the kernel exposes
   #    BTF at /sys/kernel/btf/vmlinux, which needs DEBUG_INFO_BTF=y AND pahole (dwarves)
-  #    present in the build VM at compile time.
+  #    present in the build VM at compile time. The base config also sets
+  #    DEBUG_INFO_REDUCED=y, which strips the type info BTF needs (BTF depends on
+  #    !DEBUG_INFO_REDUCED) — so we turn REDUCED off too, else olddefconfig silently
+  #    drops BTF *and* SCHED_CLASS_EXT (they vanish, with no "is not set" line).
   #  - default cpufreq governor performance -> schedutil: LAVD does its own per-core DVFS
   #    via scx_bpf_cpuperf_set(), which only takes effect under schedutil (the one governor
   #    that honours scheduler frequency hints). Under performance, clocks pin to max and
@@ -126,8 +129,9 @@ configure() {
     --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" \
     --module USBIP_CORE \
     --module USBIP_VHCI_HCD \
-    --enable SCHED_CLASS_EXT \
+    --disable DEBUG_INFO_REDUCED \
     --enable DEBUG_INFO_BTF \
+    --enable SCHED_CLASS_EXT \
     --disable CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
     --enable CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
 
