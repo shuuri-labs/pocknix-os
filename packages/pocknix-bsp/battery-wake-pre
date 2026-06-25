@@ -1,0 +1,13 @@
+#!/bin/sh
+# Disarm the pmic_glink 'battery' power-supply wakeup before suspend.
+#
+# The charger firmware on the ADSP pushes periodic battery-status updates over pmic_glink;
+# power_supply_changed() grabs this wakeup source via pm_stay_awake(), which aborts/breaks deep
+# sleep — on its own it produced a guaranteed ~5s spurious wake every cycle. On kernel 7.0.11 the
+# 'battery' wakeup source is attached to the psy device, so writing 'disabled' UNREGISTERS it and
+# pm_stay_awake() becomes a no-op (verified on-device: ~5s wakes -> minutes). The 'power/wakeup'
+# toggle is the right lever here (unlike the older kernel in docs/sm8550-suspend-wake-report.md,
+# where 'battery' was a free-standing source with no working toggle). Re-armed by the post hook.
+W=/sys/class/power_supply/battery/power/wakeup
+[ -w "${W}" ] && echo disabled > "${W}" 2>/dev/kmsg
+exit 0

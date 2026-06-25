@@ -3,7 +3,7 @@
 # InputPlumber composite-device config for the RP6 gamepad. Grows with audio/thermal.
 pkgname=pocknix-bsp
 pkgver=0.1.0
-pkgrel=10
+pkgrel=12
 pkgdesc="pocknix board support (RP6/SM8550): suspend hooks, SDAM breadcrumb, InputPlumber + audio UCM"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -11,15 +11,19 @@ license=('GPL2')
 depends=()
 optdepends=('inputplumber: gamepad -> Steam Input mapping (uses 01-rsinput-rp6.yaml)'
             'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin2 UCM)')
-# NOTE: a udev rule disarming power_supply wakeups was tried and removed — the
-# RP6 spurious deep-sleep wake is kernel-level (not gated by any power/wakeup
-# toggle); see docs/sm8550-suspend-wake-report.md. Needs a kernel/DT fix upstream.
+# NOTE on the spurious deep-sleep wake: on kernel 7.0.11 the 'battery' wakeup IS
+# gated by power/wakeup (battery-wake-{pre,post} hooks) — unlike the older kernel in
+# docs/sm8550-suspend-wake-report.md. That removes the frequent ~5s battery wake;
+# a rarer residual wake (pmic_glink/WiFi path) is still under investigation.
 source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'inputplumber-sleep-pre' 'inputplumber-sleep-post' '10-pocknix-deeponly.conf'
+        'battery-wake-pre' 'battery-wake-post'
+        'auto-resuspend-pre' 'auto-resuspend-post' '20-pocknix-powerkey.conf'
         '01-rsinput-rp6.yaml'
         'rp6-gamepad.yaml' '90-pocknix-backlight.rules' '60-pocknix-controllers.rules'
         'AYN-Odin2.conf' 'HiFi.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -33,15 +37,31 @@ package() {
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/001-inputplumber"
   install -Dm755 "${srcdir}/inputplumber-sleep-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/001-inputplumber"
+  # 002-battery-wake: disarm the pmic_glink 'battery' power-supply wakeup across sleep
+  # (its periodic charger-fw updates pm_stay_awake() the system out of deep sleep).
+  install -Dm755 "${srcdir}/battery-wake-pre" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/pre/002-battery-wake"
+  install -Dm755 "${srcdir}/battery-wake-post" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/post/002-battery-wake"
   install -Dm755 "${srcdir}/sdam-debug-pre" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/003-sdam-debug"
   install -Dm755 "${srcdir}/sdam-debug-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/003-sdam-debug"
+  # 004-auto-resuspend: go back to sleep on a spurious (non-power-button) wake — the
+  # Layer-3 pmic_glink/IPCC doorbell can't be masked, so re-suspend instead. Fails open;
+  # escape hatch: touch /run/pocknix-no-resuspend.
+  install -Dm755 "${srcdir}/auto-resuspend-pre" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/pre/004-auto-resuspend"
+  install -Dm755 "${srcdir}/auto-resuspend-post" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/post/004-auto-resuspend"
 
   # Pin deep-only suspend (drop systemd's mem->standby->freeze fall-through; s2idle
   # can wedge on SM8550). systemd reads sleep.conf drop-ins from this vendor dir.
   install -Dm644 "${srcdir}/10-pocknix-deeponly.conf" \
     "${pkgdir}/usr/lib/systemd/sleep.conf.d/10-pocknix-deeponly.conf"
+  # Power button: wake-and-stay (not poweroff), so auto-resuspend can tell user wakes apart.
+  install -Dm644 "${srcdir}/20-pocknix-powerkey.conf" \
+    "${pkgdir}/usr/lib/systemd/logind.conf.d/20-pocknix-powerkey.conf"
 
   # InputPlumber composite-device config + capability_map for the RP6 RSInput gamepad
   # (the map fixes the driver's X/Y swap + d-pad; device config targets the Steam Deck pad).
