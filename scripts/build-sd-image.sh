@@ -71,7 +71,6 @@ EOF
     log "installing overlay (diag + autologin + helpers)"
     rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
     chmod +x "${root}/usr/local/bin/pocknix-diag" \
-             "${root}/usr/local/bin/pocknix-gamescope-diag" \
              "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" \
              "${root}/usr/local/bin/pocknix-volumed" \
              "${root}/usr/local/bin/pocknix-install-internal" \
@@ -182,7 +181,7 @@ EOF
   # free lets the USB-C port act as a host for peripherals (keyboard, storage, …).
   chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
         bluetooth \
-        pocknix-diag.service pocknix-gamescope-diag.service pocknix-expand-root.service \
+        pocknix-diag.service pocknix-expand-root.service \
         pocknix-lavd.service \
         >/dev/null 2>&1 || true
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
