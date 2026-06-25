@@ -105,6 +105,17 @@ configure() {
   #    target as a virtual USB device via vhci-hcd; without it InputPlumber hides the
   #    physical gamepad but fails to create the virtual one, so Steam sees no controller
   #    ("modprobe: FATAL: Module vhci-hcd not found"). =m so InputPlumber modprobes it.
+  #  - sched_ext (SCHED_CLASS_EXT) + BTF (DEBUG_INFO_BTF): the pluggable BPF scheduler
+  #    class, so scx_lavd (the gaming/latency-aware, big.LITTLE-aware scheduler from the
+  #    ALARM scx-scheds package, run --autopilot by pocknix-lavd.service) can load. BPF
+  #    syscall/JIT are already on; a sched_ext program only attaches if the kernel exposes
+  #    BTF at /sys/kernel/btf/vmlinux, which needs DEBUG_INFO_BTF=y AND pahole (dwarves)
+  #    present in the build VM at compile time.
+  #  - default cpufreq governor performance -> schedutil: LAVD does its own per-core DVFS
+  #    via scx_bpf_cpuperf_set(), which only takes effect under schedutil (the one governor
+  #    that honours scheduler frequency hints). Under performance, clocks pin to max and
+  #    LAVD's frequency intelligence — and the handheld's thermal headroom — is lost. Still
+  #    runtime-overridable (echo performance > .../cpufreq/policy*/scaling_governor) to A/B.
   "${KSRC}/scripts/config" --file "${KSRC}/.config" \
     --enable FW_LOADER_COMPRESS \
     --enable FW_LOADER_COMPRESS_ZSTD \
@@ -114,7 +125,11 @@ configure() {
     --enable ANDROID_BINDERFS \
     --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" \
     --module USBIP_CORE \
-    --module USBIP_VHCI_HCD
+    --module USBIP_VHCI_HCD \
+    --enable SCHED_CLASS_EXT \
+    --enable DEBUG_INFO_BTF \
+    --disable CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
+    --enable CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
 
   # olddefconfig auto-accepts defaults for any new symbols (no prompts, no stdin).
   # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,
