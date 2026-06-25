@@ -181,6 +181,7 @@ EOF
   # "wired" connection in Steam, and the port is dual-role (DTS data-role="dual"), so leaving it
   # free lets the USB-C port act as a host for peripherals (keyboard, storage, …).
   chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
+        bluetooth \
         pocknix-diag.service pocknix-gamescope-diag.service pocknix-expand-root.service \
         >/dev/null 2>&1 || true
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
