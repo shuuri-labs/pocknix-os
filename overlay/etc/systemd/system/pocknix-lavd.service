@@ -7,6 +7,11 @@ After=multi-user.target
 #   /sys/kernel/btf/vmlinux exists iff DEBUG_INFO_BTF=y + pahole ran at build time.
 ConditionPathExists=/sys/kernel/sched_ext
 ConditionPathExists=/sys/kernel/btf/vmlinux
+# If the BPF object can't load (e.g. a kernel missing the tracing/BPF-events stack that
+# scx_lavd's bpf_trace_printk + futex/execve tracepoints need), give up after a few tries
+# instead of crash-looping and flooding the journal.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple

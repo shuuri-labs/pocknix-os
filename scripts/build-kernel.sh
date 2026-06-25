@@ -114,6 +114,13 @@ configure() {
   #    DEBUG_INFO_REDUCED=y, which strips the type info BTF needs (BTF depends on
   #    !DEBUG_INFO_REDUCED) — so we turn REDUCED off too, else olddefconfig silently
   #    drops BTF *and* SCHED_CLASS_EXT (they vanish, with no "is not set" line).
+  #  - tracing / BPF events (FTRACE, KPROBES, KPROBE_EVENTS, PERF_EVENTS -> BPF_EVENTS):
+  #    scx_lavd's BPF objects call bpf_trace_printk and attach futex/execve tracepoints.
+  #    The ROCKNIX config ships FTRACE off, so bpf_trace_printk's helper proto is absent
+  #    and the verifier rejects the whole scheduler ("program of this type cannot use
+  #    helper bpf_trace_printk", BPF load -EINVAL -> scx_lavd crash-loops). BPF_EVENTS is
+  #    def_bool y once (KPROBE_EVENTS||UPROBE_EVENTS) + PERF_EVENTS are on, which need the
+  #    tracing core (FTRACE) + KPROBES.
   #  - default cpufreq governor performance -> schedutil: LAVD does its own per-core DVFS
   #    via scx_bpf_cpuperf_set(), which only takes effect under schedutil (the one governor
   #    that honours scheduler frequency hints). Under performance, clocks pin to max and
@@ -132,6 +139,12 @@ configure() {
     --disable DEBUG_INFO_REDUCED \
     --enable DEBUG_INFO_BTF \
     --enable SCHED_CLASS_EXT \
+    --enable FTRACE \
+    --enable KPROBES \
+    --enable KPROBE_EVENTS \
+    --enable UPROBE_EVENTS \
+    --enable PERF_EVENTS \
+    --enable BPF_EVENTS \
     --disable CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
     --enable CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
 
