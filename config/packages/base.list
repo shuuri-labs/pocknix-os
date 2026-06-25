@@ -61,7 +61,7 @@ python-evdev
 strace               # debug: pocknix-gamescope-diag straces the hung gamescope
 bluez                # Bluetooth stack (bluetoothd) — controllers, audio, KDE/Steam BT
 bluez-utils          # bluetoothctl + rfkill helpers
-sbc                  # SBC codec for PipeWire Bluetooth audio (A2DP + HFP/mSBC mic). Without a codec
-                     #   lib, BT headphones pair but produce no audio sink. HD codecs (AptX/AAC =
-                     #   libfreeaptx/libfdk-aac in extra; LDAC = AUR) are optional quality add-ons.
-sbc
+sbc                  # SBC codec — PipeWire BT audio A2DP baseline + HFP/mSBC mic. Without a codec
+                     #   lib, BT headphones pair but produce no audio sink.
+libfreeaptx          # AptX / AptX-HD / AptX-LL (low-latency) codecs for PipeWire BT audio.
+                     #   LDAC needs ldacbt-libs (AUR); AAC needs libfdk-aac (extra) — add if wanted.
