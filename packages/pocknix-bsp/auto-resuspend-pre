@@ -1,0 +1,8 @@
+#!/bin/sh
+# Record the power-key IRQ count before suspend, so the post hook can tell a USER wake
+# (power button -> pwrkey IRQ fires) from a spurious ADSP/pmic_glink wake (pwrkey does NOT
+# fire — that wake arrives via the IRQF_NO_SUSPEND IPCC line, see docs/sm8550-suspend-wake-report.md).
+# Prints "NONE" if no pwrkey line is found, so the post hook can fail open.
+awk '/pwrkey/{f=1; for(i=2;i<=NF;i++) if($i ~ /^[0-9]+$/) s+=$i} END{print (f ? s : "NONE")}' \
+  /proc/interrupts > /run/pocknix-pwrkey.count 2>/dev/null || true
+exit 0
