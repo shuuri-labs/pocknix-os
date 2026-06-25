@@ -1,0 +1,31 @@
+#!/bin/sh
+# Option B: unplug the InputPlumber virtual controller before suspend.
+#
+# Why: with target_devices: [deck], InputPlumber emulates a Steam Deck pad as a
+# virtual USB device over USB/IP (vhci_hcd). vhci_hcd hard-refuses to suspend while
+# any virtual device is attached -- "vhci_hcd.0: We have N active connection. Do not
+# suspend." -> platform_pm_suspend returns -16 (-EBUSY) -> the WHOLE system suspend
+# aborts. (ROCKNIX dodges this by using the ds5 target, which is uhid, not USB/IP.)
+#
+# So stop InputPlumber (which detaches the vhci device) before sleep; the post hook
+# restarts it on resume. A flag in /run records that we stopped it, so we only
+# restart it if it was actually running (don't start it if the user disabled it).
+STATUS=/sys/devices/platform/vhci_hcd.0/status
+FLAG=/run/pocknix-inputplumber-resume
+
+if systemctl is-active --quiet inputplumber; then
+  : > "${FLAG}"
+  systemctl stop inputplumber
+fi
+
+# `systemctl stop` returns once the process is gone, but give the kernel a moment to
+# finish tearing down the virtual USB port. Wait (max ~3s) until no port has an open
+# socket (column 6 == 000000 on every non-header row), so suspend isn't aborted by a
+# still-attached port.
+i=0
+while [ -r "${STATUS}" ] && awk 'NR>1 && $6 != "000000" {f=1} END{exit !f}' "${STATUS}" 2>/dev/null; do
+  [ "${i}" -ge 30 ] && break
+  i=$((i + 1))
+  sleep 0.1
+done
+exit 0

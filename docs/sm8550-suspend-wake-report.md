@@ -2,6 +2,29 @@
 
 Findings from on-device testing, to share with the SM8550 suspend/resume maintainer.
 
+> ## 2026-06-25 update — TWO separate layers, don't conflate them
+>
+> Running the same kernel under **pocknix** surfaced that suspend was failing for a
+> *different, new* reason that masked the original spurious wake below:
+>
+> **Layer 1 (regression, now fixed in userspace) — `vhci_hcd` vetoes suspend.** pocknix
+> sets the InputPlumber `target_devices: [deck]`. The `deck` (Steam Deck) target emulates
+> the pad as a **virtual USB device over USB/IP (`vhci_hcd`)**. `vhci_hcd` hard-refuses to
+> suspend while any virtual device is attached — `vhci_hcd.0: We have 1 active connection.
+> Do not suspend.` → `platform_pm_suspend returns -16` (`-EBUSY`) → the whole system suspend
+> aborts *before sleeping*. Signature: `echo mem > /sys/power/state` returns `EBUSY`
+> instantly, `pm_wakeup_irq` = ENODATA (nothing slept to be woken). ROCKNIX avoids this by
+> using the `ds5` target (uhid, not USB/IP). **Fix (Option B):** `pocknix-bsp` sleep.d hooks
+> `001-inputplumber` stop InputPlumber before suspend (detaching the vhci device) and restart
+> it on resume. Option A alternative = switch the target to `ds5`/`xb360` (both uhid). Also
+> pinned `SuspendState=mem` (`10-pocknix-deeponly.conf`) to stop systemd falling deep→s2idle.
+>
+> **Layer 2 (original, still open) — the battery/pmic_glink spurious wake below.** Once
+> Layer 1 is fixed the device *does* enter deep sleep, then self-wakes after a few–30s — the
+> exact wake documented in the rest of this report. Still needs the `standby-wake-filter` /
+> kernel disarm. Attribute it now with the `wakeup_sources` diff test below (it finally
+> sleeps long enough to measure).
+
 ## Environment
 - Kernel **7.0.11** = ROCKNIX SM8550 + `thor-suspend-fixes` + RP6 delta (built fresh, GCC 16.1).
 - **Retroid Pocket 6**, minimal Arch Linux ARM userland (pocknix-os), booted from SD.

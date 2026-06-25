@@ -3,7 +3,7 @@
 # InputPlumber composite-device config for the RP6 gamepad. Grows with audio/thermal.
 pkgname=pocknix-bsp
 pkgver=0.1.0
-pkgrel=9
+pkgrel=10
 pkgdesc="pocknix board support (RP6/SM8550): suspend hooks, SDAM breadcrumb, InputPlumber + audio UCM"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -14,10 +14,12 @@ optdepends=('inputplumber: gamepad -> Steam Input mapping (uses 01-rsinput-rp6.y
 # NOTE: a udev rule disarming power_supply wakeups was tried and removed — the
 # RP6 spurious deep-sleep wake is kernel-level (not gated by any power/wakeup
 # toggle); see docs/sm8550-suspend-wake-report.md. Needs a kernel/DT fix upstream.
-source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post' '01-rsinput-rp6.yaml'
+source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
+        'inputplumber-sleep-pre' 'inputplumber-sleep-post' '10-pocknix-deeponly.conf'
+        '01-rsinput-rp6.yaml'
         'rp6-gamepad.yaml' '90-pocknix-backlight.rules' '60-pocknix-controllers.rules'
         'AYN-Odin2.conf' 'HiFi.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -25,10 +27,21 @@ package() {
     "${pkgdir}/usr/lib/systemd/system-sleep/pocknix-sleep"
 
   # suspend/resume hooks (run by the hook above, in name order)
+  # 001-inputplumber: drop the USB/IP virtual controller before sleep so vhci_hcd
+  # doesn't veto suspend (the `deck` target attaches over USB/IP); restore on resume.
+  install -Dm755 "${srcdir}/inputplumber-sleep-pre" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/pre/001-inputplumber"
+  install -Dm755 "${srcdir}/inputplumber-sleep-post" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/post/001-inputplumber"
   install -Dm755 "${srcdir}/sdam-debug-pre" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/003-sdam-debug"
   install -Dm755 "${srcdir}/sdam-debug-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/003-sdam-debug"
+
+  # Pin deep-only suspend (drop systemd's mem->standby->freeze fall-through; s2idle
+  # can wedge on SM8550). systemd reads sleep.conf drop-ins from this vendor dir.
+  install -Dm644 "${srcdir}/10-pocknix-deeponly.conf" \
+    "${pkgdir}/usr/lib/systemd/sleep.conf.d/10-pocknix-deeponly.conf"
 
   # InputPlumber composite-device config + capability_map for the RP6 RSInput gamepad
   # (the map fixes the driver's X/Y swap + d-pad; device config targets the Steam Deck pad).
