@@ -17,6 +17,7 @@
 # personal learning journal + working-conventions doc — not part of the project
 /learnings.md
 /conventions.md
+/suspend-resume-writeup.md
 
 # macOS / editor cruft
 .DS_Store
