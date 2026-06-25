@@ -6,24 +6,25 @@
 # steamos-update + armada-update, so when real OTA is built later it's a drop-in body swap.
 pkgname=pocknix-steamos-shim
 pkgver=0.1.0
-pkgrel=1
-pkgdesc="SteamOS update/branch/BIOS helper stubs for the Steam Deck UI on a non-SteamOS base (until real OTA)"
+pkgrel=2
+pkgdesc="SteamOS update/branch helper stubs for the Steam Deck UI on a non-SteamOS base (until real OTA)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-source=('steamos-update' 'steamos-select-branch' 'jupiter-biosupdate' 'jupiter-dock-updater')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+source=('steamos-update' 'steamos-select-branch')
+sha256sums=('SKIP' 'SKIP')
 
 package() {
   # Steam calls the OS-update helper by its FULL polkit-helper path, not via PATH — verified in
   # webhelper_js.txt: "… /usr/bin/steamos-polkit-helpers/steamos-update". Install it there (and the
-  # plain /usr/bin/ path the underlying check uses).
+  # plain /usr/bin/ path the underlying check uses). This is the OOBE "required update" fix
+  # (YieldingCheckForUpdateOS -> steamos-update check -> exit 7 -> "up to date").
   install -Dm755 "${srcdir}/steamos-update"        "${pkgdir}/usr/bin/steamos-polkit-helpers/steamos-update"
   install -Dm755 "${srcdir}/steamos-update"        "${pkgdir}/usr/bin/steamos-update"
   install -Dm755 "${srcdir}/steamos-select-branch" "${pkgdir}/usr/bin/steamos-select-branch"
-  # Firmware/BIOS update stubs. Steam calls jupiter-initial-firmware-update (seen in logs);
-  # keep biosupdate/dock-updater too (Deck UI references them). All report "no update".
-  install -Dm755 "${srcdir}/jupiter-biosupdate"    "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-initial-firmware-update"
-  install -Dm755 "${srcdir}/jupiter-biosupdate"    "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-biosupdate"
-  install -Dm755 "${srcdir}/jupiter-dock-updater"  "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-dock-updater"
+  # DO NOT shim jupiter-biosupdate / jupiter-dock-updater / jupiter-initial-firmware-update. Steam's
+  # BIOS check reads their exit codes with the OPPOSITE convention to steamos-update (it read our
+  # `exit 7` as "BIOS update available"), and a present dock-updater makes Steam think a dock is
+  # plugged in — both produced spurious "update available" prompts. armada ships neither; with the
+  # helper absent Steam gets 127 ("no such capability") and shows nothing. Leave them un-shimmed.
 }
