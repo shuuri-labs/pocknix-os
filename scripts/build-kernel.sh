@@ -84,6 +84,21 @@ install_dts() {
   done
 }
 
+# Vendor downstream trace events (e.g. include/trace/events/qcom_haptics.h) still use the
+# pre-6.10 two-argument __assign_str(dst, src); kernel 6.10+ made it one-arg (the src is now
+# taken from the __string(dst, src) declaration). These never compiled while tracing was off,
+# but enabling FTRACE/BPF_EVENTS (for scx_lavd, see configure()) turns TRACEPOINTS on, so every
+# built driver's TRACE_EVENT expands for real and the stale ones break the build with
+# "macro '__assign_str' passed 2 arguments, but takes just 1". Apply upstream's mechanical
+# migration — drop the redundant 2nd arg — to every trace-event-defining header in the tree.
+# Only stale two-arg call sites match; correct one-arg sites (no comma) and __assign_str_len
+# are untouched. (__string itself is unchanged and stays two-arg.)
+fixup_trace_events() {
+  log "fixing stale two-arg __assign_str() in vendor trace events (post-6.10 one-arg API)"
+  grep -rlZ --include='*.h' -e 'DECLARE_EVENT_CLASS' -e 'TRACE_EVENT' "${KSRC}" 2>/dev/null \
+    | xargs -0 -r sed -i -E 's/__assign_str\(([^,()]+),[^()]*\)/__assign_str(\1)/g'
+}
+
 configure() {
   log "configuring kernel (.config from linux.aarch64.conf; no embedded initramfs)"
   sed -e "s|@DEVICENAME@|${DEVICE}|g" \
@@ -217,6 +232,7 @@ main() {
   fetch_source
   apply_patches
   install_dts
+  fixup_trace_events
   configure
   build_kernel
   stage
