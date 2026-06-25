@@ -77,19 +77,34 @@ apply here.
 (MonsterRider) was an informal description, not a real mechanism. No distro has solved SM8550
 deep-sleep; jaewun's patches are experimental and unmerged. We're on our own.
 
+### Layer 3 — wake message CONFIRMED (2026-06-25)
+
+The `1010-DEBUG-...` logging patch (a `dev_info` of every `qcom_battmgr_callback` opcode)
+nailed it. Filtered `dmesg`:
+
+```
+[105.759] PM: suspend entry (deep)
+[106.298] qcom_battmgr ... pocknix-wakedbg: rx opcode 0x7      <- the wake
+[109.277] PM: suspend exit
+```
+
+The flood of `0x30` (`BATTMGR_BAT_PROPERTY_GET`) is just the driver polling while awake. The
+**first unsolicited message after suspend entry is `0x7` = `BATTMGR_NOTIFICATION`** — the
+charger firmware's push, which rings the `IRQF_NO_SUSPEND` IPCC line ~0.5s into sleep. So the
+Layer-3 wake is definitively the ADSP `BATTMGR_NOTIFICATION`.
+
 ### Layer 3 — the two paths forward
 
-1. **Kernel/firmware (the real fix, R&D).** Stop the firmware from *sending* the message,
-   since we can't mask the IRQ. `qcom_battmgr` has `BATTMGR_REQUEST_NOTIFICATION` (the AP
-   subscribing to pushes) and **no PM ops at all** — it subscribes at probe and never
-   unsubscribes. NOTE: the request struct is `{battery_id, power_state, low_capacity,
-   high_capacity}` — there is **no clean enable/disable field** (an earlier read of an `enable`
-   field was a mistake; that field is in the unrelated `charge_ctrl` struct). So a kernel fix
-   is experimental: add suspend/resume PM ops that re-subscribe with `low/high_capacity`
-   thresholds set to "never," or otherwise quiesce the source. First step: a **logging patch**
-   to confirm exactly which message wakes us (battmgr vs UCSI vs another ADSP channel) before
-   patching blind. Kernel iterates cheaply via `pacman -U linux-pocknix` (alpm hook rebuilds
-   `/flash/KERNEL`), no reflash.
+1. **Kernel/firmware (the real fix, R&D — uncertain).** Stop the firmware from *sending* the
+   `0x7` notification during suspend, since we can't mask the IPCC IRQ. `qcom_battmgr` subscribes
+   via `BATTMGR_REQUEST_NOTIFICATION` (worker, all-zero `{battery_id, power_state, low_capacity,
+   high_capacity}`) at probe and has **no PM ops** — it never unsubscribes, and the protocol has
+   **no documented disable opcode** (the `enable` field I first cited is in the unrelated
+   `charge_ctrl` struct). So a kernel fix means adding suspend/resume PM ops that re-subscribe
+   with notification-suppressing params (e.g. capacity thresholds set to "never") and restore on
+   resume — experimental, against undocumented firmware semantics. Kernel iterates cheaply via
+   `pacman -U linux-pocknix` (alpm hook rebuilds `/flash/KERNEL`), no reflash, so it's tractable
+   to try, but may not work.
 
 2. **Auto-resuspend safety net (usable now).** `pocknix-bsp` sleep.d `004-auto-resuspend`:
    on resume, if the **power key did not fire** (compare the `pwrkey` count in `/proc/interrupts`
