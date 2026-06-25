@@ -190,12 +190,20 @@ mount "$BOOT_PART" "$BMNT"; mount "$ROOT_PART" "$RMNT"
 # boot FAT is the only ROCKNIX-labelled FAT that isn't on the internal $DEVICE.
 SD_BOOT="$(blkid -t LABEL="$BOOT_FAT_LABEL" -o device 2>/dev/null | grep -v "^${DEVICE}" | head -1 || true)"
 [ -n "$SD_BOOT" ] || die "couldn't find the SD boot partition (LABEL=$BOOT_FAT_LABEL) to copy KERNEL from"
-mount -o ro "$SD_BOOT" "$SDMNT"
-[ -f "$SDMNT/KERNEL" ] || die "no KERNEL on the SD boot partition ($SD_BOOT)"
-say "Copying boot files (KERNEL + KERNEL.md5) from $SD_BOOT ..."
-cp -a "$SDMNT/." "$BMNT/"                  # KERNEL, KERNEL.md5, and anything else the ABL needs
-cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"       # rollback copy (Phase 3b hook keeps this updated)
-umount "$SDMNT"
+# The SD boot FAT is usually ALREADY mounted (the SD image mounts it on /flash via fstab). vfat can't
+# be re-mounted RO while it's mounted RW elsewhere ("Can't mount, would change RO state"), so reuse
+# the existing mountpoint when there is one; only mount it ourselves otherwise.
+SD_SRC="$(findmnt -nro TARGET "$SD_BOOT" 2>/dev/null | head -1)"
+if [ -n "$SD_SRC" ]; then
+  did_sd_mount=0; say "Copying boot files from $SD_BOOT (already mounted at $SD_SRC) ..."
+else
+  mount -o ro "$SD_BOOT" "$SDMNT"; SD_SRC="$SDMNT"; did_sd_mount=1
+  say "Copying boot files (KERNEL + KERNEL.md5) from $SD_BOOT ..."
+fi
+[ -f "$SD_SRC/KERNEL" ] || die "no KERNEL on the SD boot partition ($SD_BOOT at $SD_SRC)"
+cp -a "$SD_SRC/." "$BMNT/"                  # KERNEL, KERNEL.md5, and anything else the ABL needs
+cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"        # rollback copy (Phase 3b hook keeps this updated)
+[ "$did_sd_mount" = 1 ] && umount "$SDMNT" || true
 
 # Clone the running rootfs onto the internal ext4 (stay on the root fs; skip virtual + mountpoints).
 say "Cloning rootfs to $ROOT_PART (this takes a few minutes) ..."
