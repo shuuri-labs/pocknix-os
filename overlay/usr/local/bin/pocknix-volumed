@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
 # pocknix-volumed — make the RP6 volume rocker actually change volume.
 #
-# The rocker emits plain KEY_VOLUMEUP / KEY_VOLUMEDOWN (gpio-keys). Steam's gamepadui shows the volume
-# OSD on these but doesn't change the volume — its volume action is tied to the Steam Deck controller's
-# volume buttons, not generic KEY_VOLUME* (the Settings>Audio slider works because it talks to PipeWire
-# directly). So we watch the keys WITHOUT grabbing them (Steam still gets them for the OSD) and call
-# wpctl as the 'deck' user, whose PipeWire owns the sink. Runs as root (reads any input device).
-import sys, subprocess, select
+# The rocker emits plain KEY_VOLUMEUP / KEY_VOLUMEDOWN on the physical `gpio-keys` device (buttons
+# wired to SoC GPIO pins). Steam's gamepadui shows the volume OSD on these but doesn't change the
+# volume (its volume action is tied to the Steam Deck controller's volume buttons, not generic
+# KEY_VOLUME*; the Settings>Audio slider works because it talks to PipeWire directly). So we watch the
+# keys WITHOUT grabbing them (Steam still gets them for the OSD) and call wpctl on deck's PipeWire.
+#
+# We deliberately watch ONLY the physical `gpio-keys` device, NOT "every device that reports volume
+# keys." gpio-keys is real hardware: it exists from boot to shutdown and never disappears, so its fd
+# can never hang up -> no dead-fd busy-loop. (An earlier version watched InputPlumber's *virtual*
+# keyboard too, which vanishes whenever InputPlumber restarts/stops -- e.g. our suspend hook -- and a
+# hung-up fd makes select() return instantly forever, spinning a CPU at 100% and cooking the SoC to
+# ~95 C.) One stable fd also means no rescan/prune bookkeeping: we just block on it forever.
+#
+# CAVEAT: this assumes nothing has EXCLUSIVELY grabbed gpio-keys. On pocknix, InputPlumber's config
+# (packages/pocknix-bsp/01-rsinput-rp6.yaml) only sources `rsinput-gamepad`, NOT `gpio-keys`, so
+# gpio-keys stays readable here. If gpio-keys is ever added to InputPlumber's source_devices (e.g. to
+# route the volume keys or back paddles through the gamepad target), InputPlumber will EVIOCGRAB it
+# and this daemon will see nothing -> then switch to reading InputPlumber's virtual keyboard instead
+# (and re-add the dead-fd handling, since virtual devices come and go).
+import sys, os, time, subprocess
 try:
     from evdev import InputDevice, list_devices, ecodes
 except ImportError:
@@ -15,37 +29,43 @@ except ImportError:
 DECK_UID = "1001"
 SINK = "@DEFAULT_AUDIO_SINK@"
 STEP = "5%"
+DEV_NAME = "gpio-keys"
 
 def setvol(delta):
-    # runuser -> deck so wpctl reaches deck's PipeWire; -l 1.0 caps at 100%.
+    # Run wpctl as root but pointed at deck's PipeWire (root can open deck's socket). No `runuser`,
+    # so no per-press PAM session setup -> instant response. If a future PipeWire ever rejects the
+    # root connection, fall back to: runuser -u deck -- env XDG_RUNTIME_DIR=... wpctl ...
+    env = dict(os.environ, XDG_RUNTIME_DIR="/run/user/" + DECK_UID)
     subprocess.run(
-        ["runuser", "-u", "deck", "--", "env", "XDG_RUNTIME_DIR=/run/user/" + DECK_UID,
-         "wpctl", "set-volume", "-l", "1.0", SINK, delta],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        ["wpctl", "set-volume", "-l", "1.0", SINK, delta],
+        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-# Every input device that reports the volume keys (there may be more than one).
-devs = []
-for path in list_devices():
-    try:
-        d = InputDevice(path)
-        keys = d.capabilities().get(ecodes.EV_KEY, [])
-        if ecodes.KEY_VOLUMEUP in keys or ecodes.KEY_VOLUMEDOWN in keys:
-            devs.append(d)
-    except OSError:
-        pass
-if not devs:
-    sys.exit("pocknix-volumed: no volume-key input device found")
-
-fds = {d.fd: d for d in devs}
-while True:
-    r, _, _ = select.select(list(fds), [], [])
-    for fd in r:
+def open_gpio_keys():
+    for path in list_devices():
         try:
-            for ev in fds[fd].read():
-                if ev.type == ecodes.EV_KEY and ev.value == 1:   # key down only (one step per press)
-                    if ev.code == ecodes.KEY_VOLUMEUP:
-                        setvol(STEP + "+")
-                    elif ev.code == ecodes.KEY_VOLUMEDOWN:
-                        setvol(STEP + "-")
+            d = InputDevice(path)
         except OSError:
-            pass
+            continue
+        keys = d.capabilities().get(ecodes.EV_KEY, [])
+        if d.name == DEV_NAME and (ecodes.KEY_VOLUMEUP in keys or ecodes.KEY_VOLUMEDOWN in keys):
+            return d
+        d.close()
+    return None
+
+# gpio-keys is always present, but the daemon may start before the node settles — retry briefly.
+dev = None
+for _ in range(30):
+    dev = open_gpio_keys()
+    if dev:
+        break
+    time.sleep(1)
+if not dev:
+    sys.exit("pocknix-volumed: '%s' volume-key device not found" % DEV_NAME)
+
+# A single stable hardware device: just block on it forever (read_loop sleeps at 0%% CPU when idle).
+for ev in dev.read_loop():
+    if ev.type == ecodes.EV_KEY and ev.value == 1:   # key down only (one step per press)
+        if ev.code == ecodes.KEY_VOLUMEUP:
+            setvol(STEP + "+")
+        elif ev.code == ecodes.KEY_VOLUMEDOWN:
+            setvol(STEP + "-")

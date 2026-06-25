@@ -2,28 +2,108 @@
 
 Findings from on-device testing, to share with the SM8550 suspend/resume maintainer.
 
-> ## 2026-06-25 update — TWO separate layers, don't conflate them
->
-> Running the same kernel under **pocknix** surfaced that suspend was failing for a
-> *different, new* reason that masked the original spurious wake below:
->
-> **Layer 1 (regression, now fixed in userspace) — `vhci_hcd` vetoes suspend.** pocknix
-> sets the InputPlumber `target_devices: [deck]`. The `deck` (Steam Deck) target emulates
-> the pad as a **virtual USB device over USB/IP (`vhci_hcd`)**. `vhci_hcd` hard-refuses to
-> suspend while any virtual device is attached — `vhci_hcd.0: We have 1 active connection.
-> Do not suspend.` → `platform_pm_suspend returns -16` (`-EBUSY`) → the whole system suspend
-> aborts *before sleeping*. Signature: `echo mem > /sys/power/state` returns `EBUSY`
-> instantly, `pm_wakeup_irq` = ENODATA (nothing slept to be woken). ROCKNIX avoids this by
-> using the `ds5` target (uhid, not USB/IP). **Fix (Option B):** `pocknix-bsp` sleep.d hooks
-> `001-inputplumber` stop InputPlumber before suspend (detaching the vhci device) and restart
-> it on resume. Option A alternative = switch the target to `ds5`/`xb360` (both uhid). Also
-> pinned `SuspendState=mem` (`10-pocknix-deeponly.conf`) to stop systemd falling deep→s2idle.
->
-> **Layer 2 (original, still open) — the battery/pmic_glink spurious wake below.** Once
-> Layer 1 is fixed the device *does* enter deep sleep, then self-wakes after a few–30s — the
-> exact wake documented in the rest of this report. Still needs the `standby-wake-filter` /
-> kernel disarm. Attribute it now with the `wakeup_sources` diff test below (it finally
-> sleeps long enough to measure).
+# ============================================================================
+# 2026-06-25 INVESTIGATION SUMMARY (read this first)
+# ============================================================================
+#
+# Running the same kernel under **pocknix** turned out to involve THREE distinct
+# problems stacked on top of each other. The original report below (battery wake)
+# is Layer 2. Don't conflate them — each was masking the next.
+
+## Layer 1 — `vhci_hcd` vetoes suspend entirely (FIXED, userspace)
+
+pocknix sets the InputPlumber `target_devices: [deck]`. The `deck` (Steam Deck) target
+emulates the pad as a **virtual USB device over USB/IP (`vhci_hcd`)**. `vhci_hcd` hard-refuses
+to suspend while any virtual device is attached:
+
+```
+vhci_hcd vhci_hcd.0: We have 1 active connection. Do not suspend.
+vhci_hcd vhci_hcd.0: PM: failed to suspend: error -16   (-EBUSY)
+PM: Some devices failed to suspend, or early wake event detected
+PM: suspend exit
+```
+
+→ the whole system suspend aborts *before sleeping*. Signature: `echo mem > /sys/power/state`
+returns `EBUSY` instantly; `pm_wakeup_irq` = ENODATA (nothing slept). ROCKNIX avoids this by
+using the `ds5` target (uhid, not USB/IP).
+**Fix:** `pocknix-bsp` sleep.d hook `001-inputplumber` stops InputPlumber before suspend
+(detaching the vhci device) and restarts it on resume. (Alternative: switch the target to
+`ds5`/`xb360`, both uhid.) Also pinned `SuspendState=mem` (`10-pocknix-deeponly.conf`) so
+systemd doesn't fall deep→s2idle (s2idle can wedge on SM8550).
+
+## Layer 2 — the `battery` power-supply wakeup (FIXED, userspace)
+
+Once Layer 1 is fixed the device enters deep sleep, then self-wakes every ~5s. The
+`wakeup_sources` diff attributes it cleanly to the **`battery`** source (its `active_count`
+increments and nothing else does). This is the pmic_glink/ADSP charger firmware pushing
+battery-status updates; `power_supply_changed()` does `pm_stay_awake()` on the battery psy.
+
+KEY DIFFERENCE FROM THE OLD REPORT BELOW: on kernel **7.0.11** the `battery` wakeup source is
+**attached to the psy device** (it appears in `/sys/class/wakeup/` with a `device` symlink to
+`.../pmic-glink/.../power_supply/battery`). So writing `disabled` to
+`/sys/class/power_supply/battery/power/wakeup` **unregisters** the wakeup source and the
+`pm_stay_awake()` becomes a no-op. The old report found the toggle useless because on that
+kernel `battery` was a free-standing source with no device toggle — not true here.
+**Fix:** `pocknix-bsp` sleep.d hook `002-battery-wake` disables that toggle before suspend,
+re-enables on resume. Effect: ~5s wakes → minutes between wakes (the ~5s was partly a
+resume→re-query→re-notify feedback loop that this breaks).
+
+## Layer 3 — the pmic_glink doorbell on the IPCC line (OPEN, kernel/firmware)
+
+With Layer 2 fixed it still self-wakes every ~2–7 min (variable, e.g. 97/213/244/272/407s).
+Methodically ruled OUT, one by one:
+
+| Suspect | Test | Result |
+|---|---|---|
+| WiFi | suspend with `nmcli radio wifi off` | still woke (213s) — not WiFi (the `+36 mhi` per cycle is just resume-time radio re-init) |
+| usb/wls/ucsi psy wakeups | disable `power/wakeup` on ALL power_supply devices | still woke (113s), **empty** `wakeup_sources` diff |
+| TSENS thermal | `/proc/interrupts` diff + temps | critical IRQs (24/26/28, the only GIC-wake-armed) **never fire**; the uplow storm (IRQ 23/27, +30k) is intermittent and absent in cycles that still woke; temps well below the 110°C critical trip |
+| InputPlumber/vhci | stopped for the test | n/a |
+
+The empty `wakeup_sources` diff with everything disabled means the wake arrives **below** the
+Linux wakeup-source layer. `/proc/interrupts` consistently shows the **co-processor comms**
+ticking: `ipcc_0` (13), `glink-smem` (214), `apps_rsc` (14, RPMh). It's the **ADSP charger
+firmware's pmic_glink "doorbell"**, delivered via IPCC.
+
+**Why we can't just disarm it (the crux):** `drivers/mailbox/qcom-ipcc.c` requests the IPCC
+interrupt with **`IRQF_NO_SUSPEND`** (line ~324) and the irqchip is **`IRQCHIP_SKIP_SET_WAKE`**
+(line ~113). So the IPCC line is *deliberately never masked during suspend* (the AP must always
+hear its co-processors — RPMh's sleep handshake uses this same line) and it **ignores
+`enable_irq_wake`** entirely. There is no wake flag to flip, and masking IPCC would break the
+ability to *enter* deep sleep. The TSENS/geni `disable_irq_wake`-on-suspend technique does not
+apply here.
+
+**`standby-wake-filter` does not exist** in ROCKNIX/distribution (grepped). That earlier lead
+(MonsterRider) was an informal description, not a real mechanism. No distro has solved SM8550
+deep-sleep; jaewun's patches are experimental and unmerged. We're on our own.
+
+### Layer 3 — the two paths forward
+
+1. **Kernel/firmware (the real fix, R&D).** Stop the firmware from *sending* the message,
+   since we can't mask the IRQ. `qcom_battmgr` has `BATTMGR_REQUEST_NOTIFICATION` (the AP
+   subscribing to pushes) and **no PM ops at all** — it subscribes at probe and never
+   unsubscribes. NOTE: the request struct is `{battery_id, power_state, low_capacity,
+   high_capacity}` — there is **no clean enable/disable field** (an earlier read of an `enable`
+   field was a mistake; that field is in the unrelated `charge_ctrl` struct). So a kernel fix
+   is experimental: add suspend/resume PM ops that re-subscribe with `low/high_capacity`
+   thresholds set to "never," or otherwise quiesce the source. First step: a **logging patch**
+   to confirm exactly which message wakes us (battmgr vs UCSI vs another ADSP channel) before
+   patching blind. Kernel iterates cheaply via `pacman -U linux-pocknix` (alpm hook rebuilds
+   `/flash/KERNEL`), no reflash.
+
+2. **Auto-resuspend safety net (usable now).** `pocknix-bsp` sleep.d `004-auto-resuspend`:
+   on resume, if the **power key did not fire** (compare the `pwrkey` count in `/proc/interrupts`
+   across the sleep), the wake was the ADSP doorbell, not the user → `systemctl suspend` again
+   after 3s. A real power-button wake increments `pwrkey` → stay awake. Fails OPEN (never
+   re-suspends on a missing/ambiguous reading); escape hatch `touch /run/pocknix-no-resuspend`.
+   Net cost: the device blips awake ~2–3s every few minutes — negligible overnight drain.
+   Requires the power button to *wake-and-stay*, so `20-pocknix-powerkey.conf` sets
+   `HandlePowerKey=ignore` (systemd's default `poweroff` made a wake-press shut the device down;
+   long-press still powers off; sleep is invoked from Steam's power menu / `systemctl suspend`).
+
+The original battery-wake report below is Layer 2; it remains accurate for that layer.
+
+# ============================================================================
 
 ## Environment
 - Kernel **7.0.11** = ROCKNIX SM8550 + `thor-suspend-fixes` + RP6 delta (built fresh, GCC 16.1).

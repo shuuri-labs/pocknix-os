@@ -1,0 +1,5 @@
+#!/bin/sh
+# Resume side of battery-wake-pre: re-arm the 'battery' wakeup source after resume.
+W=/sys/class/power_supply/battery/power/wakeup
+[ -w "${W}" ] && echo enabled > "${W}" 2>/dev/kmsg
+exit 0
