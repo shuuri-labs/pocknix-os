@@ -51,3 +51,6 @@ waydroid
 # like Bazaar is NOT in Arch repos — install it AS a flatpak from Flathub once this is up.
 flatpak              # the Flatpak runtime + CLI
 discover             # plasma-discover — KDE app store with the Flatpak backend
+
+# --- Bluetooth (KDE UI) ---
+bluedevil            # Plasma Bluetooth applet/KCM (talks to bluez)

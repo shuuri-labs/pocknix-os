@@ -1,0 +1,9 @@
+#!/bin/sh
+# Resume side of Option B (see inputplumber-sleep-pre): restart InputPlumber so the
+# virtual controller comes back, but only if WE stopped it on the way down.
+FLAG=/run/pocknix-inputplumber-resume
+if [ -e "${FLAG}" ]; then
+  rm -f "${FLAG}"
+  systemctl start inputplumber
+fi
+exit 0
