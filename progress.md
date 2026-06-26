@@ -9,6 +9,162 @@ _Last updated: 2026-06-26 — gamescope realtime priority confirmed NOT the FPS 
 
 ---
 
+## ❌ FEX-config theory DISPROVEN (2026-06-26) — porting ROCKNIX's Config.json REGRESSED both sessions
+Tried merging ROCKNIX's full `Config.json` (Multiblock/MaxInst/TSO-relaxations/L1-L2-cache/
+KernelUnalignedAtomicBackpatching/etc.) into pocknix's. Result: **perf got WORSE on BOTH gamescope
+(very choppy) AND Plasma.** Since both sessions share the one changed file (`/usr/share/fex-emu/
+Config.json`), the config edit IS the regression → reverted to the minimal known-good config
+(RootFS + X87ReducedPrecision + thunks-all-on). LESSON: changed ~15 knobs at once (violated
+one-variable-at-a-time); ROCKNIX's config is its build's full settings dump and does NOT port
+wholesale onto our FEX. Likely choppiness culprits if ever bisected: `KernelUnalignedAtomicBack-
+patching` (needs kernel support we may lack → trap storms) + the L1/L2 JIT-cache disables.
+
+**RE-FOCUS:** the cleanest signal was always the **Plasma comparison** — same SoC/kernel/FEX/FEX-
+config/game, GPU only 60%, yet gamescope is 18-20% slower than kwin (40-48 vs 50-60; ROCKNIX
+gamescope = 50-60 too). That isolates the gap to **gamescope's compositor/present path**, NOT FEX.
+
+## ✅ FEX fully EXONERATED (2026-06-26) — gap is 100% gamescope-specific
+Tested `Multiblock:1` ALONE (ROCKNIX's safest default JIT knob) → still choppy/worse. But the
+decisive logic is simpler: **pocknix's BARE FEX already hits 50-60 under kwin = identical to
+ROCKNIX's TUNED FEX under gamescope.** A slow/mis-built FEX could not reach 50-60 under any
+compositor → pocknix's FEX build (clang + `-DCMAKE_BUILD_TYPE=Release`, commit a04b0241 = ROCKNIX,
+vendored submodules incl. vixl/jemalloc) is FINE. ROCKNIX's perf knobs backfire on our build
+because they're tuned to theirs — and we don't need them. **STOP touching FEX.** Revert to the
+minimal Config.json.
+
+**GAP IS NARROWLY BOUNDED NOW.** FEX, kernel, gamescope binary (byte-identical fe78bc6+4 patches),
+scheduler/governor/RT/pin — all eliminated. The ONLY remaining differences are gamescope's runtime
+deps + launch env:
+1. **mesa/Turnip** (ALARM vs ROCKNIX 26.1.2) — gamescope composites via Vulkan; cost amplified by
+   its heavy path (rotation shader + composite + 2× XWayland), invisible under kwin's light present.
+   PRIME SUSPECT. GPU is only 60% busy so it's mesa's CPU-side submission / present-latency, not
+   shader throughput.
+2. **`GAMESCOPE_MODE_SAVE_FILE`** — ROCKNIX sets it (`modes.cfg`); pocknix does NOT. Ties to the
+   known no-EDID dynamic-refresh issue ([[gamescope-refresh-edid]]) → possible 120 Hz fixed-refresh
+   judder on a 45 fps game ("choppy").
+**❌ Display/DRM/IRQ hunt ELIMINATED (2026-06-26):** chased the hunch that pocknix's display setup
+differs from ROCKNIX. On-device confirms it's IDENTICAL + correct: cmdline copies ROCKNIX verbatim
+(`irqaffinity=0-2 allow_mismatched_32bit_el0 …`, config/pocknix.conf:70); GPU+display IRQs (207/
+208/209) already `set=0-2` and driver-managed (off the gaming cores); gamescope log shows it
+selects the panel's native mode **1080x1920@120Hz** (hardcoded `-r 120` == real refresh, no
+mismatch) and the connector even reports 120x68 mm (not EDID-less). `GAMESCOPE_MODE_SAVE_FILE`
+only governs 60 Hz *switching*, never exercised at 120. Display layer is out.
+
+**CONFIRMED MECHANISM:** game is FEX/CPU-bound, GPU never saturates (60% under gamescope, ~75%
+under kwin/ROCKNIX — GPU% just tracks fps; FEX is the ceiling ~50-60). gamescope drops the FEX
+game ~18% BELOW that ceiling. Everything matching ROCKNIX is eliminated (FEX, gamescope binary,
+kernel, cmdline, display, IRQ, scheduler, governor, mesa-broadly). The ONLY structural thing
+gamescope adds over kwin = the extra present hop (game → XWayland → gamescope composite/rotate →
+panel) where the CPU-bound game **blocks on buffer release** → wasted FEX-thread time → fewer
+frames. **NEXT (untested, the lever):** `MESA_VK_WSI_PRESENT_MODE=mailbox %command%` in Steam
+launch options → game renders ahead instead of blocking. If FPS↑/GPU↑ → bake env into launcher.
+If not → XWayland→gamescope explicit-sync/buffer path is next.
+
+**(old NEXT, superseded):** Turnip version vs ROCKNIX 26.1.2 — deprioritized; mesa matches kwin
+which matches ROCKNIX, so broad Turnip regression ruled out.
+
+## Display/60Hz-switching — RESOLVED understanding (2026-06-26)
+Mirrored ROCKNIX's gamescope launch into `packages/pocknix-steam/pocknix-steam` (pkgrel 20):
+physical `-W 1080 -H 1920` (was 1920x1080), `GAMESCOPE_MODE_SAVE_FILE` + `touch`, `unset
+MESA_LOADER_DRIVER_OVERRIDE`, and a **configurable `-r` via `POCKNIX_REFRESH`** (default 120).
+Findings:
+- **ROCKNIX ships NO EDID for the RP6** (deep re-check): panel is DSI `vtdr6130,rp6`, modes come
+  from the panel driver's table; no EDID file/blob/patch; the getedid/create-edid-cpio tooling is
+  LibreELEC PC/HDMI/TV legacy (checks `lspci` intel/amd/nvidia). EDID sysfs is 0 bytes on both.
+  So [[gamescope-refresh-edid]] "embed an EDID" is NOT what ROCKNIX does.
+- **60Hz is NOT a dynamic in-game switch.** On-device, setting refresh in Steam's in-game menu
+  logs NOTHING in gamescope → the request never reaches it (Steam-integration gap, both distros).
+  ROCKNIX's 60Hz = system `display_mode` setting → sway output mode → `gamescope -r <hz>` AT LAUNCH
+  (start_steam.sh reads swaymsg current_mode). Replicated via `POCKNIX_REFRESH=60` → gamescope
+  selects 1080x1920@60 at launch. The dynamic in-game slider reaching gamescope is a separate,
+  deeper item (not EDID/kernel/gamescope-mode).
+- Only remaining ROCKNIX display divergences: deliberate `DRM_MSM=m` (firmware load w/o initramfs,
+  build-kernel.sh:147) and intentional `GAMESCOPE_FAKE_OUTPUT_MM=177x100` (handheld UI scale).
+**These display changes do NOT address the FPS gap** — that's still the FEX present-block; the
+`MESA_VK_WSI_PRESENT_MODE=mailbox` launch-option test remains UNRUN and is the highest-probability
+FPS fix.
+
+## (SUPERSEDED — see above) ROOT CAUSE attempt: bare FEX defaults — the gap is x86/FEX, NOT gamescope
+The 15-20% "gamescope" gap was measured on an **x86 Windows game under Proton+FEX** (`ASBR.exe` +
+wineserver/winedevice in the thread list). Per-thread `ps` showed the game's FEX-translated CPU
+threads dominating (~3 cores' worth) with the **GPU only 60% busy** = CPU-translation-bound, GPU
+starved. None of the gamescope/mesa/governor/scheduler layers were ever the bottleneck for these
+titles.
+
+**The cause:** pocknix ships a near-empty FEX `Config.json` (only `X87ReducedPrecision` + thunks)
+→ FEX runs on **built-in defaults**. ROCKNIX ships a fully perf-tuned `Config.json`. Missing on
+pocknix, most impactful first: **`Multiblock:1`** (default 0 — multi-block JIT, the big one),
+**`MaxInst:5000`** (default ~500), `VolatileMetadata:1`, `DISABLE_VIXL_INDIRECT_RUNTIME_CALLS:1`,
+`DynamicL1Cache:1`+heuristics, `DisableL2Cache:1`, the TSO relaxations (`VectorTSOEnabled:0`,
+`MemcpySetTSOEnabled:0`, `HalfBarrierTSOEnabled:1`), `KernelUnalignedAtomicBackpatching:1`,
+`SmallTSCScale:1`, `HideHybrid:1`, `MonoHacks:1`.
+Refs: pocknix `packages/fex-emu/Config.json` (installs → `/usr/share/fex-emu/Config.json`) vs
+ROCKNIX `packages/compat/fex-emu/config/fex-emu/Config.json`.
+
+**FIX:** merge ROCKNIX's perf keys into `packages/fex-emu/Config.json` (keep pocknix's absolute
+RootFS path + ThunksDB all-on). Live A/B first (edit `/usr/share/fex-emu/Config.json` on-device,
+relaunch, watch FPS↑ + GPU%↑ past 60); then bake + bump fex-emu pkgrel. **STATUS: live A/B
+pending on-device.** Scope: fixes **x86/FEX** titles only — if a NATIVE-ARM title also trails
+ROCKNIX, that's a separate (still-open) investigation, but the audited gamescope/mesa/governor/
+scheduler/RT/pin layers are all eliminated for it too.
+
+## Gamescope FPS gap (15-20% vs ROCKNIX / vs pocknix-Plasma) — investigation (2026-06-26)
+Symptom: in-game FPS under gamescope is ~15-20% below BOTH (a) ROCKNIX gamescope and (b) the
+SAME game run on pocknix under Plasma Mobile/kwin. Systematic elimination so far:
+
+| Suspect | Status | Evidence |
+|---|---|---|
+| GPU clock / devfreq governor | ❌ eliminated | on-device: `simple_ondemand`, cur_freq==max_freq==**680 MHz**, pegged in-game (mangohud). 680 = SM8550 stable ceiling; 692 max OC, 1000 unstable/slower. Pinning to `performance` would no-op. |
+| CPU governor / scx_lavd scheduler | ❌ eliminated | maintainer A/B'd `performance` cpufreq governor (dropped schedutil+scx_lavd), no FPS change. LAVD traces now stripped from the kernel (small overhead, confirmed irrelevant). |
+| gamescope version / patches | ❌ eliminated | OUR build == ROCKNIX: same commit `fe78bc685f247460d02c85f4b530b9de3ed07cdd` + same 4 patches (0001/0004/0005/0006, incl. `--use-rotation-shader`). |
+| RT priority (SCHED_RR threads) | ❌ eliminated | `pocknix-gamescope-rt` forces RR, no FPS change (see below). |
+| Full root session (vs non-root `deck`) | ⚪ untested, NOT pursuing | only FPS-relevant thing root unlocks is RT sched (already replicated + tested = no change). Expected impact ~0%; not worth losing the `deck` posture. |
+| **Mesa / Turnip build** | 🔎 **OPEN** | ALARM mesa (generic, all-drivers) vs ROCKNIX's custom **mesa 26.1.2** (turnip-only build flags). Only remaining GPU-stack difference vs ROCKNIX gamescope → A/B candidate. |
+| **gamescope's own per-frame GPU work** | 🔎 **OPEN** | rotation **compute shader** (full 1080p pass/frame) + composite. Plasma/kwin rotates via a FREE hardware output transform (kscreen-doctor) → explains the Plasma>gamescope gap. ROCKNIX pays the same shader cost, so it's not the ROCKNIX gap. |
+
+**MEASURED (2026-06-26): NOT GPU-bound.** In a trailing scene mangohud shows **GPU ~60% busy**
+while both CPU clusters are at max freq (policy0 little @2.0 GHz, policy7 prime @2.95 GHz, all
+`performance`). GPU pegged at 680 MHz but starved 40% of the time ⇒ the limiter is **CPU
+scheduling / present-pacing**, not throughput. (NB device cpufreq policies = policy0 [littles
+0-2], **policy3** [mids 3-6], policy7 [prime 7]; there is no policy4.)
+
+**PRIME SUSPECT: the `taskset -c 3-7` pin** (added `39f61e0`, **still live on the device** — it's
+running the perf-gov 39f61e0-era build; HEAD already dropped the pin in `4826cd9`). The pin crams
+ALL Steam-session threads (game + gamescope compositor + steamwebhelper CEF + 2× XWayland) onto
+the 5 big cores. **ROCKNIX does NOT pin Steam** (EMUPERF unset by default) and neither does the
+Plasma path → on both, the kernel offloads background/webhelper threads to the littles (0-2),
+keeping big cores clear for the game+compositor. The pin is the ONE thing unique to pocknix-
+gamescope vs both faster baselines → fits a starved-GPU 15-20% loss.
+**A/B RESULT (2026-06-26): the pin HELPS — keep it.** Live-widening the gamescope tree to 0-7
+*dropped* FPS → the scheduler drops hot threads onto the slow A510 littles (0-2) and tanks. So
+the 3-7 pin is correct and stays. (On-device affinity confirmed: gamescope=3-7, steamwebhelper
+self-pins to 2-6, cores 0-1 idle.) **This is itself a clue: the workload is acutely placement-/
+latency-sensitive → frame production is gated by a single hot CPU thread that must run on a fast
+core. GPU starved at 60% + this sensitivity = LATENCY-BOUND on one CPU render-path thread.**
+
+**DISPROVEN this session (don't re-test):**
+- EAS/scheduler config — pocknix kernel cfg is BYTE-IDENTICAL to ROCKNIX SM8550 on every knob
+  (UCLAMP off, ENERGY_MODEL=y, SCHED_CLUSTER/MC=y, AUTOGROUP=y — same line numbers).
+- EAS-via-governor — BOTH default to `performance` (kernel cfg line 656; ROCKNIX has no boot
+  script applying schedutil; Steam doesn't go through runemu's `performance` either). EAS is off
+  on both. Not the differentiator.
+
+**REMAINING REAL DIFFERENCES vs the faster baselines:**
+- **gamescope compositor cost** (vs Plasma): kwin presents the game ~directly w/ free HW-plane
+  rotation; gamescope adds a composite + rotation-shader pass + nested XWayland in the CPU/present
+  path. Explains Plasma>gamescope. (ROCKNIX pays the same → not the ROCKNIX gap.)
+- **mesa/Turnip CPU-side cost** (vs ROCKNIX): ALARM's generic Turnip vs ROCKNIX's custom mesa
+  26.1.2. The GPU driver runs ON the render-thread CPU (cmd-buffer build, draw submission); a
+  pricier Turnip starves a 60%-busy GPU. Same mesa in pocknix-Plasma → not the Plasma gap, but
+  the leading ROCKNIX-gap suspect. NB GPU is NOT the bottleneck (60%), so this is about Turnip's
+  CPU overhead, not its shader throughput.
+
+**NEXT DIAGNOSTIC (everything hinges on this):** per-core CPU load + WHICH THREAD owns the hot
+core, in the trailing scene. `ps -eLo psr,pcpu,tid,comm --sort=-pcpu | head -15` (psr=core) +
+mangohud's 8-core bars. One core pegged ~100% by a single thread (gamescope main? game render?
+Xwayland?) ⇒ that thread is the wall → optimize/place it. No core saturated but FPS capped ⇒
+gamescope present/vblank pacing.
+
 ## Gamescope realtime priority — NOT the FPS gap (2026-06-26)
 gamescope is built `-Drt_cap` and **has `cap_sys_nice` at runtime** (`getpcaps` shows
 `cap_sys_nice+ep`, no "No CAP_SYS_NICE" warning), but on our non-root `deck` session it does
