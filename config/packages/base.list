@@ -58,7 +58,6 @@ htop
 jq
 zstd
 python-evdev
-strace               # debug: pocknix-gamescope-diag straces the hung gamescope
 bluez                # Bluetooth stack (bluetoothd) — controllers, audio, KDE/Steam BT
 bluez-utils          # bluetoothctl + rfkill helpers
 sbc                  # SBC codec — PipeWire BT audio A2DP baseline + HFP/mSBC mic. Without a codec
