@@ -2,6 +2,32 @@
 
 Findings from on-device testing, to share with the SM8550 suspend/resume maintainer.
 
+> ## ✅ RESOLVED 2026-06-26 — the Layer-3 wake is FIXED in the kernel
+>
+> The residual ADSP/`BATTMGR_NOTIFICATION` wake (Layer 3 below) is the IPCC mailbox IRQ being
+> `IRQF_NO_SUSPEND` — never masked during sleep, so the charger firmware's doorbell wakes the SoC.
+> **The fix is one line: remove `IRQF_NO_SUSPEND` from `drivers/mailbox/qcom-ipcc.c`**, so the
+> mailbox IRQ is masked during suspend like any other. Lifted verbatim from ROCKNIX's **SM8750
+> (AYN Odin 3)** tree (`0504-wakeup-qcom-ipcc-remove-IRQF-NO-SUSPEND.patch`), which uses the same
+> `battmgr`/`pmic_glink` charger model and sleeps fine. Ported to SM8550 (`kernel/patches/20-sm8550/`).
+>
+> **Verified on-device:** `suspend_stats` shows 2 clean ~14-min suspends, `CLOCK_BOOTTIME -
+> CLOCK_MONOTONIC` = 1681 s suspended — no spurious wakes. The userspace workarounds this report
+> documents (battery-wake hook, auto-resuspend) are now **removed as redundant**. What remains in
+> `pocknix-bsp`: `001-inputplumber` (vhci suspend-veto fix — separate problem), `SuspendState=mem`,
+> the power-key drop-in, and jaewun's foundation patches (UFS/TSENS/UART/rsinput).
+>
+> Cross-SoC context (why SM8550 was stuck): SM8250 uses the *old* direct-Linux charger (`SMB5`, normal
+> maskable wakes → sleeps); SM8750 keeps the new charger but ships this IPCC patch → sleeps; SM8550
+> had jaewun's foundation but was just *missing* the IPCC line. Worth upstreaming to jaewun's branch.
+>
+> Open/cosmetic: `rsinput` (`serial1-0`) logs a `-110` resume timeout (version handshake), but the
+> gamepad works fine after wake — SM8750's `0508` does a full re-init if we want it clean. And whether
+> it truly *power-collapses* (CX retention) is unmeasured (this kernel lacks `last_hw_sleep`); a
+> battery-drain test would tell. Neither blocks "stays asleep," which is solved.
+>
+> The three-layer investigation below is kept as the record of how we got here.
+
 # ============================================================================
 # 2026-06-25 INVESTIGATION SUMMARY (read this first)
 # ============================================================================
