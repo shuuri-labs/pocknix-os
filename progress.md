@@ -5,7 +5,20 @@ Working notes for picking this back up after a break. For the *why* behind decis
 testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
-_Last updated: 2026-06-22 — Phase 4 STARTED: Plasma Mobile desktop session + game↔desktop switch scaffolded (untested)._
+_Last updated: 2026-06-26 — gamescope realtime priority confirmed NOT the FPS gap (see below)._
+
+---
+
+## Gamescope realtime priority — NOT the FPS gap (2026-06-26)
+gamescope is built `-Drt_cap` and **has `cap_sys_nice` at runtime** (`getpcaps` shows
+`cap_sys_nice+ep`, no "No CAP_SYS_NICE" warning), but on our non-root `deck` session it does
+**not** put its compositor threads on `SCHED_RR` — `ps -L … -o cls` shows them all `TS`, while
+it *does* demote its bg disk/trace threads to `SCHED_BATCH`. ROCKNIX gets RR for free (runs the
+session as root). Added `pocknix-gamescope-rt` (a root watcher that `chrt -r`s gamescope's TS
+threads to RR/40, leaving the BATCH threads alone; RR sits above sched_ext so it coexists with
+scx_lavd). **Forcing the compositor threads to RR did NOT change in-game FPS** — realtime
+priority is not the gamescope performance gap. The helper is kept for parity with ROCKNIX +
+frame pacing, not as a fix.
 
 ---
 
