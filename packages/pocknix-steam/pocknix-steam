@@ -91,9 +91,35 @@ if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhe
   pkill -u "${uid}" -KILL -f steamwebhelper 2>/dev/null || true
 fi
 
-# RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
-# rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
-W=1920; H=1080; REFRESH=120; ORIENT=left
+# RP6 panel: the DRM connector exposes 1080x1920@120 (preferred) AND 1080x1920@60 — both PHYSICAL
+# (portrait) modes; the panel is mounted rotation=270. We MIRROR ROCKNIX exactly: pass gamescope the
+# panel's PHYSICAL mode dims (-W 1080 -H 1920, == swaymsg current_mode on ROCKNIX) and let
+# --force-orientation left + --use-rotation-shader rotate content to landscape for apps.
+#
+# WHY physical dims: gamescope matches modes by the -W/-H it's given, and the panel's DRM modes are
+# 1080x1920 (@120 and @60). Passing landscape 1920x1080 (no such mode) made gamescope back-map; the
+# physical 1080x1920 matches the real modes (so -r 60 below picks 1080x1920@60).
+#
+# REFRESH: ROCKNIX does NOT leave refresh to gamescope — it reads a SYSTEM setting (system.display_mode)
+# into sway, then passes `gamescope -r <hz>` at launch (start_steam.sh: REFRESH_HZ from swaymsg
+# current_mode). We have no sway, so we drive -r from POCKNIX_REFRESH (default 120; set 60 for a 60 Hz
+# session). The panel exposes 1080x1920@60, so gamescope selects it at launch. NB Steam's in-game
+# refresh slider does NOT reach gamescope here (its mode-switch request prints nothing in the gamescope
+# log) — ROCKNIX gets 60 Hz the same launch-time way, not via the in-game slider. See gamescope-refresh-edid.
+W=1080; H=1920; ORIENT=left
+REFRESH="${POCKNIX_REFRESH:-120}"
+# Pin the whole game tree (gamescope + steam + game + FEX) to the SM8550's big cores, mirroring
+# ROCKNIX's EMUPERF=FAST_CORES. 0-2 = A510 littles, 3-7 = A710/A715 mids + X3 prime. On-device A/B
+# CONFIRMED this helps: widening to 0-7 DROPS in-game FPS (the scheduler strands hot threads on the
+# slow littles). gamescope's children inherit its affinity, so one taskset covers the whole tree.
+FAST_CORES=3-7
+# ROCKNIX: GAMESCOPE_MODE_SAVE_FILE=/storage/.config/gamescope/modes.cfg (persists/loads the DRM
+# mode; required for mode-switching) + touch it so it exists before gamescope starts. deck equivalent:
+GS_MODE_FILE="${HOME}/.config/gamescope/modes.cfg"
+mkdir -p "$(dirname "${GS_MODE_FILE}")" 2>/dev/null || true
+touch "${GS_MODE_FILE}" 2>/dev/null || true
+# ROCKNIX clears any forced mesa driver right before launch so Turnip auto-selects.
+unset MESA_LOADER_DRIVER_OVERRIDE
 
 # Steam client flags = armada's gamescope-session CLIENTCMD exactly
 # (`-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`). `-e` = gamescope --steam.
@@ -115,6 +141,8 @@ set -o pipefail
 # value (~275 DPI, handheld-correct UI); the old 508x286 was ~96 DPI -> a desktop monitor -> tiny UI.
 env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=177x100 \
+  GAMESCOPE_MODE_SAVE_FILE="${GS_MODE_FILE}" \
+  taskset -c "${FAST_CORES}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles \
