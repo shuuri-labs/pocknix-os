@@ -1,0 +1,13 @@
+[Unit]
+Description=Elevate gamescope compositor threads to realtime (parity with ROCKNIX root session)
+# Start early; don't wait for the full graphical target (same reasoning as pocknix-lavd).
+After=basic.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pocknix-gamescope-rt
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

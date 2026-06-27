@@ -182,7 +182,7 @@ EOF
   chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
         bluetooth \
         pocknix-diag.service pocknix-expand-root.service \
-        pocknix-lavd.service \
+        pocknix-gamescope-rt.service \
         >/dev/null 2>&1 || true
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
   # WirePlumber applies the AYN-Odin2 UCM (shipped by pocknix-bsp) automatically.

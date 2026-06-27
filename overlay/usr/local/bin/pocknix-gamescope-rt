@@ -1,0 +1,26 @@
+#!/bin/sh
+# pocknix-gamescope-rt — elevate gamescope's compositor threads to SCHED_RR.
+#
+# gamescope is built -Drt_cap and HAS cap_sys_nice at runtime (getpcaps confirms it, and
+# there's no "No CAP_SYS_NICE" warning), but on our non-root `deck` session it does NOT put
+# its compositor threads on realtime — it only demotes its background threads to SCHED_BATCH.
+# ROCKNIX gets RR "for free" because it runs the session as root. We match it from a root
+# service. The deck launcher itself can't chrt RT (the deck shell has no cap), so this runs
+# as root and polls for gamescope.
+#
+# Scope: only TS (normal) threads are promoted to RR. The B (SCHED_BATCH) helper threads
+# (gamescope's async disk/trace queues) are LEFT ALONE on purpose — gamescope batched them
+# deliberately; RR-ing them would needlessly preempt real work.
+#
+# RR sits ABOVE sched_ext, so this coexists cleanly with scx_lavd (LAVD schedules the normal
+# game/background threads; these RR compositor threads run above LAVD's domain).
+#
+# NB: on-device A/B showed forcing RR did NOT change FPS — this is for parity with ROCKNIX
+# and frame-pacing, not a measured throughput win.
+while :; do
+  gpid="$(pidof gamescope 2>/dev/null)" || { sleep 2; continue; }
+  for tid in $(ps -L -o tid=,cls= -p "$gpid" 2>/dev/null | awk '$2=="TS"{print $1}'); do
+    chrt -r -p 40 "$tid" 2>/dev/null
+  done
+  sleep 3
+done
