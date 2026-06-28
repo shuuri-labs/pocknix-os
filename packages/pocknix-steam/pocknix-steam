@@ -91,8 +91,10 @@ if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhe
   pkill -u "${uid}" -KILL -f steamwebhelper 2>/dev/null || true
 fi
 
-# RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080,
-# rotated in-shader (--use-rotation-shader, --force-orientation left). See gamescope-rp6-gpu.
+# RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080.
+# Rotated via COMPOSITE-rotation (--force-composition-rotation, gamescope PR #2228 = our 0007
+# patch): the rotation is folded into the existing composite store (one pass) instead of a
+# separate rotation-shader pass. --force-orientation left sets the axis. See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left
 
 # Pin the whole game tree (gamescope + steam + game + FEX) to the SM8550's capable cores,
@@ -125,6 +127,6 @@ env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=177x100 \
   taskset -c "${FAST_CORES}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
-    --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
+    --force-orientation "${ORIENT}" --force-composition-rotation -e -- \
     env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles \
   2>&1 | tee "${GS_LOG}"
