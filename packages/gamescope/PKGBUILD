@@ -3,19 +3,22 @@
 # Vanilla gamescope (incl. ALARM's 3.16.24) CANNOT drive the RP6 panel: the panel is
 # mounted rotated (DTS rotation=<270>), so gamescope tries a DRM *plane* rotation that
 # the msm DPU rejects -> "Failed to prepare 1-layer flip (Invalid argument)" forever
-# (upstream issue #1883/#819). ROCKNIX's patch 0005 adds --use-rotation-shader, which
-# rotates in a compute shader and skips the plane-rotation property -> the flip is
-# accepted. So we build ROCKNIX's pinned commit + their 4 patches.
+# (upstream issue #1883/#819). We rotate in the COMPOSITE instead — gamescope PR #2228
+# (0007) folds the rotation into the existing composite's store coordinate (one pass, like
+# kwin) rather than ROCKNIX's SEPARATE rotation-shader pass (0005). #2228 auto-engages when
+# the scanout plane can't rotate (our msm case); pass --force-composition-rotation to force
+# it. One less full-screen pass per frame = lighter present path. 0007 REPLACES 0005.
+# (0005 kept in-tree, unreferenced, as a fallback.) Confirmed on ARM (AYANEO Pocket S2/SM8650).
 #
 # epoch=1 so this is preferred over ALARM's [extra] gamescope when both are visible.
 pkgname=gamescope
 epoch=1
 pkgver=3.16.0.rocknix.fe78bc6
-pkgrel=2
+pkgrel=3
 _commit=fe78bc685f247460d02c85f4b530b9de3ed07cdd
 # Grant CAP_SYS_NICE to the installed binary (realtime scheduling) — see gamescope.install.
 install=gamescope.install
-pkgdesc="SteamOS session compositing WM — ROCKNIX-patched (rotation shader for msm/rotated panels)"
+pkgdesc="SteamOS session compositing WM — patched (composite-rotation, PR #2228, for msm/rotated panels)"
 arch=('aarch64')
 url="https://github.com/ValveSoftware/gamescope"
 license=('BSD-2-Clause')
@@ -35,8 +38,8 @@ makedepends=('git' 'meson' 'ninja' 'cmake' 'pkgconf' 'glslang' 'vulkan-headers'
 source=("gamescope::git+https://github.com/ValveSoftware/gamescope.git#commit=${_commit}"
         '0001-WaylandBackend-wire-up-wl_touch-implementation.patch'
         '0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch'
-        '0005-feature-add-rotation-shader-for-rotating-output.patch'
-        '0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch')
+        '0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch'
+        '0007-composite-rotation.patch')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
@@ -46,8 +49,9 @@ prepare() {
   # ROCKNIX patch stack (same order/numbering as their package).
   patch -p1 < "${srcdir}/0001-WaylandBackend-wire-up-wl_touch-implementation.patch"
   patch -p1 < "${srcdir}/0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch"
-  patch -p1 < "${srcdir}/0005-feature-add-rotation-shader-for-rotating-output.patch"
   patch -p1 < "${srcdir}/0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch"
+  # 0007 (gamescope PR #2228) REPLACES 0005's rotation shader with composite-rotation.
+  patch -p1 < "${srcdir}/0007-composite-rotation.patch"
 }
 
 build() {
