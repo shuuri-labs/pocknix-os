@@ -60,7 +60,6 @@ build() {
     -D llvm=enabled \
     -D mesa-clc=enabled \
     -D gallium-va=disabled \
-    -D gallium-vdpau=disabled \
     -D video-codecs= \
     -D vulkan-layers=
   meson compile -C _build
