@@ -12,13 +12,19 @@
 #     Removes the leftover POCKNIX_ROOT and grows Android userdata back to fill the disk. Refuses to
 #     run if / is on the target device (i.e. don't run the full uninstall from internal).
 #
+#   Re-enable (run FROM the SD, if you ONLY --disable-boot'd and want internal pocknix back):
+#     pocknix-uninstall-internal --enable-boot
+#     Recreates the boot FAT in the gap --disable-boot left (POCKNIX_ROOT is untouched) and
+#     regenerates /flash/KERNEL from the internal rootfs's OWN kernel via pocknix-build-bootimg —
+#     NO 27 GB re-clone, and NOT the SD's KERNEL (which may be ROCKNIX's, wrong for our rootfs).
+#
 # Never touches abl/xbl/modem/persist/super — only ROCKNIX, POCKNIX_ROOT, and userdata.
 set -euo pipefail
 
 DEVICE="${DEVICE:-/dev/sda}"
 BOOT_NAME="ROCKNIX"          # GPT name of the boot FAT  (pocknix-install-internal)
 ROOT_NAME="POCKNIX_ROOT"     # GPT name of the ext4 root
-DISABLE_BOOT=0 ; DRY_RUN=0 ; ASSUME_YES=0
+DISABLE_BOOT=0 ; ENABLE_BOOT=0 ; DRY_RUN=0 ; ASSUME_YES=0
 
 say()  { echo -e "[\033[1;34mpocknix-uninstall\033[0m] $*"; }
 die()  { echo -e "[\033[1;31mERROR\033[0m] $*" >&2; exit 1; }
@@ -27,10 +33,11 @@ run()  { if [ "$DRY_RUN" = 1 ]; then echo "  + $*"; else "$@"; fi; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --disable-boot) DISABLE_BOOT=1 ;;
+    --enable-boot)  ENABLE_BOOT=1 ;;
     --dry-run)      DRY_RUN=1 ;;
     --yes|-y)       ASSUME_YES=1 ;;
     --device)       DEVICE="$2"; shift ;;
-    *) die "unknown arg: $1 (use --disable-boot | --dry-run | --yes | --device DEV)" ;;
+    *) die "unknown arg: $1 (use --disable-boot | --enable-boot | --dry-run | --yes | --device DEV)" ;;
   esac
   shift
 done
@@ -45,6 +52,62 @@ partdev() { case "$DEVICE" in *[0-9]) echo "${DEVICE}p$1" ;; *) echo "${DEVICE}$
 
 BOOT_NUM="$(partnum "$BOOT_NAME" || true)"
 ROOT_NUM="$(partnum "$ROOT_NAME" || true)"
+
+# ---------------------------------------------------------------------------------------------------
+# Re-enable internal boot: recreate the boot FAT --disable-boot removed + regenerate KERNEL from the
+# (intact) internal POCKNIX_ROOT. Run FROM THE SD. No re-clone. MUST be before the Stage-2 fallthrough.
+# ---------------------------------------------------------------------------------------------------
+if [ "$ENABLE_BOOT" = 1 ]; then
+  [ -z "$BOOT_NUM" ] || die "a '$BOOT_NAME' partition already exists on $DEVICE — boot isn't disabled (nothing to do)."
+  [ -n "$ROOT_NUM" ] || die "no '$ROOT_NAME' on $DEVICE — nothing to re-enable; do a full pocknix-install-internal."
+  root_src="$(findmnt -no SOURCE / || true)"
+  case "$root_src" in "$DEVICE"|"$DEVICE"p[0-9]*|"$DEVICE"[0-9]*) die "/ is on $DEVICE — boot to the SD first, then run --enable-boot." ;; esac
+  for t in mkfs.vfat blockdev partprobe; do command -v "$t" >/dev/null 2>&1 || die "missing tool: $t"; done
+
+  # The boot FAT was deleted from the gap between userdata and POCKNIX_ROOT — recreate it there.
+  ud_num="$(partnum userdata)"; [ -n "$ud_num" ] || die "no 'userdata' partition on $DEVICE"
+  span_mib() { parted -m -s "$DEVICE" unit MiB print | awk -F: -v n="$1" '$1==n{gsub("MiB","");print $2" "$3}'; }
+  UD_END="$(span_mib "$ud_num"   | awk '{printf "%d",$2}')"
+  ROOT_START="$(span_mib "$ROOT_NUM" | awk '{printf "%d",$1}')"
+  [ "$ROOT_START" -gt "$UD_END" ] || die "no free gap between userdata (${UD_END}MiB) and $ROOT_NAME (${ROOT_START}MiB)."
+
+  say "Re-enable internal boot on $DEVICE:"
+  say "  recreate '$BOOT_NAME' FAT in the gap ${UD_END}..${ROOT_START} MiB ($((ROOT_START-UD_END)) MiB)"
+  say "  regenerate KERNEL from the intact internal $ROOT_NAME (its OWN kernel, not the SD's)"
+  if [ "$ASSUME_YES" != 1 ] && [ "$DRY_RUN" != 1 ]; then
+    read -rp "Proceed? [y/N]: " c; [[ $c =~ ^[Yy]$ ]] || die "aborted"
+  fi
+
+  run parted -a optimal -s "$DEVICE" mkpart primary fat32 "${UD_END}MiB" "${ROOT_START}MiB"
+  if [ "$DRY_RUN" = 1 ]; then
+    say "(dry-run) would: name it '$BOOT_NAME', mkfs.vfat -F 32 -S <sectorsize> -s 1 -n $BOOT_NAME, then chroot $ROOT_NAME pocknix-build-bootimg"
+    exit 0
+  fi
+  partprobe "$DEVICE" 2>/dev/null || true; sleep 1
+  NEW="$(partnum "$BOOT_NAME" || true)"
+  [ -n "$NEW" ] || NEW="$(parted -m -s "$DEVICE" unit MiB print | awk -F: -v s="$UD_END" '$1 ~ /^[0-9]+$/ {st=$2; gsub("MiB","",st); if (int(st)==s) print $1}' | head -1)"
+  [ -n "$NEW" ] || die "could not locate the recreated boot partition"
+  parted -s "$DEVICE" name "$NEW" "$BOOT_NAME"
+  partprobe "$DEVICE" 2>/dev/null || true; sleep 1
+  bdev="$(partdev "$NEW")"; ss="$(blockdev --getss "$bdev")"
+  say "Formatting $bdev FAT32 (-S $ss -s 1, name/label $BOOT_NAME) ..."
+  mkfs.vfat -F 32 -S "$ss" -s 1 -n "$BOOT_NAME" "$bdev" >/dev/null
+
+  # Regenerate /flash/KERNEL inside the internal rootfs (its own Image + dtbs + cmdline + mkbootimg).
+  RMNT="$(mktemp -d)"; rdev="$(partdev "$ROOT_NUM")"
+  cleanup_enable() { for m in dev proc sys; do umount "$RMNT/$m" 2>/dev/null || true; done
+                     umount "$RMNT/flash" 2>/dev/null || true; umount "$RMNT" 2>/dev/null || true; rmdir "$RMNT" 2>/dev/null || true; }
+  trap cleanup_enable EXIT
+  mount "$rdev" "$RMNT"
+  [ -x "$RMNT/usr/bin/pocknix-build-bootimg" ] || die "internal rootfs lacks pocknix-build-bootimg — can't regenerate KERNEL"
+  mkdir -p "$RMNT/flash"; mount "$bdev" "$RMNT/flash"
+  for m in dev proc sys; do mount --bind "/$m" "$RMNT/$m"; done
+  say "Regenerating /flash/KERNEL (+KERNEL.md5) inside $ROOT_NAME ..."
+  chroot "$RMNT" /usr/bin/pocknix-build-bootimg || die "pocknix-build-bootimg failed in chroot"
+  cleanup_enable; trap - EXIT
+  say "Done — internal boot re-enabled. Power off, REMOVE the SD, and boot: internal pocknix should come up."
+  exit 0
+fi
 
 # ---------------------------------------------------------------------------------------------------
 # Stage 1: disable internal boot (safe from the running internal system)
