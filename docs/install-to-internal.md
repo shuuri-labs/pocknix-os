@@ -62,37 +62,32 @@ ours is GPT-named `ROCKNIX`.)
 
 ## Temporarily boot the SD *without* uninstalling (e.g. to test ROCKNIX)
 
-To boot an SD while keeping the internal install fully intact — and be able to undo it from **any**
-OS — **rename the internal boot partition** so the ABL skips it. Nothing is deleted: the KERNEL,
-`POCKNIX_ROOT`, and Android stay exactly as they are. We change both the **GPT name** *and* the
-**FAT label**, since the ABL keys off one of them (install-internal sets both `BOOT_GPT_NAME` and
-`BOOT_FAT_LABEL` to `ROCKNIX`).
+> **You cannot disable the internal boot by renaming the partition.** Tested on-device: renaming
+> *both* the GPT name and the FAT label (`ROCKNIX` → `PNXOFF`) left the device still booting
+> internal. **The RP6 ABL boots the internal boot FAT by its existence, not its name/label** — the
+> only way to make it boot the SD is to *remove* the boot FAT. (`POCKNIX_ROOT` is left intact, so
+> your install survives — this only drops the small boot partition, which `--enable-boot` rebuilds.)
 
-**Disable** — from the internal pocknix:
+So use the same flags as the uninstall flow:
+
+**Disable** — from the internal pocknix (drops only the boot FAT; `POCKNIX_ROOT` stays):
 ```bash
-umount /flash 2>/dev/null
-N=$(parted -m -s /dev/sda print | awk -F: '$6=="ROCKNIX"{print $1}')
-parted -s /dev/sda name "$N" PNXOFF        # GPT name
-fatlabel "/dev/sda${N}" PNXOFF             # FAT label (dosfstools)
+pocknix-uninstall-internal --disable-boot
 #   power off, LEAVE THE SD IN, power on → it boots the SD (e.g. ROCKNIX)
 ```
 
-**Re-enable** — works from anywhere (the internal can't boot while disabled, but ROCKNIX's shell has
-`parted`/`fatlabel` too, so you don't need a pocknix SD):
+**Re-enable** — `--enable-boot` recreates the boot FAT and regenerates `/flash/KERNEL` from the
+intact `POCKNIX_ROOT` (no 27 GB re-clone). It chroots the internal rootfs, so it needs a **booted
+pocknix** — run it from a pocknix SD (ROCKNIX doesn't carry pocknix's scripts):
 ```bash
-umount /flash 2>/dev/null
-N=$(parted -m -s /dev/sda print | awk -F: '$6=="PNXOFF"{print $1}')
-parted -s /dev/sda name "$N" ROCKNIX
-fatlabel "/dev/sda${N}" ROCKNIX
-#   power off, REMOVE THE SD, power on → boots internal pocknix again
+# boot a pocknix SD, then:
+pocknix-uninstall-internal --enable-boot
+#   power off, REMOVE the SD, power on → boots internal pocknix again
 ```
-
-`/dev/sda` is the internal UFS from any OS — sanity-check with `parted -s /dev/sda print` first (it
-should list `userdata` + `ROCKNIX`/`PNXOFF` + `POCKNIX_ROOT`, **not** the SD's partitions). It's
-non-destructive: worst case the rename doesn't stop the internal boot, you boot internal as normal,
-and retry. The heavier `--disable-boot` (deletes the boot FAT) / `--enable-boot` (recreates it and
-regenerates `/flash/KERNEL` from `POCKNIX_ROOT`, run from a pocknix SD) flags remain for the
-uninstall/reinstall flows.
+Both accept `--dry-run`. Neither touches Android or `POCKNIX_ROOT`. (If you already renamed the boot
+partition before reading this, its name won't be `ROCKNIX` so `--disable-boot` won't find it — just
+delete it directly: `parted -s /dev/sda rm <N>`, where `<N>` is the 512 MiB boot FAT from
+`lsblk -o NAME,SIZE,LABEL /dev/sda`.)
 
 ---
 
