@@ -64,3 +64,9 @@ sbc                  # SBC codec — PipeWire BT audio A2DP baseline + HFP/mSBC 
                      #   lib, BT headphones pair but produce no audio sink.
 libfreeaptx          # AptX / AptX-HD / AptX-LL (low-latency) codecs for PipeWire BT audio.
                      #   LDAC needs ldacbt-libs (AUR); AAC needs libfdk-aac (extra) — add if wanted.
+
+# --- CPU scheduler (gaming) ---
+scx-scheds           # sched_ext schedulers incl. scx_lavd (big.LITTLE / latency-aware).
+                     #   pocknix-lavd.service runs `scx_lavd --autopilot`. Needs the
+                     #   SCHED_CLASS_EXT + DEBUG_INFO_BTF kernel (build-kernel.sh) and the
+                     #   schedutil governor (kernel default) for LAVD's per-core DVFS.
