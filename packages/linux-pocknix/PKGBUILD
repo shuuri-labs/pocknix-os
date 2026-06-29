@@ -13,7 +13,7 @@
 # build-sd-image.sh / install.sh assemble /flash/KERNEL from build/image/KERNEL as before.
 pkgname=linux-pocknix
 pkgver=7.0.11
-pkgrel=8
+pkgrel=9
 pkgdesc="RP6/SM8550 kernel (stock ${pkgver} + ROCKNIX patch stack) — packaged from 'make kernel' output"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"
