@@ -25,7 +25,8 @@ conflicts=('vulkan-freedreno')
 replaces=('vulkan-freedreno')
 depends=('libdrm' 'wayland' 'libxext' 'libxdamage' 'libxshmfence' 'libxfixes' 'libx11' 'libxcb'
          'libxxf86vm' 'zstd' 'expat' 'libglvnd' 'vulkan-icd-loader' 'llvm-libs' 'libelf' 'lm_sensors')
-makedepends=('meson' 'ninja' 'glslang' 'python-mako' 'cython' 'wayland-protocols'
+makedepends=('meson' 'ninja' 'glslang' 'python-mako' 'python-yaml' 'python-ply' 'python-packaging'
+             'cython' 'wayland-protocols'
              'llvm' 'clang' 'spirv-tools' 'spirv-llvm-translator' 'libclc'
              'libdrm' 'libxext' 'libxdamage' 'libxshmfence' 'libxfixes' 'libxrandr' 'libxcb'
              'libx11' 'libxxf86vm' 'xorgproto' 'wayland' 'zstd' 'expat' 'libglvnd' 'vulkan-icd-loader')
