@@ -207,7 +207,7 @@ cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"        # rollback copy (Phase 3b hook keeps
 
 # Clone the running rootfs onto the internal ext4 (stay on the root fs; skip virtual + mountpoints).
 say "Cloning rootfs to $ROOT_PART (this takes a few minutes) ..."
-rsync -aHAXx \
+rsync -aHAXx --numeric-ids \
   --exclude='/proc/*' --exclude='/sys/*' --exclude='/dev/*' --exclude='/run/*' \
   --exclude='/tmp/*'  --exclude='/mnt/*' --exclude='/media/*' --exclude='/lost+found' \
   / "$RMNT/"

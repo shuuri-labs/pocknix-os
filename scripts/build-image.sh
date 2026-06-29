@@ -172,7 +172,9 @@ install_firmware() {
   if [ -d "${FW_SRC}" ]; then
     log "installing SM8550 device firmware -> rootfs /usr/lib/firmware ($(du -sh "${FW_SRC}" | cut -f1))"
     mkdir -p "${root}/usr/lib/firmware"
-    rsync -a "${FW_SRC}/" "${root}/usr/lib/firmware/"
+    # --chown=root:root: the vendor firmware tree is owned by the host build user (uid 1000); plain
+    # rsync -a would bake that into the rootfs as 'alarm'-owned firmware (and re-own /usr). Force root.
+    rsync -a --chown=root:root "${FW_SRC}/" "${root}/usr/lib/firmware/"
   else
     warn "ROCKNIX firmware overlay not at ${FW_SRC} — run 'make sync' (wifi/audio firmware will be missing)"
   fi

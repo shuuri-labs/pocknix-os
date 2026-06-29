@@ -40,7 +40,9 @@ ensure_kernel_in_rootfs() {
     local kver; kver="$(cat "${KOUT}/kernelrelease" 2>/dev/null)"
     log "syncing pocknix modules (${kver}) into rootfs + removing generic kernel"
     chroot "${ROOTFS_DIR}" pacman -Rdd --noconfirm linux-aarch64 2>/dev/null || true
-    rsync -a "${KOUT}/modroot/lib/modules/" "${ROOTFS_DIR}/usr/lib/modules/"
+    # --chown=root:root: the kernel build output is owned by the host build user (uid 1000), and
+    # plain rsync -a preserves that — which inside the ALARM rootfs is 'alarm', not root. Force root.
+    rsync -a --chown=root:root "${KOUT}/modroot/lib/modules/" "${ROOTFS_DIR}/usr/lib/modules/"
     [ -n "${kver}" ] && chroot "${ROOTFS_DIR}" depmod "${kver}" 2>/dev/null || true
   else
     warn "no kernel modules in ${KOUT} — rootfs may lack matching modules"
@@ -69,7 +71,13 @@ EOF
   # install the committed test-image overlay (diag dump, autologin, NM conf, fan/volume helpers)
   if [ -d "${POCKNIX_ROOT}/overlay" ]; then
     log "installing overlay (diag + autologin + helpers)"
-    rsync -a "${POCKNIX_ROOT}/overlay/" "${root}/"
+    # --chown=root:root is REQUIRED: the overlay lives in the host git checkout owned by the build
+    # user (uid 1000). Plain rsync -a preserves that ownership AND stamps the destination parent dirs
+    # it touches (/, /usr, /etc/systemd, /etc/polkit-1, /root) — inside the ALARM rootfs uid 1000 is
+    # 'alarm', not root. That silently broke privilege-bounded services: systemd-timedated runs as root
+    # but with CapabilityBoundingSet=CAP_SYS_TIME (no DAC_OVERRIDE), so it couldn't write /etc/localtime
+    # when /etc was alarm-owned -> "set timezone has no effect". Force every overlay path to root:root.
+    rsync -a --chown=root:root "${POCKNIX_ROOT}/overlay/" "${root}/"
     chmod +x "${root}/usr/local/bin/pocknix-diag" \
              "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" \
              "${root}/usr/local/bin/pocknix-volumed" \
@@ -228,6 +236,12 @@ main() {
   log "copying rootfs -> root partition (takes a bit)"
   rsync -aHAX --numeric-ids "${ROOTFS_DIR}/" "${MNT}/"
   firstboot_config "${MNT}"
+  # Ownership gate: nothing outside /home should be owned by the host build user (uid/gid 1000 =
+  # 'alarm' in the rootfs). A stray host-owned path here means a host->rootfs copy leaked ownership
+  # (see the --chown=root:root rsyncs above) — which silently breaks privilege-bounded services like
+  # systemd-timedated (couldn't write /etc/localtime -> timezone changes had no effect). Fail loudly.
+  leaked="$(find "${MNT}" -xdev \( -uid 1000 -o -gid 1000 \) ! -path "${MNT}/home/*" -print -quit)"
+  [ -z "${leaked}" ] || die "host-owned (uid/gid 1000) path leaked into the image: ${leaked#${MNT}} — a host->rootfs rsync needs --chown=root:root"
   sync; umount "${MNT}"; rmdir "${MNT}"; MNT=""
   losetup -d "${LOOP}"; LOOP=""
   trap - EXIT

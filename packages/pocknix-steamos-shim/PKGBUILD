@@ -6,13 +6,13 @@
 # steamos-update + armada-update, so when real OTA is built later it's a drop-in body swap.
 pkgname=pocknix-steamos-shim
 pkgver=0.1.0
-pkgrel=2
-pkgdesc="SteamOS update/branch helper stubs for the Steam Deck UI on a non-SteamOS base (until real OTA)"
+pkgrel=3
+pkgdesc="SteamOS update/branch/timezone helper stubs for the Steam Deck UI on a non-SteamOS base (until real OTA)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-source=('steamos-update' 'steamos-select-branch')
-sha256sums=('SKIP' 'SKIP')
+source=('steamos-update' 'steamos-select-branch' 'steamos-set-timezone')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
   # Steam calls the OS-update helper by its FULL polkit-helper path, not via PATH — verified in
@@ -22,6 +22,11 @@ package() {
   install -Dm755 "${srcdir}/steamos-update"        "${pkgdir}/usr/bin/steamos-polkit-helpers/steamos-update"
   install -Dm755 "${srcdir}/steamos-update"        "${pkgdir}/usr/bin/steamos-update"
   install -Dm755 "${srcdir}/steamos-select-branch" "${pkgdir}/usr/bin/steamos-select-branch"
+  # Timezone: the Deck UI calls steamos-set-timezone (like steamos-update, by its full polkit-helper
+  # path as well as the plain /usr/bin name). Install both so the Settings timezone picker actually
+  # applies. Real fix needs ownership of /etc correct too — see the --chown=root:root build rsyncs.
+  install -Dm755 "${srcdir}/steamos-set-timezone"  "${pkgdir}/usr/bin/steamos-polkit-helpers/steamos-set-timezone"
+  install -Dm755 "${srcdir}/steamos-set-timezone"  "${pkgdir}/usr/bin/steamos-set-timezone"
   # DO NOT shim jupiter-biosupdate / jupiter-dock-updater / jupiter-initial-firmware-update. Steam's
   # BIOS check reads their exit codes with the OPPOSITE convention to steamos-update (it read our
   # `exit 7` as "BIOS update available"), and a present dock-updater makes Steam think a dock is

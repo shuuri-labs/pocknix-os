@@ -52,11 +52,42 @@ pocknix-uninstall-internal --disable-boot
 pocknix-uninstall-internal --dry-run     # review
 pocknix-uninstall-internal
 ```
-Flags: `--disable-boot`, `--dry-run`, `--yes`/`-y`, `--device /dev/sdX` (default `/dev/sda`).
-The full (Stage 2) uninstall refuses to run if `/` is on the target device, as a guard.
+Flags: `--disable-boot`, `--enable-boot`, `--dry-run`, `--yes`/`-y`, `--device /dev/sdX` (default
+`/dev/sda`). The full (Stage 2) uninstall refuses to run if `/` is on the target device, as a guard.
 
 (Alternative to Stage 1: the ABL menu's **"Uninstall ROCKNIX"** also removes the boot partition, since
 ours is GPT-named `ROCKNIX`.)
+
+---
+
+## Temporarily boot the SD *without* uninstalling (e.g. to test ROCKNIX)
+
+> **You cannot disable the internal boot by renaming the partition.** Tested on-device: renaming
+> *both* the GPT name and the FAT label (`ROCKNIX` → `PNXOFF`) left the device still booting
+> internal. **The RP6 ABL boots the internal boot FAT by its existence, not its name/label** — the
+> only way to make it boot the SD is to *remove* the boot FAT. (`POCKNIX_ROOT` is left intact, so
+> your install survives — this only drops the small boot partition, which `--enable-boot` rebuilds.)
+
+So use the same flags as the uninstall flow:
+
+**Disable** — from the internal pocknix (drops only the boot FAT; `POCKNIX_ROOT` stays):
+```bash
+pocknix-uninstall-internal --disable-boot
+#   power off, LEAVE THE SD IN, power on → it boots the SD (e.g. ROCKNIX)
+```
+
+**Re-enable** — `--enable-boot` recreates the boot FAT and regenerates `/flash/KERNEL` from the
+intact `POCKNIX_ROOT` (no 27 GB re-clone). It chroots the internal rootfs, so it needs a **booted
+pocknix** — run it from a pocknix SD (ROCKNIX doesn't carry pocknix's scripts):
+```bash
+# boot a pocknix SD, then:
+pocknix-uninstall-internal --enable-boot
+#   power off, REMOVE the SD, power on → boots internal pocknix again
+```
+Both accept `--dry-run`. Neither touches Android or `POCKNIX_ROOT`. (If you already renamed the boot
+partition before reading this, its name won't be `ROCKNIX` so `--disable-boot` won't find it — just
+delete it directly: `parted -s /dev/sda rm <N>`, where `<N>` is the 512 MiB boot FAT from
+`lsblk -o NAME,SIZE,LABEL /dev/sda`.)
 
 ---
 
