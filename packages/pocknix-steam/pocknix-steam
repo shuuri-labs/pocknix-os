@@ -97,13 +97,10 @@ fi
 # separate rotation-shader pass. --force-orientation left sets the axis. See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left
 
-# Pin the whole game tree (gamescope + steam + game + FEX) to the SM8550's capable cores,
-# mirroring ROCKNIX's EMUPERF=FAST_CORES. CORRECTED split per ROCKNIX PR #2930: 0-2 are the
-# A510 littles, 3-7 are the A710/A715 mids + the X3 prime — so FAST=3-7 (NOT the stale 0-4/5-7
-# in our vendored quirks). gamescope's children inherit its affinity, so one taskset covers all.
-# On-device A/B confirmed it helps: widening to 0-7 DROPS in-game FPS (the scheduler strands hot
-# threads on the slow littles).
-FAST_CORES=3-7
+# NO core pin: scx_lavd (latency- + heterogeneity-aware, pocknix-lavd.service) places the bursty
+# game/compositor threads on the big cores itself, AND needs the A510 littles free to offload batch
+# work (e.g. in-game Steam downloads) so the UI stays responsive — a hard taskset would fight it.
+# (The manual 3-7 pin was for the plain-EEVDF kernel; lavd supersedes it.)
 
 # Steam client flags = armada's gamescope-session CLIENTCMD exactly
 # (`-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`). `-e` = gamescope --steam.
@@ -125,7 +122,6 @@ set -o pipefail
 # value (~275 DPI, handheld-correct UI); the old 508x286 was ~96 DPI -> a desktop monitor -> tiny UI.
 env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=177x100 \
-  taskset -c "${FAST_CORES}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --force-composition-rotation -e -- \
     env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles \
