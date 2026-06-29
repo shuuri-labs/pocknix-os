@@ -122,6 +122,79 @@ through the nested X server. That would *localize* the architectural cost rather
 but it's a profiling session, not a quick A/B. **`CONFIG_PSI=off`** (an armada/SteamOS gaming tweak)
 was also identified but never tested — a remaining minor lever.
 
+## Investigations to run ON ROCKNIX (dual-boot)
+
+The biggest weakness in this whole effort is that we mostly **inferred** ROCKNIX's behaviour from
+source rather than measuring a *running* instance. ROCKNIX can be booted on the same device without
+disturbing the internal install — see *"Temporarily boot the SD"* in
+[`install-to-internal.md`](install-to-internal.md). Two open questions are worth driving from a live
+ROCKNIX:
+
+### 1. What actually causes the gamescope perf difference
+
+Run the **same game, same scene** on ROCKNIX and capture, side-by-side with pocknix:
+
+- **Per-thread CPU at a matched fps** — the money shot; directly tests the "~70% more CPU/frame"
+  finding:
+  ```sh
+  ps -eLo psr,pcpu,tid,comm --sort=-pcpu | head -15
+  ```
+  Does ROCKNIX's `*.exe` use *less* CPU at *higher* fps, and on which core? If yes, it's a per-frame
+  cost difference and the next step localizes it.
+- **Localize the per-frame cost with a profiler** — the one thing that turns "architectural" into a
+  named culprit:
+  ```sh
+  perf record -g -p <game-pid> -- sleep 10 ; perf report   # also profile the gamescope + Xwayland PIDs
+  ```
+  Compare hot stacks vs pocknix: is the extra time in XWayland round-trips, the Vulkan/WSI buffer
+  handoff, or FEX re-translation through the nested X server?
+- **Diff the present-path stack we only guessed at:**
+  ```sh
+  cat /proc/$(pidof gamescope)/cmdline | tr '\0' ' '; echo
+  cat /proc/$(pidof gamescope)/environ | tr '\0' '\n' | grep -iE 'MESA|TU_|DXVK|PROTON|GAMESCOPE|FEX|vblank'
+  vulkaninfo --summary | grep -iE 'driverName|driverInfo'      # Turnip version/patches
+  # ROCKNIX's live FEX config + the per-app AppConfig / thunk set actually applied to the game
+  ```
+- **Confirm the config assumptions** (we asserted these from source):
+  ```sh
+  cat /sys/devices/system/cpu/cpufreq/policy0/scaling_governor          # performance?
+  cat /sys/kernel/sched_ext/root/ops 2>/dev/null || echo "EEVDF (no scx)"
+  cat /sys/devices/system/cpu/cpu0/cpu_capacity /sys/devices/system/cpu/cpu7/cpu_capacity  # 326 / 1024?
+  [ -r /proc/pressure/cpu ] && echo "PSI on" || echo "PSI off"
+  grep Cpus_allowed_list /proc/$(pidof gamescope)/status                # is ROCKNIX's gamescope pinned?
+  ```
+  If ROCKNIX's game uses ~the same CPU/frame and the win is elsewhere, the residual is the userspace
+  *build* (Turnip / glibc / xwayland / Proton-DXVK) — a thousand cuts, not a knob.
+
+### 2. How ROCKNIX drives the DRM panel to 60 Hz (the QAM refresh question)
+
+pocknix's gamescope **can't** modeset to 60 Hz: its `ParseEDID` bails because the msm DSI connector
+exposes no EDID, and a synthetic EDID via `drm.edid_firmware` failed (msm DSI bypasses
+`drm_get_edid`) — see the `gamescope-refresh-edid` memory. ROCKNIX *does* enter a real 60 Hz session
+when the SteamOS framerate limiter is set to 60. Determine how, on a live ROCKNIX:
+
+- **Does ROCKNIX's connector even advertise a 60 Hz mode?** (An earlier `modetest` showed
+  `1080x1920@120` *and* `@60` with an **empty** EDID blob — confirm, and compare to pocknix, which
+  likely lists only `@120`):
+  ```sh
+  cat /sys/class/drm/card*-DSI*/modes            # the mode list the connector exposes
+  modetest -M msm -c | grep -A40 -i connector    # full mode table + the active mode
+  ```
+  If ROCKNIX exposes `@60` and pocknix doesn't, the difference is **in the panel driver / DTB**, not
+  gamescope or EDID — the panel node defines both timings.
+- **Compare the panel node in the running device tree** (look for multiple `display-timings` / mode
+  children, or a `qcom,mdss-dsi-*` panel with a 60 Hz timing pocknix's lacks):
+  ```sh
+  find /proc/device-tree -iname '*panel*' -o -iname '*display-timings*' 2>/dev/null
+  ```
+- **How the limiter maps to the modeset:** does ROCKNIX pass a launch-time `-r 60`, rely on
+  `GAMESCOPE_MODE_SAVE_FILE`, or does the QAM slider trigger a gamescope mode change? Grep gamescope's
+  log around a 60-cap switch (`'mode'|'refresh'|'drm'|'modeset'`).
+
+**Most likely conclusion:** if ROCKNIX's connector lists a 60 Hz mode and pocknix's doesn't, the fix
+for pocknix is to **add the 60 Hz timing to our panel node** (a kernel/DTB change) — not a gamescope
+flag or an EDID hack. That would let gamescope's `-r 60` / QAM slider pick a true 60 Hz DRM mode.
+
 ## Side-findings worth keeping
 
 - **ROCKNIX's `ThunksDB` all-0 is *not* "thunks disabled".** It delivers thunks via its custom

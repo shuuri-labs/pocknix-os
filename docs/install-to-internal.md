@@ -52,11 +52,47 @@ pocknix-uninstall-internal --disable-boot
 pocknix-uninstall-internal --dry-run     # review
 pocknix-uninstall-internal
 ```
-Flags: `--disable-boot`, `--dry-run`, `--yes`/`-y`, `--device /dev/sdX` (default `/dev/sda`).
-The full (Stage 2) uninstall refuses to run if `/` is on the target device, as a guard.
+Flags: `--disable-boot`, `--enable-boot`, `--dry-run`, `--yes`/`-y`, `--device /dev/sdX` (default
+`/dev/sda`). The full (Stage 2) uninstall refuses to run if `/` is on the target device, as a guard.
 
 (Alternative to Stage 1: the ABL menu's **"Uninstall ROCKNIX"** also removes the boot partition, since
 ours is GPT-named `ROCKNIX`.)
+
+---
+
+## Temporarily boot the SD *without* uninstalling (e.g. to test ROCKNIX)
+
+To boot an SD while keeping the internal install fully intact — and be able to undo it from **any**
+OS — **rename the internal boot partition** so the ABL skips it. Nothing is deleted: the KERNEL,
+`POCKNIX_ROOT`, and Android stay exactly as they are. We change both the **GPT name** *and* the
+**FAT label**, since the ABL keys off one of them (install-internal sets both `BOOT_GPT_NAME` and
+`BOOT_FAT_LABEL` to `ROCKNIX`).
+
+**Disable** — from the internal pocknix:
+```bash
+umount /flash 2>/dev/null
+N=$(parted -m -s /dev/sda print | awk -F: '$6=="ROCKNIX"{print $1}')
+parted -s /dev/sda name "$N" PNXOFF        # GPT name
+fatlabel "/dev/sda${N}" PNXOFF             # FAT label (dosfstools)
+#   power off, LEAVE THE SD IN, power on → it boots the SD (e.g. ROCKNIX)
+```
+
+**Re-enable** — works from anywhere (the internal can't boot while disabled, but ROCKNIX's shell has
+`parted`/`fatlabel` too, so you don't need a pocknix SD):
+```bash
+umount /flash 2>/dev/null
+N=$(parted -m -s /dev/sda print | awk -F: '$6=="PNXOFF"{print $1}')
+parted -s /dev/sda name "$N" ROCKNIX
+fatlabel "/dev/sda${N}" ROCKNIX
+#   power off, REMOVE THE SD, power on → boots internal pocknix again
+```
+
+`/dev/sda` is the internal UFS from any OS — sanity-check with `parted -s /dev/sda print` first (it
+should list `userdata` + `ROCKNIX`/`PNXOFF` + `POCKNIX_ROOT`, **not** the SD's partitions). It's
+non-destructive: worst case the rename doesn't stop the internal boot, you boot internal as normal,
+and retry. The heavier `--disable-boot` (deletes the boot FAT) / `--enable-boot` (recreates it and
+regenerates `/flash/KERNEL` from `POCKNIX_ROOT`, run from a pocknix SD) flags remain for the
+uninstall/reinstall flows.
 
 ---
 
