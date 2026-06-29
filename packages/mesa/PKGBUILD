@@ -1,0 +1,73 @@
+# mesa (pocknix) — Adreno-ONLY Mesa for the RP6 (SM8550 / Adreno 740), carrying the Turnip
+# VM_BIND submit-sync fix.
+#
+# Why ours instead of ALARM's: ALARM's mesa builds EVERY vendor's driver (amd/intel/nouveau/…)
+# and ships stock Turnip. We only have an Adreno, and stock Turnip pays a redundant per-submit
+# wait/signal fence on the msm VM_BIND path (see 0001-tu-msm-drop-redundant-vmbind-sync.patch) —
+# overhead on gamescope's per-frame compositor submits. This builds freedreno-only (much smaller,
+# faster) at the SAME upstream version as ALARM (26.1.3) so libgallium ABI matches the rest of the
+# system, and merges mesa + vulkan-freedreno into one package (everything comes from one build, so
+# it's ABI-consistent by construction). epoch=1 so it's preferred over ALARM's [extra] mesa.
+#
+# NB: mesa's meson config is finicky — if the first build trips on an option/dep, paste the error;
+# the meson flags + makedepends below are the bits most likely to need a tweak per upstream version.
+pkgname=mesa
+epoch=1
+pkgver=26.1.3
+pkgrel=1
+pkgdesc="Adreno-only Mesa (GL + Turnip/Vulkan) for the RP6, with the Turnip VM_BIND submit-sync fix"
+arch=('aarch64')
+url="https://www.mesa3d.org/"
+license=('MIT')
+# Merges the ALARM mesa + vulkan-freedreno split into one freedreno-only package.
+provides=('mesa' 'vulkan-freedreno' "vulkan-freedreno=${pkgver}" 'opengl-driver' 'vulkan-driver')
+conflicts=('vulkan-freedreno')
+replaces=('vulkan-freedreno')
+depends=('libdrm' 'wayland' 'libxext' 'libxdamage' 'libxshmfence' 'libxfixes' 'libx11' 'libxcb'
+         'libxxf86vm' 'zstd' 'expat' 'libglvnd' 'vulkan-icd-loader' 'llvm-libs' 'libelf' 'lm_sensors')
+makedepends=('meson' 'ninja' 'glslang' 'python-mako' 'cython' 'wayland-protocols'
+             'llvm' 'clang' 'spirv-tools' 'spirv-llvm-translator' 'libclc'
+             'libdrm' 'libxext' 'libxdamage' 'libxshmfence' 'libxfixes' 'libxrandr' 'libxcb'
+             'libx11' 'libxxf86vm' 'xorgproto' 'wayland' 'zstd' 'expat' 'libglvnd' 'vulkan-icd-loader')
+source=("https://mesa.freedesktop.org/archive/mesa-${pkgver}.tar.xz"
+        '0001-tu-msm-drop-redundant-vmbind-sync.patch')
+sha256sums=('SKIP' 'SKIP')
+
+prepare() {
+  cd "mesa-${pkgver}"
+  patch -p1 < "${srcdir}/0001-tu-msm-drop-redundant-vmbind-sync.patch"
+}
+
+build() {
+  cd "mesa-${pkgver}"
+  meson setup _build \
+    --prefix=/usr \
+    --libdir=lib \
+    --buildtype=release \
+    --wrap-mode=nofallback \
+    -D b_ndebug=true \
+    -D b_lto=false \
+    -D platforms=wayland,x11 \
+    -D gallium-drivers=freedreno \
+    -D vulkan-drivers=freedreno \
+    -D freedreno-kmds=msm \
+    -D egl=enabled \
+    -D gbm=enabled \
+    -D glx=dri \
+    -D gles1=disabled \
+    -D gles2=enabled \
+    -D glvnd=enabled \
+    -D llvm=enabled \
+    -D mesa-clc=enabled \
+    -D gallium-va=disabled \
+    -D gallium-vdpau=disabled \
+    -D video-codecs= \
+    -D vulkan-layers=
+  meson compile -C _build
+}
+
+package() {
+  cd "mesa-${pkgver}"
+  DESTDIR="${pkgdir}" meson install -C _build
+  install -Dm644 docs/license.rst "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
+}
