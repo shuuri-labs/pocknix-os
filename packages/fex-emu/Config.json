@@ -1,9 +1,26 @@
 {
   "Config": {
     "RootFS": "/usr/share/fex-emu/RootFS/ArchLinux.sqsh",
-    "X87ReducedPrecision": "1",
     "ThunkHostLibs": "/usr/lib/fex-emu/HostThunks",
-    "ThunkGuestLibs": "/usr/share/fex-emu/GuestThunks"
+    "ThunkGuestLibs": "/usr/share/fex-emu/GuestThunks",
+    "TSOEnabled": "1",
+    "VectorTSOEnabled": "0",
+    "MemcpySetTSOEnabled": "0",
+    "HalfBarrierTSOEnabled": "1",
+    "X87ReducedPrecision": "1",
+    "Multiblock": "1",
+    "MaxInst": "5000",
+    "KernelUnalignedAtomicBackpatching": "1",
+    "DynamicL1Cache": "1",
+    "DynamicL1CacheDecreaseCountHeuristic": "50",
+    "DynamicL1CacheIncreaseCountHeuristic": "250",
+    "DisableL2Cache": "1",
+    "DISABLE_VIXL_INDIRECT_RUNTIME_CALLS": "1",
+    "HideHybrid": "1",
+    "SmallTSCScale": "1",
+    "VolatileMetadata": "1",
+    "SMCChecks": "1",
+    "MonoHacks": "1"
   },
   "ThunksDB": {
     "Vulkan": 1,

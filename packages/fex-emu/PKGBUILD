@@ -18,7 +18,7 @@
 pkgname=fex-emu
 _commit=a04b0241c2fe3911729842205cd8643981108aad
 pkgver=2605.20260520.a04b0241
-pkgrel=2
+pkgrel=3
 pkgdesc="Fast usermode x86/x86-64 emulator for AArch64, built with host+guest thunks"
 arch=('aarch64')
 url="https://github.com/FEX-Emu/FEX"
