@@ -12,13 +12,17 @@
 > profile. **Next step is diagnostic, not another A/B:** run `docs/fps-capture.sh` on the SAME scene
 > on both OSes and diff `perf-by-dso.txt`. See **["Verdict dispute" below](#verdict-dispute-2026-06-30)**.
 >
-> **✅ RESOLVED 2026-06-30 (live session).** The dispute was right: it is NOT the irreducible
-> emulation floor. A kwin-desktop control (same OS/FEX, only the compositor changed) runs the FEX game
-> at 50-56 fps vs gamescope's 30-40, with GPU util 70-80% vs ~50% — so the gap is the **gamescope WSI
-> present path starving the GPU**, and the leading suspect is the gamescope WSI Vulkan layer running
-> **host-side (aarch64) on pocknix vs guest-side (x86_64) on ROCKNIX**. Several separate bugs (game
-> forced to SCHED_RR → hitching; fan curve averaging → throttle; a vsync staircase) were also found
-> and fixed. See **["Live on-device A/B session" below](#live-on-device-ab-session-2026-06-30--gap-isolated-to-the-gamescope-wsi-present-path)**.
+> **⚠️ LOCALIZED, NOT SOLVED (updated 2026-07-01, two live sessions).** The dispute was right that it's
+> NOT the irreducible emulation floor: a kwin-desktop control (same OS/FEX, only the compositor changed)
+> runs the FEX game at 50-56 fps vs gamescope's 30-40 — so the gap is **specific to pocknix's gamescope
+> session** (ROCKNIX-gamescope hits 55-60 on the same hardware). But the *mechanism* is still unknown:
+> **every concrete difference was ruled out** — WSI layer (same aarch64 binary; the "x86_64" filename
+> was a red herring), gamescope version (pocknix is newer), IPI/scheduler churn (comparable), swapchain
+> config (identical), meson flags, FEX (same Proton bundle), Turnip, thermal, rogue process. GPU sits at
+> ~50% in **both** gamescope cases (not "starvation"). The residual is ~10ms/frame of present-path
+> latency that no config/source delta explains; localizing it would need off-CPU per-frame tracing.
+> **Real wins are the bugs fixed along the way** (SCHED_RR hitching, fan curve, vsync staircase, settings).
+> See **["Live on-device A/B session" below](#live-on-device-ab-session-2026-06-30--gap-isolated-to-the-gamescope-wsi-present-path)**.
 
 ## TL;DR
 
@@ -296,28 +300,42 @@ This fits every fact: gamescope-specific (kwin has no WSI layer → 70-80%), FEX
 games don't cross the thunk → no gap), present-path blocking (cores idle between frames, GPU starved,
 *less* total CPU but more CPU/frame).
 
-**ROOT CAUSE CONFIRMED — pocknix is missing the guest-side (x86_64) gamescope WSI layer.**
-- `ENABLE_GAMESCOPE_WSI=1` is a **red herring**: gamescope force-sets it (plus `GAMESCOPE_LIMITER_FILE`,
-  `vk_khr_present_wait=true`, `STEAM_GAMESCOPE_DYNAMIC_FPSLIMITER=1`, …) on *every* child, so it stays
-  in the game env even when removed from the launcher. Removing it changed nothing. Not a lever.
-- pocknix ships **only the host layer**: `/usr/lib/libVkLayer_FROG_gamescope_wsi_aarch64.so` +
-  `/usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.aarch64.json`. There is **no x86_64
-  layer anywhere** (not in `steamrtarm64`, compatibilitytools, or — by inference — the FEX guest
-  rootfs `ArchLinux.sqsh`). ROCKNIX and a real Steam Deck ship the **x86_64** layer *inside the guest*.
-- So on pocknix every `vkAcquireNextImageKHR`/`vkQueuePresentKHR` blocks **across the FEX thunk** on
-  gamescope (gamescope sets `vk_khr_present_wait=true` → the app waits on present completion). That
-  per-present thunk tax starves the GPU, and it scales with present frequency — **which is exactly why
-  a `-r 60` session improved fps** (half the presents = half the thunk crossings). ROCKNIX's WSI sync
-  is guest-side (pre-thunk), so 120Hz costs it nothing extra.
+**~~ROOT CAUSE: missing guest-side x86_64 WSI layer~~ — RETRACTED 2026-07-01.** This hypothesis was
+WRONG. On live inspection of ROCKNIX, the file named `libVkLayer_FROG_gamescope_wsi_x86_64.so` is
+itself an **aarch64 ELF** (`file` confirms `ARM aarch64`) — it's just *named* `_x86_64`. **Both pocknix
+and ROCKNIX load the same host-side aarch64 WSI layer**; the perf-DSO arch suffix was a filename red
+herring. `ENABLE_GAMESCOPE_WSI=1` is also a no-op (gamescope force-sets it on every child). The WSI
+layer is NOT the differentiator.
 
-**THE FIX (to implement + test):** cross-build `libVkLayer_FROG_gamescope_wsi` for **x86_64** (pocknix
-already has the x86 cross-toolchain in `packages/fex-emu`) — or lift ROCKNIX's prebuilt `.so` — and
-ship it **with its `.json` manifest inside the FEX guest rootfs** (`/usr/share/vulkan/implicit_layer.d/`
-in `ArchLinux.sqsh`), matching ROCKNIX/the Deck. Then the guest Vulkan loader loads it guest-side and
-present-sync no longer crosses the thunk.
+**Three present-path hypotheses, all killed by direct measurement (2026-07-01 ROCKNIX live session):**
+1. **WSI layer placement** — same aarch64 host layer on both (above).
+2. **gamescope version** — pocknix `fe78bc6` (2025-11-27) is *newer* than ROCKNIX `4286887`
+   (2025-10-16); the commits between are trivial (mangoapp frametimings, an xwayland cleanup).
+3. **Scheduling/IPI churn** — measured cleanly: reschedule IPI pocknix 4044/s vs ROCKNIX 1578/s;
+   **function-call IPI pocknix 23,826/s vs ROCKNIX 36,048/s (ROCKNIX higher)**. No IPI storm on pocknix.
+   PSI is the only real-but-modest delta (pocknix ~19 vs ROCKNIX ~9-13, mostly scx_lavd).
 
-**STOPGAP (validated):** running the gamescope session at `-r 60` instead of `-r 120` measurably helps
-(halves the per-present thunk/composite overhead). Not the real fix (ROCKNIX runs 120 fine), but free.
+**Also identical / ruled out:** swapchain & present config (both `flip:true`, `minImageCount:4`,
+`VK_EXT_swapchain_maintenance1`, 8.33ms), gamescope meson flags (near-identical; pocknix differs only
+by `-Db_lto=false` + generic-vs-cortex-x3 — too small to explain a ~50% gap), FEX (Proton-bundled,
+identical), Turnip (fast under kwin → not the issue), thermal throttle, rogue process, CPU clock,
+rotation method (user-tested), present mode.
+
+**HONEST STATE:** the gap is **firmly localized** — pocknix-gamescope ~30-40fps vs ROCKNIX-gamescope
+55-60 and pocknix-kwin 50-56, *same hardware/OS/FEX/Turnip*, GPU ~50% in **both** gamescope cases (so
+it's NOT GPU starvation either — earlier framing corrected; ROCKNIX runs fine at 50% GPU too). It's
+~**10ms/frame** of extra latency specific to **pocknix's gamescope present path**, CPU/latency-bound,
+but **no config/version/layer/build difference found explains it.** Every concrete lever is exhausted.
+Remaining possibilities require deeper work: (a) build-environment/dependency deltas (ALARM vs
+LibreELEC wlroots/libliftoff/mesa toolchain), or (b) **off-CPU profiling of the render thread's
+per-frame blocking** (`perf sched`/`offcputime`) to localize *where* the 10ms goes — the only thing
+that would turn this from "localized" into "named." Not a quick A/B.
+
+**STOPGAP (validated):** `-r 60` instead of `-r 120` measurably helps. Free partial mitigation.
+
+**The session's real, kept wins are the bugs found along the way** (hitching/RR, fan curve [reverted to
+quiet averaging after ROCKNIX showed 91°C@pwm153 is normal], the vsync staircase, settings matching),
+not a closing of the residual gamescope gap.
 
 ### Confirmed fixes this session
 1. **Hitching (random GPU→0% stalls):** the *entire game* ran as **SCHED_RR rtprio 40** — Wine
