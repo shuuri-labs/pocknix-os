@@ -47,15 +47,31 @@ pacing, a gaming sysctl, ROCKNIX's FEX JIT config) — see **[Kept](#kept-real-w
 
 ## Measured baseline
 
-| Configuration | fps (same scene) |
-|---|---|
-| Plasma / ROCKNIX | ~50-60 |
-| **pocknix gamescope** | **~40-48** |
+**Refined ordering (2026-06-30, maintainer):** the three configs are NOT two tiers — they're three:
 
-Key measurement: under gamescope the game ran at **~282% CPU for ~45 fps**; under Plasma at
-**~216% CPU for ~60 fps** → **~70% more CPU per frame under gamescope.** It is *not* getting *less*
-CPU (a placement/contention problem) — it is *burning more per frame* (present-path overhead). GPU
-sat at ~60% throughout, i.e. **CPU/FEX-bound, not GPU-bound.**
+| Configuration | speed | notes |
+|---|---|---|
+| **ROCKNIX** gamescope | **fastest** | |
+| pocknix **Plasma Mobile** (kwin) | middle — beats pocknix-gamescope, **still a bit behind ROCKNIX** | |
+| **pocknix gamescope** | **slowest** | ~40-48 fps; ~282% CPU @ ~45 fps in the orig snapshot |
+
+This splits the problem into **two gaps**:
+- **Gap A (big, recoverable): pocknix-gamescope → pocknix-Plasma.** Same box, same OS, same scx_lavd,
+  same userspace — so this is purely the **gamescope-session setup** on pocknix. It also proves
+  gamescope's present path is *not free* (Plasma beats it on the same box), **but** ROCKNIX-gamescope
+  is the fastest of all, so gamescope *can* be cheap — pocknix's gamescope is paying an **avoidable
+  surcharge** ROCKNIX's gamescope doesn't. This is the main target.
+- **Gap B (small): pocknix-Plasma → ROCKNIX-gamescope.** pocknix's *best* still trails ROCKNIX even
+  with no gamescope penalty → a compositor-independent **pocknix-vs-ROCKNIX userspace/base-load**
+  margin (cortex-x3 build, Mesa 26.1.2 vs 26.1.3, lean appliance vs full distro, EEVDF vs lavd).
+  Diminishing returns; the <1% tuned-userspace finding lives here.
+
+So the goal is concrete: **drag pocknix-gamescope up to ROCKNIX-gamescope** (which would also overtake
+pocknix-Plasma). There is real headroom — gamescope is the *fastest* config when set up like ROCKNIX.
+
+Original snapshot (un-matched method, kept for reference): under gamescope ~**282% CPU for ~45 fps**;
+under Plasma ~**216% CPU for ~60 fps** → ~70% more CPU per frame under gamescope. GPU ~60% throughout
+→ CPU/FEX-bound, not GPU-bound. (Re-measure with `fps-capture.sh` for matched numbers.)
 
 ---
 
