@@ -3,7 +3,7 @@
 ## TL;DR
 
 pocknix's **game-mode (gamescope) session runs x86/FEX games ~15-20% slower** than the *same*
-game on (a) pocknix's own **Plasma** desktop, (b) **ROCKNIX**, and (c) **armada** — all on the same
+game on (a) pocknix's own **Plasma** desktop and (b) **ROCKNIX** — both on the same
 RP6. After an extensive on-device A/B campaign we **could not close the average-fps gap with any
 config or driver lever**. The conclusion is that it is **architectural**: gamescope's
 nested-XWayland present path makes the FEX-translated game spend materially more CPU *per frame*
@@ -29,13 +29,15 @@ pacing, a gaming sysctl, ROCKNIX's FEX JIT config) — see **[Kept](#kept-real-w
 - **Three reference stacks:**
   - **pocknix** — Arch Linux ARM, full distro, non-root `deck` session.
   - **ROCKNIX** — LibreELEC appliance, **root** session.
-  - **armada** — Fedora bootc, full distro (the closest comparable; `shuuri-labs/armada`).
+  - **armada** — Fedora bootc, full distro; the parallel fork we share patches/config with
+    (`shuuri-labs/armada`). **Not benchmarked here** — referenced only as a source of config/patches,
+    not as a known-faster baseline.
 
 ## Measured baseline
 
 | Configuration | fps (same scene) |
 |---|---|
-| Plasma / ROCKNIX / armada | ~50-60 |
+| Plasma / ROCKNIX | ~50-60 |
 | **pocknix gamescope** | **~40-48** |
 
 Key measurement: under gamescope the game ran at **~282% CPU for ~45 fps**; under Plasma at
@@ -117,8 +119,6 @@ Why the reference stacks don't show it:
 - **Plasma (same box):** kwin's present path is cheaper / more buffered.
 - **ROCKNIX:** lean appliance + root session; efficient enough that its RR compositor never hits the
   RT throttle and its userspace present path is tighter.
-- **armada:** also a full distro, but it shipped the gaming sysctl (RT throttle off) we were
-  missing, plus a patched Turnip and `gamescope-session-plus`.
 
 ## Unexplored / future
 
@@ -172,35 +172,6 @@ Run the **same game, same scene** on ROCKNIX and capture, side-by-side with pock
   ```
   If ROCKNIX's game uses ~the same CPU/frame and the win is elsewhere, the residual is the userspace
   *build* (Turnip / glibc / xwayland / Proton-DXVK) — a thousand cuts, not a knob.
-
-### 2. How ROCKNIX drives the DRM panel to 60 Hz (the QAM refresh question)
-
-pocknix's gamescope **can't** modeset to 60 Hz: its `ParseEDID` bails because the msm DSI connector
-exposes no EDID, and a synthetic EDID via `drm.edid_firmware` failed (msm DSI bypasses
-`drm_get_edid`) — see the `gamescope-refresh-edid` memory. ROCKNIX *does* enter a real 60 Hz session
-when the SteamOS framerate limiter is set to 60. Determine how, on a live ROCKNIX:
-
-- **Does ROCKNIX's connector even advertise a 60 Hz mode?** (An earlier `modetest` showed
-  `1080x1920@120` *and* `@60` with an **empty** EDID blob — confirm, and compare to pocknix, which
-  likely lists only `@120`):
-  ```sh
-  cat /sys/class/drm/card*-DSI*/modes            # the mode list the connector exposes
-  modetest -M msm -c | grep -A40 -i connector    # full mode table + the active mode
-  ```
-  If ROCKNIX exposes `@60` and pocknix doesn't, the difference is **in the panel driver / DTB**, not
-  gamescope or EDID — the panel node defines both timings.
-- **Compare the panel node in the running device tree** (look for multiple `display-timings` / mode
-  children, or a `qcom,mdss-dsi-*` panel with a 60 Hz timing pocknix's lacks):
-  ```sh
-  find /proc/device-tree -iname '*panel*' -o -iname '*display-timings*' 2>/dev/null
-  ```
-- **How the limiter maps to the modeset:** does ROCKNIX pass a launch-time `-r 60`, rely on
-  `GAMESCOPE_MODE_SAVE_FILE`, or does the QAM slider trigger a gamescope mode change? Grep gamescope's
-  log around a 60-cap switch (`'mode'|'refresh'|'drm'|'modeset'`).
-
-**Most likely conclusion:** if ROCKNIX's connector lists a 60 Hz mode and pocknix's doesn't, the fix
-for pocknix is to **add the 60 Hz timing to our panel node** (a kernel/DTB change) — not a gamescope
-flag or an EDID hack. That would let gamescope's `-r 60` / QAM slider pick a true 60 Hz DRM mode.
 
 ## Live ROCKNIX measurements + verdict (collected 2026-06-30)
 
