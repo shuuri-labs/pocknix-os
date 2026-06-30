@@ -20,8 +20,11 @@
 #   3. Re-run in the OTHER session on the SAME scene.
 #   4. Copy the output dirs off and diff offcpu-by-symbol.txt (see DIFFING at the bottom).
 #
-# prereqs: perf with --off-cpu (perf >= ~6.x built with BPF; pocknix 7.1.1 has it). ROCKNIX's
-# perf 7.0.11 may lack it -> the script falls back to sched:sched_switch recording automatically.
+# prereqs / platform: needs EITHER a perf built with BUILD_BPF_SKEL=1 (for --off-cpu) OR a kernel
+# with CONFIG_FTRACE + sched tracepoints (for the sched:sched_switch fallback).
+#   - pocknix: kernel has FTRACE on (enabled for scx_lavd) -> the fallback works; run it here.
+#   - ROCKNIX: its perf lacks the BPF skel AND its kernel ships FTRACE off -> off-CPU profiling is
+#     IMPOSSIBLE there (the script detects this and writes CANNOT-OFFCPU.txt). Don't bother on ROCKNIX.
 # pocknix: pacman -S --needed perf   (already installed if you ran fps-capture.sh)
 
 set -u
@@ -68,12 +71,18 @@ echo "hot threads (off-CPU report focuses on RenderThread tid=${RENDER_TID:-?}):
 # Does perf support --off-cpu? (it needs a BPF-enabled perf build)
 # --------------------------------------------------------------------------------------------------
 HAVE_OFFCPU=no
-if command -v perf >/dev/null 2>&1; then
-  perf record --off-cpu -e task-clock -o /dev/null -- true >/dev/null 2>&1 && HAVE_OFFCPU=yes
-else
-  echo "!! perf not found. pocknix: pacman -S --needed perf" | tee "$OUT/perf-MISSING.txt"; exit 1
+command -v perf >/dev/null 2>&1 || { echo "!! perf not found. pocknix: pacman -S --needed perf" | tee "$OUT/perf-MISSING.txt"; exit 1; }
+# `perf record --off-cpu` SILENTLY IGNORES the flag (exit 0 + a warning) when perf was built without
+# BUILD_BPF_SKEL=1 — which is the case on ROCKNIX's perf 7.0.11. So checking the exit code is useless;
+# check the build option, and also that it doesn't emit the "being ignored" warning.
+if perf version --build-options 2>/dev/null | grep -qiE "bpf_skel:[[:space:]]*\[[[:space:]]*on"; then
+  if ! perf record --off-cpu -e task-clock -o /dev/null -- true 2>&1 | grep -qi "being ignored\|BUILD_BPF_SKEL\|not supported"; then
+    HAVE_OFFCPU=yes
+  fi
 fi
-echo "perf --off-cpu supported: $HAVE_OFFCPU"
+HAVE_PERF_SCHED=no
+perf sched --help >/dev/null 2>&1 && HAVE_PERF_SCHED=yes
+echo "perf --off-cpu supported: $HAVE_OFFCPU   perf sched supported: $HAVE_PERF_SCHED"
 
 ESF="$OUT/.emptysymfs"; mkdir -p "$ESF"   # addr2line workaround (perf crashes on Proton .debug paths)
 RPT="perf report -i $OUT/perf.data --stdio --no-inline --symfs=$ESF"
@@ -97,27 +106,42 @@ if [ "$HAVE_OFFCPU" = yes ]; then
   if [ -n "${RENDER_TID:-}" ]; then
     $RPT -g graph,0.5,caller --tid "$RENDER_TID" 2>/dev/null > "$OUT/offcpu-RENDERTHREAD.txt"
   fi
-else
-  # Fallback (ROCKNIX perf 7.0.11): record sched_switch with stacks → stack captured at each block.
+elif [ -e /sys/kernel/tracing/events/sched/sched_switch ] || [ -e /sys/kernel/debug/tracing/events/sched/sched_switch ]; then
+  # Fallback: record sched_switch with stacks → stack captured at each block (needs CONFIG_FTRACE +
+  # tracepoints). Works on pocknix (FTRACE on for scx_lavd). NOT on ROCKNIX (FTRACE off).
   log "perf --off-cpu unavailable; FALLBACK: sched:sched_switch with stacks (20s)"
   ( cd "$OUT" && perf record -e sched:sched_switch -g --call-graph fp -p "$GAME_PID" -- sleep 20 ) \
     > "$OUT/perf-record.log" 2>&1
   $RPT -g graph,0.5,caller 2>/dev/null > "$OUT/sched-switch-callgraph.txt"
-  $RPT -g none --sort=symbol 2>/dev/null > "$OUT/sched-switch-by-symbol.txt"
+  $RPT -g none --sort=comm,symbol 2>/dev/null > "$OUT/sched-switch-by-symbol.txt"
+else
+  cat > "$OUT/CANNOT-OFFCPU.txt" <<MSG
+This kernel+perf cannot do off-CPU profiling:
+  - perf has no BPF skeleton (--off-cpu is silently ignored: needs perf built with BUILD_BPF_SKEL=1), AND
+  - the kernel has no sched_switch tracepoint (needs CONFIG_FTRACE / tracefs).
+This is the case on ROCKNIX (FTRACE is off — same reason it can't run scx_lavd). Run this on pocknix
+instead: its kernel has FTRACE on, so the sched:sched_switch fallback works even without a BPF-skel perf.
+MSG
+  echo "!! cannot off-CPU profile here (no BPF-skel perf AND no sched tracepoint). See CANNOT-OFFCPU.txt"
+  echo "   The real comparison is pocknix-gamescope vs pocknix-kwin anyway — run it there."
 fi
 
 # --------------------------------------------------------------------------------------------------
 # (B) perf sched summary — per-thread total off-CPU time + max wait latency (very interpretable).
 #     Independent of --off-cpu; works on both perf versions. Records system-wide sched for 10s.
 # --------------------------------------------------------------------------------------------------
-log "perf sched record (10s) for per-thread off-CPU/latency summary"
-( cd "$OUT" && perf sched record -o sched.data -- sleep 10 ) > "$OUT/sched-record.log" 2>&1
-log "perf sched timehist summary (look for the game's RenderThread: high 'wait time' = blocking)"
-perf sched -i "$OUT/sched.data" timehist -s 2>/dev/null > "$OUT/sched-summary.txt"
-# grep the game's threads out of the latency report for the at-a-glance comparison
-perf sched -i "$OUT/sched.data" latency 2>/dev/null > "$OUT/sched-latency-all.txt"
-grep -iE "Task|ASBR|Render|dxvk|Skin|gamescope|Xwayland|----" "$OUT/sched-latency-all.txt" 2>/dev/null \
-  | head -40 > "$OUT/sched-latency-game.txt"
+if [ "$HAVE_PERF_SCHED" = yes ]; then
+  log "perf sched record (10s) for per-thread off-CPU/latency summary"
+  ( cd "$OUT" && perf sched record -o sched.data -- sleep 10 ) > "$OUT/sched-record.log" 2>&1
+  log "perf sched timehist summary (look for the game's RenderThread: high 'wait time' = blocking)"
+  perf sched -i "$OUT/sched.data" timehist -s 2>/dev/null > "$OUT/sched-summary.txt"
+  perf sched -i "$OUT/sched.data" latency 2>/dev/null > "$OUT/sched-latency-all.txt"
+  grep -iE "Task|ASBR|Render|dxvk|Skin|gamescope|Xwayland|----" "$OUT/sched-latency-all.txt" 2>/dev/null \
+    | head -40 > "$OUT/sched-latency-game.txt"
+else
+  echo "perf sched not built into this perf — skipped (the sched:sched_switch record above has the blocking stacks)." \
+    > "$OUT/sched-summary.txt"
+fi
 
 rmdir "$ESF" 2>/dev/null
 echo
