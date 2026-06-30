@@ -1,0 +1,55 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 64K of event 'task-clock'
+# Event count (approx.): 64753753689
+#
+# Children      Self  Shared Object                          
+# ........  ........  .......................................
+#
+    74.24%    49.89%  [JIT] tid 7572                         
+    26.15%    19.84%  d3d11.dll                              
+    22.21%     3.89%  ntdll.dll                              
+    21.06%     0.00%  [unknown]                              
+    19.26%     0.19%  kernel32.dll                           
+    18.41%     2.01%  ntdll.so                               
+    12.50%     1.95%  libc.so.6                              
+    11.77%     0.39%  ucrtbase.dll                           
+    10.88%    10.88%  [kernel.kallsyms]                      
+     5.62%     5.59%  libvulkan_freedreno.so                 
+     3.82%     0.34%  kernelbase.dll                         
+     3.02%     2.97%  libarm64ecfex.dll                      
+     1.84%     0.96%  winevulkan.so                          
+     0.47%     0.12%  win32u.so                              
+     0.36%     0.36%  winevulkan.dll                         
+     0.27%     0.26%  [vdso]                                 
+     0.22%     0.03%  winex11.so                             
+     0.15%     0.03%  libpulse.so.0.24.3                     
+     0.11%     0.02%  winepulse.so                           
+     0.07%     0.00%  lsteamclient.dll                       
+     0.07%     0.07%  libpulsecommon-17.0.so                 
+     0.06%     0.01%  dxgi.dll                               
+     0.06%     0.00%  mmdevapi.dll                           
+     0.04%     0.04%  libX11.so.6.4.0                        
+     0.04%     0.03%  libwayland-client.so.0.23.1            
+     0.03%     0.03%  libVkLayer_FROG_gamescope_wsi_x86_64.so
+     0.03%     0.01%  xinput9_1_0.dll                        
+     0.02%     0.02%  libxcb.so.1.1.0                        
+     0.02%     0.01%  lsteamclient.so                        
+     0.02%     0.00%  [ath12k]                               
+     0.02%     0.01%  steamclient.so                         
+     0.02%     0.01%  user32.dll                             
+     0.02%     0.01%  xinput1_4.dll                          
+     0.01%     0.01%  libdrm.so.2.128.0                      
+     0.01%     0.00%  ws2_32.dll                             
+     0.00%     0.00%  libstdc++.so.6.0.34                    
+     0.00%     0.00%  win32u.dll                             
+     0.00%     0.00%  setupapi.dll                           
+     0.00%     0.00%  [ath12k_wifi7]                         
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

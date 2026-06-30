@@ -77,10 +77,18 @@ if command -v perf >/dev/null 2>&1; then
   log "perf record (20s, task-clock, game PID $GAME_PID) — hold the scene STEADY now"
   ( cd "$OUT" && perf record -g --call-graph fp -F 999 -e task-clock -p "$GAME_PID" -- sleep 20 ) \
     > "$OUT/perf-record.log" 2>&1
+  # ROCKNIX's perf 7.0.11 CRASHES in addr2line on Proton's .debug paths (the path has spaces:
+  # "Proton 11.0 (ARM64)"), emitting binary garbage and an empty report. Workaround: --no-inline
+  # disables inline/srcline expansion (the thing that shells out to addr2line) and --symfs points at
+  # an empty dir so perf can't find the .debug files at all. Without this the report is empty.
+  ESF="$OUT/.emptysymfs"; mkdir -p "$ESF"
   log "perf report (per-DSO Self%) — THIS is the money table to diff"
-  ( cd "$OUT" && perf report --stdio --sort=dso --no-inline -g none ) > "$OUT/perf-by-dso.txt" 2>/dev/null
-  log "perf report (per-symbol, call-graph) — for drilling into the hot DSO"
-  ( cd "$OUT" && perf report --stdio -g graph,0.5,caller ) > "$OUT/perf-by-symbol.txt" 2>/dev/null
+  ( cd "$OUT" && perf report -i perf.data --stdio --sort=dso -g none --no-inline --symfs="$ESF" ) \
+    > "$OUT/perf-by-dso.txt" 2>/dev/null
+  log "perf report (per-symbol) — for drilling into the hot DSO"
+  ( cd "$OUT" && perf report -i perf.data --stdio -g none --no-inline --symfs="$ESF" ) \
+    > "$OUT/perf-by-symbol.txt" 2>/dev/null
+  rmdir "$ESF" 2>/dev/null
 else
   echo "!! perf not found. pocknix: pacman -S --needed perf, then re-run. ROCKNIX should ship it." \
     | tee "$OUT/perf-MISSING.txt"

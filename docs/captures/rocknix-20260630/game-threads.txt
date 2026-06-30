@@ -1,0 +1,79 @@
+$ sh -c ps -L -o psr,pcpu,tid,comm -p 7572 2>/dev/null || top -H -b -n1 -p 7572 2>/dev/null
+PSR %CPU     TID COMMAND
+  1 41.4    7572 ASBR.exe
+  6  0.0    7599 File Notifier
+  5  0.0    7601 ASBR.ex:disk$0
+  0  0.0    7603 ASBR.ex:disk$0
+  1  0.0    7605 ASBR.e:traceq0
+  4  3.5    7606 dxvk-submit
+  4  3.2    7607 dxvk-queue
+  3 13.6    7608 dxvk-cs
+  7  0.0    7609 dxvk-shader-l
+  7  0.0    7610 dxvk-shader-l
+  5  0.0    7611 dxvk-shader-n
+  0  0.0    7612 dxvk-shader-n
+  6  0.0    7613 dxvk-shader-n
+  2  0.0    7614 dxvk-shader-h
+  5  0.0    7615 dxvk-shader-h
+  3  0.0    7616 dxvk-shader-h
+  7 57.9    7617 RenderThread
+  6  0.0    7618 GPUResourceDest
+  5 13.3    7619 SkinnningThread
+  0  6.3    7620 ASBR.exe
+  1  1.7    7621 numm FrameStart
+  2  0.1    7624 PARTICLE_DRAW_T
+  1  1.4    7625 ASBR.exe
+  4  0.1    7626 PARTICLE_DRAW_T
+  7  0.1    7627 ASBR.exe
+  0  0.5    7628 TRAIL_DRAW_THRE
+  5  0.3    7629 TRAIL_DRAW_THRE
+  5  0.2    7630 TRAIL_DRAW_THRE
+  1  0.1    7631 TRAIL_DRAW_THRE
+  2  4.7    7632 LAYER_SUB_THREA
+  6  4.4    7633 LAYER_SUB_THREA
+  0  4.3    7634 LAYER_SUB_THREA
+  3  4.1    7635 LAYER_SUB_THREA
+  3  0.0    7636 dxvk-frame
+  2  0.1    7638 ASBR.exe
+  6  0.0    7639 ASBR.exe
+  5  0.7    7640 ASBR.exe
+  0  0.0    7641 ASBR.exe
+  4  2.2    7642 ASBR.exe
+  1  2.3    7643 Xfbin load requ
+  2  1.3    7644 Xfbin load requ
+  6  1.3    7645 Xfbin load requ
+  1  1.3    7646 Xfbin load requ
+  0  1.3    7647 Xfbin load requ
+  7  1.3    7648 Xfbin load requ
+  5  1.3    7649 Xfbin load requ
+  6  0.0    7656 dxvk-cache
+  2  3.1    7675 TASKMANAGER_SUB
+  3  4.4    7676 TASKMANAGER_SUB
+  1  0.0    7677 wine_xinput_hid
+  5  0.0    7678 wine_sechost_de
+  6  0.3    7681 SaveLoad
+  2  0.1    7682 HttpManagerThre
+  6  0.4    7683 LibwebsocketsTh
+  1  0.0    7684 ASBR.ex:disk$0
+  3  0.0    7685 ASBR.exe:ir3q0
+  5  0.0    7686 ASBR.exe:ir3q1
+  5  0.0    7689 ASBR.exe
+  6  0.8    7690 audio_client_ma
+  6  3.2    7691 nuscMain
+  5  0.0    7693 ASBR.exe
+  1  0.0    7694 wine_mmdevapi_n
+  3  5.0    7697 ASBR.exe
+  6  0.0    7698 ASBR.exe
+  3  0.0    7699 ASBR.exe
+  0  0.0    7700 ASBR.exe
+  5  0.0    7701 ASBR.exe
+  1  0.0    7702 ASBR.exe
+  7  0.0    7703 ASBR.exe
+  4  0.0    7704 ASBR.exe
+  2  0.0    7706 PARTICLE_DRAW_M
+  6  2.1    9432 PlayerCtrlThrea
+  1  0.1    9433 PlayerCtrlThrea
+  5  2.1    9434 PlayerCtrlThrea
+  4  0.2    9435 PlayerCtrlThrea
+  3  0.0    9481 ASBR.ex:disk$1
+  1  0.0    9512 ASBR.ex:disk$2

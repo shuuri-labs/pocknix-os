@@ -1,0 +1,26 @@
+$ sh -c ps -eLo psr,pcpu,tid,comm --sort=-pcpu 2>/dev/null | head -25
+PSR %CPU     TID COMMAND
+  0  194    7572 ASBR.exe
+  6  100   10253 ps
+  2 13.0    5585 mangoapp
+  0 10.1    6881 wineserver
+  6  9.5    5815 steamwebhelper
+  1  7.7    5553 gamescope-wl
+  6  7.5    5563 Xwayland
+  5  4.8    5740 steamwebhelper
+  6  4.4    5584 steam
+  0  2.6     658 inputplumber
+  3  2.0    5652 steamwebhelper
+  0  1.5    6926 winedevice.exe
+  2  1.4    5564 Xwayland
+  3  1.2     198 kworker/u32:9-msm
+  2  1.1      59 kworker/u32:1-ring2
+  1  1.0      87 kworker/u32:4-ring0
+  1  0.9     515 pipewire-pulse
+  7  0.7     506 pipewire
+  0  0.5      93 irq/23-c271000.thermal-sensor
+  4  0.5     175 gpu-worker
+  6  0.5      12 kworker/u32:0-thermal_events
+  3  0.4     199 kworker/u32:10-msm
+  5  0.4     200 kworker/u32:11-events_unbound
+  6  0.4      68 kworker/u32:2-ring2

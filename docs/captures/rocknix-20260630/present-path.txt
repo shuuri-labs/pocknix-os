@@ -1,0 +1,13 @@
+=== gamescope cmdline ===
+gamescope -W 1080 -H 1920 -r 120 --xwayland-count 2 --mangoapp --backend drm --force-orientation left --use-rotation-shader -e -- /storage/.local/share/Steam/steamrtarm64/steam -steamdeck -steamos3 -gamepadui -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders 
+=== gamescope present/refresh-relevant environ ===
+GAMESCOPE_MODE_SAVE_FILE=/storage/.config/gamescope/modes.cfg
+GAMESCOPE_FAKE_OUTPUT_MM=508x286
+=== DRM connector current modes ===
+-- /sys/class/drm/card0-DP-1/modes
+-- /sys/class/drm/card0-DSI-1/modes
+1080x1920
+1080x1920
+-- /sys/class/drm/card0-Writeback-1/modes
+=== gamescope thread affinity (is it pinned?) ===
+Cpus_allowed_list:	0-7

@@ -1,0 +1,25 @@
+=== cpufreq governor (per policy) ===
+/sys/devices/system/cpu/cpufreq/policy0/scaling_governor: ondemand
+/sys/devices/system/cpu/cpufreq/policy3/scaling_governor: ondemand
+/sys/devices/system/cpu/cpufreq/policy7/scaling_governor: ondemand
+=== current cpu freqs ===
+/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq: 1785600
+/sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq: 2707200
+/sys/devices/system/cpu/cpufreq/policy7/scaling_cur_freq: 2956800
+=== scheduler (scx active?) ===
+EEVDF (no scx)
+=== cpu capacities (expect 326 / 693 / 1024) ===
+cpu0: 222
+cpu3: 657
+cpu7: 1024
+=== GPU devfreq ===
+/sys/class/devfreq/3d00000.gpu gov=simple_ondemand cur=680000000 max=680000000
+=== PSI ===
+PSI on
+some avg10=9.79 avg60=8.23 avg300=4.36 total=22150522
+full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+=== GPU utilisation (is it GPU-bound? expect NO, ~60%) ===
+(no gpu_busy_percent)
+=== Turnip / driver ===
+	driverName         = turnip Mesa driver
+	driverInfo         = Mesa 26.1.2

@@ -1,0 +1,5 @@
+=== FEX env on the game ===
+STEAM_COMPAT_FEX_CONFIG=
+FEX_APP_CONFIG=/storage/games-internal/roms/steam/steamapps/compatdata/1372110/proton-fex-config.json
+FEX_APP_CONFIG_LOCATION=/storage/games-internal/roms/steam/steamapps/common/Proton 11.0 (ARM64)/files/share/fex-emu/
+=== FEX config files present ===

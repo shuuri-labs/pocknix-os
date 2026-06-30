@@ -181,6 +181,66 @@ ruled out, so the productive work is the missing measurement:
   matched capture settles that too. NB the present-interval check guards the EDID/60Hz angle: if
   pocknix's session lacks a real 60Hz mode it may pace against a different effective refresh.
 
+## Matched capture — ROCKNIX half (2026-06-30, `docs/fps-capture.sh`)
+
+The **proper per-process profile** (the one the doc never had): `perf record -p <game-pid> -e
+task-clock` on ROCKNIX, ASBR steady scene. (perf 7.0.11 on ROCKNIX crashes in `addr2line` on the
+Proton `.debug` paths — workaround baked into the capture: `--no-inline --symfs=<empty>`.) Raw capture
+in scratchpad `captures/fps-capture-rocknix-20260630-144317/`. pocknix half still pending a burn.
+
+**Self% by DSO (game process, active CPU — this is the diff target):**
+```
+49.89%  [JIT]                  (FEX-translated game code)
+19.84%  d3d11.dll              (DXVK)
+10.88%  [kernel.kallsyms]      (syscalls/futex/sched on the game's threads)
+ 5.59%  libvulkan_freedreno.so (Turnip)
+ 3.89%  ntdll.dll
+ 2.97%  libarm64ecfex.dll      (FEX arm64ec interpreter — present => arm64ec path ACTIVE)
+ 2.01%  ntdll.so   1.95% libc.so.6   0.96% winevulkan.so   0.39% ucrtbase.dll   ...
+```
+This *supersedes* the earlier hand-rescaled `-a` figures (FEX-JIT 45 / DXVK 24 / Turnip 6 / glibc 4).
+The shape is the same, so the emulation profile is sound; what's new is a clean per-process baseline
+to subtract pocknix from.
+
+**Corrections to assumptions (all measured live this pass):**
+- **Governor = `ondemand`** — NOT `schedutil` (this doc) and NOT `performance` (earlier). Big cores
+  were clocked high during play (mid 2.71 GHz, prime 2.96 GHz; little 1.79 GHz), so the "clocks dip,
+  still faster" framing is wrong *for the big cores*. CPU clock is still not the lever, but for the
+  right reason (it's at-clock and latency-bound), not "schedutil dips low".
+- **`cpu_capacity` (freq-scaled, live) = 222 / 657 / 1024** — this is the value pocknix must MATCH
+  (distinct from the raw `capacity-dmips-mhz` 326/693/1024 the doc cites; different metric).
+- **PSI is ON** on ROCKNIX (`/proc/pressure/cpu` populated). So **`CONFIG_PSI=off` is NOT a
+  ROCKNIX-matching lever** — kill that "future" idea; the faster box runs with PSI on.
+- **Scheduler = plain EEVDF, no scx.** pocknix runs scx_lavd — a real session difference to A/B in
+  the eventual diff (lavd vs EEVDF on the *same* matched scene).
+- **Hot thread placement:** the heavy `RenderThread` ran on **cpu7 (prime)** at ~58%, main thread on
+  a mid, dxvk-cs on a mid. The doc's "game runs on a LITTLE core and still wins" was reading the
+  aggregate on the main-thread line — the *hot* render thread is on the prime. Placement still isn't
+  the lever, but the "little-core" claim was an artifact.
+- **arm64ec CONFIRMED active** (`libarm64ecfex.dll` mapped; exe → wine-preloader, ARM64EC Proton).
+  When pocknix is captured, confirm the same — if pocknix's game lacks it, that's the gap.
+
+**The FEX-config finding (important — re-examine the "kept win"):** the FEX config actually in effect
+for the game is the **Proton-bundled** one (`FEX_APP_CONFIG_LOCATION` → the Proton tree's
+`share/fex-emu/Config.json`), which is *minimal*:
+```
+ProfileStats=1, X87ReducedPrecision=1, TSOEnabled=1, VectorTSOEnabled=0,
+MemcpySetTSOEnabled=0, HalfBarrierTSOEnabled=1, MaxInst=500, Multiblock=1
+```
+The per-app `compatdata/<appid>/proton-fex-config.json` is empty `{}`; the AppConfig dir has no ASBR
+entry. Since **both** OSes run the same Steam-downloaded Proton, both games get this *same minimal
+Proton config*, merged over the distro/global FEX config. Implication: pocknix's elaborate
+`packages/fex-emu/Config.json` (`MaxInst=5000`, DynamicL1Cache, DisableL2Cache, …) governs the
+**Steam client's** x86, not necessarily the game's hot path (Proton's `MaxInst=500` wins for the
+game). The doc's "ROCKNIX FEX JIT config → +1-2 fps" win needs re-checking against what FEX actually
+merges for the game — **verify on the pocknix capture** (`fex-config.txt` + `/dev/shm/fex-*-stats`).
+
+**Session/launch deltas worth the diff** (both run gamescope; these are the within-compositor diffs):
+ROCKNIX launches `-W 1080 -H 1920 ... --use-rotation-shader` + the Steam appliance flags
+(`-nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders`); pocknix uses `1920×1080 +
+--force-composition-rotation` and lacks the appliance flags. gamescope unpinned (`Cpus_allowed 0-7`).
+GPU `simple_ondemand` pegged 680 MHz, Turnip Mesa 26.1.2.
+
 ## Unexplored / future
 
 The one genuinely-unexplored angle is **profiling where the game's extra per-frame CPU actually

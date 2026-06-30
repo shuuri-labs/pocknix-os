@@ -1,0 +1,3 @@
+[ perf record: Woken up 25 times to write data ]
+Failed to open /proc/schedstat
+[ perf record: Captured and wrote 7.210 MB perf.data (64689 samples) ]
