@@ -30,7 +30,10 @@ trap '[ -e "${FAN_EN}" ] && echo 0 > "${FAN_EN}" 2>/dev/null; exit 0' INT TERM
 
 LAST=""
 while :; do
-  TEMP="$(awk '{s+=$1;n++} END{printf "%d", (n? s/n : 0)}' ${SENSORS} 2>/dev/null)"
+  # Track the HOTTEST zone, not the average: the SM8550 hotspot is the X3 prime core (cpu7), which
+  # runs ~10-15C above the mids/littles/GPU. Averaging diluted the prime's 93C down to a ~78C mean,
+  # so the fan sat at PWM 153 (60%) while the prime throttled past its 90C trip. Max-zone fixes that.
+  TEMP="$(awk '{if($1>m)m=$1} END{printf "%d", m+0}' ${SENSORS} 2>/dev/null)"
   i=1; SPEED=0
   for th in ${TEMPS}; do
     if [ "${TEMP}" -gt "${th}" ]; then SPEED="$(echo ${SPEEDS} | cut -d' ' -f${i})"; break; fi
