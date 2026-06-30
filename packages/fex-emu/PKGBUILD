@@ -18,7 +18,7 @@
 pkgname=fex-emu
 _commit=a04b0241c2fe3911729842205cd8643981108aad
 pkgver=2605.20260520.a04b0241
-pkgrel=3
+pkgrel=4
 pkgdesc="Fast usermode x86/x86-64 emulator for AArch64, built with host+guest thunks"
 arch=('aarch64')
 url="https://github.com/FEX-Emu/FEX"
@@ -112,15 +112,17 @@ build() {
   cd "${srcdir}/fex"
   # FEX requires clang as the host compiler; makepkg defaults to gcc, so force it.
   export CC=clang CXX=clang++
-  # TUNE_CPU=cortex-x3 = the SM8550's actual prime core (armv9), matching ROCKNIX's TARGET_CPU
-  # (was the generic cortex-a78/armv8.2 default). Only tunes FEXCore's OWN engine; the JIT output
-  # is runtime-tuned to the real CPU regardless. If the native (aarch64/M1) build SIGILLs a host
-  # tool, fall back to cortex-a78 (armv8.2 = safe on the build host).
+  # TUNE_CPU=cortex-a78 matches ROCKNIX. Its FEX package.mk deliberately remaps the SM8550
+  # TARGET_CPU (cortex-x3) DOWN to cortex-a78 for the FEX build (case cortex-x3|cortex-x4 ->
+  # TUNE_CPU=cortex-a78). This only tunes FEXCore's OWN engine to a safe armv8.2 baseline; the
+  # JIT output (the translated game) is runtime-tuned to the real CPU regardless, so tuning the
+  # engine to the X3/armv9 prime buys nothing and risks an armv9 host-tool SIGILL on the build
+  # host. (Our earlier cortex-x3 was a misread of the device TARGET_CPU; FEX never uses it raw.)
   cmake -G Ninja -S . -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_INSTALL_LIBDIR=lib \
-    -DTUNE_CPU=cortex-x3 \
+    -DTUNE_CPU=cortex-a78 \
     -DUSE_LINKER=lld \
     -DENABLE_OFFLINE_TELEMETRY=OFF \
     -DBUILD_TESTING=OFF \
