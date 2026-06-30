@@ -294,9 +294,30 @@ The game loads a *different* gamescope WSI layer on each OS (from the matched pe
 
 This fits every fact: gamescope-specific (kwin has no WSI layer → 70-80%), FEX-specific (native ARM
 games don't cross the thunk → no gap), present-path blocking (cores idle between frames, GPU starved,
-*less* total CPU but more CPU/frame). Likely governed by `ENABLE_GAMESCOPE_WSI=1` (pocknix sets it,
-ROCKNIX doesn't) and/or how the layer manifest is delivered into the FEX guest rootfs. **Test in
-progress:** remove `ENABLE_GAMESCOPE_WSI=1`.
+*less* total CPU but more CPU/frame).
+
+**ROOT CAUSE CONFIRMED — pocknix is missing the guest-side (x86_64) gamescope WSI layer.**
+- `ENABLE_GAMESCOPE_WSI=1` is a **red herring**: gamescope force-sets it (plus `GAMESCOPE_LIMITER_FILE`,
+  `vk_khr_present_wait=true`, `STEAM_GAMESCOPE_DYNAMIC_FPSLIMITER=1`, …) on *every* child, so it stays
+  in the game env even when removed from the launcher. Removing it changed nothing. Not a lever.
+- pocknix ships **only the host layer**: `/usr/lib/libVkLayer_FROG_gamescope_wsi_aarch64.so` +
+  `/usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.aarch64.json`. There is **no x86_64
+  layer anywhere** (not in `steamrtarm64`, compatibilitytools, or — by inference — the FEX guest
+  rootfs `ArchLinux.sqsh`). ROCKNIX and a real Steam Deck ship the **x86_64** layer *inside the guest*.
+- So on pocknix every `vkAcquireNextImageKHR`/`vkQueuePresentKHR` blocks **across the FEX thunk** on
+  gamescope (gamescope sets `vk_khr_present_wait=true` → the app waits on present completion). That
+  per-present thunk tax starves the GPU, and it scales with present frequency — **which is exactly why
+  a `-r 60` session improved fps** (half the presents = half the thunk crossings). ROCKNIX's WSI sync
+  is guest-side (pre-thunk), so 120Hz costs it nothing extra.
+
+**THE FIX (to implement + test):** cross-build `libVkLayer_FROG_gamescope_wsi` for **x86_64** (pocknix
+already has the x86 cross-toolchain in `packages/fex-emu`) — or lift ROCKNIX's prebuilt `.so` — and
+ship it **with its `.json` manifest inside the FEX guest rootfs** (`/usr/share/vulkan/implicit_layer.d/`
+in `ArchLinux.sqsh`), matching ROCKNIX/the Deck. Then the guest Vulkan loader loads it guest-side and
+present-sync no longer crosses the thunk.
+
+**STOPGAP (validated):** running the gamescope session at `-r 60` instead of `-r 120` measurably helps
+(halves the per-present thunk/composite overhead). Not the real fix (ROCKNIX runs 120 fine), but free.
 
 ### Confirmed fixes this session
 1. **Hitching (random GPU→0% stalls):** the *entire game* ran as **SCHED_RR rtprio 40** — Wine
