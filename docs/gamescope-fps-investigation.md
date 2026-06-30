@@ -1,5 +1,17 @@
 # Gamescope FPS-gap investigation
 
+> **⚠️ VERDICT DISPUTED (2026-06-30, review pass).** The "architectural / irreducible emulation
+> floor" conclusion below is **not supported by this doc's own data** and should NOT be treated as
+> settled. The contradiction: ROCKNIX *also runs gamescope*, yet its game uses **~219% CPU** — i.e.
+> at **kwin/Plasma efficiency (~216%)**, NOT at pocknix-gamescope's **~282%**. If the cost were
+> inherent to gamescope's nested-XWayland present path, ROCKNIX-gamescope would pay ~282% too. It
+> doesn't. **gamescope-the-compositor is exonerated; the gap is a pocknix-gamescope-vs-ROCKNIX-gamescope
+> *session/config* delta** — the recoverable kind. Compounding this: **pocknix was never profiled at
+> all** (every pocknix number is a `ps` snapshot), and ROCKNIX was profiled `-a` system-wide (69%
+> idle, hand-rescaled), so the FEX-JIT/DXVK breakdown was never diffed against a matched pocknix
+> profile. **Next step is diagnostic, not another A/B:** run `docs/fps-capture.sh` on the SAME scene
+> on both OSes and diff `perf-by-dso.txt`. See **["Verdict dispute" below](#verdict-dispute-2026-06-30)**.
+
 ## TL;DR
 
 pocknix's **game-mode (gamescope) session runs x86/FEX games ~15-20% slower** than the *same*
@@ -119,6 +131,55 @@ Why the reference stacks don't show it:
 - **Plasma (same box):** kwin's present path is cheaper / more buffered.
 - **ROCKNIX:** lean appliance + root session; efficient enough that its RR compositor never hits the
   RT throttle and its userspace present path is tighter.
+
+## Verdict dispute (2026-06-30)
+
+A review pass found the root-cause conclusion above is **logically inconsistent with the measured
+data** and rests on an **incomplete evidence base**. Treat it as an open question, not a result.
+
+**1. The data exonerates gamescope.** Lining up the three numbers this doc reports:
+
+| Session | CPU | fps | CPU/frame |
+|---|---|---|---|
+| pocknix **Plasma** (kwin) | ~216% | ~60 | baseline |
+| **ROCKNIX gamescope** | ~219% | ~50–60 | ≈ Plasma |
+| **pocknix gamescope** | ~282% | ~45 | **+~30–60%** |
+
+ROCKNIX runs the *same compositor* (gamescope), *same* nested XWayland, *same* Steam-downloaded
+Proton — and sits at **~219%, basically kwin efficiency**, far below pocknix-gamescope's ~282%. If
+the penalty were inherent to gamescope's present path (the doc's claim), ROCKNIX-gamescope would also
+be ~282%. It isn't. So the gap is **pocknix-gamescope vs ROCKNIX-gamescope** — a delta *within the
+same compositor* — i.e. a **session/config difference**, not an architectural floor.
+
+**2. The evidence base can't support the verdict.** pocknix was **never profiled** — every pocknix
+figure is a `ps`/`top` CPU% snapshot. ROCKNIX was profiled with `perf record -a` (system-wide → 69%
+idle), then hand-rescaled. The "pocknix pays the same FEX-JIT+DXVK floor" claim therefore diffs a
+ROCKNIX profile against **no pocknix profile at all**. The 282-vs-219 comparison is also cross-OS
+`ps` on possibly-different scenes / fps caps / process sets (root vs non-root `deck`).
+
+**3. ARM64EC — checked, likely a red herring, cheap to confirm.** ROCKNIX's profile shows
+`libarm64ecfex.dll`; pocknix's `packages/fex-emu/PKGBUILD` builds only `FEXInterpreter` + thunks (no
+arm64ec interpreter) and the repo has zero arm64ec wiring. That *looks* damning but almost certainly
+isn't: Valve's "Proton 11.0 ARM64" **bundles its own arm64ec FEX**, so an identical Proton means an
+identical game emulation path regardless of the system FEX (which only handles the Steam client's own
+x86 bits). Rule it out in 30s on the next burn: `grep -i arm64ec /proc/<game-pid>/maps` on **both**
+OSes — if both show it, move on; if pocknix's game is *not* on arm64ec, that alone is the whole gap.
+
+**4. What to actually do next (diagnostic, not config A/B).** Almost every config lever is already
+ruled out, so the productive work is the missing measurement:
+- **`docs/fps-capture.sh`** — run on the SAME steady scene on both OSes; it takes the matched
+  `perf record -p <pid> -e task-clock` profile (the one pocknix never got), a matched per-thread CPU
+  snapshot, the arm64ec check, present/refresh parity, and a config snapshot. Then
+  `diff -y fps-capture-rocknix-*/perf-by-dso.txt fps-capture-pocknix-*/perf-by-dso.txt`.
+- **Read the diff against levers:** pocknix higher in `[kernel.kallsyms]` → futex/syscall/scheduling
+  = session overhead (deck cgroup/bwrap, `mesa_glthread`'s extra thread, glthread on the CEF UI) →
+  *config*; higher in `[JIT]` → FEX/arm64ec path; higher in `gamescope`/`Xwayland` → present path =
+  genuinely structural (only *then* is the verdict right).
+- **Prediction:** the extra pocknix cycles land in `[kernel.kallsyms]` (session/scheduling), not in
+  JIT/DXVK — consistent with ROCKNIX-gamescope ≈ Plasma — making this a recoverable session-config gap.
+- Also possible the 282-vs-219 itself is a measurement artifact (scene/fps-cap/process-set). The
+  matched capture settles that too. NB the present-interval check guards the EDID/60Hz angle: if
+  pocknix's session lacks a real 60Hz mode it may pace against a different effective refresh.
 
 ## Unexplored / future
 
