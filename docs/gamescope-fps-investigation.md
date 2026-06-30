@@ -11,6 +11,14 @@
 > idle, hand-rescaled), so the FEX-JIT/DXVK breakdown was never diffed against a matched pocknix
 > profile. **Next step is diagnostic, not another A/B:** run `docs/fps-capture.sh` on the SAME scene
 > on both OSes and diff `perf-by-dso.txt`. See **["Verdict dispute" below](#verdict-dispute-2026-06-30)**.
+>
+> **✅ RESOLVED 2026-06-30 (live session).** The dispute was right: it is NOT the irreducible
+> emulation floor. A kwin-desktop control (same OS/FEX, only the compositor changed) runs the FEX game
+> at 50-56 fps vs gamescope's 30-40, with GPU util 70-80% vs ~50% — so the gap is the **gamescope WSI
+> present path starving the GPU**, and the leading suspect is the gamescope WSI Vulkan layer running
+> **host-side (aarch64) on pocknix vs guest-side (x86_64) on ROCKNIX**. Several separate bugs (game
+> forced to SCHED_RR → hitching; fan curve averaging → throttle; a vsync staircase) were also found
+> and fixed. See **["Live on-device A/B session" below](#live-on-device-ab-session-2026-06-30--gap-isolated-to-the-gamescope-wsi-present-path)**.
 
 ## TL;DR
 
@@ -256,6 +264,74 @@ ROCKNIX launches `-W 1080 -H 1920 ... --use-rotation-shader` + the Steam applian
 (`-nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders`); pocknix uses `1920×1080 +
 --force-composition-rotation` and lacks the appliance flags. gamescope unpinned (`Cpus_allowed 0-7`).
 GPU `simple_ondemand` pegged 680 MHz, Turnip Mesa 26.1.2.
+
+## Live on-device A/B session (2026-06-30) — gap ISOLATED to the gamescope WSI present path
+
+A full matched on-device session (SSH, same RP6, same ASBR scene) resolved the verdict dispute and
+found several distinct bugs that were all muddled together as "the 15-20% gap."
+
+### The breakthrough — the kwin desktop control
+Same FEX game, same pocknix install, switching **only the compositor**:
+
+| Session | menus | gameplay | GPU util |
+|---|---|---|---|
+| pocknix **gamescope** | 50-60 | **30-40** | **~50%** |
+| pocknix **Plasma (kwin)** | 60 | **50-56** | **70-80%** |
+| ROCKNIX gamescope | 60-62 | 55-60 | — |
+
+Same OS / background / FEX / lavd / daemons in both pocknix rows → **the gap is 100% the gamescope
+session, NOT distro background overhead.** Under kwin the GPU is **fed (70-80%)**; under gamescope it
+is **starved (~50%)** — the game blocks on gamescope's present/buffer cycle. pocknix's
+userspace/FEX/Turnip are fine; kwin runs the FEX game within ~3-4 fps of ROCKNIX.
+
+### The lead — gamescope WSI layer on the wrong side of the FEX thunk
+The game loads a *different* gamescope WSI layer on each OS (from the matched perf captures):
+- **ROCKNIX:** `libVkLayer_FROG_gamescope_wsi_x86_64.so` — **guest (x86)** side: present-sync happens
+  inside emulation; FEX thunks only the final native present. One clean handoff.
+- **pocknix:** `libVkLayer_FROG_gamescope_wsi_aarch64.so` — **host (ARM)** side: every
+  `vkQueuePresentKHR`/`vkAcquireNextImageKHR` crosses the FEX thunk *then* does gamescope's WSI sync
+  on the host. Hypothesis: that serializes the buffer return across the thunk → GPU starvation.
+
+This fits every fact: gamescope-specific (kwin has no WSI layer → 70-80%), FEX-specific (native ARM
+games don't cross the thunk → no gap), present-path blocking (cores idle between frames, GPU starved,
+*less* total CPU but more CPU/frame). Likely governed by `ENABLE_GAMESCOPE_WSI=1` (pocknix sets it,
+ROCKNIX doesn't) and/or how the layer manifest is delivered into the FEX guest rootfs. **Test in
+progress:** remove `ENABLE_GAMESCOPE_WSI=1`.
+
+### Confirmed fixes this session
+1. **Hitching (random GPU→0% stalls):** the *entire game* ran as **SCHED_RR rtprio 40** — Wine
+   promotes it because `deck` has `rtprio 98` (granted in `limits.d` for gamescope) — with the RT
+   throttle disabled → priority-inversion stalls. Demoting the game to SCHED_OTHER **fixed the
+   hitching**. RT threads also bypass *both* lavd and EEVDF, which is why earlier scheduler A/Bs were
+   meaningless. Interim fix on device: a watcher (`pocknix-rt-demote-watch`). **Proper fix TBD:** stop
+   Wine RT-promoting the game without breaking gamescope's own RR (gamescope gets RR from the root
+   `pocknix-gamescope-rt` service, so `deck`'s `rtprio 98` limit may be droppable — needs verifying).
+2. **Fan curve** averaged all CPU/GPU zones → the X3 prime hotspot hit 93°C (past its 90°C trip) and
+   throttled while the fan sat at PWM 153 (60%). **Fixed: drive off the hottest zone** (commit
+   `4de213b`).
+3. **Unmatched graphics settings** inflated the early numbers; at matched settings the per-DSO CPU
+   profile is **identical** to ROCKNIX (FEX-JIT ~50-53 / DXVK ~20 / kernel ~11).
+4. **`GAMESCOPE_DISABLE_ASYNC_FLIPS`** was a 120/3 = **40fps vsync staircase**; removed (the game can
+   now exceed 40). Minor on its own.
+5. **`-noshaders`** added to the Steam client flags (matches ROCKNIX; stops fossilize background
+   shader compilation).
+
+### Ruled out — valid, on-device, matched (supersedes earlier invalid A/Bs)
+- **Thermal *throttling*:** `scaling_max_freq` holds at 2956800 even at 94°C; the 595 MHz dips are
+  cores **idling between frames**, not a throttle ceiling. 94°C is real (and the fan fix helps) but is
+  **not** the fps cap.
+- **Rogue process / IRQ storm:** idle is **91% idle**; biggest consumer is `mangoapp` (~19% of one
+  core); the top "interrupt" is reschedule-IPI (FEX thread wakeups), no device storm. No thief.
+- **scx_lavd:** adds CPU pressure (PSI 15-19 vs ROCKNIX 10) but **zero fps change** once the game is
+  SCHED_OTHER. (The original "no difference" was invalid — the game was RR, bypassing the scheduler.)
+- **CPU clock:** cores pinned at max (2.0/2.8/2.96 GHz, *higher* than ROCKNIX's ondemand) yet slower.
+- **Present mode (mailbox), rotation method** (`--use-rotation-shader` also needs a gamescope patch
+  pocknix doesn't ship) — both user-confirmed not the fix.
+
+### Key numbers
+- Matched per-DSO Self% (game process, task-clock): essentially identical on both OSes.
+- perf samples over 20s: **pocknix 59,590 vs ROCKNIX 64,689** → pocknix uses *less* total CPU at
+  *lower* fps = more CPU **per frame** + waiting (the GPU-starvation signature).
 
 ## Unexplored / future
 
