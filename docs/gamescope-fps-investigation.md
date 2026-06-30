@@ -99,6 +99,13 @@ sat at ~60% throughout, i.e. **CPU/FEX-bound, not GPU-bound.**
 
 ## Root-cause conclusion
 
+> **UPDATE 2026-06-30 — refined by live ROCKNIX profiling (see "Live ROCKNIX measurements" below).**
+> The compositor present-path is *part* of it, but a `perf` profile showed the per-frame cost is
+> dominated by the **irreducible x86-on-ARM emulation** (FEX-JIT ~45% + DXVK ~24% of *active* CPU),
+> which ROCKNIX pays too. The `cortex-x3`-tunable libraries are <1% — **rebuilding tuned userspace
+> is not worth it.** The box is mostly idle (latency-bound, not throughput-bound). Net: pocknix has
+> matched ROCKNIX's real config levers; the residual is the emulation floor.
+
 The residual ~15-20% is the **gamescope-vs-Plasma gap on the same box** — identical FEX, identical
 Turnip, identical CPU/GPU config — so it is **100% the compositor/session**. gamescope's
 nested-XWayland present path makes the FEX-translated game spend materially more CPU per frame than
@@ -194,6 +201,73 @@ when the SteamOS framerate limiter is set to 60. Determine how, on a live ROCKNI
 **Most likely conclusion:** if ROCKNIX's connector lists a 60 Hz mode and pocknix's doesn't, the fix
 for pocknix is to **add the 60 Hz timing to our panel node** (a kernel/DTB change) — not a gamescope
 flag or an EDID hack. That would let gamescope's `-r 60` / QAM slider pick a true 60 Hz DRM mode.
+
+## Live ROCKNIX measurements + verdict (collected 2026-06-30)
+
+ROCKNIX booted on the same RP6 (via the SD-boot toggle) running the **same Steam game (ASBR)**.
+Summarised captures:
+
+**Governor / scheduler / toolchain — corrects earlier *assumptions*:**
+- CPU governor is **`schedutil`**, NOT `performance` (clocks dip below 2 GHz) — and it's *still
+  faster* than pocknix at near-max clocks → **CPU clock is not the lever.** Scheduler: plain
+  **EEVDF** (no scx/lavd).
+- Toolchain (`projects/ROCKNIX/devices/SM8550/options`): `TARGET_CPU=cortex-x3
+  +fp16+crypto+i8mm+bf16+memtag+sm4+sha3`, **SVE/SVE2 off**. Whole userspace (glibc, Turnip, …) is
+  built cortex-x3 — **except FEX**, which `fex-emu/package.mk` remaps to **`TUNE_CPU=cortex-a78`**
+  (it migrates across all cores). *(pocknix's FEX should be a78, not the x3 I set earlier.)*
+
+**Per-thread CPU (`ps -eLo psr,pcpu,tid,comm`):**
+```
+PSR %CPU  COMMAND
+  0  219  ASBR.exe        <- game on a LITTLE (A510) core, unpinned, and STILL faster
+  3  23.5 steamwebhelper
+  4  13.7 mangoapp
+  3  10.0 wineserver
+  5   8.7 Xwayland
+  3   8.2 gamescope-wl
+```
+Game ≈ **219%** vs pocknix ~282% → ROCKNIX does **less CPU/frame**; placement is irrelevant.
+
+**gamescope launch (`/proc/$(pidof gamescope)/cmdline`):**
+```
+gamescope -W 1080 -H 1920 -r 120 --xwayland-count 2 --mangoapp --backend drm \
+  --force-orientation left --use-rotation-shader -e -- steam -steamdeck -steamos3 -gamepadui \
+  -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders
+```
+vs pocknix: native-orientation `-W 1080 -H 1920` (we use 1920×1080), `--use-rotation-shader` (we use
+#2228 composite), and the **Steam appliance flags** `-nobootstrapupdate -skipinitialbootstrap
+-norepairfiles -noshaders` (we lack these). environ: only `GAMESCOPE_MODE_SAVE_FILE` +
+`GAMESCOPE_FAKE_OUTPUT_MM=508x286` — **not** the gamescope-session-plus env vars, so those aren't its secret.
+
+**GPU (`/sys/class/devfreq/*.gpu/`):** `simple_ondemand`, cur/max **680 MHz** — *same as pocknix* →
+GPU clock not the lever (lower GPU util at the same clock = less GPU work/frame).
+
+**Stack:** Turnip **Mesa 26.1.2** (cortex-x3-built + ir3 SM8550 patch; pocknix = ALARM stock 26.1.3).
+Proton = Steam-downloaded **Valve Proton 11.0 (ARM64)**, *identical* to pocknix → DXVK/Proton **not**
+a differentiator (ROCKNIX's own dxvk/wine pkgs are for its *non-Steam* Wine path).
+
+**`perf record -a -e cpu-clock` (Self%):**
+```
+69.0%  [kernel.kallsyms]   <- MOSTLY IDLE: game uses ~2.5/8 cores; 5.5 idle = ~69%
+14.2%  [JIT]  (FEX-translated game)
+ 7.5%  d3d11.dll  (DXVK)
+ 1.9%  libvulkan_freedreno  (Turnip)
+ 1.3%  libc.so.6
+ 1.1%  libarm64ecfex.dll   (ROCKNIX Proton uses the ARM64EC path)
+ <1%   gamescope / Xwayland / mangoapp / libgallium
+```
+Rescaled to the ~31% **active** CPU: FEX-JIT ~45%, DXVK ~24%, Turnip ~6%, glibc ~4%.
+
+**Verdict:**
+1. Per-frame cost = **irreducible x86-on-ARM emulation** (FEX-JIT + DXVK) — not rebuildable; ROCKNIX
+   pays it too.
+2. cortex-x3-tunable libs (Turnip + glibc) ≈ **<1% overall** → **do not rebuild tuned userspace.**
+3. Box mostly idle → **latency-bound, not throughput-bound** → max clocks don't help (why schedutil wins).
+4. ROCKNIX's edge = its **FEX config** (matched, +1-2 fps) + a thin tuned-userspace margin (<1%). No hidden lever.
+
+**Still-applicable config (not yet done):** Steam appliance flags (`-noshaders` *conditional* on a
+cold shader cache + the no-update/bootstrap/repair flags); FEX `TUNE_CPU` **x3 → a78**; optionally
+drop lavd `--performance` for plain schedutil (power/thermals, zero fps cost).
 
 ## Side-findings worth keeping
 
