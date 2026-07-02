@@ -1,0 +1,25 @@
+#!/bin/sh
+# pocknix-rt-demote-watch — keep the Proton/FEX game off SCHED_RR.
+#
+# WHY: Wine promotes the *entire* game to SCHED_RR (rtprio 40) because the `deck` user has
+# `rtprio 98` (overlay/etc/security/limits.d/60-pocknix-gaming.conf, granted so gamescope can
+# self-RR). With the RT throttle disabled (kernel.sched_rt_runtime_us=-1), ~70 RR game threads
+# cause priority-inversion stalls — the "random GPU->0% hitching" (see
+# docs/gamescope-fps-investigation.md). ROCKNIX's game runs SCHED_OTHER (measured); it doesn't
+# promote. RT threads also bypass scx_lavd AND EEVDF entirely, so this also restores normal
+# scheduling of the game.
+#
+# WHAT: poll for the x86 game (the *.exe under FEX) and demote any RR/FIFO threads to SCHED_OTHER.
+# Uses ps|awk to find it — `pgrep -x` misses the ".exe" comm.
+#
+# NOTE: this is the pragmatic fix. The cleaner root-cause fix is to stop Wine RT-promoting the game
+# in the first place (e.g. lower the game's RLIMIT_RTPRIO while keeping gamescope's RR via the root
+# pocknix-gamescope-rt service) — TODO, needs verifying gamescope still gets RR.
+while :; do
+  for gp in $(ps -eo pid,comm 2>/dev/null | awk '/\.exe$/ && $2 !~ /steam|service|winedev|plugplay|svchost|explorer|rpcss|tabtip|conhost/{print $1}'); do
+    for tid in $(ps -L -o tid=,cls= -p "$gp" 2>/dev/null | awk '$2=="RR" || $2=="FF"{print $1}'); do
+      chrt -o -p 0 "$tid" 2>/dev/null
+    done
+  done
+  sleep 2
+done

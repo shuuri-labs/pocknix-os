@@ -23,6 +23,17 @@
 > latency that no config/source delta explains; localizing it would need off-CPU per-frame tracing.
 > **Real wins are the bugs fixed along the way** (SCHED_RR hitching, fan curve, vsync staircase, settings).
 > See **["Live on-device A/B session" below](#live-on-device-ab-session-2026-06-30--gap-isolated-to-the-gamescope-wsi-present-path)**.
+>
+> **🔎 NAMED, not fixed (2026-07-01, off-CPU + render-thread profiling — the diagnostic ran).** The
+> render thread is **~82% on-CPU in both** gamescope and kwin and **barely blocks** (off-CPU tiny,
+> wchan identical) — it is NOT stalling on the compositor. Under gamescope it spends **~5ms/frame MORE
+> on-CPU in the Vulkan present/submit path** (`d3d11.dll`/DXVK 34.7%→37.7% self, Turnip WSI 7.4%→10.5%,
+> winevulkan/ntdll up), which **crowds out actual game render** (`[JIT]` 32%→22%), capping interactive
+> play ~40fps (QTEs slip over). Inherent to routing DXVK's present through gamescope's nested
+> composite/WSI vs kwin's direct present. **Confirmed NOT config-fixable:** present-path env strip
+> (flat — gamescope force-sets them), DXVK `maxFrameLatency=1`/`numAsyncPresent`/`tearFree` (flat),
+> limiter (=0). Only remaining lead is build-level (ROCKNIX's cortex-x3 Turnip may be faster in WSI
+> present — uncertain, a rebuild). See **["Off-CPU / render-thread session" below](#off-cpu--render-thread-session-2026-07-01)**.
 
 ## TL;DR
 
@@ -371,6 +382,56 @@ not a closing of the residual gamescope gap.
 - Matched per-DSO Self% (game process, task-clock): essentially identical on both OSes.
 - perf samples over 20s: **pocknix 59,590 vs ROCKNIX 64,689** → pocknix uses *less* total CPU at
   *lower* fps = more CPU **per frame** + waiting (the GPU-starvation signature).
+
+## Off-CPU / render-thread session (2026-07-01)
+
+The off-CPU tracing the earlier passes kept deferring to. Tooling reality: **ROCKNIX can't off-CPU
+profile** (its perf lacks the BPF skel → `--off-cpu` silently ignored; its kernel has FTRACE off → no
+`sched_switch` tracepoint). **pocknix can** (FTRACE on for scx_lavd; also has bpftrace + BTF). So the
+decisive comparison is **pocknix gamescope (slow) vs pocknix kwin (fast)** — same OS, only the
+compositor differs. Scripts: `docs/offcpu-capture.sh`, plus ad-hoc `wchan` sampling and bpftrace
+on/off-CPU-time.
+
+**Findings (same scene, game demoted to SCHED_OTHER in both via the RT-demote watcher):**
+- **wchan sampling:** the blocking *pattern* is ~identical gamescope vs kwin. RenderThread blocks
+  little and only on `ntsync` (Wine sync); the dxvk chain waits on futex + `drm_syncobj` (GPU fences).
+  No compositor/present syscall dominates. → the gap is NOT a different blocking pattern.
+- **bpftrace on/off-CPU time (per thread, 15s):** RenderThread on-CPU **12232ms (kwin) vs 12293ms
+  (gamescope)** — *identical* — and off-CPU tiny in both (747 / 487ms). So the render thread does the
+  **same total CPU per second** but yields fewer frames → **more CPU per frame** (~15ms kwin → ~20ms
+  gamescope), and it's **on-CPU, not blocking**.
+- **RenderThread on-CPU by DSO (self%), the money table:**
+
+  | DSO | kwin (55fps) | gamescope (40fps) |
+  |---|---|---|
+  | `[JIT]` (actual game render) | **32.2** | **21.6** |
+  | `d3d11.dll` (DXVK present+submit) | 34.7 | **37.7** |
+  | `libvulkan_freedreno` (Turnip WSI) | 7.4 | **10.5** |
+  | winevulkan.so | 2.8 | 4.3 |
+  | ntdll.so | 3.5 | 5.3 |
+
+  Under gamescope the render thread's fixed CPU budget shifts **away from game render (`[JIT]`) toward
+  the Vulkan present/submit path** (DXVK + Turnip WSI + winevulkan/ntdll) — ~5ms/frame — which is why
+  interactive gameplay caps ~40fps.
+
+**Config levers tested this session — all flat:** stripping the present-path env
+(`vk_xwayland_wait_ready`/`mesa_glthread`/`ENABLE_GAMESCOPE_WSI` — and gamescope force-sets the first
+two on children anyway, so they were never ours to set); DXVK `dxvk.maxFrameLatency=1` +
+`d3d11.maxFrameLatency=1` + `numAsyncPresent` + `tearFree=False`; frame limiter (was already 0).
+ROCKNIX/armada set **no** DXVK or present env either — so there's nothing to copy.
+
+**Named conclusion:** the residual is the render thread paying ~5ms/frame of extra on-CPU present cost
+routing through gamescope's nested composite/WSI (vs kwin's direct present). Not blocking, not a
+limiter, not config-tunable with anything we control. The only untested lever is **build-level**:
+ROCKNIX-gamescope is fast on the same path and its Turnip is **cortex-x3 + SM8550 ir3 patch** vs
+pocknix's generic ALARM Turnip; part of the cost is in Turnip's WSI (7.4→10.5%). A cortex-x3 Turnip
+*might* shave it — but the earlier system-wide profile put x3 rebuilds at <1% (WSI present wasn't
+isolated), so it's uncertain and it's a rebuild, not a knob. **Parked here.**
+
+**Productionized from this whole effort:** SCHED_RR hitching fix (`pocknix-rt-demote.service` +
+`pocknix-rt-demote-watch`, enabled in `build-sd-image.sh`; interim — proper fix is to stop Wine
+RR-promoting the game); `-noshaders` + removed present-path env in `pocknix-steam`; fan curve reverted
+to the quiet averaging behavior (ROCKNIX runs 91°C @ pwm153, so max-zone was needless noise).
 
 ## Unexplored / future
 
