@@ -40,12 +40,19 @@ makedepends=(
 )
 # upstream considers LTO broken until explicit notice (Arch mesa does the same)
 options=(!lto)
-source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz")
+# 0001 = upstream mesa 179e744f7577 ("c11/threads: fix build on c23", Cc: mesa-stable) —
+# newer glibc (ALARM's 2.43) declares once_flag/call_once in stdlib.h per C2y, which
+# collides with mesa's bundled src/c11 pthread shim ("conflicting types for 'call_once'").
+# 25.1.5 predates the fix (ROCKNIX builds it against an older glibc, so they never hit it).
+source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz"
+        '0001-c11-threads-fix-build-on-c23.patch')
 # sha256 = ROCKNIX's PKG_SHA256 for mesa 25.1.5 (packages/graphics/mesa/package.mk)
-sha256sums=('3c4f6b10ff6ee950d0ec6ea733cc6e6d34c569454e3d39a9b276de9115a3b363')
+sha256sums=('3c4f6b10ff6ee950d0ec6ea733cc6e6d34c569454e3d39a9b276de9115a3b363'
+            'SKIP')
 
 prepare() {
   cd "mesa-${pkgver}"
+  patch -p1 < "${srcdir}/0001-c11-threads-fix-build-on-c23.patch"
   # Include the package release in the version string so Chromium/CEF (steamwebhelper!)
   # invalidates its GPU cache across our rebuilds — same trick as Arch's mesa.
   echo "${pkgver}-pocknix${epoch}.${pkgrel}" > VERSION
