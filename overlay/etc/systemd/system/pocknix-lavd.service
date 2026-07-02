@@ -1,0 +1,35 @@
+[Unit]
+Description=pocknix LAVD scheduler (scx_lavd, big.LITTLE / latency-aware, performance mode)
+Documentation=https://github.com/sched-ext/scx
+# Start early once the base system is up — do NOT order after multi-user.target, which
+# pulls in the graphical Steam session bring-up and can settle late (or stall on the temp
+# gamescope-diag), leaving the start job queued forever. The sched_ext/BTF guards below are
+# satisfied from kernel init, so a scheduler needs no later ordering. WantedBy stays
+# multi-user.target so it's still enabled at boot; default deps order it after basic.target.
+After=basic.target
+# Guards: skip cleanly (don't crash-loop) until the sched_ext + BTF kernel is deployed.
+#   /sys/kernel/sched_ext  exists iff CONFIG_SCHED_CLASS_EXT=y in the running kernel.
+#   /sys/kernel/btf/vmlinux exists iff DEBUG_INFO_BTF=y + pahole ran at build time.
+ConditionPathExists=/sys/kernel/sched_ext
+ConditionPathExists=/sys/kernel/btf/vmlinux
+# If the BPF object can't load (e.g. a kernel missing the tracing/BPF-events stack that
+# scx_lavd's bpf_trace_printk + futex/execve tracepoints need), give up after a few tries
+# instead of crash-looping and flooding the journal.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# --performance = LAVD biases clocks high across the board (not just for latency-critical
+# tasks) while keeping its latency-aware big.LITTLE placement. Chosen over --autopilot after
+# on-device A/B: autopilot's efficiency bias left raw FPS lower; --performance recovers most of
+# it and keeps LAVD's steadier 1% lows. Pairs with the schedutil governor (kernel default) so
+# LAVD's per-core frequency requests actually take effect. (Trade-off: more heat/drain at idle
+# than autopilot; and downloads run slower than under the performance *governor* — flip the
+# governor to performance momentarily for big installs: echo performance > .../scaling_governor.)
+ExecStart=/usr/bin/scx_lavd --performance
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

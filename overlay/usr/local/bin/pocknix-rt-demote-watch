@@ -6,8 +6,8 @@
 # self-RR). With the RT throttle disabled (kernel.sched_rt_runtime_us=-1), ~70 RR game threads
 # cause priority-inversion stalls — the "random GPU->0% hitching" (see
 # docs/gamescope-fps-investigation.md). ROCKNIX's game runs SCHED_OTHER (measured); it doesn't
-# promote. RT threads bypass the normal EEVDF scheduler entirely, so this also restores
-# normal scheduling of the game.
+# promote. RT threads also bypass scx_lavd AND EEVDF entirely, so this also restores normal
+# scheduling of the game.
 #
 # WHAT: poll for the x86 game (the *.exe under FEX) and demote any RR/FIFO threads to SCHED_OTHER.
 # Uses ps|awk to find it — `pgrep -x` misses the ".exe" comm.

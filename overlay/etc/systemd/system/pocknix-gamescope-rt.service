@@ -1,7 +1,6 @@
 [Unit]
 Description=Elevate gamescope compositor threads to realtime (parity with ROCKNIX root session)
-# Start early; do NOT order after multi-user.target — that pulls in the graphical Steam
-# session bring-up and can settle late, leaving the start job queued forever.
+# Start early; don't wait for the full graphical target (same reasoning as pocknix-lavd).
 After=basic.target
 
 [Service]
