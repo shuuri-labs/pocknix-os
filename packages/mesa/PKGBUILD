@@ -1,0 +1,146 @@
+# mesa (pocknix) — trimmed, RP6-tuned Mesa: freedreno (Adreno 740 GL) + turnip (Vulkan) only.
+#
+# Why our own mesa instead of ALARM's:
+#  - ALARM's mesa builds EVERY driver (intel/amd/nouveau/broadcom/panfrost/virtio/asahi/... plus
+#    rusticl OpenCL and NVK's whole Rust stack). The RP6 has exactly one GPU; everything else is
+#    dead weight in the image and build-time deps (llvm, rust, clang) we don't want.
+#  - CPU tuning: built with ROCKNIX's exact SM8550 flags (cortex-x3/armv9-a, see build()) like
+#    our gamescope/mangohud, instead of ALARM's generic armv8-a baseline.
+#  - Version pinned to ROCKNIX's mesa (25.1.5, their packages/graphics/mesa/package.mk pin and
+#    sha256) so the driver pair matches what the RP6 is validated against upstream. NB: ROCKNIX
+#    ships NO mesa patches on our pinned branch (packages/graphics/mesa has only package.mk) —
+#    "the same patches ROCKNIX ships" is the empty set; this is stock 25.1.5.
+#
+# Driver set mirrors ROCKNIX SM8550 (options: GRAPHIC_DRIVERS=freedreno -> config/graphic):
+#   gallium = freedreno + zink + softpipe (their default fallback), vulkan = freedreno (turnip).
+# ONE deliberate divergence: ROCKNIX builds -Dplatforms=wayland -Dglx=disabled (their session is
+# pure Wayland); we ALSO build x11 + GLX because our Steam client and desktop-mode X11 apps run
+# under XWayland and need GLX/EGL-x11 — dropping it would break them (ALARM's mesa has both).
+#
+# epoch=2 because ALARM's mesa is epoch=1 and version-ahead (1:26.x); epoch 2 makes our pinned
+# 2:25.1.5 win upgrades. Split mirrors the two ALARM packages the image installs (base.list):
+# `mesa` and `vulkan-freedreno` — install_local_packages replaces both with these.
+pkgbase=mesa
+pkgname=(mesa vulkan-freedreno)
+epoch=2
+pkgver=25.1.5
+pkgrel=1
+pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (ROCKNIX 25.1.5 pin)"
+arch=('aarch64')
+url="https://www.mesa3d.org/"
+license=("MIT AND BSD-3-Clause AND SGI-B-2.0")
+makedepends=(
+  # toolchain / build system
+  meson ninja python-mako python-packaging python-yaml python-ply
+  # linked libs (subset of Arch's — no llvm/rust/clang: llvm=disabled, no rusticl, no NVK)
+  expat libdrm libglvnd libdisplay-info spirv-tools systemd-libs vulkan-icd-loader
+  wayland wayland-protocols zlib zstd
+  # x11 platform + GLX + vulkan x11 WSI
+  xorgproto libx11 libxcb libxext libxshmfence libxxf86vm libxrandr xcb-util-keysyms
+)
+# upstream considers LTO broken until explicit notice (Arch mesa does the same)
+options=(!lto)
+source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz")
+# sha256 = ROCKNIX's PKG_SHA256 for mesa 25.1.5 (packages/graphics/mesa/package.mk)
+sha256sums=('3c4f6b10ff6ee950d0ec6ea733cc6e6d34c569454e3d39a9b276de9115a3b363')
+
+prepare() {
+  cd "mesa-${pkgver}"
+  # Include the package release in the version string so Chromium/CEF (steamwebhelper!)
+  # invalidates its GPU cache across our rebuilds — same trick as Arch's mesa.
+  echo "${pkgver}-pocknix${epoch}.${pkgrel}" > VERSION
+}
+
+build() {
+  # CPU tuning = ROCKNIX's exact SM8550 userspace flags (devices/SM8550/options:
+  # TARGET_CPU=cortex-x3, TARGET_CPU_FLAGS=+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2,
+  # + their -mno-outline-atomics). Appended after ALARM's defaults so -march/-mtune override.
+  # buildtype=plain -> meson respects these env flags (same pattern as gamescope/mangohud).
+  local _rocknix_tune="-march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics"
+  export CFLAGS="${CFLAGS} ${_rocknix_tune}"
+  export CXXFLAGS="${CXXFLAGS} ${_rocknix_tune}"
+
+  # Option set = ROCKNIX's PKG_MESON_OPTS_TARGET for a freedreno/wl device, plus x11 (see header).
+  # llvm=disabled kills llvmpipe/lavapipe (softpipe is the CPU fallback, as on ROCKNIX) and drops
+  # the llvm-libs runtime dep entirely. No VA/VDPAU/XA (no such hardware paths on msm), no
+  # rusticl/OpenCL, no vulkan layers (mangohud is our overlay; device-select is pointless with
+  # one GPU). freedreno-kmds=msm only (no virtio guests here).
+  meson setup build "mesa-${pkgver}" --prefix=/usr --buildtype=plain \
+    -Db_ndebug=true \
+    -Dplatforms=x11,wayland \
+    -Dglx=dri \
+    -Degl=enabled \
+    -Dgbm=enabled \
+    -Dglvnd=enabled \
+    -Dopengl=true \
+    -Dgles1=disabled \
+    -Dgles2=enabled \
+    -Dgallium-drivers=freedreno,zink,softpipe \
+    -Dvulkan-drivers=freedreno \
+    -Dfreedreno-kmds=msm \
+    -Dvulkan-layers= \
+    -Dllvm=disabled \
+    -Ddraw-use-llvm=false \
+    -Dgallium-rusticl=false \
+    -Dgallium-va=disabled \
+    -Dgallium-vdpau=disabled \
+    -Dgallium-xa=disabled \
+    -Dgallium-extra-hud=false \
+    -Dshader-cache=enabled \
+    -Dandroid-libbacktrace=disabled \
+    -Dlibunwind=disabled \
+    -Dlmsensors=disabled \
+    -Dvalgrind=disabled \
+    -Dmicrosoft-clc=disabled \
+    -Dbuild-tests=false
+  meson compile -C build
+}
+
+# Stage-split helper (Arch mesa's _pick): move a packaged file out of $pkgdir into a
+# side directory that the second package() scoops up.
+_pick() {
+  local p="$1" f d; shift
+  for f; do
+    d="$srcdir/$p/${f#$pkgdir/}"
+    mkdir -p "$(dirname "$d")"
+    mv -v "$f" "$d"
+    rmdir -p --ignore-fail-on-non-empty "$(dirname "$f")"
+  done
+}
+
+package_mesa() {
+  pkgdesc="Open-source OpenGL drivers, trimmed for the RP6 (freedreno + zink + softpipe)"
+  depends=(
+    expat glibc libdrm libglvnd libx11 libxcb libxext libxshmfence libxxf86vm
+    wayland zlib zstd
+  )
+  provides=("mesa-libgl=${epoch}:${pkgver}-${pkgrel}" opengl-driver)
+  conflicts=('mesa-libgl<17.0.1-2')
+  replaces=('mesa-libgl<17.0.1-2')
+
+  meson install -C build --destdir "${pkgdir}" --no-rebuild
+
+  (
+    cd "${pkgdir}"
+    # split turnip + its ICD out into vulkan-freedreno (mirrors Arch/ALARM packaging)
+    _pick vkfdreno usr/lib/libvulkan_freedreno.so
+    _pick vkfdreno usr/share/vulkan/icd.d/freedreno_icd.json
+    # indirect rendering (glvnd looks for libGLX_indirect)
+    ln -sr usr/lib/libGLX_{mesa,indirect}.so.0
+  )
+
+  install -Dm644 "mesa-${pkgver}/docs/license.rst" -t "${pkgdir}/usr/share/licenses/${pkgname}"
+}
+
+package_vulkan-freedreno() {
+  pkgdesc="Open-source Vulkan driver for Adreno GPUs (turnip, cortex-x3 tuned)"
+  depends=(
+    expat glibc libdrm libdisplay-info libx11 libxcb libxshmfence spirv-tools
+    systemd-libs vulkan-icd-loader wayland xcb-util-keysyms zlib zstd
+  )
+  provides=(vulkan-driver)
+
+  mv "${srcdir}/vkfdreno"/* "${pkgdir}"
+
+  install -Dm644 "mesa-${pkgver}/docs/license.rst" -t "${pkgdir}/usr/share/licenses/${pkgname}"
+}
