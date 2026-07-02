@@ -14,7 +14,7 @@
 pkgname=gamescope
 epoch=1
 pkgver=3.16.0.rocknix.fe78bc6
-pkgrel=3
+pkgrel=4
 _commit=fe78bc685f247460d02c85f4b530b9de3ed07cdd
 # Grant CAP_SYS_NICE to the installed binary (realtime scheduling) — see gamescope.install.
 install=gamescope.install
@@ -39,8 +39,9 @@ source=("gamescope::git+https://github.com/ValveSoftware/gamescope.git#commit=${
         '0001-WaylandBackend-wire-up-wl_touch-implementation.patch'
         '0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch'
         '0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch'
-        '0007-composite-rotation.patch')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        '0007-composite-rotation.patch'
+        '0008-Revert-mangoapp-always-send-output-frametimings.patch')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
   cd gamescope
@@ -52,6 +53,12 @@ prepare() {
   patch -p1 < "${srcdir}/0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch"
   # 0007 (gamescope PR #2228) REPLACES 0005's rotation shader with composite-rotation.
   patch -p1 < "${srcdir}/0007-composite-rotation.patch"
+  # 0008 reverts upstream e572411d: nudge mangoapp at game COMMIT (pre-composite, like
+  # ROCKNIX's older gamescope) so the overlay redraw coalesces into the same composite
+  # instead of forcing an extra ~3.5ms rotated pass, and restore real (non-vblank-quantized)
+  # frametimes to the overlay readout. Pairs with mangohud's 0006 pacing fix. Measured:
+  # docs/gamescope-fps-investigation.md "GPU-side session (2026-07-02)".
+  patch -p1 < "${srcdir}/0008-Revert-mangoapp-always-send-output-frametimings.patch"
 }
 
 build() {
@@ -61,6 +68,12 @@ build() {
   # Disable -Werror wholesale rather than chase each version-skew warning. CFLAGS
   # propagate into the subprojects (wlroots etc.), and being last they override -Werror.
   export CFLAGS+=" -Wno-error" CXXFLAGS+=" -Wno-error"
+  # CPU tuning = ROCKNIX's exact SM8550 userspace flags (distribution config/arch.aarch64 +
+  # devices/SM8550/options): armv9-a + their feature set (SVE off), tuned for the X3 prime,
+  # -mno-outline-atomics per their arch config. Appended last so -march/-mtune override
+  # ALARM's generic armv8-a defaults; propagates into wlroots/libliftoff subprojects too.
+  local _rocknix_tune="-march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics"
+  export CFLAGS+=" ${_rocknix_tune}" CXXFLAGS+=" ${_rocknix_tune}"
   meson setup build \
     --prefix=/usr --buildtype=release -Db_lto=false \
     -Ddrm_backend=enabled \

@@ -560,6 +560,19 @@ The "why is ROCKNIX's overlay nearly free" question was chased through the sourc
   → `pacman -U` → overlay ON in a fight → expect composites ≈ game rate and fps ≈ the
   overlay-off 50–55, i.e. the overlay becomes ~free. Worth upstreaming to MangoHud if it holds.
 
+**Pacing-fix validation (same day, on-device, identical paused scene):** the mangohud 0006 patch
+works as designed — mangoapp submits dropped to **1:1 with game frames** (726 = 726, 0.6% GPU) —
+and cut the overlay cost from ~10 to **~6.5 fps** (48.4 overlay-on vs 54.9 overlay-off). The
+residual decomposes as: (a) +1 ms per composite for blending the second layer (2.55 → 3.58 ms,
+inherent), and (b) **~16 extra composites/s from a timing straddle**: our gamescope (post
+`e572411d`) nudges mangoapp from the output handler *after* the composite, so the overlay redraw
+always misses its own frame's composite and forces an extra pass. ROCKNIX's older gamescope nudges
+at game *commit* time (pre-composite) → redraw coalesces → overlay ~free there. **Second fix
+shipped: `packages/gamescope/0008-Revert-mangoapp-always-send-output-frametimings.patch`**
+(pkgrel 4, + ROCKNIX cortex-x3/armv9-a tuning added to the build) — reverts `e572411d`, restoring
+the pre-composite nudge AND real (non-vblank-quantized) frametimes to the readout. Validation:
+rebuild gamescope, overlay ON, expect composites ≈ game rate and an accurate fps readout.
+
 ### Session incidents (for the record)
 
 - Removing rotation for a "composite cost without rotation" test wedged the session — vanilla
