@@ -56,7 +56,7 @@ install_local_packages() {
     warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping local pkgs"
     return 0
   fi
-  log "installing local pocknix packages (pocknix-bsp, gamescope, inputplumber, pocknix-steam)"
+  log "installing local pocknix packages (mesa, vulkan-freedreno, pocknix-bsp, gamescope, inputplumber, pocknix-steam, …)"
   append_local_repo "${root}/etc/pacman.conf"
   mkdir -p "${root}/localrepo"
   mount --bind "${LOCAL_REPO_DIR}" "${root}/localrepo"
@@ -79,11 +79,21 @@ install_local_packages() {
   # build black-screens the rotated panel; our patched mangohud has the Adreno reader). epoch=1 only
   # affects `-Syu` upgrades, not `-S` selection. Qualifying forces our builds and errors loudly if a
   # local package is genuinely missing from [pocknix] instead of silently grabbing ALARM's.
+  # mesa + vulkan-freedreno: our epoch-2 trimmed/tuned builds (packages/mesa — freedreno/turnip
+  # only, ROCKNIX's 25.1.5 pin, cortex-x3) REPLACE the ALARM copies base.list installed for
+  # bootstrap. Same package names; epoch 2 > ALARM's 1, so pacman treats it as a plain upgrade.
   chroot "${root}" pacman -S --noconfirm --needed \
+        pocknix/mesa pocknix/vulkan-freedreno \
         pocknix/pocknix-bsp pocknix/gamescope pocknix/inputplumber pocknix/pocknix-steamos-shim \
         pocknix/mangohud pocknix/pocknix-steam pocknix/fex-emu pocknix/fex-rootfs pocknix/pocknix-desktop
   # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
   # especially: ALARM's vanilla lacks --use-rotation-shader and black-screens on the RP6 (bitten 3x).
+  local mesa_ver; mesa_ver="$(chroot "${root}" pacman -Q mesa 2>/dev/null | awk '{print $2}')"
+  case "${mesa_ver}" in
+    2:*) log "mesa OK: ${mesa_ver} (epoch-2 pocknix trimmed build)" ;;
+    *) umount "${root}/localrepo" 2>/dev/null || true
+       die "mesa resolved to '${mesa_ver}', NOT our epoch-2 [pocknix] build — the image would ship ALARM's all-driver mesa. Confirm build/localrepo/mesa-2:*.pkg.tar.* exists AND is in pocknix.db ('make packages PKG=mesa'), then re-run." ;;
+  esac
   local gs_ver; gs_ver="$(chroot "${root}" pacman -Q gamescope 2>/dev/null | awk '{print $2}')"
   case "${gs_ver}" in
     1:*rocknix*) log "gamescope OK: ${gs_ver} (epoch-1 patched build)" ;;

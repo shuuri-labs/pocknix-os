@@ -23,7 +23,10 @@ parted              # pocknix-install-internal repartitions the internal UFS (+ 
 rsync               # pocknix-install-internal clones the running rootfs to the internal ext4
 cloud-guest-utils   # growpart — pocknix-expand-root grows the root partition to fill the SD on first boot
 
-# --- graphics stack (mesa from ALARM, NOT holo — see plan.md #1) ---
+# --- graphics stack ---
+# mesa + vulkan-freedreno install from ALARM here to satisfy bootstrap deps, then
+# install_local_packages REPLACES both with our epoch-2 pocknix builds (packages/mesa:
+# freedreno/turnip-only, ROCKNIX's 25.1.5 pin, cortex-x3 tuned).
 mesa
 vulkan-freedreno
 vulkan-icd-loader
