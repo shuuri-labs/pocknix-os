@@ -1,6 +1,12 @@
 From: pocknix
 Subject: [PATCH] mangoapp: pace redraws to gamescope frame messages (stop free-running)
 
+UPSTREAM STATUS: independently discovered + fixed upstream as PR #2067 ("mangoapp:
+throttle overlay to one render per game frame", merged 2026-06-06, commit 2c1dc528) with a
+functionally identical fix (cv wait_for(100ms) + consume new_frame; their analysis also
+blames a3b5683 for removing the wait). The upstream fix is in master but in NO release yet
+(post-v0.8.4). DROP THIS PATCH when we move to a release containing 2c1dc528.
+
 WHY (measured on the RP6, docs/gamescope-fps-investigation.md "GPU-side session"):
 mangoapp's main loop has NO pacing for the visible-overlay case. `new_frame` is set by
 the msgrcv thread when gamescope sends a frametime message, but it is NEVER cleared —
