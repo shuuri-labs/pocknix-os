@@ -120,19 +120,16 @@ GS_LOG="${HOME}/pocknix-steam.log"
 set -o pipefail
 # Steam's gamepadui sizes its UI from the output's physical mm (DPI). 177x100 = armada's tested RP6
 # value (~275 DPI, handheld-correct UI); the old 508x286 was ~96 DPI -> a desktop monitor -> tiny UI.
-# Present-path env, ported from gamescope-session-plus (ChimeraOS/Bazzite — the upstream Steam-Deck
-# session manager). vk_xwayland_wait_ready=false: don't block on client buffers going idle before
-# handing them to gamescope. GAMESCOPE_DISABLE_ASYNC_FLIPS=1: vblank-synced flips = steadier pacing
-# on msm DRM. ENABLE_GAMESCOPE_WSI=1: optimized swapchain/framelimiter path. mesa_glthread=true: GL
-# threading (helps the GL/UI paths). On-device these did NOT raise average fps, but they made the
-# SteamOS in-game fps cap HOLD STEADY (no overshoot) — kept for the cleaner frame pacing.
+# The present-path env (vk_xwayland_wait_ready / GAMESCOPE_DISABLE_ASYNC_FLIPS / ENABLE_GAMESCOPE_WSI /
+# mesa_glthread), ported from gamescope-session-plus, was REMOVED 2026-07-01 after the deep off-CPU
+# investigation (docs/gamescope-fps-investigation.md): on-device A/B showed they don't affect fps, and
+# gamescope force-sets vk_xwayland_wait_ready / ENABLE_GAMESCOPE_WSI on its children anyway (so setting
+# them here was a no-op). GAMESCOPE_DISABLE_ASYNC_FLIPS=1 was a 120/3=40fps vsync staircase — dropping
+# it lets frames exceed 40. Now bare, matching ROCKNIX's launch. -noshaders matches ROCKNIX too (stops
+# Steam's fossilize background shader compile stealing CPU during play).
 env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM=177x100 \
-  vk_xwayland_wait_ready=false \
-  GAMESCOPE_DISABLE_ASYNC_FLIPS=1 \
-  ENABLE_GAMESCOPE_WSI=1 \
-  mesa_glthread=true \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --force-composition-rotation -e -- \
-    env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles \
+    env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles -noshaders \
   2>&1 | tee "${GS_LOG}"
