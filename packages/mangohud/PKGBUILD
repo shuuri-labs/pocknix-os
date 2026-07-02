@@ -17,7 +17,7 @@
 # (makepkg strips local source entries to basename, so a patches/ subdir wouldn't be found).
 pkgname=mangohud
 pkgver=0.8.3
-pkgrel=3
+pkgrel=4
 pkgdesc="Vulkan/OpenGL FPS/frametime/CPU/GPU overlay + mangoapp for the gamescope Steam session"
 arch=('aarch64')
 url="https://github.com/flightlessmango/MangoHud"
@@ -54,6 +54,14 @@ prepare() {
 
 build() {
   cd MangoHud
+  # CPU tuning = ROCKNIX's exact SM8550 userspace flags (distribution config/arch.aarch64 +
+  # devices/SM8550/options: TARGET_CPU=cortex-x3, TARGET_VARIANT=armv9-a,
+  # TARGET_CPU_FLAGS=+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2, plus their
+  # -mno-outline-atomics). Appended after ALARM's defaults so -march/-mtune override them.
+  # buildtype=plain -> meson respects these env flags.
+  local _rocknix_tune="-march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics"
+  export CFLAGS="${CFLAGS} ${_rocknix_tune}"
+  export CXXFLAGS="${CXXFLAGS} ${_rocknix_tune}"
   # mangoapp=true builds the standalone overlay app gamescope --mangoapp launches.
   # NVIDIA backends disabled (no NVIDIA here; avoids nvml/xnvctrl deps).
   meson setup build --prefix=/usr --buildtype=plain \
