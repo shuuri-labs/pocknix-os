@@ -20,17 +20,23 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-# --autopilot = LAVD picks its own power mode from measured load (scx_lavd's default):
+# The mode is NOT hardcoded here: pocknix-lavd-mode run reads the persisted choice from
+# /var/lib/pocknix/lavd-mode (DEFAULT: --autopilot) and execs scx_lavd with it. Toggle with
+# `pocknix-lavd-mode toggle` (or set autopilot/performance explicitly) — it rewrites the
+# file and restarts this unit.
+#
+# --autopilot (default) = LAVD picks its own power mode from measured load:
 #   required capacity <= ~half a little core  -> powersave  (littles-first, core compaction)
 #   moderate (roughly 5-70% of total capacity) -> balanced   (compaction, energy-model order)
 #   high (>~70%)                               -> performance (all cores, fast-cores-first)
 # Chosen over --performance (2026-07-02) for battery/heat/fan noise: at idle and in menus the
 # device now compacts onto little cores and drops clocks instead of biasing everything high.
 # Trade-off (earlier on-device A/B): GPU-bound games often sit at moderate CPU util, so
-# autopilot stays in *balanced* in-game and raw FPS measured a bit lower than --performance;
-# accepted. Pairs with the schedutil governor (kernel default) so LAVD's per-core frequency
-# requests (scx_bpf_cpuperf_set) actually take effect.
-ExecStart=/usr/bin/scx_lavd --autopilot
+# autopilot stays in *balanced* in-game and raw FPS measured a bit lower than --performance —
+# flip to performance for a demanding title: pocknix-lavd-mode performance. Pairs with the
+# schedutil governor (kernel default) so LAVD's per-core frequency requests
+# (scx_bpf_cpuperf_set) actually take effect.
+ExecStart=/usr/local/bin/pocknix-lavd-mode run
 Restart=on-failure
 RestartSec=5
 
