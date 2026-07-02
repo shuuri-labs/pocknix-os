@@ -97,10 +97,11 @@ fi
 # separate rotation-shader pass. --force-orientation left sets the axis. See gamescope-rp6-gpu.
 W=1920; H=1080; REFRESH=120; ORIENT=left
 
-# NO core pin: scx_lavd (latency- + heterogeneity-aware, pocknix-lavd.service) places the bursty
-# game/compositor threads on the big cores itself, AND needs the A510 littles free to offload batch
-# work (e.g. in-game Steam downloads) so the UI stays responsive — a hard taskset would fight it.
-# (The manual 3-7 pin was for the plain-EEVDF kernel; lavd supersedes it.)
+# NO core pin — matches ROCKNIX: their Steam session applies taskset ONLY when a per-game
+# "cores" setting is explicitly set (start_steam.sh steam_set_cpu_affinity); the default is
+# unpinned, and on-device 3-7 pinning measured no FPS change anyway. Scheduling = stock
+# EEVDF + ondemand governor (kernel default, build-kernel.sh) — ROCKNIX's runtime CPU state
+# (their autostart flips performance->ondemand at boot; scx_lavd was removed 2026-07-02).
 
 # Steam client flags = armada's gamescope-session CLIENTCMD exactly
 # (`-gamepadui -steamos3 -steampal -steamdeck -noverifyfiles`). `-e` = gamescope --steam.

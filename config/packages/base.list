@@ -68,8 +68,7 @@ sbc                  # SBC codec — PipeWire BT audio A2DP baseline + HFP/mSBC 
 libfreeaptx          # AptX / AptX-HD / AptX-LL (low-latency) codecs for PipeWire BT audio.
                      #   LDAC needs ldacbt-libs (AUR); AAC needs libfdk-aac (extra) — add if wanted.
 
-# --- CPU scheduler (gaming) ---
-scx-scheds           # sched_ext schedulers incl. scx_lavd (big.LITTLE / latency-aware).
-                     #   pocknix-lavd.service runs `scx_lavd --autopilot`. Needs the
-                     #   SCHED_CLASS_EXT + DEBUG_INFO_BTF kernel (build-kernel.sh) and the
-                     #   schedutil governor (kernel default) for LAVD's per-core DVFS.
+# --- CPU scheduler ---
+# scx-scheds/scx_lavd REMOVED (2026-07-02): we now copy ROCKNIX's CPU setup — stock EEVDF
+# + ondemand governor (kernel default, build-kernel.sh), no core pinning. That also let
+# the sched_ext/BTF/FTRACE kernel deltas be dropped.

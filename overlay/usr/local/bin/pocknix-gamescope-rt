@@ -12,8 +12,8 @@
 # (gamescope's async disk/trace queues) are LEFT ALONE on purpose — gamescope batched them
 # deliberately; RR-ing them would needlessly preempt real work.
 #
-# RR sits ABOVE sched_ext, so this coexists cleanly with scx_lavd (LAVD schedules the normal
-# game/background threads; these RR compositor threads run above LAVD's domain).
+# RR is a realtime class above the normal EEVDF scheduler — the compositor threads preempt
+# game/background work only when they actually have frames to push.
 #
 # NB: on-device A/B showed forcing RR did NOT change FPS — this is for parity with ROCKNIX
 # and frame-pacing, not a measured throughput win.

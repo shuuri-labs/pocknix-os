@@ -86,13 +86,13 @@ install_dts() {
 
 # Vendor downstream trace events (e.g. include/trace/events/qcom_haptics.h) still use the
 # pre-6.10 two-argument __assign_str(dst, src); kernel 6.10+ made it one-arg (the src is now
-# taken from the __string(dst, src) declaration). These never compiled while tracing was off,
-# but enabling FTRACE/BPF_EVENTS (for scx_lavd, see configure()) turns TRACEPOINTS on, so every
-# built driver's TRACE_EVENT expands for real and the stale ones break the build with
-# "macro '__assign_str' passed 2 arguments, but takes just 1". Apply upstream's mechanical
-# migration — drop the redundant 2nd arg — to every trace-event-defining header in the tree.
-# Only stale two-arg call sites match; correct one-arg sites (no comma) and __assign_str_len
-# are untouched. (__string itself is unchanged and stays two-arg.)
+# taken from the __string(dst, src) declaration). These only compile for real when tracing
+# (FTRACE -> TRACEPOINTS) is on — which it currently is NOT (we match ROCKNIX: FTRACE off;
+# the scx_lavd tracing stack was removed 2026-07-02) — but the fixup is kept because it's
+# cheap, inert with tracing off, and prevents a surprise build break if FTRACE is ever
+# re-enabled for bpftrace work. Apply upstream's mechanical migration — drop the redundant
+# 2nd arg — to every trace-event-defining header in the tree. Only stale two-arg call sites
+# match; correct one-arg sites (no comma) and __assign_str_len are untouched.
 fixup_trace_events() {
   log "fixing stale two-arg __assign_str() in vendor trace events (post-6.10 one-arg API)"
   grep -rlZ --include='*.h' -e 'DECLARE_EVENT_CLASS' -e 'TRACE_EVENT' "${KSRC}" 2>/dev/null \
@@ -120,27 +120,20 @@ configure() {
   #    target as a virtual USB device via vhci-hcd; without it InputPlumber hides the
   #    physical gamepad but fails to create the virtual one, so Steam sees no controller
   #    ("modprobe: FATAL: Module vhci-hcd not found"). =m so InputPlumber modprobes it.
-  #  - sched_ext (SCHED_CLASS_EXT) + BTF (DEBUG_INFO_BTF): the pluggable BPF scheduler
-  #    class, so scx_lavd (the gaming/latency-aware, big.LITTLE-aware scheduler from the
-  #    ALARM scx-scheds package, run --autopilot by pocknix-lavd.service) can load. BPF
-  #    syscall/JIT are already on; a sched_ext program only attaches if the kernel exposes
-  #    BTF at /sys/kernel/btf/vmlinux, which needs DEBUG_INFO_BTF=y AND pahole (dwarves)
-  #    present in the build VM at compile time. The base config also sets
-  #    DEBUG_INFO_REDUCED=y, which strips the type info BTF needs (BTF depends on
-  #    !DEBUG_INFO_REDUCED) — so we turn REDUCED off too, else olddefconfig silently
-  #    drops BTF *and* SCHED_CLASS_EXT (they vanish, with no "is not set" line).
-  #  - tracing / BPF events (FTRACE, KPROBES, KPROBE_EVENTS, PERF_EVENTS -> BPF_EVENTS):
-  #    scx_lavd's BPF objects call bpf_trace_printk and attach futex/execve tracepoints.
-  #    The ROCKNIX config ships FTRACE off, so bpf_trace_printk's helper proto is absent
-  #    and the verifier rejects the whole scheduler ("program of this type cannot use
-  #    helper bpf_trace_printk", BPF load -EINVAL -> scx_lavd crash-loops). BPF_EVENTS is
-  #    def_bool y once (KPROBE_EVENTS||UPROBE_EVENTS) + PERF_EVENTS are on, which need the
-  #    tracing core (FTRACE) + KPROBES.
-  #  - default cpufreq governor performance -> schedutil: LAVD does its own per-core DVFS
-  #    via scx_bpf_cpuperf_set(), which only takes effect under schedutil (the one governor
-  #    that honours scheduler frequency hints). Under performance, clocks pin to max and
-  #    LAVD's frequency intelligence — and the handheld's thermal headroom — is lost. Still
-  #    runtime-overridable (echo performance > .../cpufreq/policy*/scaling_governor) to A/B.
+  #  - default cpufreq governor performance -> ondemand: ROCKNIX parity. Their kernel
+  #    config defaults to performance, but userspace flips every policy to ondemand right
+  #    at boot (autostart/008-perfmode sets system.cpugovernor=ondemand when the governor
+  #    is available, and sysutils/autostart applies it) — so the state a running ROCKNIX
+  #    actually games under is EEVDF + ondemand, no core pinning (verified in their source
+  #    AND on-device 2026-07-02). We have no settings/autostart machinery, so we bake
+  #    ondemand as the kernel default instead. Still runtime-overridable to A/B
+  #    (echo performance > .../cpufreq/policy*/scaling_governor).
+  #
+  #  REMOVED (2026-07-02): the sched_ext/BTF + FTRACE/KPROBES/BPF_EVENTS stack that
+  #  existed only to run scx_lavd (pocknix-lavd.service, also removed). We now match
+  #  ROCKNIX: EEVDF, FTRACE off. NB this drops the bpftrace/msm-tracepoint tooling the
+  #  fps investigation used — re-add FTRACE+KPROBES+BPF_EVENTS (+ DEBUG_INFO_BTF and
+  #  --disable DEBUG_INFO_REDUCED) temporarily if that tracing is ever needed again.
   "${KSRC}/scripts/config" --file "${KSRC}/.config" \
     --enable FW_LOADER_COMPRESS \
     --enable FW_LOADER_COMPRESS_ZSTD \
@@ -151,17 +144,8 @@ configure() {
     --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" \
     --module USBIP_CORE \
     --module USBIP_VHCI_HCD \
-    --disable DEBUG_INFO_REDUCED \
-    --enable DEBUG_INFO_BTF \
-    --enable SCHED_CLASS_EXT \
-    --enable FTRACE \
-    --enable KPROBES \
-    --enable KPROBE_EVENTS \
-    --enable UPROBE_EVENTS \
-    --enable PERF_EVENTS \
-    --enable BPF_EVENTS \
     --disable CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
-    --enable CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
+    --enable CPU_FREQ_DEFAULT_GOV_ONDEMAND
 
   # olddefconfig auto-accepts defaults for any new symbols (no prompts, no stdin).
   # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,

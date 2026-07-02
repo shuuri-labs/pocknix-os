@@ -3,7 +3,7 @@
 # InputPlumber composite-device config for the RP6 gamepad. Grows with audio/thermal.
 pkgname=pocknix-bsp
 pkgver=0.1.0
-pkgrel=13
+pkgrel=14
 pkgdesc="pocknix board support (RP6/SM8550): suspend hooks, SDAM breadcrumb, InputPlumber + audio UCM"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -18,12 +18,12 @@ optdepends=('inputplumber: gamepad -> Steam Input mapping (uses 01-rsinput-rp6.y
 # docs/sm8550-suspend-wake-report.md.
 source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'inputplumber-sleep-pre' 'inputplumber-sleep-post' '10-pocknix-deeponly.conf'
-        '20-pocknix-powerkey.conf'
+        '20-pocknix-powerkey.conf' '30-pocknix-cpuidle.conf'
         '01-rsinput-rp6.yaml'
         'rp6-gamepad.yaml' '90-pocknix-backlight.rules' '60-pocknix-controllers.rules'
         'AYN-Odin2.conf' 'HiFi.conf')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -52,6 +52,10 @@ package() {
   # poweroff (which made a wake-press shut the device down). Sleep via the Steam menu.
   install -Dm644 "${srcdir}/20-pocknix-powerkey.conf" \
     "${pkgdir}/usr/lib/systemd/logind.conf.d/20-pocknix-powerkey.conf"
+  # cpuidle quirk: disable cpu0 idle state1 (GMU issues) — ROCKNIX SM8550 096-cpuidle,
+  # re-asserted every boot via systemd-tmpfiles.
+  install -Dm644 "${srcdir}/30-pocknix-cpuidle.conf" \
+    "${pkgdir}/usr/lib/tmpfiles.d/30-pocknix-cpuidle.conf"
 
   # InputPlumber composite-device config + capability_map for the RP6 RSInput gamepad
   # (the map fixes the driver's X/Y swap + d-pad; device config targets the Steam Deck pad).
