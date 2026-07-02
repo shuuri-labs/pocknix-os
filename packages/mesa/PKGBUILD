@@ -129,9 +129,12 @@ package_mesa() {
 
   (
     cd "${pkgdir}"
-    # split turnip + its ICD out into vulkan-freedreno (mirrors Arch/ALARM packaging)
+    # split turnip + its ICD out into vulkan-freedreno (mirrors Arch/ALARM packaging).
+    # NB glob: mesa 25.1 installs the ICD manifest arch-suffixed (freedreno_icd.aarch64.json)
+    # — the unsuffixed name only exists from mesa 26's vulkan-manifest-per-architecture=false.
+    # The Vulkan loader scans the whole icd.d dir, so the name is irrelevant at runtime.
     _pick vkfdreno usr/lib/libvulkan_freedreno.so
-    _pick vkfdreno usr/share/vulkan/icd.d/freedreno_icd.json
+    _pick vkfdreno usr/share/vulkan/icd.d/freedreno_icd*.json
     # indirect rendering (glvnd looks for libGLX_indirect)
     ln -sr usr/lib/libGLX_{mesa,indirect}.so.0
   )
