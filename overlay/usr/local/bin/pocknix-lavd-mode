@@ -1,0 +1,54 @@
+#!/bin/sh
+# pocknix-lavd-mode — get/set/toggle the scx_lavd power mode.
+#
+# The chosen mode persists across reboots in /var/lib/pocknix/lavd-mode;
+# pocknix-lavd.service launches through `pocknix-lavd-mode run`, which reads it
+# (default: autopilot). Setting a mode rewrites the file and restarts the service,
+# so the switch takes effect immediately — including mid-game (sched_ext swaps
+# schedulers live; tasks fall back to EEVDF for the moment scx_lavd is down).
+#
+#   pocknix-lavd-mode                # print the current mode
+#   pocknix-lavd-mode performance    # set a mode + restart the scheduler
+#   pocknix-lavd-mode autopilot
+#   pocknix-lavd-mode toggle         # flip autopilot <-> performance
+#   pocknix-lavd-mode run            # (internal, used by the .service ExecStart)
+#
+# Modes (scx_lavd upstream): autopilot picks powersave/balanced/performance from
+# measured load; performance disables core compaction + prefers fast cores + high
+# clocks always. balanced/powersave are accepted too for manual experiments.
+# Setting needs root (writes /var/lib + restarts a system unit).
+MODE_FILE=/var/lib/pocknix/lavd-mode
+DEFAULT=autopilot
+
+current() {
+  m="$(cat "${MODE_FILE}" 2>/dev/null)"
+  # sanitize: an unknown word here would exec `scx_lavd --<garbage>` and crash-loop
+  case "${m}" in autopilot|performance|balanced|powersave) ;; *) m="${DEFAULT}" ;; esac
+  printf '%s\n' "${m}"
+}
+
+case "${1:-}" in
+  "")
+    current
+    ;;
+  run)
+    exec /usr/bin/scx_lavd "--$(current)"
+    ;;
+  toggle|autopilot|performance|balanced|powersave)
+    m="${1}"
+    if [ "${m}" = toggle ]; then
+      if [ "$(current)" = performance ]; then m=autopilot; else m=performance; fi
+    fi
+    mkdir -p "$(dirname "${MODE_FILE}")" 2>/dev/null
+    if ! printf '%s\n' "${m}" > "${MODE_FILE}" 2>/dev/null; then
+      echo "pocknix-lavd-mode: cannot write ${MODE_FILE} (run as root)" >&2
+      exit 1
+    fi
+    systemctl restart pocknix-lavd.service
+    echo "scx_lavd mode: ${m}"
+    ;;
+  *)
+    echo "usage: pocknix-lavd-mode [autopilot|performance|balanced|powersave|toggle]" >&2
+    exit 2
+    ;;
+esac
