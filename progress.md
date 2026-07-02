@@ -5,7 +5,43 @@ Working notes for picking this back up after a break. For the *why* behind decis
 testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
-_Last updated: 2026-07-02 — **gamescope FPS gap SOLVED** (see below)._
+_Last updated: 2026-07-02 — **gamescope FPS gap SOLVED**; own mesa pkg + LAVD→autopilot + fan curve fixed (see below)._
+
+---
+
+## 🔨 Own mesa + ROCKNIX CPU parity + quiet fan (2026-07-02, code done — VM build + on-device validation pending)
+Three changes, all committed, none built/tested yet:
+1. **`packages/mesa`** — our own trimmed mesa replaces ALARM's all-driver build: split
+   (`mesa`, `vulkan-freedreno`), **epoch=2** (ALARM is 1:26.x), pinned to **ROCKNIX's mesa
+   25.1.5** (their exact version+sha256; ROCKNIX ships **no mesa patches** on our branch —
+   packages/graphics/mesa is package.mk only). Drivers mirror ROCKNIX SM8550: gallium
+   `freedreno,zink,softpipe`, vulkan `freedreno`, `llvm=disabled` (no llvm/rust deps at all);
+   cortex-x3/armv9-a tuned like gamescope/mangohud. ONE divergence: we keep `x11,wayland` +
+   GLX (ROCKNIX is wayland-only) because Steam/X11 apps run under XWayland. base.list still
+   installs ALARM's mesa for bootstrap; `install_local_packages` upgrades to ours (epoch 2)
+   with a die-guard. **Test:** `make packages PKG=mesa` in the VM (first build is the risky
+   step — meson option names checked against 25.1), then on-device `vulkaninfo` (Turnip 740),
+   game mode, desktop GL, desktop-mode Steam (GLX!).
+2. **LAVD switched `--performance` → `--autopilot`** (scheduler + sched_ext/tracing kernel
+   stack KEPT — a full LAVD-removal-for-ROCKNIX-parity was committed then reverted the same
+   day at the user's call, commits 2171364/1323c68). Autopilot = scx_lavd's default mode: it
+   picks powersave/balanced/performance itself from measured load (required capacity ≲ half
+   a little core → powersave with core compaction onto the littles; moderate ~5-70% →
+   balanced; >~70% → performance, all cores, fast-first). Chosen for battery/idle-heat/fan
+   noise. Known trade-off (earlier on-device A/B): GPU-bound games sit at moderate CPU util,
+   so autopilot rides *balanced* in-game and raw FPS measured a bit lower than --performance.
+   For the record, ROCKNIX's REAL CPU setup was verified from source (the old "pin 3-7 +
+   performance governor" claim was wrong): no scx anywhere, FTRACE off, EEVDF + **ondemand**
+   (autostart/008-perfmode flips the kernel's performance default at boot), and NO default
+   pinning (start_steam.sh tasksets only on an explicit per-game 'cores' setting). Also
+   ported ROCKNIX `096-cpuidle` (disable cpu0 idle state1, "GMU issues") → pocknix-bsp
+   tmpfiles rule (pkgrel 14). Hot-deploy: scp the .service + `systemctl daemon-reload &&
+   systemctl restart pocknix-lavd`; pacman -U pocknix-bsp for the cpuidle rule.
+3. **Fan curve → ROCKNIX's real default: "quiet"**, not "moderate" (their system.cfg ships
+   `cooling.profile=quiet`; the moderate fallback in their script is only for a broken custom
+   profile). Off <60°C, full only >95°C. Hot-deployable: scp `pocknix-fancontrol` +
+   `systemctl restart pocknix-fancontrol`. The lavd `--performance`→`--autopilot` switch
+   (idle heat) feeds the same loudness symptom.
 
 ---
 

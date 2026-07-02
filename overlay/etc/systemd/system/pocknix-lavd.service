@@ -1,5 +1,5 @@
 [Unit]
-Description=pocknix LAVD scheduler (scx_lavd, big.LITTLE / latency-aware, performance mode)
+Description=pocknix LAVD scheduler (scx_lavd, big.LITTLE / latency-aware, autopilot mode)
 Documentation=https://github.com/sched-ext/scx
 # Start early once the base system is up — do NOT order after multi-user.target, which
 # pulls in the graphical Steam session bring-up and can settle late (or stall on the temp
@@ -20,14 +20,17 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-# --performance = LAVD biases clocks high across the board (not just for latency-critical
-# tasks) while keeping its latency-aware big.LITTLE placement. Chosen over --autopilot after
-# on-device A/B: autopilot's efficiency bias left raw FPS lower; --performance recovers most of
-# it and keeps LAVD's steadier 1% lows. Pairs with the schedutil governor (kernel default) so
-# LAVD's per-core frequency requests actually take effect. (Trade-off: more heat/drain at idle
-# than autopilot; and downloads run slower than under the performance *governor* — flip the
-# governor to performance momentarily for big installs: echo performance > .../scaling_governor.)
-ExecStart=/usr/bin/scx_lavd --performance
+# --autopilot = LAVD picks its own power mode from measured load (scx_lavd's default):
+#   required capacity <= ~half a little core  -> powersave  (littles-first, core compaction)
+#   moderate (roughly 5-70% of total capacity) -> balanced   (compaction, energy-model order)
+#   high (>~70%)                               -> performance (all cores, fast-cores-first)
+# Chosen over --performance (2026-07-02) for battery/heat/fan noise: at idle and in menus the
+# device now compacts onto little cores and drops clocks instead of biasing everything high.
+# Trade-off (earlier on-device A/B): GPU-bound games often sit at moderate CPU util, so
+# autopilot stays in *balanced* in-game and raw FPS measured a bit lower than --performance;
+# accepted. Pairs with the schedutil governor (kernel default) so LAVD's per-core frequency
+# requests (scx_bpf_cpuperf_set) actually take effect.
+ExecStart=/usr/bin/scx_lavd --autopilot
 Restart=on-failure
 RestartSec=5
 
