@@ -5,7 +5,28 @@ Working notes for picking this back up after a break. For the *why* behind decis
 testing, see [`docs/testing-fedora-vm.md`](docs/testing-fedora-vm.md). This file tracks
 **where things stand and what to do next**.
 
-_Last updated: 2026-06-26 — gamescope realtime priority confirmed NOT the FPS gap (see below)._
+_Last updated: 2026-07-02 — **gamescope FPS gap SOLVED** (see below)._
+
+---
+
+## 🎉 SOLVED: the gamescope FPS gap — GPU composite tax × overlay repaint (2026-07-02)
+Live SSH session, measured end-to-end with hardware GPU counters (`msm_gpu_submit_retired`).
+**The gap was never CPU-side.** The render thread's "present-path CPU" is the game busy-polling
+`GetData` waiting for the GPU (matched render-thread profiles are shape-identical pocknix↔ROCKNIX).
+The real mechanism: **gamescope's rotated composite costs ~2.5–3.9 ms GPU per pass on a
+higher-priority ring, and the mangoapp overlay repaints continuously → composites forced at
+72–120/s → up to ~32–41% of the GPU stolen** from a game that needs a constant ~12.7 ms GPU/frame.
+Steam performance overlay OFF → composites drop to the game's own rate → **37.5 → 54.4 fps = 
+ROCKNIX parity** (54–60). Ruled out by direct measurement: Turnip build (ROCKNIX's exact binary
+transplanted under game AND gamescope), rotation implementation, color management, `-r 60` (clean
+A/B: nothing — EDID-less panel, 120 Hz is the only mode), 3-7 pinning, EEVDF/ondemand (lavd+
+schedutil measured BEST of the 2×2 — don't copy ROCKNIX's scheduler config). Launcher unchanged
+(back to stock `-r 120`). **Persistent device change: `pocknix-rt-demote.service` now properly
+installed+enabled on the internal install** (the watcher was a bare process → died on every reboot
+→ recurring hitching; unit was already in the repo overlay but predated the internal install).
+Open: why ROCKNIX's overlay is nearly free (mangohud-build/gamescope-version source diff — bounded);
+mangoapp's fps readout is untrustworthy (read 45 while HW retired 55). Full data + tables:
+[`docs/gamescope-fps-investigation.md`](docs/gamescope-fps-investigation.md) ("GPU-side session").
 
 ---
 

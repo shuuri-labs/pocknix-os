@@ -1,5 +1,25 @@
 # Gamescope FPS-gap investigation
 
+> **✅ SOLVED (2026-07-02, live SSH session — GPU-side, measured with hardware counters).** The gap
+> was never CPU-side: the render thread's "present-path CPU" is the game **spin-waiting on GPU
+> query results** (matched render-thread profiles are shape-identical on pocknix and ROCKNIX; the
+> spin loop is JIT'd x86 code, so *every* DSO inflates together when frames run late). The real
+> mechanism, measured via `msm_gpu_submit_retired` hardware tick counters: **gamescope's rotated
+> composite costs ~2.5–3.9 ms of GPU per pass on a higher-priority ring**, and the **mangoapp
+> overlay repaints continuously, forcing composites at 72–120/s** — up to **~32–41% of the GPU** —
+> starving a game that needs a constant ~12.7 ms GPU/frame. Overlay off → composites fall to the
+> game's own rate (~50/s, ~13% GPU) → **37.5 → 54.4 fps on the same fight = ROCKNIX parity**
+> (54–60). Also ruled out by direct measurement this session: Turnip build (ROCKNIX's exact binary
+> transplanted under BOTH the game and gamescope — composite cost and fps identical), rotation
+> implementation, `--disable-color-management`, `-r 60` (clean A/B: no effect; the panel has no
+> EDID → 120 Hz is the only mode; `-r` changes nothing clients see), core pinning (3-7), and
+> EEVDF/ondemand (lavd+schedutil measured *best*: 55.0 vs 52.4 vs 51.2 on an identical scene — do
+> NOT copy ROCKNIX's scheduler config). Open follow-ups: why ROCKNIX's overlay is nearly free
+> (their mangohud/gamescope overlay path vs our pinned mangohud 0.8.3 — bounded source comparison),
+> and mangoapp's fps readout disagreeing with hardware frame counts (read 45 while the GPU retired
+> 55 fps on a paused scene — don't trust it for benchmarking). Full data:
+> **["GPU-side session" below](#gpu-side-session-2026-07-02--root-cause-found-composite-tax--overlay-repaint)**.
+
 > **⚠️ VERDICT DISPUTED (2026-06-30, review pass).** The "architectural / irreducible emulation
 > floor" conclusion below is **not supported by this doc's own data** and should NOT be treated as
 > settled. The contradiction: ROCKNIX *also runs gamescope*, yet its game uses **~219% CPU** — i.e.
@@ -432,6 +452,99 @@ isolated), so it's uncertain and it's a rebuild, not a knob. **Parked here.**
 `pocknix-rt-demote-watch`, enabled in `build-sd-image.sh`; interim — proper fix is to stop Wine
 RR-promoting the game); `-noshaders` + removed present-path env in `pocknix-steam`; fan curve reverted
 to the quiet averaging behavior (ROCKNIX runs 91°C @ pwm153, so max-zone was needless noise).
+
+## GPU-side session (2026-07-02) — ROOT CAUSE FOUND: composite tax × overlay repaint
+
+Live SSH session on both OSes (ROCKNIX booted via SD first, then internal pocknix). Everything
+below is measured, not inferred. Raw captures in `docs/captures/` conventions apply; ROCKNIX
+binaries archived in `vendor/rocknix-binaries-20260702/`.
+
+### Step 1 — the missing ROCKNIX render-thread profile killed the CPU theory
+
+`perf record -t <render-tid>` (on-CPU only — works on ROCKNIX, no BPF needed), same ASBR fight:
+
+| DSO self% | pocknix (matched, this session) | ROCKNIX |
+|---|---|---|
+| `[JIT]` | 14.4 | 14.7 |
+| `d3d11.dll` | 57.3 | 60.7 |
+| Turnip | 8.7 | 7.6 |
+| `libarm64ecfex.dll` | 6.3 | 6.3 |
+
+**Shape-identical.** (The July-1 table showing a "present-path shift" doesn't reproduce under
+matched methodology.) The symbol view shows the d3d11 time is a tight leaf cluster feeding
+`thunk64_vkGetQueryPoolResults` — the game's `ID3D11Query::GetData` **busy-poll waiting for the
+GPU**. The spin loop is JIT'd x86, so when frames run late the wait inflates JIT/DXVK/Turnip/ntdll
+*proportionally* — which is why every CPU-side profile ever taken was misleading. The render
+thread is a busy-waiter; its profile describes the waiter, not the bottleneck.
+
+### Step 2 — hardware GPU counters (`msm_gpu_submit_retired`: per-submit `elapsed` ticks, per-pid)
+
+The old "GPU ~50%" util reading was wrong; the GPU is **~84% busy** in the slow config:
+
+| Config (same fight unless noted) | game fps (HW frame count) | game GPU/frame | composite rate | composite cost | composite GPU share |
+|---|---|---|---|---|---|
+| baseline, overlay ON, `-r 120` | 37.5 | 12.7 ms | 89/s | 3.55 ms | 31.6% |
+| overlay ON, `-r 60` | 44 | 12.9 ms | 72/s | 3.90 ms | 28% |
+| **overlay OFF**, `-r 60` | **54.4** | 12.7 ms | **51.6/s** | 2.85 ms | **14.7%** |
+| clean A/B: overlay OFF, `-r 120` | 50.3 | 13.45 ms | 50.2/s | 2.54 ms | 12.8% |
+| clean A/B: overlay OFF, `-r 60` (same fight recreated) | 52.2 | 12.6 ms | 49.7/s | 2.53 ms | 12.6% |
+
+Readings:
+- **The game's GPU cost is a constant ~12.6–13.5 ms/frame in every config** — the game was never
+  the variable.
+- **gamescope's composite runs on a higher-priority ring** (ring 0 vs the game's ring 2) and costs
+  ~2.5–3.9 ms GPU per pass (rotation-sampled 2MP, 10-bit XR30 + UBWC target — modifier checked,
+  not a linear fallback).
+- **With the overlay on, mangoapp repaints continuously (GPU submits in 1:1 lockstep with
+  composites), forcing composites at 72–120/s** instead of the game's ~50/s. That tax (~28–41% of
+  GPU incl. the Steam-UI case, which composites at the full 120/s) comes straight out of the
+  game's frame time. Overlay OFF = composite per game frame = ROCKNIX-parity fps.
+- The clean `-r 120` vs `-r 60` A/B (same fight, overlay off): 50.3 vs 52.2 fps with the run-2
+  scene measured ~7% lighter — **`-r 60` has no real effect** (the panel is EDID-less with a single
+  120 Hz mode; `-r` doesn't change what clients see — nested display still reports 120 Hz, Steam UI
+  runs >60). The earlier "+6.5 fps from `-r 60`" row above was scene-variance across a reboot.
+  Launcher stays at `REFRESH=120` (user also reports better pacing at 120).
+
+### Ruled out this session (all by direct measurement, on-device)
+
+- **Turnip build/version** — ROCKNIX's exact `libvulkan_freedreno.so` (26.1.2, cortex-x3 + ir3
+  patch; needs a `libdisplay-info.so.2→.so.3` compat symlink on Arch) transplanted under the game
+  (maps the *system* lib via Proton's arm64ec winevulkan, NOT the fex-emu copy) → no change; and
+  under gamescope (fresh session) → composite cost identical (3.40 vs 3.55 ms). Driver fully
+  exonerated on both sides. NB: a driver swap invalidates all Vulkan pipeline caches (driver UUID)
+  → the Steam UI recompiles shaders and feels "super slow" until caches rebuild — red herring.
+- **`--disable-color-management`** — composite 3.87 ms vs 3.90; dead.
+- **CPU core placement** — under lavd the render thread bounces across all 8 cores (~29% of
+  samples on the A510 littles), but pinning the game to 3-7: no fps change.
+- **Scheduler/governor 2×2** (identical paused scene, HW frame counts): lavd+schedutil **55.0**,
+  EEVDF+schedutil 52.4, EEVDF+ondemand (= live-ROCKNIX's actual combo) 51.2. **Do not copy
+  ROCKNIX's scheduler config** — pocknix's is already the best of the three.
+- **mangoapp process kill** — invalid test, gamescope respawns it instantly; the valid lever is
+  the Steam performance-overlay toggle (level 0).
+
+### Open follow-ups
+
+1. **Why is ROCKNIX's overlay nearly free?** Its users run 54–60 fps *with* the overlay visible.
+   Suspects: their mangohud build (ours is pinned 0.8.3) throttling repaints, or their older
+   gamescope (`4286887` vs our `fe78bc6`) handling overlay damage more cheaply. Bounded source
+   comparison; no device needed to start. ROCKNIX-side GPU counters would need our kernel (theirs
+   has FTRACE off) — the "pocknix KERNEL on the ROCKNIX SD" trick, only if the source diff is
+   inconclusive.
+2. **mangoapp's fps readout is not trustworthy** — on a paused scene it displayed 45 while the
+   hardware retired 55 fps and mangoapp itself made zero GPU submissions. Benchmark via
+   `msm_gpu_submit_retired` counts (submits with `elapsed > 5 ms` ≈ frames).
+3. Possible product lever: default the performance overlay off / document its measured ~10 fps
+   cost; revisit after (1).
+
+### Session incidents (for the record)
+
+- Removing rotation for a "composite cost without rotation" test wedged the session — vanilla
+  no-rotation on this panel is the original DPU plane-rotation failure; don't retry.
+- The RT-demote watcher only existed as a bare process on the internal install → died on reboot →
+  hitching returned twice. Fixed permanently: `pocknix-rt-demote.service` (the repo overlay unit)
+  is now installed + enabled on-device. An orphaned ASBR instance (from a hard session kill) held
+  the Wine prefix and blocked relaunches (Steam spinning-wheel) — clear with a reboot or
+  `pkill -f ASBR`.
 
 ## Unexplored / future
 
