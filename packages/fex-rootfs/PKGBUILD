@@ -21,15 +21,15 @@
 pkgname=fex-rootfs
 _rootfsdate=2026-01-08             # pinned dated image from FEX's rootfs CDN (immutable path)
 pkgver=${_rootfsdate//-/}          # 20260108
-pkgrel=1
+pkgrel=2
 pkgdesc="x86_64 ArchLinux RootFS for FEX (x86 game userland + native Turnip GPU passthrough)"
 arch=('aarch64')
 url="https://rootfs.fex-emu.gg/"
 license=('custom')                 # a full Arch x86 userland — mixed upstream licensing
 # squashfuse: FEXServer FUSE-mounts the .sqsh at runtime. vulkan-freedreno: the native Adreno
-# (Turnip) Vulkan driver the FEX Vulkan host-thunk loads for GPU passthrough. fex-emu: the consumer.
-depends=('fex-emu' 'squashfuse')
-makedepends=('vulkan-freedreno')   # provides /usr/lib/libvulkan_freedreno.so to bundle (ROCKNIX-style)
+# (Turnip) Vulkan driver the FEX Vulkan host-thunk loads for GPU passthrough (we symlink the
+# system copy, see package()). fex-emu: the consumer.
+depends=('fex-emu' 'squashfuse' 'vulkan-freedreno')
 options=('!strip' '!debug')
 
 # FEX verifies rootfs images with xxh3_64 (its own check at fetch), NOT sha256 — and the dated URL
@@ -45,8 +45,11 @@ package() {
   install -Dm0644 "${srcdir}/ArchLinux-${_rootfsdate}.sqsh" \
     "${pkgdir}/usr/share/fex-emu/RootFS/ArchLinux.sqsh"
 
-  # Native GPU passthrough: the Vulkan HOST thunk must reach the real Adreno driver. ROCKNIX copies
-  # libvulkan_freedreno.so (Turnip) into /usr/share/fex-emu/ for exactly this; mirror it with ALARM's.
-  install -Dm0644 /usr/lib/libvulkan_freedreno.so \
-    "${pkgdir}/usr/share/fex-emu/libvulkan_freedreno.so"
+  # Native GPU passthrough: the Vulkan HOST thunk must reach the real Adreno driver. ROCKNIX
+  # copies libvulkan_freedreno.so (Turnip) into /usr/share/fex-emu/ for exactly this; we SYMLINK
+  # the system driver instead of copying, so the thunk always loads whatever vulkan-freedreno is
+  # installed (now our epoch-2 tuned build) — a bundled copy froze ALARM's turnip at fex-rootfs
+  # build time and silently went stale when mesa changed.
+  install -d "${pkgdir}/usr/share/fex-emu"
+  ln -s /usr/lib/libvulkan_freedreno.so "${pkgdir}/usr/share/fex-emu/libvulkan_freedreno.so"
 }
