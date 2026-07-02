@@ -7,6 +7,18 @@
 # directly). So we watch the keys WITHOUT grabbing them (Steam still gets the OSD) and call wpctl on
 # deck's PipeWire.
 #
+# GAME MODE ONLY. In the Plasma session, Plasma's own handler (plasma-pa) already changes volume AND
+# repeats on hold, so this daemon would double-count there. We therefore act ONLY when gamescope is
+# the running compositor (game mode); in Plasma we stay out of the way entirely. gamescope's Steam
+# has no native rocker handling, so in game mode we're the sole volume actor (no double-count).
+#
+# HOLD TO REPEAT (game mode). Steam only does one step per press; users expect volume to ramp while
+# the button is held (as it does in Plasma). We implement our OWN repeat rather than trust kernel
+# autorepeat: on press, step once immediately, then after REPEAT_DELAY keep stepping every
+# REPEAT_INTERVAL until release. Kernel autorepeat events (value==2) are IGNORED so they can't
+# race our timer; we track held state purely from the press (1) / release (0) edges, driven by a
+# short select() timeout while any key is held.
+#
 # Robustness (learned the hard way):
 #  - Match the source device by CAPABILITY (it reports the volume keys), NOT by name. An earlier
 #    version hardcoded name == "gpio-keys" and exited when the evdev *name* differed from the
@@ -27,8 +39,10 @@ except ImportError:
 DECK_UID = "1001"
 SINK = "@DEFAULT_AUDIO_SINK@"
 STEP = "5%"
-RESCAN_SECS = 5      # re-enumerate devices that (dis)appeared
-WPCTL_TIMEOUT = 2    # never let a stuck wpctl block the key loop
+REPEAT_DELAY = 0.35      # hold this long before auto-repeat kicks in (keyboard-like)
+REPEAT_INTERVAL = 0.12   # then step every this many seconds while held (~40%/s at 5%)
+RESCAN_SECS = 5          # re-enumerate devices that (dis)appeared
+WPCTL_TIMEOUT = 2        # never let a stuck wpctl block the key loop
 
 def setvol(delta):
     # Root can open deck's PipeWire socket directly (no runuser/PAM overhead). Bounded by a timeout
@@ -40,6 +54,25 @@ def setvol(delta):
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (subprocess.TimeoutExpired, OSError):
         pass
+
+def in_game_mode():
+    # Game mode == gamescope is the running compositor. In the Plasma session (kwin_wayland),
+    # plasma-pa owns the rocker, so we do nothing. Scan /proc/*/comm (no subprocess). PREFIX match:
+    # gamescope's compositor process comm is 'gamescope-wl' (NOT 'gamescope' — an exact match broke
+    # volume entirely), plus 'gamescopereaper'; both start with 'gamescope'.
+    try:
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            try:
+                with open("/proc/" + pid + "/comm") as f:
+                    if f.read().strip().startswith("gamescope"):
+                        return True
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return False
 
 def has_volume_keys(dev):
     keys = dev.capabilities().get(ecodes.EV_KEY, [])
@@ -61,7 +94,10 @@ def scan(known_paths):
             dev.close()
     return found
 
+DIRS = {ecodes.KEY_VOLUMEUP: STEP + "+", ecodes.KEY_VOLUMEDOWN: STEP + "-"}
+
 devs = {}            # path -> InputDevice
+held = {}            # keycode -> [delta_str, next_fire_monotonic]
 last_scan = 0.0
 while True:
     now = time.monotonic()
@@ -73,14 +109,16 @@ while True:
         continue
 
     by_fd = {dev.fd: (path, dev) for path, dev in devs.items()}
+    # Poll fast while a key is held (to drive our own repeat), idle otherwise.
+    timeout = 0.05 if held else RESCAN_SECS
     try:
-        ready, _, _ = select.select(list(by_fd), [], [], RESCAN_SECS)
+        ready, _, _ = select.select(list(by_fd), [], [], timeout)
     except OSError:
         # a watched fd went invalid out from under select(); drop all and rescan clean
         for dev in devs.values():
             try: dev.close()
             except OSError: pass
-        devs.clear()
+        devs.clear(); held.clear()
         last_scan = 0.0
         continue
 
@@ -88,14 +126,25 @@ while True:
         path, dev = by_fd[fd]
         try:
             for ev in dev.read():
-                if ev.type == ecodes.EV_KEY and ev.value == 1:   # key down only (one step per press)
-                    if ev.code == ecodes.KEY_VOLUMEUP:
-                        setvol(STEP + "+")
-                    elif ev.code == ecodes.KEY_VOLUMEDOWN:
-                        setvol(STEP + "-")
+                if ev.type != ecodes.EV_KEY or ev.code not in DIRS:
+                    continue
+                if ev.value == 1:                       # press: one step now, then arm repeat
+                    if in_game_mode():                  # (Plasma handles its own repeat)
+                        setvol(DIRS[ev.code])
+                        held[ev.code] = [DIRS[ev.code], time.monotonic() + REPEAT_DELAY]
+                elif ev.value == 0:                     # release: stop repeating
+                    held.pop(ev.code, None)
+                # value == 2 (kernel autorepeat) intentionally ignored — we time our own repeat.
         except OSError:
             # device went away (e.g. InputPlumber tore down its virtual keyboard). Drop the dead fd
             # NOW so select() stops returning it instantly — that was the 100% busy-loop.
             try: dev.close()
             except OSError: pass
             devs.pop(path, None)
+
+    # Fire auto-repeat for any still-held key whose interval has elapsed.
+    now = time.monotonic()
+    for code, st in list(held.items()):
+        if now >= st[1]:
+            setvol(st[0])
+            st[1] = now + REPEAT_INTERVAL

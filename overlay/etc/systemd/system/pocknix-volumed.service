@@ -1,6 +1,11 @@
 [Unit]
 Description=pocknix volume rocker -> PipeWire volume
-After=multi-user.target
+# Start EARLY. Do NOT order After=multi-user.target — that makes the daemon start dead last,
+# after every other multi-user service settles (measured ~2 min late on-device), during which
+# the rocker only shows Steam's OSD but can't change volume. The daemon already tolerates the
+# input device or deck's PipeWire not being ready yet (it rescans + wpctl fails gracefully), so
+# it can come up at basic.target and be functional the moment PipeWire appears.
+After=basic.target
 
 [Service]
 Type=simple

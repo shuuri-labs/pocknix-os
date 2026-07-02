@@ -1,6 +1,9 @@
 [Unit]
 Description=pocknix power button -> short press suspends (long press stays logind poweroff)
-After=multi-user.target
+# Start early — After=multi-user.target delayed volume/power handling by ~2 min on-device (it
+# orders dead last, after everything else settles). The daemon tolerates devices not being ready
+# yet (rescans), so basic.target is correct: the power button works soon after boot, not minutes in.
+After=basic.target
 
 [Service]
 Type=simple
