@@ -93,11 +93,19 @@ build_one() {
     warn "makepkg failed for ${name} — keeping any previous build in ${LOCALREPO##*/}"
     return 1
   fi
-  # Confirm the build produced a package, matched by pkgname — NOT every *.pkg.tar.* in the build
-  # dir, which would also sweep up any .pkg.tar.* a PKGBUILD downloads as *sources* (e.g. fex-emu's
-  # pinned x86 sysroot pkgs). A non-matching glob leaves the literal pattern, so `-e` is false.
-  local built_pkgs=("${BROOT}/build/${name}/${name}"-*.pkg.tar.*)
-  if [ ! -e "${built_pkgs[0]}" ]; then
+  # Collect what makepkg ACTUALLY produced via `makepkg --packagelist`: a split PKGBUILD
+  # (packages/mesa -> mesa + vulkan-freedreno) emits sibling packages a "${name}-*" glob
+  # misses (bitten by mesa: only the mesa half reached localrepo), while a bare *.pkg.tar.*
+  # sweep would grab .pkg.tar.* files that are makepkg *sources* symlinked into the build
+  # dir (e.g. fex-emu's pinned x86 sysroot pkgs). --packagelist names exactly the built
+  # artifacts, epoch and all.
+  local built_pkgs=() p
+  while IFS= read -r p; do
+    p="${BROOT}/build/${name}/$(basename "${p}")"
+    [ -e "${p}" ] && built_pkgs+=("${p}")
+  done < <(chroot "${BROOT}" runuser -u builder -- \
+             bash -lc "cd /build/${name} && makepkg --packagelist" 2>/dev/null)
+  if [ "${#built_pkgs[@]}" -eq 0 ]; then
     warn "no .pkg.tar.* produced for ${name} — keeping any previous build"
     return 1
   fi
@@ -105,8 +113,14 @@ build_one() {
   # AFTER a confirmed successful build, so a failed/transient rebuild never wipes a known-good
   # package (build-to-temp-then-swap). The rm also clears stale dupes that would otherwise break
   # `pacman -U pkg-*.tar` with "duplicate target". (rm before cp: the new file's own epoch'd name
-  # matches the *:* pattern, so cp-then-rm would delete what we just copied.)
-  rm -f "${LOCALREPO}/${name}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${name}"-*:*.pkg.tar.* 2>/dev/null || true
+  # matches the *:* pattern, so cp-then-rm would delete what we just copied.) Clear per PRODUCED
+  # package name — split siblings each have their own previous versions.
+  local base
+  for p in "${built_pkgs[@]}"; do
+    base="$(basename "${p}")"
+    base="${base%-*}"; base="${base%-*}"; base="${base%-*}"  # strip -<ver>-<rel>-<arch>.pkg.tar.*
+    rm -f "${LOCALREPO}/${base}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${base}"-*:*.pkg.tar.* 2>/dev/null || true
+  done
   cp "${built_pkgs[@]}" "${LOCALREPO}/"
 }
 
