@@ -573,6 +573,17 @@ shipped: `packages/gamescope/0008-Revert-mangoapp-always-send-output-frametiming
 the pre-composite nudge AND real (non-vblank-quantized) frametimes to the readout. Validation:
 rebuild gamescope, overlay ON, expect composites ≈ game rate and an accurate fps readout.
 
+**0008 validation (same day, on-device):** the **readout is FIXED** — overlay displayed 45 while
+hardware retired 45.1 (previously read ~10 low), proving the pre-composite commit-path nudge is
+active (game classified non-FIFO). mangoapp stays perfectly 1:1 with game frames (0.5% GPU). The
+composite ratio however stayed ~1.35× game rate — the residual ~16 extra composites/s are **timing
+jitter** (the redraw issued at commit time occasionally lands after that frame's composite vblank),
+not an ordering bug. **Final state of the overlay cost: ~5–6 fps** (was ~10), split between the
+jitter composites and the inherent +1 ms/composite of blending a second rotated layer. Accepted —
+no further lever identified. **The overall arc: 37.5 fps (start) → 54.4 overlay-off / ~49
+overlay-on (end), with a trustworthy readout** — ROCKNIX parity within scene noise. Investigation
+CLOSED.
+
 ### Session incidents (for the record)
 
 - Removing rotation for a "composite cost without rotation" test wedged the session — vanilla
