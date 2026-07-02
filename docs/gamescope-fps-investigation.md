@@ -522,19 +522,43 @@ Readings:
 - **mangoapp process kill** — invalid test, gamescope respawns it instantly; the valid lever is
   the Steam performance-overlay toggle (level 0).
 
-### Open follow-ups
+### The overlay cost, root-caused at source level (2026-07-02, follow-up) — FIX SHIPPED
 
-1. **Why is ROCKNIX's overlay nearly free?** Its users run 54–60 fps *with* the overlay visible.
-   Suspects: their mangohud build (ours is pinned 0.8.3) throttling repaints, or their older
-   gamescope (`4286887` vs our `fe78bc6`) handling overlay damage more cheaply. Bounded source
-   comparison; no device needed to start. ROCKNIX-side GPU counters would need our kernel (theirs
-   has FTRACE off) — the "pocknix KERNEL on the ROCKNIX SD" trick, only if the source diff is
-   inconclusive.
-2. **mangoapp's fps readout is not trustworthy** — on a paused scene it displayed 45 while the
-   hardware retired 55 fps and mangoapp itself made zero GPU submissions. Benchmark via
-   `msm_gpu_submit_retired` counts (submits with `elapsed > 5 ms` ≈ frames).
-3. Possible product lever: default the performance overlay off / document its measured ~10 fps
-   cost; revisit after (1).
+The "why is ROCKNIX's overlay nearly free" question was chased through the sources:
+
+- **MangoHud is identical on both OSes** — ROCKNIX pins commit `330c42a5…` which IS the v0.8.3
+  tag pocknix builds, with the same common+qualcomm patch set (no repaint throttling anywhere).
+  The overlay app version is exonerated.
+- **gamescope `4286887..fe78bc6` contains exactly one overlay-relevant commit:** `e572411d`
+  *"mangoapp: Always send output frametimings even when not FIFO."* It reroutes the frametime
+  messages mangoapp receives: pre-commit (ROCKNIX) a non-FIFO game's frametimes come from the
+  game's own commits (`commit_t::Signal`); post-commit (pocknix) they come from
+  `mangoapp_output_update` — **vblank-timestamped base-plane deltas, quantized to 8.33 ms
+  multiples**. This is why pocknix's overlay read "45 fps" while the hardware retired 55: the
+  readout on our build reports vblank-quantized base-plane cadence, not the game's present rate.
+  **The readout discrepancy is explained; treat kernel counts as truth on our gamescope.**
+- **The cost itself is an upstream mangoapp pacing bug, present in v0.8.3 verbatim:** in
+  `src/app/main.cpp`, `new_frame` is set by the msgrcv thread and **never cleared** — after the
+  first message it latches true forever, and the visible-overlay main loop has **no wait at all**
+  (upstream commented out `mangoapp_cv.wait()` because a blocking wait while *hidden* hangs
+  keybind detection, and replaced it with… nothing on the visible path). So mangoapp free-runs,
+  paced only by `glfwSwapBuffers` — i.e. by how fast gamescope returns overlay buffers. Every
+  swap damages the overlay → forces a full ~3.5 ms rotated composite → releases the next swap.
+  Our measurements already prove the loop on pocknix: mangoapp GPU submits ran in **1:1 lockstep
+  with composites at 72–120/s** against a ~44 fps game, while frame *messages* can only arrive at
+  base-plane rate (~44/s) — redraws ≫ messages = free-run.
+- **Why ROCKNIX doesn't visibly pay it is strictly unproven** (the latch exists in its identical
+  mangoapp; its kernel has no tracepoints, so its composite cost/rate can't be measured without
+  booting the pocknix KERNEL on the ROCKNIX SD). Plausibly its older gamescope paces overlay
+  buffer returns differently, or its composite pass is cheaper — but it no longer matters for us:
+- **Fix shipped: `packages/mangohud/0006-mangoapp-pace-redraw-to-frame-messages.patch`**
+  (pkgrel 3): consume `new_frame` after rendering (one redraw per gamescope frame message ≈ per
+  game frame), gate the hide-window branch on `no_display` (previously "visible but no new frame"
+  could hide the overlay), and block on the cv **with a 100 ms timeout** (keeps keybinds polled —
+  strictly better than the old `usleep(500000)` — and avoids the hidden-case hang upstream feared).
+  Verified to `git apply` cleanly on v0.8.3. **Validation pending:** `make packages PKG=mangohud`
+  → `pacman -U` → overlay ON in a fight → expect composites ≈ game rate and fps ≈ the
+  overlay-off 50–55, i.e. the overlay becomes ~free. Worth upstreaming to MangoHud if it holds.
 
 ### Session incidents (for the record)
 

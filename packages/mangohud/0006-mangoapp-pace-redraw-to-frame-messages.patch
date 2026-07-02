@@ -1,0 +1,62 @@
+From: pocknix
+Subject: [PATCH] mangoapp: pace redraws to gamescope frame messages (stop free-running)
+
+WHY (measured on the RP6, docs/gamescope-fps-investigation.md "GPU-side session"):
+mangoapp's main loop has NO pacing for the visible-overlay case. `new_frame` is set by
+the msgrcv thread when gamescope sends a frametime message, but it is NEVER cleared —
+after the first message it latches true forever and the loop becomes a free-running
+render loop, throttled only by glfwSwapBuffers. Every swap damages the overlay layer,
+which forces gamescope to run its (expensive, rotated) composite; every composite lets
+the next swap through. Result on the RP6: mangoapp GPU submits in 1:1 lockstep with
+gamescope composites at 72-120/s against a ~44fps game — the composite tax measured at
+up to ~32-41% of the GPU, costing ~10 fps with the Steam performance overlay on.
+
+Upstream deliberately replaced the old `mangoapp_cv.wait()` with nothing/usleep because
+a blocking wait while HIDDEN hangs keybind detection (their comment retained below).
+This patch keeps that concern addressed while fixing the visible case:
+ - consume `new_frame` after rendering (redraw only once per gamescope frame message,
+   i.e. once per game/base-plane frame);
+ - only run the hide-the-window branch when the overlay is actually disabled
+   (`no_display`) — previously "visible but no new frame yet" could hide the window;
+ - otherwise block on the condition variable WITH A 100ms TIMEOUT, so keybinds are
+   still polled and the hidden case cannot hang (strictly better than the old
+   usleep(500000): 10Hz instead of 2Hz keybind polling).
+
+--- a/src/app/main.cpp
++++ b/src/app/main.cpp
+@@ -12,6 +12,8 @@
+ #include <stdio.h>
+ #include <thread>
+ #include <unistd.h>
++#include <chrono>
++#include <condition_variable>
+ #include "../overlay.h"
+ #include "notify.h"
+ #include "mangoapp.h"
+@@ -423,7 +425,13 @@
+             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+             glfwSwapBuffers(window);
+-        } else if (!mangoapp_paused) {
++            // Consume the frame token: one redraw per gamescope frame message.
++            // (Previously new_frame was never cleared -> free-running render loop.)
++            {
++                std::unique_lock<std::mutex> lk(mangoapp_m);
++                new_frame = false;
++            }
++        } else if (real_params->no_display && !mangoapp_paused) {
+             glClearColor(0, 0, 0, 0);
+             glClear(GL_COLOR_BUFFER_BIT);
+             glfwSwapBuffers(window);
+@@ -446,7 +454,10 @@
+             // std::unique_lock<std::mutex> lk(mangoapp_m);
+             // mangoapp_cv.wait(lk, []{return !get_params()->no_display;});
+         } else {
+-            usleep(500000);
++            // Wait for the next frame message; timeout keeps keybinds responsive
++            // and avoids the hidden-case hang the comment above describes.
++            std::unique_lock<std::mutex> lk(mangoapp_m);
++            mangoapp_cv.wait_for(lk, std::chrono::milliseconds(100), []{ return new_frame; });
+         }
+     }
+
