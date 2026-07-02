@@ -80,7 +80,7 @@ EOF
     rsync -a --chown=root:root "${POCKNIX_ROOT}/overlay/" "${root}/"
     chmod +x "${root}/usr/local/bin/pocknix-diag" \
              "${root}/usr/local/bin/pocknix-expand-root" "${root}/usr/local/bin/pocknix-fancontrol" \
-             "${root}/usr/local/bin/pocknix-volumed" \
+             "${root}/usr/local/bin/pocknix-volumed" "${root}/usr/local/bin/pocknix-powerd" \
              "${root}/usr/local/bin/pocknix-install-internal" \
              "${root}/usr/local/bin/pocknix-uninstall-internal" 2>/dev/null || true
   fi
@@ -107,7 +107,7 @@ EOF
   # Root services: RP6 fan curve + FEX-binfmt-off (deck can't write /proc/sys/fs/binfmt_misc) +
   # the volume-rocker handler (Steam shows the OSD but doesn't change volume on KEY_VOLUME*).
   chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt-off.service \
-        pocknix-volumed.service pocknix-rt-demote.service 2>/dev/null || true
+        pocknix-volumed.service pocknix-rt-demote.service pocknix-powerd.service 2>/dev/null || true
   # Desktop (Plasma Mobile) session: register the Flathub remote on the first online boot so
   # Discover/flatpak can install apps. Harmless in game-only use (oneshot, no-op once added).
   chroot "${root}" systemctl enable pocknix-flathub.service 2>/dev/null || true

@@ -17,7 +17,7 @@
 # docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=6
+pkgrel=7
 pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -31,8 +31,9 @@ license=('GPL2')
 depends=('bash')
 source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'
         'steamos-session-select' 'return-to-gamemode.desktop'
-        'pocknix-flathub-setup' 'pocknix-flathub.service' 'ksplashrc' 'pocknix-x11.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'pocknix-flathub-setup' 'pocknix-flathub.service' 'ksplashrc' 'pocknix-x11.conf'
+        'powerdevilrc')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
@@ -51,6 +52,9 @@ package() {
   # Disable the 30s KSplash fallback (Plasma Mobile never dismisses it) so a session switch isn't
   # stuck behind a splash. System-wide default; only the deck Plasma session reads it.
   install -Dm644 "${srcdir}/ksplashrc"                "${pkgdir}/etc/xdg/ksplashrc"
+  # power button -> NoAction in powerdevil: Plasma Mobile's ToggleScreenOnOff default turned
+  # the panel back OFF on the (post-resume-delivered) wake press. pocknix-powerd owns the key.
+  install -Dm644 "${srcdir}/powerdevilrc"             "${pkgdir}/etc/xdg/powerdevilrc"
   # tmpfiles rule to create /tmp/.X11-unix at boot so kwin can start XWayland (X11 apps like Steam
   # in desktop mode). kwin expects the dir to exist; the minimal ALARM base ships no xorg-server
   # to provide it. See pocknix-x11.conf.

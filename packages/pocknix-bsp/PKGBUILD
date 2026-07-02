@@ -3,7 +3,7 @@
 # InputPlumber composite-device config for the RP6 gamepad. Grows with audio/thermal.
 pkgname=pocknix-bsp
 pkgver=0.1.0
-pkgrel=14
+pkgrel=15
 pkgdesc="pocknix board support (RP6/SM8550): suspend hooks, SDAM breadcrumb, InputPlumber + audio UCM"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

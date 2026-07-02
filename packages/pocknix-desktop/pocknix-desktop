@@ -45,4 +45,16 @@ export LIBSEAT_BACKEND=seatd
 mkdir -p /tmp/.X11-unix 2>/dev/null || true
 chmod 1777 /tmp/.X11-unix 2>/dev/null || true
 
+# Power button: unbind powerdevil's "Turn Off Screen" global shortcut, which Plasma Mobile
+# binds to the Power Off key in tablet mode (powerdevil dpms.cpp — lock + DPMS off). pocknix-powerd
+# owns the key (short press = suspend), and the RP6 delivers the WAKING press to userspace after
+# resume, so this binding turned the freshly-lit panel straight back off — the "second press to
+# wake" bug. This is a *different* path from powerButtonAction (also disabled, /etc/xdg/powerdevilrc).
+# Re-asserted every launch (fixes-go-in-robust-locations): a fresh home or a powerdevil default
+# change must not resurrect it. Format: "active,default,description" — active=none.
+if command -v kwriteconfig6 >/dev/null 2>&1; then
+  kwriteconfig6 --file kglobalshortcutsrc --group org_kde_powerdevil \
+    --key "Turn Off Screen" "none,Power Off,Turn Off Screen" 2>/dev/null || true
+fi
+
 exec startplasmamobile

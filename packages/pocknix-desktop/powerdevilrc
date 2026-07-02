@@ -1,0 +1,20 @@
+# pocknix system default (/etc/xdg/powerdevilrc — KConfig cascade; a user setting in
+# ~/.config/powerdevilrc still overrides).
+#
+# Power button -> NoAction (0) in every profile. Plasma Mobile's default is
+# ToggleScreenOnOff (128, powerdevilsettingsdefaults.cpp defaultPowerButtonAction(mobile)),
+# which fights pocknix-powerd's short-press-suspend: the press that WAKES the device is
+# delivered as a normal KEY_POWER after resume (RP6 quirk, see pocknix-bsp
+# 20-pocknix-powerkey.conf), so the shell toggled the freshly-lit panel straight back OFF
+# and a second press was needed. With NoAction, powerdevil leaves the key alone:
+# pocknix-powerd suspends on press, kwin lights the panel on resume, kscreenlocker's
+# lock-on-resume shows the lockscreen — one press to sleep, one press to wake, locked.
+# Enum: daemon/powerdevilenums.h PowerButtonAction (0=NoAction).
+[AC][SuspendAndShutdown]
+powerButtonAction=0
+
+[Battery][SuspendAndShutdown]
+powerButtonAction=0
+
+[LowBattery][SuspendAndShutdown]
+powerButtonAction=0
