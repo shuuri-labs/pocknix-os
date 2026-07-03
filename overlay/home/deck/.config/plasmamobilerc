@@ -1,0 +1,8 @@
+[General]
+autoHidePanelsEnabled=true
+gesturePanelEnabled=false
+navigationPanelEnabled=false
+statusBarScaleFactor=1.149999976158142
+
+[InitialStart]
+wizardRun=true

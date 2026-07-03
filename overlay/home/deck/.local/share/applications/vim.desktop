@@ -1,0 +1,13 @@
+[Desktop Entry]
+NoDisplay=true
+Name=Vim
+GenericName=Text Editor
+Comment=Edit text files
+TryExec=vim
+Exec=vim %F
+Terminal=true
+Type=Application
+Icon=gvim
+Categories=Utility;TextEditor;
+StartupNotify=false
+MimeType=text/plain;

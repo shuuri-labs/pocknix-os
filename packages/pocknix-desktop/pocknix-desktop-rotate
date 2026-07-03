@@ -13,7 +13,7 @@
 #
 # Overridable via the environment (e.g. from the autostart .desktop or a drop-in):
 #   POCKNIX_ROTATE  rotation token for kscreen-doctor (none|left|right|inverted)   default: left
-#   POCKNIX_SCALE   output scale factor for the 6" 1080x1920 panel                 default: 2
+#   POCKNIX_SCALE   output scale factor for the 6" 1080x1920 panel                 default: 2.5
 #   POCKNIX_OUTPUT  output name to target (e.g. DSI-1); default = autodetect the connected one
 #
 # NOTE (left vs right): the game session uses `--force-orientation left` (right rendered
@@ -23,7 +23,7 @@
 set -u
 
 ROTATE="${POCKNIX_ROTATE:-left}"
-SCALE="${POCKNIX_SCALE:-2}"
+SCALE="${POCKNIX_SCALE:-2.5}"
 OUTPUT="${POCKNIX_OUTPUT:-}"
 
 have() { command -v "$1" >/dev/null 2>&1; }
