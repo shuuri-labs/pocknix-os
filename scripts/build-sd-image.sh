@@ -113,6 +113,9 @@ EOF
   # Desktop (Plasma Mobile) session: register the Flathub remote on the first online boot so
   # Discover/flatpak can install apps. Harmless in game-only use (oneshot, no-op once added).
   chroot "${root}" systemctl enable pocknix-flathub.service 2>/dev/null || true
+  # Waydroid: re-assert the Android /data tuning (nav/density/font/immersive/multi_windows)
+  # after each container boot — those settings are wiped by `waydroid init`. See docs/waydroid.md.
+  chroot "${root}" systemctl enable pocknix-waydroid-tuning.service 2>/dev/null || true
 
   # Wi-Fi pre-seed — SteamOS topology: NetworkManager is the FRONT-END (Steam's gamepadui manages
   # Wi-Fi ONLY through NM's D-Bus API — without it the setup wizard shows "no connections found"

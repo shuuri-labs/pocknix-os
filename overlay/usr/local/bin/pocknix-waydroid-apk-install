@@ -1,0 +1,31 @@
+#!/bin/sh
+# pocknix-os: install an APK into Waydroid, auto-starting a session if none is
+# running. Wired up as the default handler for application/vnd.android.package-archive
+# so double-clicking an .apk in the file manager installs it. Runs as the session
+# user (deck), which is what `waydroid app *` expects.
+apk="$1"
+name=$(basename "$apk")
+
+if ! waydroid status 2>/dev/null | grep -q "Session:[[:space:]]*RUNNING"; then
+    notify-send "Waydroid" "Starting session to install $name…"
+    setsid waydroid session start >/dev/null 2>&1 </dev/null &
+fi
+
+# Wait until the Android platform accepts app commands (booted far enough).
+ready=0
+for i in $(seq 1 60); do
+    if waydroid app list >/dev/null 2>&1; then ready=1; break; fi
+    sleep 2
+done
+if [ "$ready" != 1 ]; then
+    notify-send -u critical "Waydroid" "Session did not start; $name not installed"
+    exit 1
+fi
+
+out=$(waydroid app install "$apk" 2>&1)
+if printf "%s" "$out" | grep -qiE "fail|error|not.*install"; then
+    notify-send -u critical "Waydroid" "Install failed: $name"
+    printf "%s\n" "$out" >&2
+    exit 1
+fi
+notify-send "Waydroid" "Installed: $name"

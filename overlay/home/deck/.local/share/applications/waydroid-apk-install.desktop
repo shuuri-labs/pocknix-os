@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Install with Waydroid
+Exec=/usr/local/bin/pocknix-waydroid-apk-install %f
+MimeType=application/vnd.android.package-archive;
+Icon=waydroid
+NoDisplay=true
+Terminal=false

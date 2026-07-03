@@ -1,0 +1,10 @@
+[Unit]
+Description=pocknix Waydroid tuning (nav/density/font/immersive/multi_windows), re-asserted after the Android container boots
+After=waydroid-container.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pocknix-waydroid-tuning
+
+[Install]
+WantedBy=waydroid-container.service

@@ -1,0 +1,52 @@
+#!/bin/sh
+# pocknix-os: re-assert Waydroid Android-side tuning after the container boots.
+# Idempotent; runs on every waydroid-container start (WantedBy that unit).
+# These are Android /data settings, so they are wiped by `waydroid init` and
+# must be re-applied at launch rather than baked once. Runs as root.
+set -u
+
+ws() { waydroid shell "$@" 2>/dev/null | tr -d '\r'; }
+
+# Wait for the Android framework to finish booting (up to ~120s).
+ready=0
+for i in $(seq 1 60); do
+    if [ "$(ws getprop sys.boot_completed)" = "1" ]; then ready=1; break; fi
+    sleep 2
+done
+[ "$ready" = 1 ] || { echo "pocknix-waydroid-tuning: container not ready, skipping"; exit 0; }
+
+# 1) 3-button navigation (host + Waydroid gesture nav both grab edge swipes)
+if [ "$(ws settings get secure navigation_mode)" != "0" ]; then
+    ws settings put secure navigation_mode 0
+    ws cmd overlay enable  com.android.internal.systemui.navbar.threebutton
+    ws cmd overlay disable com.android.internal.systemui.navbar.gestural
+    echo "pocknix-waydroid-tuning: applied 3-button nav"
+fi
+
+# 2) Display size (pinned density). Auto-density drifts into >=600dp tablet UI
+#    at 1080; 360 keeps a phone layout (swdp ~432) at the user's preferred size.
+if ! waydroid shell wm density 2>/dev/null | grep -q "Override density: 360"; then
+    ws wm density 360
+    echo "pocknix-waydroid-tuning: pinned density 360"
+fi
+
+# 3) Font size
+if [ "$(ws settings get system font_scale)" != "1.0" ]; then
+    ws settings put system font_scale 1.0
+    echo "pocknix-waydroid-tuning: set font_scale 1.0"
+fi
+
+# 4) Hide the Android status bar (nav bar stays visible for 3-button)
+if [ "$(ws settings get global policy_control)" != "immersive.status=*" ]; then
+    ws settings put global policy_control 'immersive.status=*'
+    echo "pocknix-waydroid-tuning: applied immersive.status"
+fi
+
+# 5) Single-window / no-caption windowing (fullscreen tasks, not freeform).
+#    Read at container boot, so it takes effect from the NEXT start; persists after.
+if [ "$(ws getprop persist.waydroid.multi_windows)" != "false" ]; then
+    ws setprop persist.waydroid.multi_windows false
+    echo "pocknix-waydroid-tuning: set multi_windows=false (effective next boot)"
+fi
+
+echo "pocknix-waydroid-tuning: done"
