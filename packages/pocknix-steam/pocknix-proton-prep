@@ -1,0 +1,68 @@
+#!/bin/bash
+# pocknix-proton-prep — register the ARM "Proton 11.0 (ARM64)" compat tool and keep it usable,
+# DECOUPLED from Steam's own download/update of the app, so the FIRST in-Steam download works with
+# NO reboot (and Steam updates self-heal mid-session).
+#
+# Why a reboot was needed before: Steam reads compatibilitytools.d ONLY at client startup, so the
+# `proton_11_arm64` registration MUST exist BEFORE Steam launches. The old launcher created it only
+# if the Proton dir already existed — so a mid-session first download left it unregistered until the
+# next boot re-ran the launcher. Here we split the work by WHEN Steam reads each piece:
+#   * registration (compatibilitytool.vdf) + our require_tool_appid-free toolmanifest.vdf  -> read at
+#     STARTUP: written UNCONDITIONALLY (even before Proton is downloaded) as REAL files Steam never
+#     clobbers, so the tool is listed from the first Steam launch.
+#   * the dist (the `proton` binary etc.) + the downloaded app's toolmanifest  -> read at GAME LAUNCH:
+#     filled in / re-fixed once Proton is present, so a post-startup download becomes usable with no
+#     restart. pocknix-steam runs this once at session start; pocknix-proton-prep.service --watch
+#     re-runs it when Proton is downloaded or updated.
+#
+# Covers BOTH ways a user can end up on ARM Proton:
+#   - our community tool `proton_11_arm64` (games map to it) -> compatibilitytools.d dist + our vdfs.
+#   - Steam's native "Proton 11.0 (ARM64)" (appid 4628740)   -> the app's own toolmanifest, kept
+#     require_tool_appid-free (Steam restores Valve's — which runs Proton inside a SteamLinuxRuntime
+#     container we can't set up — on every download/update).
+set -u
+
+STEAM="${HOME}/.local/share/Steam"
+PROTON_DIR="${STEAM}/steamapps/common/Proton 11.0 (ARM64)"
+TOOLDIR="${STEAM}/compatibilitytools.d/proton-11-arm64"
+RES=/usr/share/pocknix-steam
+
+apply() {
+  # 1) Registration + our toolmanifest as REAL files, present from before Steam starts. Written once
+  #    (guards keep the --watch loop cheap); Steam only ever reads these, never overwrites them.
+  mkdir -p "${TOOLDIR}"
+  [ -f "${TOOLDIR}/compatibilitytool.vdf" ] || install -Dm644 "${RES}/proton-compatibilitytool.vdf" "${TOOLDIR}/compatibilitytool.vdf"
+  [ -f "${TOOLDIR}/toolmanifest.vdf" ]      || install -Dm644 "${RES}/proton-toolmanifest.vdf"      "${TOOLDIR}/toolmanifest.vdf"
+
+  [ -d "${PROTON_DIR}" ] || return 0
+
+  # 2a) Native-tool path: keep the DOWNLOADED app's toolmanifest require_tool_appid-free. Steam
+  #     restores Valve's on each download/update; re-fix only when clobbered. Match the QUOTED VDF key
+  #     ("require_tool_appid") — Valve's has it, ours mentions it only in a `backtick` comment, so this
+  #     guard stays false once ours is in place (no rewrite churn on every --watch tick).
+  if grep -q '"require_tool_appid"' "${PROTON_DIR}/toolmanifest.vdf" 2>/dev/null; then
+    install -Dm644 "${RES}/proton-toolmanifest.vdf" "${PROTON_DIR}/toolmanifest.vdf"
+  fi
+
+  # 2b) Community-tool path: point the dist at the downloaded binaries (symlinks), then re-assert our
+  #     REAL vdfs on top (the glob would symlink Valve's over them). `proton` present => launchable.
+  #     Top-level entries are stable across updates (inner changes live under the symlinked files/),
+  #     so linking once (guard) suffices; the guard also makes this the first-download trigger.
+  if [ ! -e "${TOOLDIR}/proton" ]; then
+    ln -sfn "${PROTON_DIR}"/* "${TOOLDIR}/" 2>/dev/null || true
+    rm -f "${TOOLDIR}/toolmanifest.vdf" "${TOOLDIR}/compatibilitytool.vdf"
+    install -Dm644 "${RES}/proton-compatibilitytool.vdf" "${TOOLDIR}/compatibilitytool.vdf"
+    install -Dm644 "${RES}/proton-toolmanifest.vdf"      "${TOOLDIR}/toolmanifest.vdf"
+  fi
+}
+
+case "${1:-}" in
+  --watch)
+    # Re-apply on a gentle poll so a mid-session Proton download/update self-heals without a reboot.
+    # apply() is guarded/idempotent, so each tick is a few stats + greps unless something changed.
+    while :; do apply; sleep 20; done
+    ;;
+  *)
+    apply
+    ;;
+esac

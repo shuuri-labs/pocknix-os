@@ -47,26 +47,17 @@ touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 mkdir -p "${STEAM}/package"
 echo steamdeck_publicbeta > "${STEAM}/package/beta"
 
-# --- FEX/Proton prep for x86 game content (mirrors ROCKNIX steam_arm64_binfmt_and_proton_prep) ---
-# Re-applied EVERY launch because Steam restores Valve's files on a Proton update and binfmt resets on
-# boot. Needs root for the binfmt write (the boot-to-Steam session runs as root). See the 2026-06-22
-# milestone in progress.md for the why.
-PROTON_DIR="${STEAM}/steamapps/common/Proton 11.0 (ARM64)"
-if [ -d "${PROTON_DIR}" ]; then
-  # 1) Replace Valve's toolmanifest with our require_tool_appid-free one so Proton runs DIRECTLY
-  #    (Valve's runs it inside the SteamLinuxRuntime_4-arm64 container, which Steam can't set up here).
-  install -Dm644 /usr/share/pocknix-steam/proton-toolmanifest.vdf "${PROTON_DIR}/toolmanifest.vdf" 2>/dev/null || true
-  # 2) Register the (gated) library ARM Proton as a selectable compat tool: symlink the dist in +
-  #    drop our compatibilitytool.vdf (install_path ".").
-  TOOLDIR="${STEAM}/compatibilitytools.d/proton-11-arm64"
-  mkdir -p "${TOOLDIR}"
-  ln -sfn "${PROTON_DIR}"/* "${TOOLDIR}/" 2>/dev/null || true
-  install -Dm644 /usr/share/pocknix-steam/proton-compatibilitytool.vdf "${TOOLDIR}/compatibilitytool.vdf" 2>/dev/null || true
-fi
-# 3) (binfmt) The FEX x86 binfmt handlers are disabled at BOOT by pocknix-fex-binfmt-off.service —
-#    done there, as root, because the non-root 'deck' session can't write /proc/sys/fs/binfmt_misc.
-#    Leaving binfmt on breaks Steam's Proton compat-tool setup (x86 game content goes Wine->FEX
-#    directly, not via Linux binfmt). See overlay/etc/systemd/system/pocknix-fex-binfmt-off.service.
+# --- Proton 11 ARM compat tool: register + keep usable, decoupled from Steam's own download/updates
+# so the FIRST in-Steam download works with NO reboot. The registration (compatibilitytools.d) is
+# read by Steam only at STARTUP, so it must exist before Steam launches — pocknix-proton-prep writes
+# it here unconditionally (even pre-download). The dist + toolmanifest (read at game launch) are
+# filled in / re-fixed by pocknix-proton-prep.service --watch the moment Proton is downloaded or
+# updated, so a mid-session download becomes usable immediately. See pocknix-proton-prep.
+/usr/bin/pocknix-proton-prep
+# (binfmt) The FEX x86 binfmt handlers are disabled at BOOT by pocknix-fex-binfmt-off.service — done
+# there, as root, because the non-root 'deck' session can't write /proc/sys/fs/binfmt_misc. Leaving
+# binfmt on breaks Steam's Proton compat-tool setup (x86 game content goes Wine->FEX directly, not via
+# Linux binfmt). See overlay/etc/systemd/system/pocknix-fex-binfmt-off.service.
 
 # Self-heal a session SWITCH: steamos-session-select SIGTERMs gamescope to go to Plasma, but the
 # Steam client re-parents and keeps running (with its single-instance lock). On the way back the new
