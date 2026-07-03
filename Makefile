@@ -9,7 +9,7 @@ SCRIPTS := scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync bootstrap build fast kernel packages sd-image install check du trim clean distclean
+.PHONY: help sync bootstrap build kernel packages sd-image install check du trim clean distclean
 
 help: ## Show this help
 	@echo "pocknix-os build targets:"
@@ -24,9 +24,6 @@ bootstrap: ## Download + verify + extract the ALARM base rootfs (root, Linux)
 
 build: ## Full build: bootstrap -> packages -> kernel -> assemble (root, Linux)
 	@$(SCRIPTS)/build-image.sh
-
-fast: ## Iterate on packages/config without re-bootstrapping (root, Linux)
-	@$(SCRIPTS)/build-image-fast.sh
 
 kernel: ## Build only the in-project kernel (linux-pocknix) [Phase 1]
 	@if [ -x $(SCRIPTS)/build-kernel.sh ]; then $(SCRIPTS)/build-kernel.sh; \

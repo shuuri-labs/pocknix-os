@@ -24,7 +24,7 @@ stubbed with clear markers.
 kernel/        COMMITTED RP6 kernel enablement: patches, DTS, config, fw list, bootloader
 config/        pacman.conf template, repo settings (pocknix.conf), package lists
 packages/      local makepkg PKGBUILDs (linux-pocknix, pocknix-bsp, session units…)
-scripts/       sync / bootstrap / build-image / fast / install / check
+scripts/       sync / bootstrap / build-image / packages / kernel / sd-image / install / check
 vendor/        GITIGNORED build-time material (reference scripts, firmware overlay); `make sync`
 build/         build output (rootfs, image, localrepo, cache)
 plan.md        full phased plan
@@ -90,7 +90,7 @@ export POCKNIX_ALARM_SHA256=...    # pin for reproducible builds (optional)
 sudo -E make build                 # bootstrap + base packages (later phases stubbed)
 ```
 
-> Only `bootstrap`/`build`/`fast` need root (they `chroot`). Run `help`/`check`/`sync` as your
+> Only `bootstrap`/`build`/`packages`/`kernel`/`sd-image` need root (they `chroot`/mount). Run `help`/`check`/`sync` as your
 > normal user — `sudo make sync` would write the synced `kernel/` files as root-owned.
 
 ## Configuration

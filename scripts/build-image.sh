@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# build-image.sh — full pocknix-os image build.
+# build-image.sh — build the complete pocknix-os ROOTFS (make build).
 #
-# Pipeline (Phase 0 establishes the skeleton; later phases fill the stubs):
-#   bootstrap -> configure pacman -> install packages -> [kernel] -> [sessions] -> assemble
+# Pipeline:
+#   bootstrap -> configure pacman -> install packages (base + session lists) -> local pocknix
+#   packages (incl. the linux-pocknix kernel) -> SM8550 firmware -> bake the native Steam client
 #
-# Phase 0 status: bootstrap + pacman configuration + package install are wired.
-# Steps that depend on later phases are clearly marked STUB and are no-ops for now.
+# The output is a finished rootfs at ${ROOTFS_DIR}. Turning that into a flashable image
+# (partitioning, boot KERNEL, first-boot config) is a SEPARATE step: scripts/build-sd-image.sh
+# (make sd-image).
 
 source "$(dirname "$0")/lib.sh"
 need_linux
@@ -91,25 +93,21 @@ install_local_packages() {
   local mesa_ver; mesa_ver="$(chroot "${root}" pacman -Q mesa 2>/dev/null | awk '{print $2}')"
   case "${mesa_ver}" in
     2:*) log "mesa OK: ${mesa_ver} (epoch-2 pocknix trimmed build)" ;;
-    *) umount "${root}/localrepo" 2>/dev/null || true
-       die "mesa resolved to '${mesa_ver}', NOT our epoch-2 [pocknix] build — the image would ship ALARM's all-driver mesa. Confirm build/localrepo/mesa-2:*.pkg.tar.* exists AND is in pocknix.db ('make packages PKG=mesa'), then re-run." ;;
+    *) die "mesa resolved to '${mesa_ver}', NOT our epoch-2 [pocknix] build — the image would ship ALARM's all-driver mesa. Confirm build/localrepo/mesa-2:*.pkg.tar.* exists AND is in pocknix.db ('make packages PKG=mesa'), then re-run." ;;
   esac
   local gs_ver; gs_ver="$(chroot "${root}" pacman -Q gamescope 2>/dev/null | awk '{print $2}')"
   case "${gs_ver}" in
     1:*rocknix*) log "gamescope OK: ${gs_ver} (epoch-1 patched build)" ;;
-    *) umount "${root}/localrepo" 2>/dev/null || true
-       die "gamescope resolved to '${gs_ver}', NOT our epoch-1 [pocknix] rocknix build. Vanilla gamescope can't drive the RP6's rotated panel (no --use-rotation-shader) -> black screen. The install pins pocknix/gamescope, so reaching here means [pocknix] is missing it: confirm build/localrepo/gamescope-1:*.pkg.tar.* exists AND is registered in pocknix.db ('make packages PKG=gamescope' rebuilds + repo-adds it), then re-run." ;;
+    *) die "gamescope resolved to '${gs_ver}', NOT our epoch-1 [pocknix] rocknix build. Vanilla gamescope can't drive the RP6's rotated panel (no --use-rotation-shader) -> black screen. The install pins pocknix/gamescope, so reaching here means [pocknix] is missing it: confirm build/localrepo/gamescope-1:*.pkg.tar.* exists AND is registered in pocknix.db ('make packages PKG=gamescope' rebuilds + repo-adds it), then re-run." ;;
   esac
   local lp
   for lp in fex-emu fex-rootfs; do
     chroot "${root}" pacman -Q "${lp}" >/dev/null 2>&1 || {
-      umount "${root}/localrepo" 2>/dev/null || true
       die "${lp} not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=${lp}' (fex-rootfs downloads the ~1.1 GB Arch x86 squashfs once), confirm build/localrepo/${lp}-*.pkg.tar.* exists, then re-run."
     }
   done
   # pocknix-desktop must come from [pocknix] too (it pulls the Plasma Mobile stack from ALARM).
   chroot "${root}" pacman -Q pocknix-desktop >/dev/null 2>&1 || {
-    umount "${root}/localrepo" 2>/dev/null || true
     die "pocknix-desktop not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=pocknix-desktop', confirm build/localrepo/pocknix-desktop-*.pkg.tar.* exists, then re-run."
   }
   # Kernel: swap ALARM's generic linux-aarch64 for our linux-pocknix (Image + modules, built by
@@ -120,12 +118,10 @@ install_local_packages() {
     rm -rf "${root}/boot/initramfs-linux"*.img 2>/dev/null || true
     chroot "${root}" pacman -S --noconfirm pocknix/linux-pocknix
     chroot "${root}" pacman -Q linux-pocknix >/dev/null 2>&1 || {
-      umount "${root}/localrepo" 2>/dev/null || true
       die "linux-pocknix failed to install — check the pacman output above."
     }
     log "kernel OK: $(chroot "${root}" pacman -Q linux-pocknix)"
   else
-    umount "${root}/localrepo" 2>/dev/null || true
     die "linux-pocknix not in [pocknix] — run 'make kernel' first (build-packages.sh stages build/kernel/out into the package), then re-run. Without it the rootfs has no matching modules for the booted kernel."
   fi
   umount "${root}/localrepo"
@@ -198,19 +194,18 @@ install_firmware() {
 # rootfs chroot — which already has the steam deps + Xvfb — under a STAGING HOME, verifies the tree
 # is complete (steamui.so + the channel .installed manifest, else the seed would re-install online),
 # strips per-session cruft, and tars the HOME-agnostic tree (relative .steam symlinks) into a
-# re-seedable seed at /usr/share/pocknix-steam/steam-seed.tar.zst. pocknix-steam extracts it offline
-# on first run. Cached in ${CACHE_DIR} so it runs once (POCKNIX_REBOOTSTRAP_STEAM=1 forces a rebake);
-# POCKNIX_SKIP_STEAM_BAKE=1 skips entirely (no seed -> first boot downloads it, needs network).
+# re-seedable seed cached at ${CACHE_DIR}/steam-seed.tar.zst. The tar is a BUILD-TIME INTERMEDIATE:
+# we unpack it straight into the rootfs's /home/deck at the end of this function (see below) so the
+# extracted tree is part of ROOTFS_DIR before build-sd-image.sh sizes the image partition, and the
+# tar itself is never shipped. First boot then has no extract wait AND no network need.
+# Cached in ${CACHE_DIR} so it runs once (POCKNIX_REBOOTSTRAP_STEAM=1 forces a rebake) — repeat
+# builds reuse the cache and need no network. The bake is mandatory: the on-device launcher has no
+# network-installer fallback, so a build with no seed would ship a Steam session that hard-fails.
 bootstrap_steam_seed() {
   local root="$1"
   local seed="${CACHE_DIR}/steam-seed.tar.zst"
   local home="/var/lib/pocknix/steam-seed-home"
   local steam="${home}/.local/share/Steam"
-
-  if [ -n "${POCKNIX_SKIP_STEAM_BAKE:-}" ]; then
-    warn "POCKNIX_SKIP_STEAM_BAKE set — not baking Steam; first boot will download it (needs network)"
-    return 0
-  fi
 
   if [ ! -f "${seed}" ] || [ -n "${POCKNIX_REBOOTSTRAP_STEAM:-}" ]; then
     log "baking native ARM Steam client (downloads + Xvfb self-update; can take several minutes)..."
@@ -222,12 +217,12 @@ bootstrap_steam_seed() {
     chroot "${root}" rm -rf "${home}"; chroot "${root}" mkdir -p "${home}"
     if ! chroot "${root}" env HOME="${home}" /usr/bin/pocknix-steam-install; then
       umount "${root}/dev/shm" 2>/dev/null || true
-      die "steam bake failed (pocknix-steam-install in chroot). Check network, or POCKNIX_SKIP_STEAM_BAKE=1 to defer to first boot."
+      die "steam bake failed (pocknix-steam-install in chroot). Check network + retry (the bake is cached, so a retry resumes)."
     fi
     if ! chroot "${root}" test -f "${steam}/steamrtarm64/steamui.so" \
        || ! chroot "${root}" test -f "${steam}/package/steam_client_steamdeck_publicbeta_linuxarm64.installed"; then
       umount "${root}/dev/shm" 2>/dev/null || true
-      die "steam bake incomplete (no steamui.so / .installed) — seed would re-install on first boot. Re-run, or POCKNIX_SKIP_STEAM_BAKE=1."
+      die "steam bake incomplete (no steamui.so / .installed) — the seed is broken. Re-run (POCKNIX_REBOOTSTRAP_STEAM=1 forces a clean rebake)."
     fi
     # strip per-session cruft AND registry.vdf (like armada) so the seed shows the OOBE on first boot
     # — the user configures Wi-Fi there; pocknix-steamos-shim's steamos-update keeps the OOBE's
@@ -247,7 +242,18 @@ bootstrap_steam_seed() {
   else
     log "using cached steam seed: ${seed} ($(du -h "${seed}" | cut -f1))"
   fi
-  install -Dm644 "${seed}" "${root}/usr/share/pocknix-steam/steam-seed.tar.zst"
+  # Pre-extract the baked client into the rootfs's /home/deck HERE — while it's still part of
+  # ROOTFS_DIR, so build-sd-image.sh's `du -sm ROOTFS_DIR` sizes the image partition to INCLUDE the
+  # ~1.3 GB tree. (Extracting later, during image assembly into the already-sized partition, blew
+  # past its size -> "No space left on device".) The tar is NOT shipped in the rootfs: we unpack the
+  # cached seed straight in and drop it, so the image carries only the extracted tree. Files land
+  # root-owned (bake ran as root); build-sd-image.sh creates the deck user (uid 1001) and its
+  # `chown -R deck:deck /home/deck` fixes ownership. The relative .steam symlinks are HOME-agnostic
+  # so they resolve correctly once this tree is deck's HOME.
+  log "pre-extracting Steam client into rootfs /home/deck (sized into the partition; no tar shipped)"
+  install -d "${root}/home/deck"
+  cp "${seed}" "${root}/steam-seed.tar.zst"
+  chroot "${root}" bash -c "set -e; tar -C /home/deck -xf /steam-seed.tar.zst; rm -f /steam-seed.tar.zst"
 }
 
 main() {
@@ -265,11 +271,13 @@ main() {
   chroot_mount "${ROOTFS_DIR}"
   configure_keyring "${ROOTFS_DIR}"
 
-  # 3. packages: base now; session lists become active in Phase 3/4. gamescope/mangohud are
-  #    in ALARM (no holo needed) — see config/packages/steam.list. Activate once GPU is up.
-  install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/base.list"
-  install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/steam.list"        # Phase 3 (ALARM): gamescope
-  install_packages "${ROOTFS_DIR}" "${CONFIG_DIR}/packages/desktop.list"      # Phase 4 (ALARM): Plasma Mobile stack
+  # 3. packages: base + the two session lists (steam = Phase 3 gamescope/mangohud; desktop = Phase 4
+  #    Plasma Mobile). All from ALARM (no holo needed) — see config/packages/steam.list. Installed in
+  #    ONE transaction so the (forced -Syy) repo-DB refresh happens once, not once per list.
+  install_packages "${ROOTFS_DIR}" \
+        "${CONFIG_DIR}/packages/base.list" \
+        "${CONFIG_DIR}/packages/steam.list" \
+        "${CONFIG_DIR}/packages/desktop.list"
 
   # Generate a UTF-8 locale. The ALARM base ships only "C"; Qt apps (all of Plasma) warn and fall
   # back to C.UTF-8 on every launch, and the C path is slower. Set en_US.UTF-8 system-wide.
@@ -286,10 +294,9 @@ main() {
 
   chroot_umount "${ROOTFS_DIR}"; trap - EXIT
 
-  # 6. assemble bootable image (Phase 6)
-  warn "STUB: image assembly (Phase 6) not implemented yet"
-
-  ok "build-image: base rootfs built at ${ROOTFS_DIR} (later phases stubbed)"
+  # The rootfs is complete. Assembling it into a flashable image (partitions, boot KERNEL,
+  # first-boot config) is a separate step: scripts/build-sd-image.sh (make sd-image).
+  ok "build-image: rootfs ready at ${ROOTFS_DIR} — run 'make sd-image' to assemble a flashable image"
 }
 
 main "$@"

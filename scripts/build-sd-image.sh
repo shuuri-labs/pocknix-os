@@ -55,7 +55,8 @@ firstboot_config() {
   echo "root:${SD_ROOT_PASSWORD}" | chroot "${root}" chpasswd
   cat > "${root}/etc/fstab" <<EOF
 # pocknix-os test image
-PARTLABEL=${ROOT_LABEL}        /       ext4  rw,relatime        0 1
+# noatime: no software here needs atime; dropping atime write-backs cuts flash writes (SteamOS/ROCKNIX do the same).
+PARTLABEL=${ROOT_LABEL}        /       ext4  rw,noatime         0 1
 PARTLABEL=${SD_BOOT_PARTNAME}  /flash  vfat  rw,noatime,nofail  0 2
 EOF
   echo "pocknix" > "${root}/etc/hostname"
@@ -101,7 +102,17 @@ EOF
   for d in Desktop Documents Downloads Music Pictures Videos; do
     mkdir -p "${root}/home/deck/${d}"   # ownership fixed by the chown below ('deck' is unknown to the host)
   done
+  # One chown covers everything under /home/deck: the XDG dirs just made, the overlay's .bash_profile/
+  # .config, AND the Steam tree pre-extracted into it by build-image.sh (all root-owned until now).
   chroot "${root}" chown -R deck:deck /home/deck
+  # NB: the native Steam client is already pre-extracted into /home/deck by build-image.sh's
+  # bootstrap_steam_seed (done there so `du -sm ROOTFS_DIR` above sizes the partition to fit the
+  # ~1.3 GB tree). The chown above (root -> deck) is what gives deck ownership of it. Guard: the
+  # bake is mandatory (the on-device launcher has no network fallback), so a missing tree means a
+  # broken/stale rootfs — fail rather than ship a Steam session that hard-fails on first launch.
+  [ -x "${root}/home/deck/.local/share/Steam/steamrtarm64/steam" ] \
+    || die "Steam client not pre-extracted in the rootfs (/home/deck/.local/share/Steam) — run 'sudo make build' first."
+
   # PipeWire/WirePlumber for deck's session (global-enable so its --user units start on login).
   chroot "${root}" systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service 2>/dev/null || true
   # Root services: RP6 fan curve + FEX-binfmt-off (deck can't write /proc/sys/fs/binfmt_misc) +

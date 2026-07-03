@@ -21,23 +21,14 @@ CLIENT="${CLIENT_DIR}/steam"
 # aarch64 shim dir (libibus shim). steamrtarm64/steam re-execs into its runtime from here.
 LDLP="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu"
 
-# First run: lay down the native client + runtime. Prefer the BUILD-TIME bake (offline) — a seed
-# tarball of a fully-bootstrapped, HOME-agnostic Steam tree shipped in the image — so first boot
-# needs no network. Fall back to the network installer only if no seed is present.
-SEED=/usr/share/pocknix-steam/steam-seed.tar.zst
+# The native client + runtime are PRE-EXTRACTED into this HOME at BUILD time (build-image.sh's
+# bootstrap_steam_seed unpacks the baked tree into the rootfs /home/deck), so first boot needs no
+# network AND no extract wait. If the tree is somehow absent there's nothing to launch — fail clearly.
+# (No network-installer fallback: pocknix-steam-install runs ONLY at build time now, inside the
+# bake; the image always ships the extracted client.)
 if [ ! -x "${CLIENT}" ]; then
-  if [ -f "${SEED}" ]; then
-    echo "[pocknix-steam] seeding the baked Steam client (offline, $(du -h "${SEED}" 2>/dev/null | cut -f1) — can take a FEW MINUTES on a slow SD, faster on internal)..."
-    mkdir -p "${HOME}"
-    # --checkpoint prints progress every N records so a slow SD extract isn't a silent "hang".
-    if tar -C "${HOME}" --checkpoint=2000 --checkpoint-action=echo='[pocknix-steam]   extracting… (%u records)' -xf "${SEED}"; then
-      echo "[pocknix-steam] seed extracted."
-    else
-      echo "[pocknix-steam] seed extract failed; falling back to download" >&2; /usr/bin/pocknix-steam-install
-    fi
-  else
-    /usr/bin/pocknix-steam-install
-  fi
+  echo "[pocknix-steam] native Steam client missing at ${CLIENT} — the build-time bake didn't seed it." >&2
+  exit 1
 fi
 
 # CRITICAL: Steam resolves its legacy module paths (bin/vgui2_s.dll …) RELATIVE TO getcwd.

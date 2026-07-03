@@ -4,12 +4,15 @@
 # Steam is experimental (Valve publicbeta linuxarm64).
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=23
+pkgrel=25
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 # gamescope = our ROCKNIX-patched compositor; wget/unzip/curl/tar fetch+unpack the client.
+# NB: wget/unzip/curl/tar + xorg-server-xvfb (below) are BUILD-TIME-ONLY now — pocknix-steam-install
+# runs only inside the bake (build-image.sh), which happens in THIS rootfs, so they must stay in the
+# rootfs even though the on-device launcher no longer network-installs. Don't drop them.
 # seatd (gamescope seat) + pipewire (audio) come from the base image.
 # gtk2 (built by us; EOL in Arch) + gdk-pixbuf2 = libs steamui.so dlopens. Two deps the native
 # arm64 client needs that nothing else pulls in on a from-scratch ALARM base (Fedora/armada get

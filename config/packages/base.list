@@ -71,6 +71,14 @@ sbc                  # SBC codec — PipeWire BT audio A2DP baseline + HFP/mSBC 
 libfreeaptx          # AptX / AptX-HD / AptX-LL (low-latency) codecs for PipeWire BT audio.
                      #   LDAC needs ldacbt-libs (AUR); AAC needs libfdk-aac (extra) — add if wanted.
 
+# --- memory / swap ---
+zram-generator       # compressed-RAM swap (zram0, zstd) via /etc/systemd/zram-generator.conf.
+                     #   Memory headroom for big games + Waydroid + in-game Steam downloads on a
+                     #   RAM-limited handheld (armada/SteamOS/ROCKNIX all run zram). Kernel has
+                     #   ZRAM=m + zstd backend. Pairs with vm.swappiness=180 (sysctl). No flash swap
+                     #   wear. (Optional follow-up: enable systemd-oomd — ships with systemd — for
+                     #   earlier/cleaner kills under pressure instead of the kernel OOM backstop.)
+
 # --- CPU scheduler (gaming) ---
 scx-scheds           # sched_ext schedulers incl. scx_lavd (big.LITTLE / latency-aware).
                      #   pocknix-lavd.service runs `scx_lavd --autopilot`. Needs the
