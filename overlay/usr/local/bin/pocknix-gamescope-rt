@@ -18,9 +18,17 @@
 # NB: on-device A/B showed forcing RR did NOT change FPS — this is for parity with ROCKNIX
 # and frame-pacing, not a measured throughput win.
 while :; do
-  gpid="$(pidof gamescope 2>/dev/null)" || { sleep 2; continue; }
+  # Match BOTH names: gamescope renames its compositor process to "gamescope-wl" (comm),
+  # which name-based tools can miss (pkill -x gamescope provenly does). Since the deck
+  # rtprio grant was dropped (limits.d, 2026-07-03) this helper is the ONLY RR mechanism.
+  gpid="$(pidof gamescope gamescope-wl 2>/dev/null)" || { sleep 2; continue; }
   for tid in $(ps -L -o tid=,cls= -p "$gpid" 2>/dev/null | awk '$2=="TS"{print $1}'); do
-    chrt -r -p 40 "$tid" 2>/dev/null
+    # --reset-on-fork is CRITICAL: SCHED_RR is inherited across fork/clone, and gamescope's
+    # main thread forks the ENTIRE session (steam -> proton -> wine -> game). Without -R the
+    # whole tree is born RR 40 — which recreated the priority-inversion hitching on
+    # 2026-07-03 with no Wine promotion involved (rtprio rlimit was 0; inheritance needs no
+    # permission). -R keeps the gamescope thread RR but children start back at SCHED_OTHER.
+    chrt -r --reset-on-fork -p 40 "$tid" 2>/dev/null
   done
   sleep 3
 done

@@ -105,9 +105,11 @@ EOF
   # PipeWire/WirePlumber for deck's session (global-enable so its --user units start on login).
   chroot "${root}" systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service 2>/dev/null || true
   # Root services: RP6 fan curve + FEX-binfmt-off (deck can't write /proc/sys/fs/binfmt_misc) +
-  # the volume-rocker handler (Steam shows the OSD but doesn't change volume on KEY_VOLUME*).
+  # the volume-rocker handler (Steam shows the OSD but doesn't change volume on KEY_VOLUME*) +
+  # gamescope-rt (RRs the compositor from root — the deck session has no rtprio grant, the
+  # SteamOS model; see limits.d/60-pocknix-gaming.conf. Replaces the old rt-demote watcher).
   chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt-off.service \
-        pocknix-volumed.service pocknix-rt-demote.service pocknix-powerd.service 2>/dev/null || true
+        pocknix-volumed.service pocknix-gamescope-rt.service pocknix-powerd.service 2>/dev/null || true
   # Desktop (Plasma Mobile) session: register the Flathub remote on the first online boot so
   # Discover/flatpak can install apps. Harmless in game-only use (oneshot, no-op once added).
   chroot "${root}" systemctl enable pocknix-flathub.service 2>/dev/null || true

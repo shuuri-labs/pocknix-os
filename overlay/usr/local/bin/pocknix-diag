@@ -48,7 +48,11 @@ OUT=/var/log/pocknix-diag.txt
   printf '\n## ath12k dmesg\n'; dmesg 2>/dev/null | grep -i ath12k | tail -20
   printf '\n## wifi: FORCED connect attempt (prints the real activation failure reason)\n'
   prof=$(ls /etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null | head -1)
-  if [ -n "$prof" ]; then
+  if nmcli -g GENERAL.STATE device show wlan0 2>/dev/null | grep -q '^100'; then
+    # already activated: re-running 'connection up' would tear the link down and
+    # rebuild it (visible as a wifi blip every boot)
+    echo "(wlan0 already connected — skipping forced activation)"
+  elif [ -n "$prof" ]; then
     name=$(basename "${prof%.nmconnection}")
     echo "+ nmcli --wait 25 connection up \"$name\""
     nmcli --wait 25 connection up "$name" 2>&1

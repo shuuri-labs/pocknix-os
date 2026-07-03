@@ -46,6 +46,9 @@ pipewire
 pipewire-pulse
 pipewire-alsa
 wireplumber
+rtkit               # RT broker: PipeWire/WirePlumber get bounded realtime via rtkit (SteamOS
+                    #   model). The deck session has NO blanket rtprio grant (see
+                    #   limits.d/60-pocknix-gaming.conf) so module-rt's direct path fails -> rtkit.
 alsa-utils          # aplay/amixer/alsaucm/speaker-test — card inspection + UCM testing
 alsa-ucm-conf       # ALSA Use Case Manager configs (card routing); RP6 UCM may need adding
 
