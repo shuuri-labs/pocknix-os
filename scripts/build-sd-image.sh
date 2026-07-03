@@ -203,8 +203,10 @@ EOF
   # NOTE: the USB-C network gadget (ssh over USB) is intentionally gone — it showed as a phantom
   # "wired" connection in Steam, and the port is dual-role (DTS data-role="dual"), so leaving it
   # free lets the USB-C port act as a host for peripherals (keyboard, storage, …).
+  #   upower: battery %/time-to-empty for Steam's gamepadui (it reads battery only via the UPower
+  #   D-Bus API) + Plasma. D-Bus-activated anyway, but enable it so it's up before Steam's first query.
   chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
-        bluetooth \
+        bluetooth upower \
         pocknix-diag.service pocknix-expand-root.service \
         pocknix-lavd.service pocknix-gamescope-rt.service \
         >/dev/null 2>&1 || true
