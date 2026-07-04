@@ -1,0 +1,12 @@
+# pocknix SD-card automount — mirror of SteamOS's hwsupport automount rule.
+#
+# On insertion of an ext4 partition on the microSD slot (mmcblkNpM), hand the device to
+# sdcard-mount.sh, which mounts it under /run/media/deck and registers it with the running
+# Steam client (steam://addlibraryfolder) so it shows up in the gamescope Storage UI. On
+# removal, unmount + deregister. The RP6's internal storage is UFS (sd*), so mmcblk* matches
+# only the SD slot — no risk of grabbing an internal partition.
+#
+# systemd-run --no-block launches the helper as a transient unit and returns immediately, so
+# the (short, serialized) udev event isn't blocked by the mount + the Steam IPC round-trip.
+ACTION=="add",    SUBSYSTEM=="block", ENV{DEVTYPE}=="partition", KERNEL=="mmcblk[0-9]p[0-9]", ENV{ID_FS_TYPE}=="ext4", RUN{program}+="/usr/bin/systemd-run --no-block /usr/lib/hwsupport/sdcard-mount.sh add %k"
+ACTION=="remove", SUBSYSTEM=="block", ENV{DEVTYPE}=="partition", KERNEL=="mmcblk[0-9]p[0-9]", RUN{program}+="/usr/bin/systemd-run --no-block /usr/lib/hwsupport/sdcard-mount.sh remove %k"

@@ -1,0 +1,26 @@
+# pocknix-sdcard-automount — port of SteamOS's SD-card automount stack (missing on pocknix, so the
+# gamescope Steam session never surfaced an inserted microSD). A udev rule fires a mount helper on
+# ext4 mmcblk insert/removal; the helper mounts under /run/media/deck, chowns to the deck session
+# user, and — the bit a bare mount rule lacks — tells the running Steam client via
+# steam://addlibraryfolder so the card appears in the Storage UI. armada/SteamOS are the reference.
+#
+# NOTE: mounting a card FORMATTED BY SteamOS also needs CONFIG_UNICODE in the kernel — SteamOS
+# formats cards with the ext4 `casefold` feature, which the kernel refuses to mount without it.
+# That's a separate fix in scripts/build-kernel.sh (the linux-pocknix config delta); this package
+# is the userspace half.
+pkgname=pocknix-sdcard-automount
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="SteamOS-style microSD automount + Steam library registration for the gamescope session"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('jq' 'util-linux' 'systemd')
+source=('sdcard-mount.sh' '99-pocknix-sdcard-automount.rules')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/sdcard-mount.sh" "${pkgdir}/usr/lib/hwsupport/sdcard-mount.sh"
+  install -Dm644 "${srcdir}/99-pocknix-sdcard-automount.rules" \
+    "${pkgdir}/usr/lib/udev/rules.d/99-pocknix-sdcard-automount.rules"
+}

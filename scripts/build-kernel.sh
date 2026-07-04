@@ -141,7 +141,16 @@ configure() {
   #    that honours scheduler frequency hints). Under performance, clocks pin to max and
   #    LAVD's frequency intelligence — and the handheld's thermal headroom — is lost. Still
   #    runtime-overridable (echo performance > .../cpufreq/policy*/scaling_governor) to A/B.
+  #  - UNICODE (UTF-8 normalization + casefolding tables): the ROCKNIX config ships this off.
+  #    SteamOS formats every SD card with the ext4 `casefold` feature (case-insensitive dir
+  #    lookups, so mixed-case Windows/Proton game paths resolve). ext4 REFUSES to mount a
+  #    casefold filesystem without CONFIG_UNICODE ("Filesystem with casefold feature cannot be
+  #    mounted without CONFIG_UNICODE") — so a card formatted on another Steam Deck won't mount
+  #    here at all, and Steam never sees it. =y builds the UTF-8 normalization table in (no
+  #    module: filesystems may be mounted before modules load). Pairs with the SD automount
+  #    stack (pocknix-sdcard-automount) that mounts + registers the card with Steam.
   "${KSRC}/scripts/config" --file "${KSRC}/.config" \
+    --enable UNICODE \
     --enable FW_LOADER_COMPRESS \
     --enable FW_LOADER_COMPRESS_ZSTD \
     --module DRM_MSM \
