@@ -25,9 +25,9 @@ subfolder and they are picked up automatically the next time ES-DE starts.
 
 4. GET IT INTO YOUR STEAM LIBRARY
    In ES-DE, press the Favorite button on any game to star it. Starred games are
-   added to your Steam library (with artwork) automatically — no manual setup.
-   Un-star to remove it again. New/removed favorites appear next time you enter Game
-   Mode.
+   added to your Steam library automatically (in a "Pocknix" collection) — no manual
+   setup. Un-star to remove it again. New/removed favorites appear next time you
+   enter Game Mode.
 
 Saves and save-states live in ~/ROMs/saves and ~/ROMs/states, so a single copy of
 this ~/ROMs folder is fully self-contained and portable.

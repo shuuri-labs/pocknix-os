@@ -1,27 +1,29 @@
 # pocknix-emulation — the "drop ROMs in and play" layer: ES-DE + preconfigured emulators.
 #
 # Symmetric with pocknix-desktop: this is a data/scripts package (arch=any). The HEAVY runtime
-# (es-de, retroarch, the libretro core set, the standalone emulators, steam-rom-manager) is NOT a
-# depends() here — it is delivered into the rootfs from config/packages/emulation.list at image
-# time, the same base.list/steam.list/desktop.list pattern. Reason (identical to pocknix-desktop):
-# makepkg -s would otherwise drag ES-DE/RetroArch/Qt/etc. into the BUILD chroot just to build this
-# no-op data package. So this package ships ONLY:
+# (es-de, retroarch, the libretro core set, the standalone emulators) is NOT a depends() here —
+# it is delivered into the rootfs from config/packages/emulation.list at image time, the same
+# base.list/steam.list/desktop.list pattern. Reason (identical to pocknix-desktop): makepkg -s
+# would otherwise drag ES-DE/RetroArch/Qt/etc. into the BUILD chroot just to build this no-op
+# data package. So this package ships ONLY:
 #   - pocknix-roms-init         first-run (per deck login): create ~/ROMs/<system> + ~/ROMs/bios,
 #                               and SEED the ES-DE + RetroArch configs into the user's home if absent
 #                               (robust-location pattern: user configs live in $HOME, a package can't
 #                               write /home/deck, so we stage under /usr/share and copy on first login)
 #   - pocknix-roms-init.service the --user oneshot that runs it (enabled --global at image time)
-#   - pocknix-srm-sync          ES-DE favorites -> Steam ROM Manager manifest -> `srm add`
-#                               (RetroDeck "Steam Sync" model: only STARRED games reach Steam)
-#   - pocknix-play              <system> <rom> launcher — the target of every SRM favorite
-#                               shortcut; owns the system->core/emulator default mapping
+#   - pocknix-steam-sync        ES-DE + starred favorites -> Steam library, by DIRECT binary-VDF
+#                               write into shortcuts.vdf (RetroDeck "Steam Sync" model, minus SRM:
+#                               Steam ROM Manager's Electron CLI deadlocked on every display
+#                               backend on-device 2026-07-05 and was retired from the flow)
+#   - pocknix-play              <system> <rom> launcher — the target of every favorite shortcut;
+#                               owns the system->core/emulator default mapping
 #   - es_find_rules.xml         ES-DE emulator lookup -> our binary/AppImage install paths
 #   - retroarch.cfg             sane RetroArch defaults (system_directory -> ~/ROMs/bios, Turnip)
 #   - ROMS-README.txt           dropped into ~/ROMs so the user knows where ROMs/BIOS/keys go
 #
 pkgname=pocknix-emulation
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="ES-DE + preconfigured emulators for the RP6: drop ROMs into ~/ROMs and play; star -> Steam"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -30,14 +32,17 @@ license=('GPL2')
 # scripts `command -v`-guard their callees (retroarch, es-de, steam-rom-manager) so an install
 # WITHOUT the runtime present degrades gracefully instead of erroring.
 depends=('bash')
-source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-srm-sync' 'pocknix-play'
+source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
         'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
-  install -Dm755 "${srcdir}/pocknix-srm-sync"  "${pkgdir}/usr/bin/pocknix-srm-sync"
   install -Dm755 "${srcdir}/pocknix-play"      "${pkgdir}/usr/bin/pocknix-play"
+  # ES-DE + favorites -> Steam library by DIRECT shortcuts.vdf write (run by pocknix-steam at
+  # session start; Steam down, no display needed, <1s). Replaced the whole SRM pipeline — see
+  # the pocknix-steam-sync header for the burial notes.
+  install -Dm755 "${srcdir}/pocknix-steam-sync" "${pkgdir}/usr/bin/pocknix-steam-sync"
 
   # --user oneshot: runs pocknix-roms-init on the deck login (create tree + seed configs). Enabled
   # for all users with `systemctl --global enable pocknix-roms-init.service` in build-sd-image.sh
@@ -53,4 +58,8 @@ package() {
     "${pkgdir}/usr/share/pocknix-emulation/retroarch.cfg"
   install -Dm644 "${srcdir}/ROMS-README.txt" \
     "${pkgdir}/usr/share/pocknix-emulation/ROMS-README.txt"
+  # Static SRM manifest: puts ES-DE itself in the Steam library (desktop mode has no controller
+  # nav, so the frontend must run under gamescope). Instantiated per-user by pocknix-roms-init.
+  install -Dm644 "${srcdir}/srm-manifest-es-de.json.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/srm-manifest-es-de.json.in"
 }

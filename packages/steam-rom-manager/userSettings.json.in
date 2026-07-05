@@ -1,16 +1,11 @@
 {
+  "version": 11,
   "environmentVariables": {
     "steamDirectory": "__HOME__/.local/share/Steam",
-    "romsDirectory": "__HOME__/ROMs"
+    "romsDirectory": "__HOME__/ROMs",
+    "retroarchPath": "/usr/bin/retroarch",
+    "raCoresDirectory": "/usr/lib/libretro"
   },
   "offlineMode": false,
-  "previewSettings": {
-    "retrieveCurrentSteamImages": true,
-    "disableCategories": false,
-    "deleteDisabledShortcuts": false,
-    "imageZoomPercentage": 40,
-    "preload": false,
-    "hideUserAccount": false
-  },
   "autoUpdate": false
 }

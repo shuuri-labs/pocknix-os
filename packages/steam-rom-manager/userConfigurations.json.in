@@ -1,5 +1,7 @@
 [
   {
+    "version": 26,
+    "parserId": "__PARSERID__",
     "parserType": "Manual",
     "configTitle": "Pocknix Favorites",
     "steamCategories": ["Pocknix"],

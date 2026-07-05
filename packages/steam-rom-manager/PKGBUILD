@@ -15,7 +15,7 @@
 # on first login if absent. Manifest format/dir contract: see pocknix-srm-sync.
 pkgname=steam-rom-manager
 pkgver=2.5.37
-pkgrel=1
+pkgrel=2
 pkgdesc="Steam ROM Manager — bulk non-Steam-shortcut + artwork importer (aarch64 source build)"
 arch=('aarch64')
 url="https://github.com/SteamGridDB/steam-rom-manager"

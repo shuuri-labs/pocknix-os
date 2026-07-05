@@ -73,13 +73,12 @@ if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhe
   pkill -u "${uid}" -KILL -f steamwebhelper 2>/dev/null || true
 fi
 
-# Sync ES-DE favorites -> Steam library (pocknix-emulation, favorites-only model). MUST run while
-# Steam is down — Steam rewrites shortcuts.vdf on exit, clobbering mid-session additions — and this
-# is the one guaranteed moment (stale Steam cleared above, client not launched yet; SRM runs under
-# xvfb here since no compositor is up). Best-effort: a failed/offline sync never blocks the session
-# (favorites just appear next launch).
-if command -v pocknix-srm-sync >/dev/null 2>&1; then
-  pocknix-srm-sync || echo "[pocknix-steam] favorites->Steam sync failed (non-fatal)"
+# ES-DE + ES-DE favorites into the Steam library: pocknix-steam-sync (pocknix-emulation) writes
+# shortcuts.vdf DIRECTLY — no Steam ROM Manager (its Electron CLI deadlocked on every display
+# backend on this device; retired 2026-07-05). Right moment: Steam is guaranteed down (it rewrites
+# shortcuts.vdf on exit, clobbering live edits) and the sync needs no display. <1s, idempotent.
+if command -v pocknix-steam-sync >/dev/null 2>&1; then
+  pocknix-steam-sync || echo "[pocknix-steam] Steam-library sync failed (non-fatal)"
 fi
 
 # RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080.

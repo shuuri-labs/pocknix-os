@@ -1,6 +1,15 @@
 #!/bin/bash
-# steam-rom-manager wrapper — exec the unpacked electron build.
-# --no-sandbox: electron's chrome-sandbox needs setuid-root or userns; neither is guaranteed for
-# the deck session, and SRM here is a local tool run headless (`add`) or from desktop mode — the
-# renderer only loads SRM's own bundled UI, so the sandbox buys nothing on this device.
-exec /opt/steam-rom-manager/steam-rom-manager --no-sandbox "$@"
+# steam-rom-manager wrapper — exec the unpacked electron build. Flags earned on-device 2026-07-05:
+# --no-sandbox           chrome-sandbox needs setuid-root/userns; neither guaranteed for deck, and
+#                        SRM only renders its own bundled UI.
+# --no-zygote            the zygote socket died mid-`add` ("Socket closed prematurely") and took
+#                        the GPU-process relaunch path with it; forking directly removes the class.
+# --disable-gpu          real-GPU electron contexts crash-looped mid-`add` on Adreno/wayland
+#                        ("GPU process isn't usable. Goodbye."); SRM has no need for GPU rendering.
+# --ozone-platform=wayland (when a wayland socket exists): the X11 path deadlocks the CLI renderer
+#                        handshake (xvfb AND the session's Xwayland); wayland completes.
+#                        --ozone-platform-hint=auto was NOT enough — electron still picked x11.
+#                        Plasma (wayland-0) and gamescope (its own socket) both provide wayland.
+plat=()
+[ -n "${WAYLAND_DISPLAY:-}" ] && plat=(--ozone-platform=wayland)
+exec /opt/steam-rom-manager/steam-rom-manager --no-sandbox --no-zygote --disable-gpu "${plat[@]}" "$@"

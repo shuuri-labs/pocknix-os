@@ -113,11 +113,13 @@ install_local_packages() {
     die "pocknix-desktop not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=pocknix-desktop', confirm build/localrepo/pocknix-desktop-*.pkg.tar.* exists, then re-run."
   }
   # Emulation layer (packages/pocknix-emulation + docs/there): ES-DE frontend, vendored core set,
-  # AppImage emulators, SRM. ALARM-side deps (retroarch, ppsspp, fuse2, xvfb) came from
-  # emulation.list above. This set is hard-required — all are data/vendor/straightforward builds.
+  # AppImage emulators. ALARM-side deps (retroarch, ppsspp, fuse2) came from emulation.list above.
+  # This set is hard-required — all are data/vendor/straightforward builds. NB: steam-rom-manager
+  # is NOT shipped — its Electron CLI deadlocked on-device (2026-07-05) and the Steam-library sync
+  # is done by pocknix-steam-sync (direct shortcuts.vdf write) instead; the PKGBUILD stays in-tree
+  # as an optional tool (pacman -U it manually if ever wanted).
   chroot "${root}" pacman -S --noconfirm --needed \
         pocknix/pocknix-emulation pocknix/es-de pocknix/libretro-cores-pocknix \
-        pocknix/steam-rom-manager \
         pocknix/armsx2-bin pocknix/rpcs3-bin pocknix/eden-bin pocknix/xemu-bin \
         pocknix/vita3k-bin pocknix/cemu-x86-bin
   # Source-built emulators are OPTIONAL-warn (first-ever aarch64 builds = likeliest to fail; a

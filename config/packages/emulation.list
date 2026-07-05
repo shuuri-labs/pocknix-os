@@ -9,6 +9,7 @@
 retroarch              # the libretro frontend (ALARM extra); cores come from libretro-cores-pocknix
 libretro-core-info     # core metadata RetroArch/ES-DE read to identify systems
 ppsspp                 # PSP standalone (native aarch64 in ALARM) — the psp default; core is the alt
-fuse2                  # AppImage runtime (armsx2/rpcs3/eden/xemu/vita3k mount their squashfs via libfuse.so.2)
-xorg-server-xvfb       # headless X for `steam-rom-manager add` in the pre-gamescope hook (Electron
-                       #   needs a display; the favorites sync runs before any compositor is up)
+fuse2                  # AppImage runtime (es-de/armsx2/rpcs3/eden/xemu/vita3k mount their squashfs via libfuse.so.2)
+# (xorg-server-xvfb was here for headless steam-rom-manager — retired 2026-07-05; the Steam-library
+#  sync is pocknix-steam-sync, a direct shortcuts.vdf write needing no display. xvfb itself still
+#  ships via pocknix-steam's own deps.)
