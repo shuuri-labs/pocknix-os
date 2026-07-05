@@ -1,0 +1,48 @@
+# dolphin-emu — GameCube/Wii emulator, built from source for aarch64.
+#
+# WHY SOURCE: Arch has dolphin-emu in [extra] but ALARM does NOT carry it for aarch64 (checked the
+# mirror 2026-07-05), and upstream's Linux binaries are x86_64-only. AArch64 is nonetheless a
+# first-class Dolphin architecture (the Android + Apple-Silicon JIT), so a straight build works.
+# Modeled on Arch's official PKGBUILD (tag 2606) but using the repo's usual git+submodules pattern
+# (like packages/gamescope) instead of Arch's hand-pinned external repos. Only the GUI/emulator is
+# packaged (Arch splits a dolphin-emu-tool subpackage; we don't need it).
+#
+# HEAVY BUILD (~Qt6, ~30-60 min in the VM) — same league as gamescope/mesa.
+pkgname=dolphin-emu
+pkgver=2606
+pkgrel=1
+pkgdesc="GameCube / Wii emulator (native aarch64 build)"
+arch=('aarch64')
+url="https://dolphin-emu.org"
+license=('GPL-2.0-or-later')
+depends=('bluez-libs' 'bzip2' 'curl' 'enet' 'ffmpeg' 'glslang' 'hidapi' 'libspng' 'libusb'
+         'libx11' 'libxi' 'libxrandr' 'lz4' 'lzo' 'pugixml' 'qt6-base' 'qt6-svg' 'sdl3' 'sfml'
+         'speexdsp' 'xxhash' 'xz' 'zlib-ng' 'zstd')
+makedepends=('alsa-lib' 'cmake' 'git' 'libevdev' 'libpulse' 'miniupnpc' 'ninja' 'python'
+             'vulkan-headers')
+options=('!lto' '!emptydirs')   # !lto per Arch upstream (miscompiles)
+source=("dolphin::git+https://github.com/dolphin-emu/dolphin.git#tag=${pkgver}")
+sha256sums=('SKIP')
+
+prepare() {
+  cd dolphin
+  # Bundled externals (fmt, cubeb, cpp-optparse, …) are git submodules at this tag.
+  git submodule update --init --recursive
+}
+
+build() {
+  cmake -S dolphin -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DENABLE_ALSA=ON \
+    -DENABLE_AUTOUPDATE=OFF \
+    -DENABLE_TESTS=OFF \
+    -DENABLE_ANALYTICS=OFF \
+    -DUSE_SHARED_ENET=ON \
+    -DDISTRIBUTOR=pocknix
+  ninja -C build
+}
+
+package() {
+  DESTDIR="${pkgdir}" ninja -C build install
+}

@@ -1,0 +1,65 @@
+# libretro-cores-pocknix — the curated aarch64 libretro core set for the RP6.
+#
+# WHY VENDORED: RetroArch's in-app Core Updater does NOT serve arm64 cores, so every core must be
+# present at image time or "drop ROMs in and play" breaks. Sourcing (locked decision): vendor the
+# prebuilt aarch64 set from christianhaitian/retroarch-cores (the set ArkOS/TheRA ship — built FOR
+# arm64 handhelds), then selectively replace hot cores with ROCKNIX-tuned builds later (the same
+# ship-generic-then-swap pattern as mesa/gamescope). Cores live in the repo's aarch64/ tree as
+# individual <core>_libretro.so.zip files pinned by _commit below.
+#
+# Curation: one solid default per system on the pocknix console list + a few strong alternates
+# (pcsx_rearmed alongside duckstation, mame2003_plus alongside fbneo). ~25 cores, not the ~100-core
+# firehose — deliberate image-size control. The system->default-core mapping itself lives in
+# pocknix-play (pocknix-emulation) and ES-DE's bundled rules; this package just provides the .so's
+# in /usr/lib/libretro where both expect them (and where ALARM's libretro-* pkgs also install,
+# so an ALARM core can transparently replace a vendored one later).
+pkgname=libretro-cores-pocknix
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Curated prebuilt aarch64 libretro cores for the RP6 (vendored, ArkOS/TheRA set)"
+arch=('aarch64')
+url="https://github.com/christianhaitian/retroarch-cores"
+license=('GPL2')  # umbrella; per-core licenses vary (GPL2/GPL3/BSD/non-commercial for some arcade cores)
+depends=()
+makedepends=('unzip')
+# retroarch itself comes from ALARM via emulation.list; core-info from libretro-core-info there too.
+
+# Pin the exact repo state so builds are reproducible even though upstream force-updates files.
+_commit=913e84e8371aa252e1c520729fba04bb6a8bc1f1   # master 2026-07-05; URL verified 200
+_base="https://raw.githubusercontent.com/christianhaitian/retroarch-cores/${_commit}/aarch64"
+
+# system coverage -> core (defaults marked in pocknix-play):
+#   nes: fceumm + nestopia         snes: snes9x            n64: mupen64plus_next
+#   gb/gbc: gambatte               gba: mgba               nds: melonds
+#   genesis/md/sms/gg/segacd: genesis_plus_gx   sega32x: picodrive
+#   saturn: yabasanshiro (ARM-fit) dreamcast: flycast
+#   psx: duckstation (8G2-fit) + pcsx_rearmed (ARM classic)
+#   psp: ppsspp (core alt; standalone PPSSPP is the psp default)
+#   pce/tg16: mednafen_pce_fast + mednafen_supergrafx
+#   arcade/neogeo: fbneo + mame2003_plus
+#   atari2600: stella  7800: prosystem  lynx: handy  jaguar: virtualjaguar
+#   wonderswan: mednafen_wswan     ngp: mednafen_ngp       virtualboy: mednafen_vb
+_cores=(
+  fceumm nestopia snes9x mupen64plus_next gambatte mgba melonds
+  genesis_plus_gx picodrive yabasanshiro flycast
+  duckstation pcsx_rearmed ppsspp
+  mednafen_pce_fast mednafen_supergrafx fbneo mame2003_plus
+  stella prosystem handy virtualjaguar
+  mednafen_wswan mednafen_ngp mednafen_vb
+)
+
+source=()
+sha256sums=()
+for _c in "${_cores[@]}"; do
+  source+=("${_c}_libretro.so.zip::${_base}/${_c}_libretro.so.zip")
+  sha256sums+=('SKIP')
+done
+
+package() {
+  local c
+  install -dm755 "${pkgdir}/usr/lib/libretro"
+  for c in "${_cores[@]}"; do
+    unzip -o "${srcdir}/${c}_libretro.so.zip" -d "${pkgdir}/usr/lib/libretro/" >/dev/null
+  done
+  chmod 644 "${pkgdir}/usr/lib/libretro/"*.so
+}

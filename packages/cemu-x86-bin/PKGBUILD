@@ -1,0 +1,32 @@
+# cemu-x86-bin — Cemu, the Wii U emulator — x86_64 AppImage, run through FEX. EXPERIMENTAL.
+#
+# Cemu has NO aarch64 Linux build and its recompiler is x86-only, so native is not an option
+# (checked 2026-07-05: v2.6 assets are x64-only). pocknix already runs x86 content through FEX
+# (Proton games; fex-emu + fex-rootfs), so Wii U gets the same treatment: vendor the x86_64
+# AppImage and launch it via FEXInterpreter (pocknix-play does this — the global x86 binfmt is
+# OFF in the deck session by design, so plain ./Cemu.AppImage would NOT work).
+#
+# EXPECTATIONS: unverified on-device. CPU-side FEX translation of an emulator's JIT output is the
+# worst case for FEX; GPU goes through the x86 rootfs's GL/Vulkan like Proton does. Treat as an
+# experiment — if it's unusably slow, drop the package (it's isolated; nothing else depends on it).
+# Launched with --appimage-extract-and-run to sidestep FUSE-under-FEX.
+pkgname=cemu-x86-bin
+pkgver=2.6
+pkgrel=1
+pkgdesc="Cemu — Wii U emulator, x86_64 AppImage via FEX (vendored; EXPERIMENTAL)"
+arch=('aarch64')   # the payload is x86_64; runs via fex-emu on aarch64
+url="https://cemu.info"
+license=('MPL2')
+depends=('fex-emu' 'fex-rootfs')
+options=('!strip')
+source=("Cemu-${pkgver}-x86_64.AppImage::https://github.com/cemu-project/Cemu/releases/download/v${pkgver}/Cemu-${pkgver}-x86_64.AppImage"
+        'cemu-fex')
+sha256sums=('SKIP' 'SKIP')
+noextract=("Cemu-${pkgver}-x86_64.AppImage")
+
+package() {
+  install -Dm755 "${srcdir}/Cemu-${pkgver}-x86_64.AppImage" \
+    "${pkgdir}/opt/pocknix/emulators/cemu/Cemu.AppImage"
+  # The ONLY supported entrypoint (direct exec of the x86 AppImage fails: binfmt is off).
+  install -Dm755 "${srcdir}/cemu-fex" "${pkgdir}/opt/pocknix/emulators/cemu/cemu-fex"
+}

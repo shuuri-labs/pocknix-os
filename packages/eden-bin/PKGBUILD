@@ -1,0 +1,30 @@
+# eden-bin — Eden, the Switch emulator (vendored aarch64 AppImage, clang-PGO build).
+#
+# Switch on pocknix is a deliberate DELTA over ROCKNIX (they omit it for legal caution, not tech).
+# Of the post-DMCA maintained forks (Eden / Citron / Ryubing), Eden is the pocknix default: strong
+# Snapdragon 8-Gen-2/Elite commitment, aarch64-native Linux AppImages, and a clang-PGO variant.
+# Citron can be added later as an alternate (its forge API was unreachable when this was written).
+#
+# IMPORTANT: Eden's GitHub mirror was DMCA'd (Feb 2026 Nintendo wave) — releases come from their
+# self-hosted Forgejo, git.eden-emu.dev, which redirects assets to stable.eden-emu.dev. URL
+# verified 200 on 2026-07-05. If the host moves again, check their site for the new forge.
+#
+# Needs the user's own prod.keys (+ firmware) — see ROMS-README.txt (~/ROMs/bios or the path Eden
+# names on first run).
+pkgname=eden-bin
+pkgver=0.2.1
+pkgrel=1
+pkgdesc="Eden — Nintendo Switch emulator, aarch64 clang-PGO AppImage (vendored)"
+arch=('aarch64')
+url="https://eden-emu.dev"
+license=('GPL3')
+depends=('fuse2')
+options=('!strip')
+source=("Eden-${pkgver}.AppImage::https://git.eden-emu.dev/eden-emu/eden/releases/download/v${pkgver}/Eden-Linux-v${pkgver}-aarch64-clang-pgo.AppImage")
+sha256sums=('SKIP')
+noextract=("Eden-${pkgver}.AppImage")
+
+package() {
+  install -Dm755 "${srcdir}/Eden-${pkgver}.AppImage" \
+    "${pkgdir}/opt/pocknix/emulators/eden/Eden.AppImage"
+}

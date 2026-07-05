@@ -1,0 +1,28 @@
+# rpcs3-bin — RPCS3, the PS3 emulator (vendored OFFICIAL aarch64 AppImage).
+#
+# RPCS3 has shipped official ARM64 Linux builds since Dec 2024 (LLVM JIT on aarch64, developed on
+# Asahi), with 2026 Snapdragon SDOT/UDOT optimizations. PS3 is the single most demanding system in
+# the pocknix set — expect "some games playable, many rough" on a mobile Adreno (Unity-engine PS3
+# titles notably don't boot on ARM64). Ship it as the advanced tier, not a headline.
+#
+# Pinned to a known build from RPCS3/rpcs3-binaries-linux-arm64 (their official arm64 release
+# repo). Needs PS3 firmware (PS3UPDAT.PUP) installed via the GUI once — see ROMS-README.
+pkgname=rpcs3-bin
+pkgver=0.0.41.19559
+pkgrel=1
+pkgdesc="RPCS3 — PS3 emulator, official aarch64 AppImage (vendored)"
+arch=('aarch64')
+url="https://rpcs3.net"
+license=('GPL2')
+depends=('fuse2')
+options=('!strip')
+_build=build-d87cf99b655e1a3c85fa5913b2b591dec18a473a
+_asset=rpcs3-v0.0.41-19559-d87cf99b_linux_aarch64.AppImage
+source=("rpcs3-${pkgver}.AppImage::https://github.com/RPCS3/rpcs3-binaries-linux-arm64/releases/download/${_build}/${_asset}")
+sha256sums=('SKIP')
+noextract=("rpcs3-${pkgver}.AppImage")
+
+package() {
+  install -Dm755 "${srcdir}/rpcs3-${pkgver}.AppImage" \
+    "${pkgdir}/opt/pocknix/emulators/rpcs3/rpcs3.AppImage"
+}

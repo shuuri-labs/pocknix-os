@@ -1,0 +1,28 @@
+# vita3k-bin — Vita3K, the PS Vita emulator (vendored native aarch64 AppImage).
+#
+# Vita3K publishes a native Linux aarch64 AppImage on its rolling 'continuous' release tag.
+# CAVEAT — NOT REPRODUCIBLE: 'continuous' is force-updated upstream, so what this downloads is
+# whatever build is current at makepkg time (pkgver's date suffix marks when we last vendored).
+# The persistent SRCDEST cache keeps the fetched copy stable across rebuilds until it's deleted;
+# to intentionally take a newer build, bump pkgver's date + clear it from build/pkgbuild-root's
+# srccache. If upstream ever cuts versioned releases, pin one.
+#
+# Vita content installs INTO the emulator (fw + .pkg/NoNpDrm via the GUI) rather than launching
+# loose files; ES-DE's psvita flow passes a title-id shortcut. Treat as the most manual of the set.
+pkgname=vita3k-bin
+pkgver=0.2026.07.05
+pkgrel=1
+pkgdesc="Vita3K — PS Vita emulator, native aarch64 AppImage (vendored, rolling upstream)"
+arch=('aarch64')
+url="https://vita3k.org"
+license=('GPL2')
+depends=('fuse2')
+options=('!strip')
+source=("Vita3K-${pkgver}.AppImage::https://github.com/Vita3K/Vita3K/releases/download/continuous/Vita3K-aarch64.AppImage")
+sha256sums=('SKIP')
+noextract=("Vita3K-${pkgver}.AppImage")
+
+package() {
+  install -Dm755 "${srcdir}/Vita3K-${pkgver}.AppImage" \
+    "${pkgdir}/opt/pocknix/emulators/vita3k/Vita3K.AppImage"
+}

@@ -1,0 +1,6 @@
+#!/bin/bash
+# steam-rom-manager wrapper — exec the unpacked electron build.
+# --no-sandbox: electron's chrome-sandbox needs setuid-root or userns; neither is guaranteed for
+# the deck session, and SRM here is a local tool run headless (`add`) or from desktop mode — the
+# renderer only loads SRM's own bundled UI, so the sandbox buys nothing on this device.
+exec /opt/steam-rom-manager/steam-rom-manager --no-sandbox "$@"

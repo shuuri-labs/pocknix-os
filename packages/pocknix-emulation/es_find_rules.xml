@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+<!--
+  pocknix ES-DE custom emulator find-rules. Seeded to ~/ES-DE/custom_systems/es_find_rules.xml by
+  pocknix-roms-init. This does NOT redefine systems — ES-DE already ships definitions + launch
+  commands for every console on the pocknix list (incl. Switch/PS2/PS3). It only tells ES-DE WHERE
+  our emulator binaries live, so the stock launch commands resolve.
+
+  RetroArch + libretro cores need NO rule here: ES-DE's bundled rules already search /usr/bin for
+  `retroarch` and /usr/lib/libretro for cores, which is exactly where our packages install them.
+
+  This file therefore covers the STANDALONE emulators, which we vendor as aarch64 AppImages under
+  /opt/pocknix/emulators/<name>/ (with an optional /usr/bin/<name> for native builds). Two notes:
+    * PS2 is intentionally mapped to ARMSX2 (a native-ARM64 PCSX2 fork, Adreno/Turnip-tuned) via
+      the stock "PCSX2" emulator name — ES-DE's PS2 launch command then drives ARMSX2. Its CLI args
+      vs upstream PCSX2 must be VERIFIED on-device; if they differ, add a custom es_systems.xml PS2
+      entry with the right command instead of relying on the PCSX2 mapping.
+    * Every path/binary-name below is a CONVENTION to confirm as each emulator is actually vendored;
+      staticpath lists both the AppImage and a /usr/bin fallback so either packaging choice resolves.
+-->
+<ruleList>
+
+  <!-- GameCube / Wii -->
+  <emulator name="DOLPHIN">
+    <rule type="staticpath">
+      <entry>/opt/pocknix/emulators/dolphin/dolphin-emu.AppImage</entry>
+      <entry>/usr/bin/dolphin-emu</entry>
+    </rule>
+  </emulator>
+
+  <!-- PS2 -> ARMSX2 (native ARM64 PCSX2 fork). Stock PS2 command uses the PCSX2 emulator name. -->
+  <emulator name="PCSX2">
+    <rule type="staticpath">
+      <entry>/opt/pocknix/emulators/armsx2/ARMSX2.AppImage</entry>
+      <entry>/usr/bin/armsx2</entry>
+    </rule>
+  </emulator>
+
+  <!-- PS3 -->
+  <emulator name="RPCS3">
+    <rule type="staticpath">
+      <entry>/opt/pocknix/emulators/rpcs3/rpcs3.AppImage</entry>
+      <entry>/usr/bin/rpcs3</entry>
+    </rule>
+  </emulator>
+
+  <!-- PSP (standalone from ALARM; a libretro PPSSPP core is also shipped) -->
+  <emulator name="PPSSPP">
+    <rule type="staticpath">
+      <entry>/usr/bin/ppsspp</entry>
+      <entry>/usr/bin/PPSSPPSDL</entry>
+    </rule>
+  </emulator>
+
+  <!-- PS Vita -->
+  <emulator name="VITA3K">
+    <rule type="staticpath">
+      <entry>/opt/pocknix/emulators/vita3k/Vita3K.AppImage</entry>
+      <entry>/usr/bin/Vita3K</entry>
+    </rule>
+  </emulator>
+
+  <!-- Wii U: Cemu is x86_64-only -> launched via the FEX wrapper, never the AppImage directly
+       (global x86 binfmt is off in the deck session). EXPERIMENTAL. -->
+  <emulator name="CEMU">
+    <rule type="staticpath">
+      <entry>/opt/pocknix/emulators/cemu/cemu-fex</entry>
+    </rule>
+  </emulator>
+
+  <!-- 3DS: Azahar (the maintained Citra successor; built from source — packages/azahar) -->
+  <emulator name="AZAHAR">
+    <rule type="staticpath">
+      <entry>/usr/bin/azahar</entry>
+    </rule>
+  </emulator>
+
+  <!-- Original Xbox -->
+  <emulator name="XEMU">
+    <rule type="staticpath">
+      <entry>/opt/pocknix/emulators/xemu/xemu.AppImage</entry>
+      <entry>/usr/bin/xemu</entry>
+    </rule>
+  </emulator>
+
+  <!-- Nintendo Switch: Eden (pocknix default — Snapdragon-committed, aarch64 clang-PGO build;
+       see packages/eden-bin). If ES-DE's switch system doesn't know the EDEN emulator name on
+       this version, add a custom es_systems.xml switch entry on-device. -->
+  <emulator name="EDEN">
+    <rule type="staticpath">
+      <entry>/opt/pocknix/emulators/eden/Eden.AppImage</entry>
+    </rule>
+  </emulator>
+
+</ruleList>

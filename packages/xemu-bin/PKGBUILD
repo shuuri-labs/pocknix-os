@@ -1,0 +1,22 @@
+# xemu-bin — xemu, the original-Xbox emulator (vendored OFFICIAL native aarch64 AppImage).
+#
+# xemu publishes first-party aarch64 Linux AppImages (a pleasant surprise — no fork needed).
+# Needs the user's Xbox BIOS/flash + HDD image files — xemu names them in its settings on first
+# run; keep them in ~/ROMs/bios (see ROMS-README).
+pkgname=xemu-bin
+pkgver=0.8.136
+pkgrel=1
+pkgdesc="xemu — original Xbox emulator, official aarch64 AppImage (vendored)"
+arch=('aarch64')
+url="https://xemu.app"
+license=('GPL2')
+depends=('fuse2')
+options=('!strip')
+source=("xemu-${pkgver}.AppImage::https://github.com/xemu-project/xemu/releases/download/v${pkgver}/xemu-${pkgver}-aarch64.AppImage")
+sha256sums=('SKIP')
+noextract=("xemu-${pkgver}.AppImage")
+
+package() {
+  install -Dm755 "${srcdir}/xemu-${pkgver}.AppImage" \
+    "${pkgdir}/opt/pocknix/emulators/xemu/xemu.AppImage"
+}

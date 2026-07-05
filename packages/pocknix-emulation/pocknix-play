@@ -1,0 +1,94 @@
+#!/bin/bash
+# pocknix-play <system> <rom> — launch a game by ES-DE system name. THE single coupling point
+# between the Steam library and the emulators: every SRM favorite shortcut targets this script
+# (pocknix-srm-sync writes `pocknix-play <system> "<rom>"` as the launch command), so emulator/
+# core swaps happen HERE once, and existing Steam shortcuts keep working.
+#
+# The system->core/emulator mapping mirrors the pocknix defaults (see packages/
+# libretro-cores-pocknix for the curation rationale). ES-DE's own launches do NOT go through this
+# script — ES-DE uses its bundled launch commands + es_find_rules.xml — so keep the two aligned
+# when changing a default.
+#
+# NOTE standalone emulator CLI flags are per-upstream and UNVERIFIED-ON-DEVICE where marked;
+# ES-DE's bundled commands are the reference if one misbehaves.
+set -u
+
+system="${1:-}"; rom="${2:-}"
+if [ -z "${system}" ] || [ -z "${rom}" ]; then
+  echo "usage: pocknix-play <system> <rom-path>" >&2; exit 2
+fi
+[ -e "${rom}" ] || { echo "pocknix-play: ROM not found: ${rom}" >&2; exit 1; }
+
+EMUS=/opt/pocknix/emulators
+CORES=/usr/lib/libretro
+
+# RetroArch path: -f fullscreen; per-core config/overrides come from the user's retroarch.cfg
+# (seeded by pocknix-roms-init).
+run_core() {
+  local core="${CORES}/$1_libretro.so"
+  [ -f "${core}" ] || { echo "pocknix-play: core missing: ${core} (libretro-cores-pocknix not installed?)" >&2; exit 1; }
+  exec retroarch -f -L "${core}" "${rom}"
+}
+
+run_appimage() {  # $1 = path under EMUS; remaining args = emulator flags (rom appended by caller)
+  local app="${EMUS}/$1"; shift
+  [ -x "${app}" ] || { echo "pocknix-play: emulator missing: ${app}" >&2; exit 1; }
+  exec "${app}" "$@"
+}
+
+case "${system}" in
+  # --- RetroArch tier (defaults; alternates ship in the same package) ---
+  nes|famicom)                          run_core fceumm ;;
+  snes|sfc)                             run_core snes9x ;;
+  n64)                                  run_core mupen64plus_next ;;
+  gb|gbc)                               run_core gambatte ;;
+  gba)                                  run_core mgba ;;
+  nds)                                  run_core melonds ;;
+  genesis|megadrive|mastersystem|gamegear|segacd|megacd) run_core genesis_plus_gx ;;
+  sega32x)                              run_core picodrive ;;
+  saturn)                               run_core yabasanshiro ;;
+  dreamcast)                            run_core flycast ;;
+  psx)                                  run_core duckstation ;;   # pcsx_rearmed = the ARM classic alternate
+  tg16|pcengine)                        run_core mednafen_pce_fast ;;
+  supergrafx|sgfx)                      run_core mednafen_supergrafx ;;
+  neogeo|arcade|fbneo)                  run_core fbneo ;;
+  mame)                                 run_core mame2003_plus ;;
+  atari2600)                            run_core stella ;;
+  atari7800)                            run_core prosystem ;;
+  atarilynx)                            run_core handy ;;
+  atarijaguar)                          run_core virtualjaguar ;;
+  wonderswan|wonderswancolor)           run_core mednafen_wswan ;;
+  ngp|ngpc)                             run_core mednafen_ngp ;;
+  virtualboy)                           run_core mednafen_vb ;;
+
+  # --- standalone tier ---
+  psp)
+    # ALARM's ppsspp; binary name differs across versions (ppsspp vs PPSSPPSDL).
+    for b in ppsspp PPSSPPSDL; do
+      command -v "$b" >/dev/null 2>&1 && exec "$b" --fullscreen "${rom}"
+    done
+    echo "pocknix-play: ppsspp not installed" >&2; exit 1 ;;
+  gc|wii)
+    command -v dolphin-emu >/dev/null 2>&1 || { echo "pocknix-play: dolphin-emu not installed" >&2; exit 1; }
+    exec dolphin-emu -b -e "${rom}" ;;                                   # -b batch: no GUI, quit on stop
+  ps2)
+    run_appimage armsx2/ARMSX2.AppImage -batch -fullscreen -- "${rom}" ;;  # PCSX2-Qt flags (VERIFY on-device)
+  ps3)
+    run_appimage rpcs3/rpcs3.AppImage --no-gui "${rom}" ;;
+  switch)
+    run_appimage eden/Eden.AppImage -f -g "${rom}" ;;                      # yuzu-lineage flags
+  xbox)
+    run_appimage xemu/xemu.AppImage -full-screen -dvd_path "${rom}" ;;
+  n3ds|3ds)
+    command -v azahar >/dev/null 2>&1 || { echo "pocknix-play: azahar not installed" >&2; exit 1; }
+    exec azahar "${rom}" ;;
+  psvita)
+    run_appimage vita3k/Vita3K.AppImage -r "${rom}" ;;                     # -r = run title (VERIFY on-device)
+  wiiu)
+    # EXPERIMENTAL: Cemu is x86_64-only; the cemu-fex wrapper (cemu-x86-bin) owns the FEX dance.
+    run_appimage cemu/cemu-fex -f -g "${rom}" ;;
+
+  *)
+    echo "pocknix-play: unknown system '${system}' (see /usr/bin/pocknix-play for the mapping)" >&2
+    exit 2 ;;
+esac

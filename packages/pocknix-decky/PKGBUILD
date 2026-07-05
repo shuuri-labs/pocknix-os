@@ -11,7 +11,7 @@
 # The plugin frontend (dist/index.js) is prebuilt and committed — no node at package build time.
 pkgname=pocknix-decky
 pkgver=0.1.0
-pkgrel=1
+pkgrel=3
 pkgdesc="Decky Loader (under FEX, namespaced binfmt) + Pocknix Control QAM plugin"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

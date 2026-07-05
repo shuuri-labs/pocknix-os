@@ -1,0 +1,38 @@
+# es-de — the ES-DE frontend (EmulationStation Desktop Edition), OFFICIAL aarch64 AppImage.
+#
+# The emulation-layer frontend (see packages/pocknix-emulation): scans ~/ROMs, shows/launches the
+# library, and its per-game "favorite" star drives the Steam sync (pocknix-srm-sync).
+#
+# WHY THE APPIMAGE AND NOT A SOURCE BUILD: the source build (upstream's AUR recipe) hard-depends on
+# freeimage, which Arch dropped and ALARM never carried for aarch64 — `make packages` died on
+# "target not found: freeimage" (2026-07-05). Upstream ships an official Linux-aarch64 AppImage
+# (their SteamOS-on-ARM target) with everything bundled, so vendor that instead — same pattern as
+# the emulator *-bin packages. Custom find rules in ~/ES-DE/custom_systems (seeded by
+# pocknix-roms-init) still apply on top of the AppImage's bundled config.
+#
+# The GitLab asset URL is a pinned package_files id (opaque but immutable) — from the v3.4.1
+# release's "ES-DE_aarch64.AppImage" link. Bump: check the release page for the new id.
+pkgname=es-de
+pkgver=3.4.1
+pkgrel=2
+pkgdesc="ES-DE frontend for browsing and launching games (official aarch64 AppImage)"
+arch=('aarch64')
+url="https://es-de.org"
+license=('MIT')
+provides=('emulationstation-de')
+conflicts=('emulationstation-de')
+depends=('fuse2')
+options=('!strip')
+source=("ES-DE-${pkgver}.AppImage::https://gitlab.com/es-de/emulationstation-de/-/package_files/288156935/download"
+        'es-de-wrapper'
+        'es-de.desktop')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+noextract=("ES-DE-${pkgver}.AppImage")
+
+package() {
+  install -Dm755 "${srcdir}/ES-DE-${pkgver}.AppImage" "${pkgdir}/opt/pocknix/es-de/ES-DE.AppImage"
+  # `es-de` on PATH: what konsole tests, the app-grid entry, and docs all invoke.
+  install -Dm755 "${srcdir}/es-de-wrapper" "${pkgdir}/usr/bin/es-de"
+  # Desktop-mode app grid entry (game mode reaches ES-DE via Steam favorites/shortcuts instead).
+  install -Dm644 "${srcdir}/es-de.desktop" "${pkgdir}/usr/share/applications/es-de.desktop"
+}

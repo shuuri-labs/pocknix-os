@@ -1,0 +1,30 @@
+# armsx2-bin — ARMSX2, the PS2 emulator for the RP6 (vendored aarch64 AppImage).
+#
+# WHY ARMSX2 and not PCSX2: upstream PCSX2 is x86-centric; ARMSX2 is the PCSX2 2.7 fork with a
+# NATIVE ARM64 JIT/recompiler and explicit Adreno/Turnip tuning ("faster blending on Adreno") —
+# targets Snapdragon 865+, so the RP6's 8 Gen 2 is comfortably above the bar. This is the best PS2
+# path on this hardware. The desktop-Linux port is young (fork MaSieS4Fun/ARMSX2, branch
+# linux-arm64-desktop, single release so far) -> pinned to that release; verify on-device before
+# trusting broadly. Needs the user's own PS2 BIOS in ~/ROMs/bios (see ROMS-README).
+#
+# ES-DE drives it via the stock PCSX2 emulator name (es_find_rules.xml maps PCSX2 -> this path);
+# Steam favorites launch it via pocknix-play. AppImage needs fuse2 at runtime (emulation.list).
+pkgname=armsx2-bin
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="ARMSX2 — PS2 emulator, native-ARM64 PCSX2 fork (vendored AppImage)"
+arch=('aarch64')
+url="https://github.com/MaSieS4Fun/ARMSX2"
+license=('GPL3')
+depends=('fuse2')
+options=('!strip')   # AppImage = ELF runtime + squashfs payload; strip would corrupt it
+# Tag is 'Linux-arm' (the release NAME is Linux-arm64-v1.0.0). URL verified 200 on 2026-07-05.
+source=("ARMSX2-${pkgver}.AppImage::https://github.com/MaSieS4Fun/ARMSX2/releases/download/Linux-arm/ARMSX2-linux-Qt-arm64.AppImage")
+sha256sums=('SKIP')
+noextract=("ARMSX2-${pkgver}.AppImage")
+
+package() {
+  # Canonical name matches pocknix-emulation's es_find_rules.xml + pocknix-play.
+  install -Dm755 "${srcdir}/ARMSX2-${pkgver}.AppImage" \
+    "${pkgdir}/opt/pocknix/emulators/armsx2/ARMSX2.AppImage"
+}

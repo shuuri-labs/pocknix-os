@@ -112,6 +112,22 @@ install_local_packages() {
   chroot "${root}" pacman -Q pocknix-desktop >/dev/null 2>&1 || {
     die "pocknix-desktop not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=pocknix-desktop', confirm build/localrepo/pocknix-desktop-*.pkg.tar.* exists, then re-run."
   }
+  # Emulation layer (packages/pocknix-emulation + docs/there): ES-DE frontend, vendored core set,
+  # AppImage emulators, SRM. ALARM-side deps (retroarch, ppsspp, fuse2, xvfb) came from
+  # emulation.list above. This set is hard-required — all are data/vendor/straightforward builds.
+  chroot "${root}" pacman -S --noconfirm --needed \
+        pocknix/pocknix-emulation pocknix/es-de pocknix/libretro-cores-pocknix \
+        pocknix/steam-rom-manager \
+        pocknix/armsx2-bin pocknix/rpcs3-bin pocknix/eden-bin pocknix/xemu-bin \
+        pocknix/vita3k-bin pocknix/cemu-x86-bin
+  # Source-built emulators are OPTIONAL-warn (first-ever aarch64 builds = likeliest to fail; a
+  # missing one just leaves that system out of ES-DE, which degrades gracefully) — don't fail the
+  # whole image over 3DS/GameCube.
+  local oe
+  for oe in dolphin-emu azahar; do
+    chroot "${root}" pacman -S --noconfirm --needed "pocknix/${oe}" 2>/dev/null \
+      || warn "optional emulator ${oe} not in [pocknix] (build failed/skipped?) — image ships WITHOUT it"
+  done
   # Kernel: swap ALARM's generic linux-aarch64 for our linux-pocknix (Image + modules, built by
   # `make kernel` -> staged into the package). Its own step (not bundled above) so a missing kernel
   # build errors clearly, and the replace is deterministic. linux-pocknix `provides=linux`.
@@ -279,7 +295,8 @@ main() {
   install_packages "${ROOTFS_DIR}" \
         "${CONFIG_DIR}/packages/base.list" \
         "${CONFIG_DIR}/packages/steam.list" \
-        "${CONFIG_DIR}/packages/desktop.list"
+        "${CONFIG_DIR}/packages/desktop.list" \
+        "${CONFIG_DIR}/packages/emulation.list"
 
   # Generate a UTF-8 locale. The ALARM base ships only "C"; Qt apps (all of Plasma) warn and fall
   # back to C.UTF-8 on every launch, and the C path is slower. Set en_US.UTF-8 system-wide.

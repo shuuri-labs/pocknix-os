@@ -220,6 +220,9 @@ EOF
   chroot "${root}" systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service \
         pocknix-proton-prep.service \
         >/dev/null 2>&1 || true
+  # Emulation first-login seeding: ~/ROMs tree + ES-DE/RetroArch/SRM configs (pocknix-emulation;
+  # idempotent oneshot, never blocks the session).
+  chroot "${root}" systemctl --global enable pocknix-roms-init.service >/dev/null 2>&1 || true
 }
 
 main() {

@@ -73,6 +73,15 @@ if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhe
   pkill -u "${uid}" -KILL -f steamwebhelper 2>/dev/null || true
 fi
 
+# Sync ES-DE favorites -> Steam library (pocknix-emulation, favorites-only model). MUST run while
+# Steam is down — Steam rewrites shortcuts.vdf on exit, clobbering mid-session additions — and this
+# is the one guaranteed moment (stale Steam cleared above, client not launched yet; SRM runs under
+# xvfb here since no compositor is up). Best-effort: a failed/offline sync never blocks the session
+# (favorites just appear next launch).
+if command -v pocknix-srm-sync >/dev/null 2>&1; then
+  pocknix-srm-sync || echo "[pocknix-steam] favorites->Steam sync failed (non-fatal)"
+fi
+
 # RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080.
 # Rotated via COMPOSITE-rotation (--force-composition-rotation, gamescope PR #2228 = our 0007
 # patch): the rotation is folded into the existing composite store (one pass) instead of a

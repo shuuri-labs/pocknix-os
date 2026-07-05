@@ -1,0 +1,73 @@
+#!/bin/bash
+# pocknix-roms-init — first-login setup for the emulation layer, run as the 'deck' user by
+# pocknix-roms-init.service (a --user oneshot). Two jobs, both idempotent:
+#
+#   1. Create the ROM drop tree ~/ROMs/<system> + ~/ROMs/bios, and drop ROMS-README.txt so the
+#      user knows exactly where to copy ROMs / BIOS / Switch keys. This is the whole "drop your
+#      files in a folder and they're picked up" promise — ES-DE scans ~/ROMs by default.
+#
+#   2. Seed the ES-DE + RetroArch configs into $HOME IF THE USER HAS NONE (never clobber user
+#      edits). A pacman package cannot write /home/deck at install time, so the staged copies live
+#      in /usr/share/pocknix-emulation and land here on first login instead (robust-location
+#      pattern — see the fixes-go-in-robust-locations rationale in the repo).
+#
+# Safe to run repeatedly; re-runs only create what's missing. Guarded so it never fails the login.
+set -u
+
+SHARE=/usr/share/pocknix-emulation
+ROMS="${HOME}/ROMs"
+
+# ES-DE default folder names. Curated to the pocknix console list (RetroArch-core systems + the
+# standalone heavy hitters: gc/wii/wiiu, ps2, ps3, psvita, switch, xbox, n3ds). Creating the dir
+# just gives the user a labelled place to drop ROMs; ES-DE still only SHOWS systems once populated.
+SYSTEMS=(
+  nes snes n64 gb gbc gba nds n3ds
+  genesis megadrive mastersystem gamegear segacd saturn dreamcast
+  tg16 pcengine neogeo arcade mame
+  atari2600 atari7800 atarilynx atarijaguar wonderswan
+  psx ps2 ps3 psp psvita
+  gc wii wiiu switch xbox
+)
+
+mkdir -p "${ROMS}/bios"
+for s in "${SYSTEMS[@]}"; do mkdir -p "${ROMS}/${s}"; done
+
+# Drop the guidance file at the root of the tree (refresh it each run so doc updates propagate).
+if [ -f "${SHARE}/ROMS-README.txt" ]; then
+  cp -f "${SHARE}/ROMS-README.txt" "${ROMS}/README.txt" 2>/dev/null || true
+fi
+
+# --- seed ES-DE custom find-rules (only if the user has none) ---
+# ES-DE reads custom emulator lookup rules from ~/ES-DE/custom_systems/es_find_rules.xml. Ours
+# points ES-DE at the pocknix emulator install paths (see that file).
+ESDE_CUSTOM="${HOME}/ES-DE/custom_systems"
+if [ -f "${SHARE}/es_find_rules.xml" ] && [ ! -f "${ESDE_CUSTOM}/es_find_rules.xml" ]; then
+  mkdir -p "${ESDE_CUSTOM}"
+  cp "${SHARE}/es_find_rules.xml" "${ESDE_CUSTOM}/es_find_rules.xml" 2>/dev/null || true
+fi
+
+# --- seed Steam ROM Manager configs (only if the user has none) ---
+# Templates ship in the steam-rom-manager package with a __HOME__ placeholder (a pacman package
+# can't know the user's home). The Manual parser they enable points at the pocknix-srm-sync
+# manifest dir — favorites-only Steam sync. Never clobbers user-edited SRM config.
+SRM_SHARE=/usr/share/pocknix-emulation/srm
+SRM_USERDATA="${HOME}/.config/steam-rom-manager/userData"
+for f in userSettings.json userConfigurations.json; do
+  if [ -f "${SRM_SHARE}/${f}.in" ] && [ ! -f "${SRM_USERDATA}/${f}" ]; then
+    mkdir -p "${SRM_USERDATA}"
+    sed "s|__HOME__|${HOME}|g" "${SRM_SHARE}/${f}.in" > "${SRM_USERDATA}/${f}" 2>/dev/null || true
+  fi
+done
+# The manifest dir the Manual parser reads (pocknix-srm-sync writes into it).
+mkdir -p "${HOME}/.config/pocknix/srm-manifest"
+
+# --- seed RetroArch defaults (only if the user has no retroarch.cfg) ---
+# system_directory -> ~/ROMs/bios etc. RetroArch expands any missing keys itself on first run, so a
+# minimal seed is fine; if the user already has a config we leave it entirely alone.
+RA_CFG="${HOME}/.config/retroarch/retroarch.cfg"
+if [ -f "${SHARE}/retroarch.cfg" ] && [ ! -f "${RA_CFG}" ]; then
+  mkdir -p "${HOME}/.config/retroarch"
+  cp "${SHARE}/retroarch.cfg" "${RA_CFG}" 2>/dev/null || true
+fi
+
+exit 0

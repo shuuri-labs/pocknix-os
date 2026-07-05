@@ -1,0 +1,95 @@
+#!/bin/bash
+# pocknix-srm-sync — sync ES-DE FAVORITES into the Steam library (RetroDeck "Steam Sync" model).
+# Only games the user has STARRED in ES-DE become Steam shortcuts, so the library isn't flooded
+# with thousands of ROMs. KISS: favorites-only, no blanket mode.
+#
+# Flow:
+#   1. Scan ~/ES-DE/gamelists/<system>/gamelist.xml for <favorite>true</favorite> games.
+#   2. Write an SRM "Manual" parser manifest (JSON) of those games.
+#   3. Run `steam-rom-manager add`, which reads that manifest, writes the non-Steam shortcuts, and
+#      pulls artwork from SteamGridDB.
+#
+# HARD REQUIREMENT: Steam MUST be fully closed when `steam-rom-manager add` runs (else Steam
+# overwrites shortcuts.vdf on exit). The intended trigger is therefore a pre-Game-Mode hook, run in
+# the session launch BEFORE Steam starts — not while Steam is up. This script does NOT itself kill
+# Steam; the caller guarantees Steam is down.
+#
+# COMPANION PIECES still to build (this script is correct but inert until they exist):
+#   * /usr/bin/pocknix-play <system> <rom>  — the launcher each shortcut calls; resolves <system> to
+#     the right emulator (the same mapping ES-DE uses). Named here as the single coupling point.
+#   * the steam-rom-manager package must ship a userSettings.json with a "Manual" parser enabled and
+#     pointed at the manifest this script writes (MANIFEST below).
+set -u
+
+ESDE_GAMELISTS="${HOME}/ES-DE/gamelists"
+ROMS="${HOME}/ROMs"
+MANIFEST_DIR="${HOME}/.config/pocknix/srm-manifest"
+MANIFEST="${MANIFEST_DIR}/pocknix-favorites.json"
+PLAY=/usr/bin/pocknix-play
+
+command -v steam-rom-manager >/dev/null 2>&1 || {
+  echo "[pocknix-srm-sync] steam-rom-manager not installed — skipping." >&2; exit 0; }
+[ -d "${ESDE_GAMELISTS}" ] || { echo "[pocknix-srm-sync] no ES-DE gamelists yet — nothing to sync."; exit 0; }
+
+mkdir -p "${MANIFEST_DIR}"
+
+# Extract favorites from every gamelist.xml. awk splits on </game> so multi-line <game> blocks are
+# handled without an XML dependency (xmllint/python not guaranteed present). System = the gamelist's
+# parent directory name; a relative <path> (./Game.zip) is resolved against ~/ROMs/<system>/.
+emit_entries() {
+  local gl system
+  for gl in "${ESDE_GAMELISTS}"/*/gamelist.xml; do
+    [ -f "${gl}" ] || continue
+    system="$(basename "$(dirname "${gl}")")"
+    ROMS="${ROMS}" SYSTEM="${system}" PLAY="${PLAY}" awk '
+      BEGIN { RS="</game>" }
+      /<favorite>true<\/favorite>/ {
+        path=""; name="";
+        if (match($0, /<path>[^<]*<\/path>/))  { path=substr($0,RSTART+6,RLENGTH-13) }
+        if (match($0, /<name>[^<]*<\/name>/))  { name=substr($0,RSTART+6,RLENGTH-13) }
+        if (path=="") next;
+        # resolve relative ./ path against the system rom dir
+        if (path ~ /^\.\//) { path=ENVIRON["ROMS"] "/" ENVIRON["SYSTEM"] "/" substr(path,3) }
+        if (name=="") { n=path; sub(/.*\//,"",n); sub(/\.[^.]*$/,"",n); name=n }
+        # minimal JSON escaping for name + path (backslash then doublequote)
+        gsub(/\\/,"\\\\",name); gsub(/"/,"\\\"",name);
+        gsub(/\\/,"\\\\",path); gsub(/"/,"\\\"",path);
+        printf "  {\"title\": \"%s\", \"target\": \"%s\", \"startIn\": \"/usr/bin\", \"launchOptions\": \"%s \\\"%s\\\"\"},\n", \
+               name, ENVIRON["PLAY"], ENVIRON["SYSTEM"], path
+      }
+    ' "${gl}"
+  done
+}
+
+# Build the manifest as a JSON array (strip the trailing comma of the last entry).
+{
+  echo "["
+  emit_entries | sed '$ s/,$//'
+  echo "]"
+} > "${MANIFEST}.tmp"
+mv -f "${MANIFEST}.tmp" "${MANIFEST}"
+
+count="$(grep -c '"title"' "${MANIFEST}" 2>/dev/null || echo 0)"
+echo "[pocknix-srm-sync] ${count} favorite(s) -> ${MANIFEST}"
+
+# Hand off to SRM. `add` runs all ENABLED parsers (the steam-rom-manager package enables only the
+# Manual parser pointed at MANIFEST) and writes the shortcuts + artwork. Steam must be closed.
+#
+# DISPLAY: SRM is Electron — it aborts with no display server. The pre-game-mode hook runs BEFORE
+# gamescope exists, so fall back to xvfb-run (headless X, emulation.list) there; inside a session
+# (desktop mode, manual runs) the real display is used.
+run_srm() {
+  if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+    steam-rom-manager add
+  elif command -v xvfb-run >/dev/null 2>&1; then
+    xvfb-run -a steam-rom-manager add
+  else
+    echo "[pocknix-srm-sync] no display and no xvfb-run — run from desktop mode instead." >&2
+    return 1
+  fi
+}
+if ! run_srm; then
+  echo "[pocknix-srm-sync] steam-rom-manager add failed (is Steam fully closed?)." >&2
+  exit 1
+fi
+echo "[pocknix-srm-sync] synced favorites to Steam."

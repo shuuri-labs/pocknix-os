@@ -1,0 +1,61 @@
+# azahar — Nintendo 3DS emulator (the maintained Citra successor), built from source for aarch64.
+#
+# WHY SOURCE: Azahar's Linux release assets are x86_64-only (checked 2026-07-05: the AppImages have
+# no arch-suffixed aarch64 variant), but the codebase is fully aarch64-capable — its Android arm64
+# build is a first-class target. Modeled on the AUR azahar PKGBUILD (unified-source tarball,
+# system libs) with x86-only bits adjusted:
+#   * zydis (x86 disassembler) dropped from deps — only used by the x86 JIT debugger paths.
+#   * the SSE4.2 probe removed (meaningless on aarch64).
+#   * discord presence off (KISS; no discord on the device).
+#
+# RISKIEST BUILD OF THE SET — the desktop-aarch64-Linux combo is the least-CI'd upstream; expect
+# possible compile fixes on first build. If it fails, the system degrades gracefully (3DS just
+# stays absent from ES-DE until fixed) — build-image treats it as optional (see build-image.sh).
+pkgname=azahar
+pkgver=2125.1.3
+pkgrel=1
+pkgdesc="Azahar — 3DS emulator (Citra successor), native aarch64 build"
+arch=('aarch64')
+url="https://github.com/azahar-emu/azahar"
+license=('GPL-2.0-or-later')
+depends=('boost-libs' 'crypto++' 'enet' 'fmt' 'glslang' 'hicolor-icon-theme' 'libinih' 'libusb'
+         'openal' 'openssl' 'qt6-base' 'qt6-multimedia' 'sdl2' 'soundtouch')
+makedepends=('boost' 'catch2' 'cmake' 'doxygen' 'ffmpeg4.4' 'ninja' 'nlohmann-json' 'qt6-tools'
+             'rapidjson' 'spirv-headers' 'vulkan-headers')
+source=("https://github.com/azahar-emu/azahar/releases/download/${pkgver}/azahar-unified-source-${pkgver}.tar.xz")
+sha256sums=('e26502b03e17c8a261dcb4809d41825508b27073c2b40f91be83fe3594245de0')  # from upstream's .sha256sum
+
+prepare() {
+  cd "azahar-unified-source-${pkgver}"
+  # AUR carries this cubeb include fix; keep it.
+  sed -i '4i #include <cstring>' src/audio_core/{cubeb_input,cubeb_sink}.cpp
+}
+
+build() {
+  cmake -B build -S "azahar-unified-source-${pkgver}" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DUSE_DISCORD_PRESENCE=OFF \
+    -DENABLE_TESTS=OFF \
+    -DUSE_SYSTEM_BOOST=ON \
+    -DUSE_SYSTEM_CATCH2=ON \
+    -DUSE_SYSTEM_CRYPTOPP=ON \
+    -DUSE_SYSTEM_ENET=ON \
+    -DUSE_SYSTEM_FFMPEG_HEADERS=ON \
+    -DUSE_SYSTEM_FMT=ON \
+    -DUSE_SYSTEM_GLSLANG=ON \
+    -DUSE_SYSTEM_INIH=ON \
+    -DUSE_SYSTEM_JSON=ON \
+    -DUSE_SYSTEM_LIBUSB=ON \
+    -DUSE_SYSTEM_OPENAL=ON \
+    -DUSE_SYSTEM_OPENSSL=ON \
+    -DUSE_SYSTEM_QT=ON \
+    -DUSE_SYSTEM_SDL2=ON \
+    -DUSE_SYSTEM_SOUNDTOUCH=ON \
+    -DUSE_SYSTEM_VULKAN_HEADERS=ON
+  ninja -C build
+}
+
+package() {
+  DESTDIR="${pkgdir}" ninja -C build install
+}

@@ -1,0 +1,72 @@
+# steam-rom-manager — SRM built from source for aarch64 (no upstream arm64 Linux build).
+#
+# The Steam-library half of the emulation layer: pocknix-srm-sync (pocknix-emulation) writes an
+# ES-DE-favorites manifest, and SRM's headless CLI (`steam-rom-manager add`) turns it into
+# non-Steam shortcuts + SteamGridDB artwork. Favorites-only by design (locked decision) — the
+# Manual parser seeded below is the ONLY enabled parser, so `add` never floods the library.
+#
+# Electron app (electron ^32 / electron-builder ^26 — both ship arm64 Linux support). Built with
+# `--dir` (the unpacked layout, bundled electron) instead of an AppImage: no FUSE, plain exec.
+# NETWORK AT BUILD TIME: yarn install downloads node_modules + the arm64 electron dist (same deal
+# as fex-rootfs's fetch; the build chroot has network).
+#
+# Ships the SRM config seeds (userSettings/userConfigurations with a __HOME__ placeholder);
+# pocknix-roms-init (pocknix-emulation) instantiates them into ~/.config/steam-rom-manager/userData
+# on first login if absent. Manifest format/dir contract: see pocknix-srm-sync.
+pkgname=steam-rom-manager
+pkgver=2.5.37
+pkgrel=1
+pkgdesc="Steam ROM Manager — bulk non-Steam-shortcut + artwork importer (aarch64 source build)"
+arch=('aarch64')
+url="https://github.com/SteamGridDB/steam-rom-manager"
+license=('GPL3')
+depends=('gtk3' 'nss' 'alsa-lib' 'libxss')   # electron runtime libs
+# node-gyp + npm: better-sqlite3 (a SRM dep) compiles its native module via
+# `prebuild-install || node-gyp rebuild` — with neither on PATH that postinstall exits 127
+# (bitten 2026-07-05). ALARM ships node-gyp as its own package.
+makedepends=('git' 'nodejs' 'yarn' 'python' 'npm' 'node-gyp')
+options=('!strip')   # electron binary + asar; stripping breaks the bundled runtime
+source=("steam-rom-manager::git+https://github.com/SteamGridDB/steam-rom-manager.git#tag=v${pkgver}"
+        'steam-rom-manager-wrapper'
+        'userSettings.json.in'
+        'userConfigurations.json.in')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+build() {
+  cd steam-rom-manager
+  # Keep caches inside srcdir (electron + electron-builder downloads), not the builder's HOME.
+  export XDG_CACHE_HOME="${srcdir}/.cache"
+  export ELECTRON_CACHE="${srcdir}/.cache/electron"
+  # --ignore-scripts: better-sqlite3's OWN postinstall (prebuild-install || node-gyp rebuild)
+  # compiles against the SYSTEM node's V8 (node 26 in the chroot) and fails — its runtime here is
+  # Electron 32 (Node-20-era V8), not system node. Upstream handles this via the root postinstall
+  # (`electron-builder install-app-deps` = rebuild natives against Electron headers), but yarn runs
+  # dependency postinstalls FIRST, so the bad build happens before the good one. Skip them all and
+  # run the deferred steps explicitly, in the right order (bitten 2026-07-05):
+  yarn install --frozen-lockfile --ignore-scripts
+  # 1. electron's skipped postinstall = the arm64 electron dist download.
+  node node_modules/electron/install.js
+  # 2. upstream's own postinstall: rebuild native modules (better-sqlite3) against Electron.
+  npx electron-builder install-app-deps
+  # 3. webpack bundles (pure JS).
+  yarn run build:dist
+  # 4. package. Upstream's build:linux hard-codes --x64; invoke electron-builder directly.
+  npx electron-builder --linux --arm64 --dir
+}
+
+package() {
+  cd steam-rom-manager
+  local unpacked="release/linux-arm64-unpacked"
+  # electron-builder names the binary after the package name; fail loudly if the layout changed.
+  [ -x "${unpacked}/steam-rom-manager" ] || {
+    echo "ERROR: ${unpacked}/steam-rom-manager missing — electron-builder output layout changed:" >&2
+    ls -la "${unpacked}" >&2; return 1; }
+  install -dm755 "${pkgdir}/opt/steam-rom-manager"
+  cp -a "${unpacked}/." "${pkgdir}/opt/steam-rom-manager/"
+  install -Dm755 "${srcdir}/steam-rom-manager-wrapper" "${pkgdir}/usr/bin/steam-rom-manager"
+  # Config seeds (instantiated per-user by pocknix-roms-init).
+  install -Dm644 "${srcdir}/userSettings.json.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/srm/userSettings.json.in"
+  install -Dm644 "${srcdir}/userConfigurations.json.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/srm/userConfigurations.json.in"
+}

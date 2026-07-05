@@ -107,6 +107,19 @@ def write_fex_config(settings, game_id, profiles):
         tmp.unlink(missing_ok=True)
 
 
+def apply_audio_latency(settings):
+    # Per-game audio buffer: exports PULSE_LATENCY_MSEC, which winepulse honors (verified
+    # on-device 2026-07-05: stream renegotiates 256/48000 -> e.g. 720/48000 and SFX-burst
+    # underruns drop ~10x — docs/gamescope-fps-investigation.md follow-up). The value is the
+    # game's audio buffer in ms; bigger absorbs FEX-translated mixer overruns at the cost of
+    # audio latency, so it's a PER-GAME tweak (rhythm games stay on the tight default).
+    # A Steam launch-option override (`PULSE_LATENCY_MSEC=... %command%`) is already in our
+    # env by the time we run — it wins; we only fill in when unset.
+    value = str(settings.get("audioLatency", "") or "").strip()
+    if value.isdigit() and 10 <= int(value) <= 500 and "PULSE_LATENCY_MSEC" not in os.environ:
+        os.environ["PULSE_LATENCY_MSEC"] = value
+
+
 def main():
     if len(sys.argv) < 2:
         raise SystemExit("usage: pocknix-proton-wrapper PROTON_ENTRYPOINT [ARGS...]")
@@ -114,12 +127,17 @@ def main():
     real_proton = sys.argv[1]
     args = [real_proton, *sys.argv[2:]]
     game_id = appid()
+    settings = {}
     try:
         contract = load_fex_contract()
         settings = merged_settings(load_tweaks(contract["defaults"]), game_id)
         write_fex_config(settings, game_id, contract["profiles"])
     except Exception as exc:
         print(f"pocknix-proton: failed to write FEX config: {exc}", file=sys.stderr)
+    try:
+        apply_audio_latency(settings)
+    except Exception as exc:
+        print(f"pocknix-proton: failed to apply audio latency: {exc}", file=sys.stderr)
 
     try:
         os.execv(real_proton, args)

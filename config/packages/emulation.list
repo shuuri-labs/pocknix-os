@@ -1,0 +1,14 @@
+# Emulation session stack — the ALARM-sourced runtime for the emulation layer.
+#
+# Same pattern as base.list / steam.list / desktop.list: build-image.sh installs this list into the
+# rootfs. The pocknix-emulation package ships only the config/scripts glue (like pocknix-desktop);
+# the LOCAL packages (es-de, libretro-cores-pocknix, the *-bin emulators, dolphin-emu, azahar,
+# steam-rom-manager, pocknix-emulation itself) install via install_local_packages from [pocknix] —
+# do NOT list those here.
+
+retroarch              # the libretro frontend (ALARM extra); cores come from libretro-cores-pocknix
+libretro-core-info     # core metadata RetroArch/ES-DE read to identify systems
+ppsspp                 # PSP standalone (native aarch64 in ALARM) — the psp default; core is the alt
+fuse2                  # AppImage runtime (armsx2/rpcs3/eden/xemu/vita3k mount their squashfs via libfuse.so.2)
+xorg-server-xvfb       # headless X for `steam-rom-manager add` in the pre-gamescope hook (Electron
+                       #   needs a display; the favorites sync runs before any compositor is up)

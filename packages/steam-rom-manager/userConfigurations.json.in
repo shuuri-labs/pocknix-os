@@ -1,0 +1,50 @@
+[
+  {
+    "parserType": "Manual",
+    "configTitle": "Pocknix Favorites",
+    "steamCategories": ["Pocknix"],
+    "executable": {
+      "path": "",
+      "shortcutPassthrough": false,
+      "appendArgsToExecutable": false
+    },
+    "executableArgs": "",
+    "executableModifier": "\"${exePath}\"",
+    "romDirectory": "",
+    "steamDirectory": "${steamdirglobal}",
+    "startInDirectory": "",
+    "titleModifier": "${fuzzyTitle}",
+    "userAccounts": {
+      "specifiedAccounts": ["Global"]
+    },
+    "parserInputs": {
+      "manualManifests": "__HOME__/.config/pocknix/srm-manifest"
+    },
+    "titleFromVariable": {
+      "caseInsensitiveVariables": false,
+      "skipFileIfVariableWasNotFound": false,
+      "limitToGroups": []
+    },
+    "fuzzyMatch": {
+      "replaceDiacritics": true,
+      "removeCharacters": true,
+      "removeBrackets": true
+    },
+    "onlineImageQueries": ["${fuzzyTitle}"],
+    "imagePool": "${fuzzyTitle}",
+    "imageProviders": ["sgdb"],
+    "imageProviderAPIs": {
+      "sgdb": {
+        "nsfw": false,
+        "humor": false,
+        "imageMotionTypes": ["static"],
+        "styles": [],
+        "stylesHero": [],
+        "stylesLogo": [],
+        "stylesIcon": []
+      },
+      "steamCDN": {}
+    },
+    "disabled": false
+  }
+]

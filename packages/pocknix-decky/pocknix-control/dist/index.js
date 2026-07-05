@@ -35,31 +35,46 @@ function SelectEdit({ label, value, options, onChange }) {
 function useDebouncedSave(options) {
     const { config, field, snapshot, save, setConfig, onError, delay = 900 } = options;
     const value = config ? config[field] : undefined;
+    // Latest unsaved edit; written by the debounce timer or the unmount flush below.
+    const pending = SP_REACT.useRef(null);
+    const flush = SP_REACT.useCallback(async () => {
+        const entry = pending.current;
+        if (!entry)
+            return;
+        pending.current = null;
+        try {
+            const next = await save(entry.value);
+            snapshot.current = JSON.stringify(next[field]);
+            setConfig((stored) => {
+                if (!stored)
+                    return next;
+                if (JSON.stringify(stored[field]) !== entry.serialized)
+                    return stored;
+                return { ...stored, [field]: next[field] };
+            });
+        }
+        catch (error) {
+            onError?.(error);
+        }
+    }, [save, field, snapshot, setConfig, onError]);
+    const flushRef = SP_REACT.useRef(flush);
+    flushRef.current = flush;
     SP_REACT.useEffect(() => {
         if (!config || !snapshot.current)
             return;
         const current = JSON.stringify(value);
-        if (current === snapshot.current)
+        if (current === snapshot.current) {
+            pending.current = null;
             return;
-        const timer = window.setTimeout(async () => {
-            try {
-                const saved = current;
-                const next = await save(value);
-                snapshot.current = JSON.stringify(next[field]);
-                setConfig((stored) => {
-                    if (!stored)
-                        return next;
-                    if (JSON.stringify(stored[field]) !== saved)
-                        return stored;
-                    return { ...stored, [field]: next[field] };
-                });
-            }
-            catch (error) {
-                onError?.(error);
-            }
-        }, delay);
+        }
+        pending.current = { value, serialized: current };
+        const timer = window.setTimeout(() => flushRef.current(), delay);
         return () => window.clearTimeout(timer);
     }, [value]);
+    // QAM panels unmount the moment the menu closes. The cleanup above clears the only
+    // pending timer, so without this unmount flush any edit made <delay ms before closing
+    // was silently dropped (how the first on-device Audio Buffer edit got lost, 2026-07-05).
+    SP_REACT.useEffect(() => () => void flushRef.current(), []);
 }
 
 function gameDisplayName(game) {
@@ -130,6 +145,14 @@ const fanOptions = [
 const lavdOptions = [
     { data: "autopilot", label: "Autopilot" },
     { data: "performance", label: "Performance" },
+];
+// Audio buffer (PULSE_LATENCY_MSEC): absorbs FEX-mixer overruns (SFX-burst crackle) at the
+// cost of audio latency — keep rhythm games on Game default. 60 measured ~10x fewer underruns.
+const audioLatencyOptions = [
+    { data: "", label: "Game default" },
+    { data: "60", label: "60 ms" },
+    { data: "90", label: "90 ms" },
+    { data: "120", label: "120 ms" },
 ];
 function Content() {
     const [config, setConfig] = SP_REACT.useState(null);
@@ -247,7 +270,9 @@ function FexSection({ config, setConfig }) {
     const storedProfile = values.fexProfile;
     const fexValue = storedProfile && presets[storedProfile] ? storedProfile : "default";
     const fexOptions = Object.entries(presets).map(([id, profile]) => ({ data: id, label: profile.label }));
-    return (SP_JSX.jsxs(DFL.PanelSection, { title: "FEX PROFILE", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), SP_JSX.jsx(DFL.Field, { label: "", description: "FEX changes apply on next game launch" }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null, editingDefault || perGameEnabled ? (SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) })) : null] }));
+    const storedLatency = String(values.audioLatency ?? "");
+    const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), SP_JSX.jsx(DFL.Field, { label: "", description: "Changes apply on next game launch" }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null, editingDefault || perGameEnabled ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) })] })) : null] }));
 }
 
 var index = definePlugin(() => ({
