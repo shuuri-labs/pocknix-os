@@ -1,0 +1,17 @@
+{
+  "Config": {
+    "TSOEnabled": "1",
+    "X87ReducedPrecision": "0",
+    "Multiblock": "0",
+    "VectorTSOEnabled": "1",
+    "MemcpySetTSOEnabled": "1",
+    "HalfBarrierTSOEnabled": "1"
+  },
+  "ThunksDB": {
+    "Vulkan": 1,
+    "GL": 1,
+    "drm": 1,
+    "WaylandClient": 1,
+    "asound": 1
+  }
+}

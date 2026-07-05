@@ -1,0 +1,30 @@
+[Unit]
+Description=Decky Loader (via FEXInterpreter)
+# The released PluginLoader is an x86_64 PyInstaller binary; it (and the plugin backends it
+# spawns) needs the FEX x86 binfmt handlers to exec children, which pocknix disables globally
+# (they break Steam's Proton compat-tool setup — see pocknix-fex-binfmt-off.service).
+# pocknix-decky-run gives this service a PRIVATE binfmt_misc instance in its own user+mount
+# namespace instead (kernel >= 6.7); Steam/Proton never see it.
+After=network-online.target pocknix-decky-sync.service
+Wants=network-online.target pocknix-decky-sync.service
+
+[Service]
+Type=simple
+User=root
+Restart=always
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=15
+WorkingDirectory=/home/deck/homebrew/services
+ExecStart=/usr/lib/pocknix/pocknix-decky-run
+Environment=UNPRIVILEGED_PATH=/home/deck/homebrew
+Environment=PRIVILEGED_PATH=/home/deck/homebrew
+Environment=PLUGIN_PATH=/home/deck/homebrew/plugins
+Environment=UNPRIVILEGED_USER=deck
+Environment=KEEP_SYSTEMD_SERVICE=1
+Environment=USE_CEF_CLOSE_WORKAROUND=0
+Environment=LOG_LEVEL=INFO
+Environment=FEX_APP_CONFIG=/usr/share/fex-emu/AppConfig/PluginLoader.json
+
+[Install]
+WantedBy=multi-user.target

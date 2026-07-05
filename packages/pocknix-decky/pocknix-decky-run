@@ -1,0 +1,24 @@
+#!/bin/bash
+# pocknix-decky-run — launch Decky's PluginLoader (x86_64 PyInstaller binary) under FEX.
+#
+# FEX does NOT intercept guest->guest execve itself; it needs the FEX-x86_64 binfmt_misc
+# handler, and the PyInstaller onefile bootloader re-execs itself (ENOEXEC without it).
+# pocknix keeps that binfmt DISABLED globally because it breaks Steam's Proton compat-tool
+# setup (see pocknix-fex-binfmt-off.service). binfmt_misc is user-namespace scoped on
+# kernels >= 6.7, so run the loader in a private user+mount namespace with its OWN
+# binfmt_misc instance: FEX x86 handlers enabled in here, still off for Steam/Proton.
+#
+# The userns maps the full uid range (0,0,2^32-1) so uid 0 stays real root for D-Bus/
+# systemctl and file access. Known limit: CAP_CHOWN is checked against the init userns,
+# so chown to another uid fails in here — pocknix-decky-sync (init ns) owns the deck
+# chown of the seeded tree instead.
+set -eu
+
+exec unshare --user --map-users=0,0,4294967295 --map-groups=0,0,4294967295 --mount \
+  /bin/bash -c '
+    set -eu
+    mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc
+    grep -h . /usr/lib/binfmt.d/FEX-x86_64.conf > /proc/sys/fs/binfmt_misc/register
+    grep -h . /usr/lib/binfmt.d/FEX-x86.conf    > /proc/sys/fs/binfmt_misc/register
+    exec /usr/bin/FEXInterpreter /home/deck/homebrew/services/PluginLoader
+  '

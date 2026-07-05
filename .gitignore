@@ -11,6 +11,9 @@
 /packages/**/src/
 /packages/**/pkg/
 
+# decky plugin frontend build deps (dist/ IS committed — built on the dev Mac, needed by PKGBUILD)
+/packages/pocknix-decky/pocknix-control/node_modules/
+
 # local Claude Code settings
 /.claude/
 

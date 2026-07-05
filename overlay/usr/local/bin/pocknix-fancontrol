@@ -3,10 +3,16 @@
 # Ported from ROCKNIX hardware/quirks/platforms/SM8550/bin/fancontrol (+ 005-thermal_path /
 # 020-fan_control). Without this nothing takes PWM control of the fan, so it never spins and the
 # device cooks. Discovers the hwmon PWM fan + the CPU/GPU thermal zones, then drives pwm1 from a
-# temp->speed table every few seconds. Runs as root (writes /sys). Curve = ROCKNIX "quiet" —
-# their SHIPPED default (rocknix/config/system/configs/system.cfg: cooling.profile=quiet).
-# We previously baked "moderate" (fan from 55°C, every step 5-10°C earlier) — obnoxiously loud.
+# temp->speed table every few seconds. Runs as root (writes /sys).
+#
+# Curve selection: /var/lib/pocknix/fan-mode (quiet|moderate|performance), re-read every tick so
+# the Pocknix Control plugin / pocknix-fan-mode switch curves live with a bare file write — no
+# service restart. Curves = ROCKNIX's of the same names ("performance" = their "aggressive").
+# Default quiet — ROCKNIX's SHIPPED default (rocknix system.cfg: cooling.profile=quiet). We
+# previously baked "moderate" (fan from 55°C, every step 5-10°C earlier) — obnoxiously loud.
 set -u
+
+MODE_FILE=/var/lib/pocknix/fan-mode
 
 # Fan PWM (hwmon pwm1) — ROCKNIX 020-fan_control.
 FAN_PWM="$(ls /sys/class/hwmon/hwmon*/pwm1 2>/dev/null | head -1)"
@@ -22,10 +28,16 @@ for z in /sys/devices/virtual/thermal/thermal_zone*/; do
 done
 [ -n "${SENSORS}" ] || { echo "pocknix-fancontrol: no cpu/gpu thermal zones, exiting"; exit 0; }
 
-# ROCKNIX "quiet" curve (their default): PWM (0-255) vs temperature (millidegC), highest
-# first. Fan off below 60°C, full speed only past 95°C.
+# PWM (0-255) vs temperature (millidegC) tables, highest first. Same speed steps for every
+# mode (ROCKNIX's); only the temperature thresholds shift.
 SPEEDS="255 204 153 119 102 77 51 0"
-TEMPS="95000 85000 80000 75000 70000 65000 60000 0"
+curve_temps() {
+  case "$(cat "${MODE_FILE}" 2>/dev/null)" in
+    performance) echo "80000 75000 70000 65000 60000 55000 50000 0" ;;  # ROCKNIX "aggressive"
+    moderate)    echo "85000 80000 75000 70000 65000 60000 55000 0" ;;
+    *)           echo "95000 85000 80000 75000 70000 65000 60000 0" ;;  # quiet (default)
+  esac
+}
 
 # Take manual PWM control; restore automatic on exit.
 [ -e "${FAN_EN}" ] && echo 1 > "${FAN_EN}" 2>/dev/null
@@ -33,6 +45,7 @@ trap '[ -e "${FAN_EN}" ] && echo 0 > "${FAN_EN}" 2>/dev/null; exit 0' INT TERM
 
 LAST=""
 while :; do
+  TEMPS="$(curve_temps)"
   TEMP="$(awk '{s+=$1;n++} END{printf "%d", (n? s/n : 0)}' ${SENSORS} 2>/dev/null)"
   i=1; SPEED=0
   for th in ${TEMPS}; do

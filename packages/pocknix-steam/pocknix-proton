@@ -1,0 +1,5 @@
+#!/bin/sh
+# pocknix-proton — compat-tool entrypoint shim. toolmanifest.vdf's commandline points here
+# (paths are relative to the tool dir); wraps the real `proton` next to it with the FEX
+# per-game profile wrapper. Installed into the tool dirs by pocknix-proton-prep.
+exec /usr/lib/pocknix/pocknix-proton-wrapper "$(dirname "$0")/proton" "$@"

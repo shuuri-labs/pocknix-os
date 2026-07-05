@@ -1,0 +1,51 @@
+# pocknix-decky — Decky Loader (QAM plugin framework) + the Pocknix Control plugin.
+# Modeled on armada's decky install (45-install-decky-plugins.sh + armada-decky-sync), with one
+# pocknix twist: the released PluginLoader is an x86_64 PyInstaller binary that needs the FEX
+# binfmt handlers to spawn children, and pocknix keeps those DISABLED globally (they break
+# Steam's Proton compat-tool setup). pocknix-decky-run therefore launches the loader in a
+# private user+mount namespace with its OWN binfmt_misc instance (kernel >= 6.7).
+#
+# Ships under /usr/share; pocknix-decky-sync.service seeds/updates deck's ~/homebrew at boot
+# (version-compared so Decky's self-updates are never downgraded) and re-copies the
+# PocknixControl plugin (OS-owned system UI: fan curve / scx_lavd mode / per-game FEX profile).
+# The plugin frontend (dist/index.js) is prebuilt and committed — no node at package build time.
+pkgname=pocknix-decky
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Decky Loader (under FEX, namespaced binfmt) + Pocknix Control QAM plugin"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+# fex-emu/fex-rootfs = FEXInterpreter + the x86 rootfs the loader's libs resolve from.
+# util-linux (unshare with --map-users) is in base. pocknix-steam ships the proton wrapper +
+# /usr/share/pocknix/fex-profiles.json the plugin's FEX tab drives (soft coupling: the plugin
+# carries a fallback copy of the profile contract, so no hard dep).
+depends=('fex-emu' 'fex-rootfs')
+_loaderver=v3.2.6
+source=('pocknix-decky-run' 'pocknix-decky-sync' 'pocknix-decky-sync.service'
+        'pocknix-decky-loader.service' 'PluginLoader.json'
+        "PluginLoader-${_loaderver}::https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${_loaderver}/PluginLoader")
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            '30f017a36a8baeb8c3dbae884f5d64be987a9b351b3859bf33e88615b653cf5e')
+
+package() {
+  # Loader binary + the version the sync script compares against.
+  install -Dm755 "${srcdir}/PluginLoader-${_loaderver}" "${pkgdir}/usr/share/decky-loader/PluginLoader"
+  printf '%s\n' "${_loaderver}" > "${srcdir}/loader.version"
+  install -Dm644 "${srcdir}/loader.version"          "${pkgdir}/usr/share/decky-loader/.loader.version"
+
+  install -Dm755 "${srcdir}/pocknix-decky-run"       "${pkgdir}/usr/lib/pocknix/pocknix-decky-run"
+  install -Dm755 "${srcdir}/pocknix-decky-sync"      "${pkgdir}/usr/lib/pocknix/pocknix-decky-sync"
+  install -Dm644 "${srcdir}/pocknix-decky-sync.service"   "${pkgdir}/usr/lib/systemd/system/pocknix-decky-sync.service"
+  install -Dm644 "${srcdir}/pocknix-decky-loader.service" "${pkgdir}/usr/lib/systemd/system/pocknix-decky-loader.service"
+  # FEX app config for the loader process (armada's TSO-safe knobs).
+  install -Dm644 "${srcdir}/PluginLoader.json"       "${pkgdir}/usr/share/fex-emu/AppConfig/PluginLoader.json"
+
+  # Pocknix Control plugin — runtime payload only (frontend build sources/tooling stay out).
+  local plug="${startdir}/pocknix-control" dest="${pkgdir}/usr/share/decky-plugins/PocknixControl"
+  install -d -m755 "${dest}"
+  cp -a "${plug}/plugin.json" "${plug}/package.json" "${plug}/main.py" "${plug}/fex-profiles.json" "${dest}/"
+  cp -a "${plug}/py_modules" "${plug}/dist" "${dest}/"
+  rm -f "${dest}/dist"/*.map
+  find "${dest}" -name __pycache__ -type d -prune -exec rm -rf {} +
+}

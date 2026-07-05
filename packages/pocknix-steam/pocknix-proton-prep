@@ -44,6 +44,14 @@ apply() {
     install -Dm644 "${RES}/proton-toolmanifest.vdf" "${PROTON_DIR}/toolmanifest.vdf"
   fi
 
+  # 2a') FEX-profile shim: our toolmanifest's commandline is "/pocknix-proton %verb%" (relative to
+  #      the tool dir), so the shim must sit next to `proton` in BOTH launchable dirs — the
+  #      downloaded app (native-tool path) and compatibilitytools.d (community-tool path; installed
+  #      after the symlink step below so a real file, not a stale glob-symlink, wins). cmp guard
+  #      keeps the --watch loop write-free once in place.
+  cmp -s "${RES}/pocknix-proton" "${PROTON_DIR}/pocknix-proton" 2>/dev/null \
+    || install -Dm755 "${RES}/pocknix-proton" "${PROTON_DIR}/pocknix-proton"
+
   # 2b) Community-tool path: point the dist at the downloaded binaries (symlinks), then re-assert our
   #     REAL vdfs on top (the glob would symlink Valve's over them). `proton` present => launchable.
   #     Top-level entries are stable across updates (inner changes live under the symlinked files/),
@@ -54,6 +62,8 @@ apply() {
     install -Dm644 "${RES}/proton-compatibilitytool.vdf" "${TOOLDIR}/compatibilitytool.vdf"
     install -Dm644 "${RES}/proton-toolmanifest.vdf"      "${TOOLDIR}/toolmanifest.vdf"
   fi
+  cmp -s "${RES}/pocknix-proton" "${TOOLDIR}/pocknix-proton" 2>/dev/null \
+    || { rm -f "${TOOLDIR}/pocknix-proton"; install -Dm755 "${RES}/pocknix-proton" "${TOOLDIR}/pocknix-proton"; }
 }
 
 case "${1:-}" in

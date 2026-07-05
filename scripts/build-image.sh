@@ -88,7 +88,8 @@ install_local_packages() {
         pocknix/mesa pocknix/vulkan-freedreno \
         pocknix/pocknix-bsp pocknix/gamescope pocknix/inputplumber pocknix/pocknix-steamos-shim \
         pocknix/pocknix-sdcard-automount \
-        pocknix/mangohud pocknix/pocknix-steam pocknix/fex-emu pocknix/fex-rootfs pocknix/pocknix-desktop
+        pocknix/mangohud pocknix/pocknix-steam pocknix/fex-emu pocknix/fex-rootfs pocknix/pocknix-desktop \
+        pocknix/pocknix-decky
   # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
   # especially: ALARM's vanilla lacks --use-rotation-shader and black-screens on the RP6 (bitten 3x).
   local mesa_ver; mesa_ver="$(chroot "${root}" pacman -Q mesa 2>/dev/null | awk '{print $2}')"

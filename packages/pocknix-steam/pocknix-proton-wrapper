@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+# pocknix-proton-wrapper — apply the per-game FEX profile before Proton (ARM64/FEX) launches.
+# Ported from armada's armada-proton-wrapper (path swap: /etc/pocknix, /usr/share/pocknix).
+#
+# The Pocknix Control Decky plugin writes /etc/pocknix/game-tweaks.json (global + per-appid
+# fexProfile choices). At game launch, Steam's toolmanifest commandline points at the
+# pocknix-proton shim, which execs this wrapper around the real `proton` entrypoint. We merge
+# the chosen profile's knobs over the host base FEX config, write a per-launch app config
+# under XDG_RUNTIME_DIR, export FEX_APP_CONFIG, and exec Proton — its bundled FEX reads it.
+import json
+import os
+import pathlib
+import sys
+import time
+
+
+BASE_FEX_CONFIG = pathlib.Path("/usr/share/fex-emu/Config.json")
+TWEAKS_CONFIG = pathlib.Path("/etc/pocknix/game-tweaks.json")
+FEX_PROFILES_CONFIG = pathlib.Path("/usr/share/pocknix/fex-profiles.json")
+
+
+def appid():
+    for key in ("STEAM_COMPAT_APP_ID", "SteamAppId", "SteamGameId"):
+        value = os.environ.get(key, "").strip()
+        if value.isdigit():
+            return value
+    return None
+
+
+def load_fex_contract():
+    with FEX_PROFILES_CONFIG.open(encoding="utf-8") as f:
+        contract = json.load(f)
+    profiles = contract.get("profiles")
+    if not isinstance(contract.get("defaults"), dict) or not isinstance(profiles, dict) or "default" not in profiles:
+        raise ValueError("invalid FEX profile contract")
+    for profile in profiles.values():
+        if not isinstance(profile, dict) or not isinstance(profile.get("config"), dict):
+            raise ValueError("invalid FEX profile contract")
+    return contract
+
+
+def load_tweaks(defaults):
+    data = json.loads(json.dumps(defaults))
+    try:
+        with TWEAKS_CONFIG.open(encoding="utf-8") as f:
+            loaded = json.load(f)
+    except (OSError, ValueError):
+        return data
+    if not isinstance(loaded, dict):
+        return data
+    if isinstance(loaded.get("global"), dict):
+        data["global"].update(loaded["global"])
+    if isinstance(loaded.get("games"), dict):
+        data["games"] = loaded["games"]
+    return data
+
+
+def merged_settings(tweaks, game_id):
+    settings = dict(tweaks.get("global", {}))
+    if game_id:
+        game_settings = tweaks.get("games", {}).get(str(game_id))
+        if isinstance(game_settings, dict) and game_settings.get("enabled") is True:
+            settings.update(game_settings)
+    return settings
+
+
+def runtime_config_dir():
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime:
+        return pathlib.Path(runtime) / "pocknix-fex"
+    return pathlib.Path("/tmp") / f"pocknix-fex-{os.getuid()}"
+
+
+def resolve_fex_config(settings, profiles):
+    profile_id = settings.get("fexProfile")
+    if isinstance(profile_id, str) and profile_id in profiles:
+        return profiles[profile_id]["config"]
+    return profiles["default"]["config"]
+
+
+def write_fex_config(settings, game_id, profiles):
+    with BASE_FEX_CONFIG.open(encoding="utf-8") as f:
+        config = json.load(f)
+    allowed = set().union(*(profile["config"].keys() for profile in profiles.values()))
+    fex_config = resolve_fex_config(settings, profiles)
+    config.setdefault("Config", {}).update({k: v for k, v in fex_config.items() if k in allowed})
+
+    config_dir = runtime_config_dir()
+    config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    cutoff = time.time() - 86400
+    for old in config_dir.glob("*.json"):
+        try:
+            if old.stat().st_mtime < cutoff:
+                old.unlink()
+        except OSError:
+            pass
+    name = f"{game_id or 'global'}.{os.getpid()}.json"
+    target = config_dir / name
+    tmp = target.with_name(f".{name}.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, sort_keys=True)
+            f.write("\n")
+        os.replace(tmp, target)
+        os.environ["FEX_APP_CONFIG"] = str(target)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def main():
+    if len(sys.argv) < 2:
+        raise SystemExit("usage: pocknix-proton-wrapper PROTON_ENTRYPOINT [ARGS...]")
+
+    real_proton = sys.argv[1]
+    args = [real_proton, *sys.argv[2:]]
+    game_id = appid()
+    try:
+        contract = load_fex_contract()
+        settings = merged_settings(load_tweaks(contract["defaults"]), game_id)
+        write_fex_config(settings, game_id, contract["profiles"])
+    except Exception as exc:
+        print(f"pocknix-proton: failed to write FEX config: {exc}", file=sys.stderr)
+
+    try:
+        os.execv(real_proton, args)
+    except OSError as exc:
+        raise SystemExit(f"pocknix-proton: failed to exec Proton: {exc}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,12 @@
+[Unit]
+Description=Seed Decky Loader and plugins into deck's homebrew
+After=local-fs.target
+Before=pocknix-decky-loader.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/pocknix/pocknix-decky-sync
+
+[Install]
+WantedBy=multi-user.target
