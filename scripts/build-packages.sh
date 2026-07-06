@@ -90,13 +90,17 @@ build_one() {
         fi
       ;; esac
     done < <(chroot "${BROOT}" runuser -u builder -- \
-               bash -lc "cd /build/${name} && makepkg --packagelist" 2>/dev/null)
+               bash -lc "cd /build/${name} && LC_ALL=C makepkg --packagelist" 2>/dev/null)
     if [ "${nlist}" -gt 0 ] && [ "${uptodate}" -eq 1 ]; then
       log "skip: ${name} (already in localrepo, sources unchanged — force with PKG=${name})"
       return 0
     fi
   fi
   log "makepkg: ${name}"
+  # Refresh the chroot's sync DBs (incl. [pocknix], so makepkg -s sees siblings built
+  # earlier this run) — only here, when actually building; skipped packages must not
+  # each pay a network DB refresh.
+  chroot "${BROOT}" pacman -Sy --noconfirm >/dev/null 2>&1 || true
   # linux-pocknix-<soc> is a THIN package: it doesn't compile the kernel (no makepkg/toolchain
   # in the chroot for that), it just packages `make kernel`'s output. Stage build/kernel/out
   # into the package build dir as ./staged so its package() can lay it out as /boot +
@@ -150,7 +154,7 @@ Update one to match the other."
   local mkflags="-s"
   case "${pkgdir}" in */devices/*/packages/*) mkflags="-d" ;; esac
   if ! chroot "${BROOT}" runuser -u builder -- \
-      bash -lc "cd /build/${name} && SRCDEST=/build/srccache makepkg ${mkflags} -f --noconfirm --nocheck --skippgpcheck"; then
+      bash -lc "cd /build/${name} && LC_ALL=C SRCDEST=/build/srccache makepkg ${mkflags} -f --noconfirm --nocheck --skippgpcheck"; then
     warn "makepkg failed for ${name} — keeping any previous build in ${LOCALREPO##*/}"
     return 1
   fi
@@ -165,7 +169,7 @@ Update one to match the other."
     p="${BROOT}/build/${name}/$(basename "${p}")"
     [ -e "${p}" ] && built_pkgs+=("${p}")
   done < <(chroot "${BROOT}" runuser -u builder -- \
-             bash -lc "cd /build/${name} && makepkg --packagelist" 2>/dev/null)
+             bash -lc "cd /build/${name} && LC_ALL=C makepkg --packagelist" 2>/dev/null)
   if [ "${#built_pkgs[@]}" -eq 0 ]; then
     warn "no .pkg.tar.* produced for ${name} — keeping any previous build"
     return 1
@@ -183,6 +187,12 @@ Update one to match the other."
     rm -f "${LOCALREPO}/${base}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${base}"-*:*.pkg.tar.* 2>/dev/null || true
   done
   cp "${built_pkgs[@]}" "${LOCALREPO}/"
+  # Register exactly the artifacts just built (NOT *.pkg.tar.* — re-adding the whole repo
+  # for every package spammed 'entry already existed' x N^2). LC_ALL=C: the build chroot
+  # has no generated locales, and bsdtar warns on every tar op otherwise.
+  local addlist=""
+  for p in "${built_pkgs[@]}"; do addlist+=" $(basename "${p}")"; done
+  chroot "${BROOT}" bash -lc "cd /localrepo && LC_ALL=C repo-add -q ${REPO_DB}${addlist}"
 }
 
 main() {
@@ -198,19 +208,19 @@ main() {
   # local deps (pocknix-steam -> gamescope, gtk2) from the [pocknix] repo as we go.
   mkdir -p "${BROOT}/localrepo"
   mount --bind "${LOCALREPO}" "${BROOT}/localrepo"
-  # Initialize the [pocknix] db so the repo is valid even on the first/partial run.
+  # Initialize the [pocknix] db so the repo is valid even on the first/partial run
+  # (one full re-add; per-package registration during the run adds only new artifacts).
   if ls "${LOCALREPO}"/*.pkg.tar.* >/dev/null 2>&1; then
-    chroot "${BROOT}" bash -lc "cd /localrepo && repo-add -q ${REPO_DB} *.pkg.tar.*"
+    chroot "${BROOT}" bash -lc "cd /localrepo && LC_ALL=C repo-add -q ${REPO_DB} \$(ls *.pkg.tar.* | grep -v '\.sig\$')" >/dev/null 2>&1
   else
     chroot "${BROOT}" bash -lc "cd /localrepo && tar -czf ${REPO_DB} -T /dev/null && ln -sf ${REPO_DB} pocknix.db"
   fi
 
-  # Build a package, publishing it to [pocknix] on success so later packages see it.
+  # Build a package (build_one registers its artifacts in [pocknix] so later packages
+  # see them; the pacman -Sy refresh happens inside build_one, only for real builds).
   try_build() {
-    chroot "${BROOT}" pacman -Sy --noconfirm >/dev/null 2>&1 || true   # refresh dbs incl. [pocknix]
     if build_one "$1" "${2:-0}"; then
       built=$((built+1))
-      chroot "${BROOT}" bash -lc "cd /localrepo && repo-add -q ${REPO_DB} *.pkg.tar.*"
       return 0
     fi
     return 1

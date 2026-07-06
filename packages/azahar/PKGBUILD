@@ -13,7 +13,7 @@
 # stays absent from ES-DE until fixed) — build-image treats it as optional (see build-image.sh).
 pkgname=azahar
 pkgver=2125.1.3
-pkgrel=1
+pkgrel=2
 pkgdesc="Azahar — 3DS emulator (Citra successor), native aarch64 build"
 arch=('aarch64')
 url="https://github.com/azahar-emu/azahar"
@@ -32,9 +32,15 @@ prepare() {
 }
 
 build() {
+  # CMAKE_INCLUDE_PATH: the video-dump backend (compiled unconditionally) uses FFmpeg-4/5
+  # APIs that FFmpeg 8 removed (AV_OPT_TYPE_CHANNEL_LAYOUT, ...). Point header resolution
+  # at the ffmpeg4.4 compat package (makedepends) instead of /usr/include's ffmpeg 8 —
+  # same as the AUR azahar PKGBUILD. Headers only (USE_SYSTEM_FFMPEG_HEADERS): the libs
+  # are dlopen'd at runtime, so a missing ffmpeg4.4 runtime just disables video dumping.
   cmake -B build -S "azahar-unified-source-${pkgver}" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INCLUDE_PATH=/usr/include/ffmpeg4.4 \
     -DUSE_DISCORD_PRESENCE=OFF \
     -DENABLE_TESTS=OFF \
     -DUSE_SYSTEM_BOOST=ON \
