@@ -43,7 +43,7 @@ prepare() {
   # latches, never cleared) -> repaints at up to display refresh -> forces gamescope's
   # ~3.5ms rotated composite at 72-120/s = up to ~32-41% of the GPU = ~10fps off the game.
   # Pace redraws to gamescope's per-frame messages instead. Measured root cause:
-  # docs/gamescope-fps-investigation.md "GPU-side session (2026-07-02)".
+  # docs/archive/gamescope-fps-investigation.md "GPU-side session (2026-07-02)".
   for p in 0001-Qualcomm-GPU-support 0002-SM8550-GPU 0003-Battery-name \
            0004-Qualcomm-battery-power-now 0005-RAM-name \
            0006-mangoapp-pace-redraw-to-frame-messages; do

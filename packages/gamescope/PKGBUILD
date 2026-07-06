@@ -57,7 +57,7 @@ prepare() {
   # ROCKNIX's older gamescope) so the overlay redraw coalesces into the same composite
   # instead of forcing an extra ~3.5ms rotated pass, and restore real (non-vblank-quantized)
   # frametimes to the overlay readout. Pairs with mangohud's 0006 pacing fix. Measured:
-  # docs/gamescope-fps-investigation.md "GPU-side session (2026-07-02)".
+  # docs/archive/gamescope-fps-investigation.md "GPU-side session (2026-07-02)".
   patch -p1 < "${srcdir}/0008-Revert-mangoapp-always-send-output-frametimings.patch"
 }
 
