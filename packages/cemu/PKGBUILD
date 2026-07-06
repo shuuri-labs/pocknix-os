@@ -1,0 +1,68 @@
+# cemu — Wii U emulator, built from source for aarch64 (NATIVE ARM64 recompiler).
+#
+# HISTORY: we first shipped cemu-x86-bin (the x86_64 AppImage via FEX, flagged experimental)
+# because Cemu's RELEASES are x86-only and the recompiler was believed x86-only. Both stale:
+# upstream Cemu now carries a native AArch64 recompiler backend (src/Cafe/HW/Espresso/
+# Recompiler/BackendAArch64, xbyak_aarch64 — the Android-port work, upstreamed), it just hasn't
+# made a release yet (v2.6 predates it, checked 2026-07-06). ROCKNIX builds Cemu from source for
+# its ARM devices for exactly this reason — no FEX anywhere. This package replaces cemu-x86-bin.
+#
+# Pinned to ROCKNIX's cemu-sa commit (their tested ARM build). Recipe modeled on the AUR cemu
+# PKGBUILD (system deps, clang+ninja — upstream's preferred toolchain) minus x86-isms (nasm).
+# The prepare() seds match ROCKNIX's pre_configure_target fixes.
+pkgname=cemu
+pkgver=2.6.rocknix.6f6c129
+pkgrel=1
+_commit=6f6c1299e29fa6e1062ae283a035b4ef787cc397   # = ROCKNIX cemu-sa PKG_VERSION
+pkgdesc="Cemu — Wii U emulator (native aarch64 build with the ARM64 recompiler)"
+arch=('aarch64')
+url="https://cemu.info"
+license=('MPL2')
+options=('!strip')
+# wxwidgets-gtk3>=3.3: satisfied by wxwidgets-pocknix (ALARM's 3.2 fails the constraint — that's
+# the resolution trick; see packages/wxwidgets-pocknix). sdl3: the pinned commit post-dates the
+# SDL2->SDL3 migration.
+depends=('boost-libs' 'fmt' 'libzip' 'libpng' 'pugixml' 'sdl3' 'wxwidgets-gtk3>=3.3'
+         'wayland' 'bluez-libs' 'libsodium' 'hidapi')
+makedepends=('git' 'cmake' 'clang' 'llvm' 'ninja' 'boost' 'glslang' 'glm' 'rapidjson'
+             'vulkan-headers' 'glu' 'libpulse' 'wayland-protocols')
+source=("cemu::git+https://github.com/cemu-project/Cemu.git#commit=${_commit}")
+sha256sums=('SKIP')
+
+prepare() {
+  cd cemu
+  # bundled externals (cubeb, imgui, ZArchive, …) are submodules at this commit
+  git submodule update --init --recursive
+  # unbundled fmt (system fmt is linked, not header-only)
+  sed -i '/FMT_HEADER_ONLY/d' src/Common/precompiled.h
+  # force the bundled cubeb submodule (no system cubeb)
+  sed -i '/find_package(cubeb)/d' CMakeLists.txt
+  # glm target-name fix (same fix ROCKNIX carries)
+  sed -i 's/glm::glm/glm/' src/Common/CMakeLists.txt src/input/CMakeLists.txt
+}
+
+build() {
+  cd cemu
+  cmake -B build -G Ninja -Wno-dev \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.21.1 \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++ \
+    -DCMAKE_CXX_FLAGS="${CXXFLAGS} -w" \
+    -DENABLE_VCPKG=OFF \
+    -DEMULATOR_VERSION_MAJOR=2 \
+    -DEMULATOR_VERSION_MINOR=6 \
+    -DEMULATOR_VERSION_PATCH=99
+  cmake --build build
+}
+
+package() {
+  cd cemu
+  install -Dm755 bin/Cemu_release "${pkgdir}/usr/bin/Cemu"
+  ln -s Cemu "${pkgdir}/usr/bin/cemu"
+  # runtime resources (gameProfiles, resources/) live next to the binary upstream; ship in share
+  install -dm755 "${pkgdir}/usr/share/Cemu"
+  find bin -mindepth 1 -maxdepth 1 ! -name 'Cemu_release' -exec cp -r {} "${pkgdir}/usr/share/Cemu/" \;
+  install -Dm644 src/resource/logo_icon.png "${pkgdir}/usr/share/icons/hicolor/128x128/apps/info.cemu.Cemu.png"
+  install -Dm644 dist/linux/info.cemu.Cemu.desktop "${pkgdir}/usr/share/applications/Cemu.desktop"
+}

@@ -59,11 +59,10 @@
     </rule>
   </emulator>
 
-  <!-- Wii U: Cemu is x86_64-only -> launched via the FEX wrapper, never the AppImage directly
-       (global x86 binfmt is off in the deck session). EXPERIMENTAL. -->
+  <!-- Wii U: native aarch64 Cemu (source build, packages/cemu) -->
   <emulator name="CEMU">
     <rule type="staticpath">
-      <entry>/opt/pocknix/emulators/cemu/cemu-fex</entry>
+      <entry>/usr/bin/Cemu</entry>
     </rule>
   </emulator>
 

@@ -37,4 +37,7 @@ matching subfolder and they are picked up automatically the next time ES-DE star
 Saves and save-states live in ~/Emulation/Saves and ~/Emulation/States, so a single
 copy of this ~/Emulation folder is fully self-contained and portable.
 
+MOVING YOUR ROMS (e.g. to an SD card): ES-DE Menu -> Other Settings -> ROM directory,
+pick the new location, move the files there. Everything else follows automatically.
+
 You (and only you) are responsible for supplying game and BIOS files you legally own.

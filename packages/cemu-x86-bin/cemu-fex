@@ -1,9 +1,0 @@
-#!/bin/bash
-# cemu-fex — run the x86_64 Cemu AppImage through FEX. EXPERIMENTAL (see PKGBUILD header).
-# Needed because the global x86 binfmt is OFF in the deck session (pocknix-fex-binfmt-off), so
-# nothing may exec the AppImage directly — both ES-DE (find rule) and pocknix-play launch Cemu
-# via this wrapper. --appimage-extract-and-run sidesteps FUSE-under-FEX; if the extracted AppRun
-# re-exec chain still trips on binfmt, port the private-binfmt-userns pattern from pocknix-decky.
-command -v FEXInterpreter >/dev/null 2>&1 || {
-  echo "cemu-fex: FEXInterpreter not installed (Cemu is x86-only and runs via FEX)" >&2; exit 1; }
-exec FEXInterpreter /opt/pocknix/emulators/cemu/Cemu.AppImage --appimage-extract-and-run "$@"

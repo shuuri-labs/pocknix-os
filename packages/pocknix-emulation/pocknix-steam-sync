@@ -30,7 +30,26 @@ import xml.etree.ElementTree as ET
 
 HOME = os.path.expanduser("~")
 GAMELISTS = os.path.join(HOME, "ES-DE", "gamelists")
-ROMS = os.path.join(HOME, "Emulation", "ROMs")
+
+
+def rom_dir() -> str:
+    """The ROM directory is ES-DE's 'ROMDirectory' setting — the ONE knob for moving ROMs
+    (ES-DE Menu > Other Settings > ROM directory; users pointing at an SD card etc.). The
+    settings file is a rootless XML fragment, so regex it. Empty/absent = ES-DE's default
+    ~/ROMs (which is also the legacy pocknix layout)."""
+    import re
+    try:
+        with open(os.path.join(HOME, "ES-DE", "settings", "es_settings.xml")) as f:
+            m = re.search(r'name="ROMDirectory"\s+value="([^"]*)"', f.read())
+        val = (m.group(1) if m else "").strip()
+    except OSError:
+        val = ""
+    if val.startswith("~"):
+        val = HOME + val[1:]
+    return val or os.path.join(HOME, "ROMs")
+
+
+ROMS = rom_dir()
 PLAY = "/usr/bin/pocknix-play"
 OWNER = "pocknix"  # DevkitGameID marker for entries we own
 TAG = "Pocknix"

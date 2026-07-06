@@ -97,8 +97,10 @@ case "${system}" in
   psvita)
     run_appimage vita3k/Vita3K.AppImage -r "${rom}" ;;                     # -r = run title (VERIFY on-device)
   wiiu)
-    # EXPERIMENTAL: Cemu is x86_64-only; the cemu-fex wrapper (cemu-x86-bin) owns the FEX dance.
-    run_appimage cemu/cemu-fex -f -g "${rom}" ;;
+    # Native aarch64 Cemu (source build, packages/cemu — upstream grew an ARM64 recompiler;
+    # the old cemu-x86-bin/FEX route is retired).
+    command -v Cemu >/dev/null 2>&1 || { echo "pocknix-play: cemu not installed" >&2; exit 1; }
+    exec Cemu -f -g "${rom}" ;;
 
   *)
     echo "pocknix-play: unknown system '${system}' (see /usr/bin/pocknix-play for the mapping)" >&2

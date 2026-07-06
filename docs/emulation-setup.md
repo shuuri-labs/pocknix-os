@@ -20,6 +20,18 @@ Everything lives under `~/Emulation` (created on first login by `pocknix-roms-in
 
 A single copy of `~/Emulation` is self-contained — ROMs, BIOS, saves all travel together.
 
+## Moving the ROM directory (e.g. to an SD card)
+
+The ROM directory is **moveable** and ES-DE's setting is the single source of truth:
+**ES-DE Menu → Other Settings → ROM directory** → pick the new location (e.g.
+`/run/media/<card>/ROMs`). Everything follows automatically: `pocknix-roms-init`
+builds the per-system folder skeleton there on next login, and the favorites→Steam
+sync resolves game paths against it on next Game Mode entry. Move the actual files
+yourself, then rescan in ES-DE.
+
+`BIOS/`, `Saves/`, `States/` stay in `~/Emulation` on internal storage (small files;
+emulators reference them independently of the ROM location).
+
 > NB the original dev device predates this layout and still uses `~/ROMs` with a nested
 > `bios/` — seeds never migrate an existing setup. Fresh images get `~/Emulation`.
 
@@ -72,4 +84,4 @@ down — favorites always appear on the *next* Game Mode entry, never mid-sessio
 | PS Vita | Vita3K | installed, untested (content installs via GUI) |
 | GC/Wii | Dolphin | pending VM source build |
 | 3DS | Azahar | pending VM source build (riskiest build) |
-| Wii U | Cemu via FEX | experimental; Android-port/Waydroid routes under consideration |
+| Wii U | Cemu (native source build) | pending VM build — upstream gained an ARM64 recompiler; the FEX route is retired |

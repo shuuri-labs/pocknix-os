@@ -17,7 +17,21 @@ set -u
 
 SHARE=/usr/share/pocknix-emulation
 EMU="${HOME}/Emulation"
-ROMS="${EMU}/ROMs"
+# The ROM dir is MOVEABLE: ES-DE's ROMDirectory setting is the single source of truth (ES-DE
+# Menu > Other Settings > ROM directory — e.g. point it at an SD card). Everything follows it:
+# this script builds the system-folder skeleton there, pocknix-steam-sync resolves favorites
+# against it. Empty/absent = ES-DE's default ~/ROMs (also the legacy pocknix layout). The seed
+# below (only when ES-DE has never been configured) sets ~/Emulation/ROMs for fresh installs.
+ESDE_SETTINGS="${HOME}/ES-DE/settings/es_settings.xml"
+_roms_setting="$(sed -n 's/.*name="ROMDirectory" value="\([^"]*\)".*/\1/p' "${ESDE_SETTINGS}" 2>/dev/null | head -1)"
+case "${_roms_setting}" in "~"*) _roms_setting="${HOME}${_roms_setting#\~}" ;; esac
+if [ -n "${_roms_setting}" ]; then
+  ROMS="${_roms_setting}"
+elif [ -f "${ESDE_SETTINGS}" ]; then
+  ROMS="${HOME}/ROMs"          # settings exist but no/empty ROMDirectory = ES-DE default
+else
+  ROMS="${EMU}/ROMs"           # fresh install: the seed below points ES-DE here
+fi
 
 # ES-DE default folder names. Curated to the pocknix console list (RetroArch-core systems + the
 # standalone heavy hitters: gc/wii/wiiu, ps2, ps3, psvita, switch, xbox, n3ds). Creating the dir
@@ -41,8 +55,7 @@ fi
 
 # --- seed ES-DE settings: ROM directory (only if the user has no settings yet) ---
 # ES-DE's default scan dir is ~/ROMs; ours is ~/Emulation/ROMs. Only seeded when ES-DE has never
-# run (no es_settings.xml) — never fight a user's own configuration.
-ESDE_SETTINGS="${HOME}/ES-DE/settings/es_settings.xml"
+# run (no es_settings.xml) — after that, ES-DE's own setting is authoritative (see above).
 if [ ! -f "${ESDE_SETTINGS}" ]; then
   mkdir -p "${HOME}/ES-DE/settings"
   printf '<?xml version="1.0"?>\n<string name="ROMDirectory" value="%s" />\n' "${ROMS}" > "${ESDE_SETTINGS}" 2>/dev/null || true

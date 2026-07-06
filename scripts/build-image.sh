@@ -122,12 +122,12 @@ install_local_packages() {
         pocknix/pocknix-emulation pocknix/es-de pocknix/libretro-cores-pocknix \
         pocknix/retroarch-autoconfig-pocknix pocknix/retroarch-shaders-pocknix \
         pocknix/armsx2-bin pocknix/rpcs3-bin pocknix/eden-bin pocknix/xemu-bin \
-        pocknix/vita3k-bin pocknix/cemu-x86-bin
+        pocknix/vita3k-bin
   # Source-built emulators are OPTIONAL-warn (first-ever aarch64 builds = likeliest to fail; a
   # missing one just leaves that system out of ES-DE, which degrades gracefully) — don't fail the
-  # whole image over 3DS/GameCube.
+  # whole image over 3DS/GameCube/WiiU.
   local oe
-  for oe in dolphin-emu azahar; do
+  for oe in dolphin-emu azahar cemu; do
     chroot "${root}" pacman -S --noconfirm --needed "pocknix/${oe}" 2>/dev/null \
       || warn "optional emulator ${oe} not in [pocknix] (build failed/skipped?) — image ships WITHOUT it"
   done

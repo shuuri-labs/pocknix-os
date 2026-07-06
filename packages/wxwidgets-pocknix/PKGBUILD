@@ -1,0 +1,55 @@
+# wxwidgets-pocknix — wxWidgets 3.3 (gtk3), built because Cemu requires >=3.3 and ALARM ships
+# 3.2.11 (cemu configure died on it, 2026-07-06). Nothing else on the image uses wxWidgets, so
+# this exists solely for packages/cemu.
+#
+# Single lean package (Arch splits common/gtk3/qt5; we merge base+gtk3 and skip qt5 entirely) with
+# webview + mediactrl OFF — Cemu's find_package needs only: base core gl propgrid xrc. That drops
+# the webkit2gtk + gstreamer dependency chains.
+#
+# RESOLUTION TRICK: named wxwidgets-pocknix with provides/conflicts on the Arch names. cemu
+# depends on 'wxwidgets-gtk3>=3.3' — ALARM's real wxwidgets-gtk3 (3.2) fails the constraint, so
+# pacman/makepkg fall through to this provider. (A same-name epoch bump wouldn't work here:
+# unqualified `pacman -S name` picks the FIRST repo with the name, and [pocknix] is last.)
+pkgname=wxwidgets-pocknix
+pkgver=3.3.2
+pkgrel=1
+pkgdesc="wxWidgets 3.3 (gtk3, lean: no webview/media) — required by cemu, ALARM only has 3.2"
+arch=('aarch64')
+url="https://wxwidgets.org"
+license=('custom:wxWindows')
+provides=("wxwidgets-common=${pkgver}" "wxwidgets-gtk3=${pkgver}")
+conflicts=('wxwidgets-common' 'wxwidgets-gtk3')
+depends=('gtk3' 'libjpeg-turbo' 'libpng' 'libtiff' 'xz' 'expat' 'zlib' 'libnotify' 'libsm' 'glu')
+makedepends=('cmake' 'git' 'ninja')
+source=("wxWidgets::git+https://github.com/wxWidgets/wxWidgets#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+prepare() {
+  cd wxWidgets
+  # bundled 3rdparty bits (nanosvg, catch, pcre) are submodules
+  git submodule update --init --recursive
+}
+
+build() {
+  cmake -B build -S wxWidgets -G Ninja \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DwxBUILD_TOOLKIT=gtk3 \
+    -DwxUSE_OPENGL=ON \
+    -DwxUSE_WEBVIEW=OFF \
+    -DwxUSE_MEDIACTRL=OFF \
+    -DwxUSE_ZLIB=sys \
+    -DwxUSE_EXPAT=sys \
+    -DwxUSE_LIBJPEG=sys \
+    -DwxUSE_LIBPNG=sys \
+    -DwxUSE_LIBTIFF=sys \
+    -DwxUSE_LIBLZMA=sys \
+    -DwxUSE_PRIVATE_FONTS=ON \
+    -DwxUSE_GTKPRINT=ON
+  cmake --build build
+}
+
+package() {
+  DESTDIR="${pkgdir}" cmake --install build
+  install -Dm644 wxWidgets/docs/licence.txt "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
