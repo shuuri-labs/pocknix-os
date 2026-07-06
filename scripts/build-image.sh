@@ -135,9 +135,29 @@ install_local_packages() {
   log "device OK: $(chroot "${root}" pacman -Q "${DEVICE_META_PKG}" 2>/dev/null || echo "${DEVICE}")"
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
-  # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
-  # bind mount doesn't exist on the running device, so it would break `pacman -Sy` there.
+  # Drop the build-only [pocknix] stanza (its file:///localrepo bind mount doesn't exist on
+  # the device). With POCKNIX_REPO_URL set, re-add a stanza pointing at the PUBLISHED repo
+  # (see docs/pacman-repo.md), inserted ABOVE [core]: `pacman -S <name>` picks the FIRST
+  # repo that carries the name, so pocknix must outrank ALARM for our same-name packages
+  # (mesa, gamescope, ...). Without it the image ships reflash-only, as before.
   sed -i '/^\[pocknix\]/,+2d' "${root}/etc/pacman.conf"
+  if [ -n "${POCKNIX_REPO_URL}" ]; then
+    log "shipping [pocknix] repo stanza -> ${POCKNIX_REPO_URL} (SigLevel ${POCKNIX_REPO_SIGLEVEL})"
+    sed -i "0,/^\[core\]/s||[pocknix]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}\n\n[core]|" \
+      "${root}/etc/pacman.conf"
+    # Trust the repo key out of the box: bake the exported public key + lsign it, so a
+    # fresh image can `pacman -Syu` without a manual pacman-key dance.
+    if [ -n "${POCKNIX_REPO_PUBKEY}" ]; then
+      [ -f "${POCKNIX_REPO_PUBKEY}" ] || die "POCKNIX_REPO_PUBKEY not found: ${POCKNIX_REPO_PUBKEY}"
+      install -Dm644 "${POCKNIX_REPO_PUBKEY}" "${root}/usr/share/pocknix/pocknix-repo.gpg"
+      chroot "${root}" pacman-key --add /usr/share/pocknix/pocknix-repo.gpg
+      local fpr
+      fpr="$(gpg --show-keys --with-colons "${POCKNIX_REPO_PUBKEY}" 2>/dev/null | awk -F: '/^fpr/{print $10; exit}')"
+      [ -n "${fpr}" ] || die "could not read the key fingerprint from ${POCKNIX_REPO_PUBKEY} (host gpg missing?)"
+      chroot "${root}" pacman-key --lsign-key "${fpr}"
+      log "repo key trusted: ${fpr}"
+    fi
+  fi
 }
 
 read_pkglist() {

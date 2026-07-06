@@ -28,7 +28,7 @@ note "device" "${DEVICE} (${DEVICE_PRETTY:-?}) on ${SOC}"
 
 # --- scripts executable ----------------------------------------------------
 for s in sync.sh bootstrap.sh build-image.sh build-kernel.sh build-packages.sh \
-         build-sd-image.sh install.sh check.sh; do
+         build-sd-image.sh publish-repo.sh install.sh check.sh; do
   [ -x "${POCKNIX_ROOT}/scripts/${s}" ] && note "exec: scripts/${s}" "ok" || { note "exec: scripts/${s}" "not +x"; fail=1; }
 done
 

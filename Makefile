@@ -9,7 +9,7 @@ SCRIPTS := scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync bootstrap build kernel packages sd-image install check du trim clean distclean
+.PHONY: help sync bootstrap build kernel packages sd-image publish install check du trim clean distclean
 
 help: ## Show this help
 	@echo "pocknix-os build targets:"
@@ -33,6 +33,9 @@ packages: ## Build local pocknix-* packages -> build/localrepo (root). PKG="a b"
 
 sd-image: ## Build a flashable SD boot-test image (needs build + kernel) (root, Linux)
 	@$(SCRIPTS)/build-sd-image.sh
+
+publish: ## Sign build/localrepo + publish it as the [pocknix] update repo (see docs/pacman-repo.md)
+	@$(SCRIPTS)/publish-repo.sh $(PUBLISH_ARGS)
 
 install: ## Install to internal storage, preserving ABL [Phase 6] (on-device)
 	@$(SCRIPTS)/install.sh

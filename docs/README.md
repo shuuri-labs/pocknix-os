@@ -9,6 +9,8 @@ Living references (current, kept up to date):
 - [fex-version-bump.md](fex-version-bump.md) — how to bump the pinned FEX commit
 - [fex-proton-plan.md](fex-proton-plan.md) — the FEX + Proton-ARM plan and rationale
 - [plasma-mobile-plan.md](plasma-mobile-plan.md) — desktop-session (Plasma Mobile) plan
+- [pacman-repo.md](pacman-repo.md) — the [pocknix] update repo: signing, hosting, `pacman -Syu` instead of reflashing
+- [../devices/README.md](../devices/README.md) — the device-abstraction boundary + new-device bring-up checklist
 
 Root-level: [../README.md](../README.md) (project intro + build flow), [../plan.md](../plan.md)
 (original phased build plan), [../progress.md](../progress.md) (the running journal).
