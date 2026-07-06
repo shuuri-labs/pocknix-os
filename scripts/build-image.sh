@@ -120,7 +120,7 @@ install_local_packages() {
   # as an optional tool (pacman -U it manually if ever wanted).
   chroot "${root}" pacman -S --noconfirm --needed \
         pocknix/pocknix-emulation pocknix/es-de pocknix/libretro-cores-pocknix \
-        pocknix/retroarch-autoconfig-pocknix \
+        pocknix/retroarch-autoconfig-pocknix pocknix/retroarch-shaders-pocknix \
         pocknix/armsx2-bin pocknix/rpcs3-bin pocknix/eden-bin pocknix/xemu-bin \
         pocknix/vita3k-bin pocknix/cemu-x86-bin
   # Source-built emulators are OPTIONAL-warn (first-ever aarch64 builds = likeliest to fail; a

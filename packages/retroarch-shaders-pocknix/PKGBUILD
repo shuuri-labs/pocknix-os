@@ -1,0 +1,34 @@
+# retroarch-shaders-pocknix — the official libretro slang shader set, vendored.
+#
+# WHY: RetroArch's "Online Updater > Update Slang Shaders" just downloads libretro/slang-shaders
+# into the user's home (~79 MB) — but nothing ships them, and no ALARM package exists (checked
+# 2026-07-06). Baked shader presets (e.g. lcd3x for GBA, seeded by pocknix-emulation) reference
+# these files, so they must exist at first boot with no network step. ROCKNIX ships the full set
+# too. Slang = the Vulkan-native format, matching our video_driver.
+#
+# Installed to /usr/share/libretro/shaders/shaders_slang; pocknix-roms-init SYMLINKS that into
+# ~/.config/retroarch/shaders/shaders_slang (RetroArch's default video_shader_dir stays the
+# writable user dir, so saving presets keeps working; presets reference shaders relative to the
+# shader dir, so they resolve through the symlink).
+pkgname=retroarch-shaders-pocknix
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="libretro slang shader set for RetroArch (vendored; replaces the Online Updater step)"
+arch=('any')
+url="https://github.com/libretro/slang-shaders"
+license=('GPL3')  # umbrella; individual shaders vary (GPL/MIT/public domain)
+depends=()
+_commit=a113a573b3ed96a2a4dfc5c98e3d55ad7451bb0e   # master 2026-07-06
+source=("slang-shaders-${_commit}.tar.gz::https://github.com/libretro/slang-shaders/archive/${_commit}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  install -dm755 "${pkgdir}/usr/share/libretro/shaders"
+  cp -r "${srcdir}/slang-shaders-${_commit}" \
+        "${pkgdir}/usr/share/libretro/shaders/shaders_slang"
+  # drop repo housekeeping; keep only shader content
+  rm -rf "${pkgdir}/usr/share/libretro/shaders/shaders_slang/.git"* \
+         "${pkgdir}/usr/share/libretro/shaders/shaders_slang/.github" 2>/dev/null || true
+  find "${pkgdir}/usr/share/libretro/shaders" -type f -exec chmod 644 {} +
+  find "${pkgdir}/usr/share/libretro/shaders" -type d -exec chmod 755 {} +
+}

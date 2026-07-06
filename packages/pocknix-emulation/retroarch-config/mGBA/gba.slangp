@@ -1,0 +1,8 @@
+shaders = "1"
+feedback_pass = "0"
+shader0 = "../../shaders/shaders_slang/handheld/shaders/lcd3x.slang"
+alias0 = ""
+wrap_mode0 = "clamp_to_border"
+mipmap_input0 = "false"
+float_framebuffer0 = "false"
+srgb_framebuffer0 = "false"

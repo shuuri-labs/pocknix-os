@@ -33,8 +33,12 @@ license=('GPL2')
 # WITHOUT the runtime present degrades gracefully instead of erroring.
 depends=('bash')
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
-        'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt'
+        # per-system RetroArch tuning seeds (content-dir overrides + shader presets), harvested
+        # from on-device A/B sessions. NB: makepkg flattens these to $srcdir basenames — keep
+        # basenames unique across systems (they're named after the content dir, so they are).
+        'retroarch-config/mGBA/gba.cfg' 'retroarch-config/mGBA/gba.slangp')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
@@ -58,8 +62,10 @@ package() {
     "${pkgdir}/usr/share/pocknix-emulation/retroarch.cfg"
   install -Dm644 "${srcdir}/ROMS-README.txt" \
     "${pkgdir}/usr/share/pocknix-emulation/ROMS-README.txt"
-  # Static SRM manifest: puts ES-DE itself in the Steam library (desktop mode has no controller
-  # nav, so the frontend must run under gamescope). Instantiated per-user by pocknix-roms-init.
-  install -Dm644 "${srcdir}/srm-manifest-es-de.json.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/srm-manifest-es-de.json.in"
+  # Per-system RetroArch tuning (seeded into ~/.config/retroarch/config by pocknix-roms-init):
+  # GBA = integer scaling + lcd3x (on-device tuned 2026-07-06). The lcd3x preset references the
+  # vendored shader set (retroarch-shaders-pocknix) by relative path. The user's bezel overlay is
+  # deliberately NOT baked (trademarked console logo in the artwork) — device-only.
+  install -Dm644 "${srcdir}/gba.cfg"    "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.cfg"
+  install -Dm644 "${srcdir}/gba.slangp" "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.slangp"
 }

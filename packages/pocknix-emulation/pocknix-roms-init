@@ -63,6 +63,28 @@ if [ -d "${RA_AUTOCFG_SRC}" ]; then
   cp -n "${RA_AUTOCFG_SRC}/"*.cfg "${RA_AUTOCFG_DST}/" 2>/dev/null || true
 fi
 
+# --- link the vendored slang shader set into RetroArch's shader dir ---
+# From retroarch-shaders-pocknix. Symlink (not copy — 79 MB): the shader dir itself stays the
+# writable user default so preset saving keeps working; presets reference shaders relative to the
+# shader dir and resolve through the link. Skipped if the user already has a real shaders_slang
+# (e.g. downloaded via Online Updater before this package existed).
+RA_SHADERS_SRC=/usr/share/libretro/shaders/shaders_slang
+RA_SHADERS_DST="${HOME}/.config/retroarch/shaders/shaders_slang"
+if [ -d "${RA_SHADERS_SRC}" ] && [ ! -e "${RA_SHADERS_DST}" ]; then
+  mkdir -p "${HOME}/.config/retroarch/shaders"
+  ln -s "${RA_SHADERS_SRC}" "${RA_SHADERS_DST}" 2>/dev/null || true
+fi
+
+# --- seed per-system RetroArch tuning (content-dir overrides + shader presets) ---
+# From /usr/share/pocknix-emulation/retroarch-config (e.g. mGBA/gba.cfg = integer scaling,
+# mGBA/gba.slangp = lcd3x). cp -Rn: a user's own saved overrides/presets are never clobbered.
+RA_CONF_SRC=/usr/share/pocknix-emulation/retroarch-config
+RA_CONF_DST="${HOME}/.config/retroarch/config"
+if [ -d "${RA_CONF_SRC}" ]; then
+  mkdir -p "${RA_CONF_DST}"
+  cp -Rn "${RA_CONF_SRC}/." "${RA_CONF_DST}/" 2>/dev/null || true
+fi
+
 # --- seed RetroArch defaults (only if the user has no retroarch.cfg) ---
 # system_directory -> ~/ROMs/bios etc. RetroArch expands any missing keys itself on first run, so a
 # minimal seed is fine; if the user already has a config we leave it entirely alone.
