@@ -30,7 +30,7 @@ import xml.etree.ElementTree as ET
 
 HOME = os.path.expanduser("~")
 GAMELISTS = os.path.join(HOME, "ES-DE", "gamelists")
-ROMS = os.path.join(HOME, "ROMs")
+ROMS = os.path.join(HOME, "Emulation", "ROMs")
 PLAY = "/usr/bin/pocknix-play"
 OWNER = "pocknix"  # DevkitGameID marker for entries we own
 TAG = "Pocknix"

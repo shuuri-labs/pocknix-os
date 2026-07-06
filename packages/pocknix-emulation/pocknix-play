@@ -1,7 +1,7 @@
 #!/bin/bash
 # pocknix-play <system> <rom> — launch a game by ES-DE system name. THE single coupling point
 # between the Steam library and the emulators: every SRM favorite shortcut targets this script
-# (pocknix-srm-sync writes `pocknix-play <system> "<rom>"` as the launch command), so emulator/
+# (pocknix-steam-sync writes `pocknix-play <system> "<rom>"` as the launch command), so emulator/
 # core swaps happen HERE once, and existing Steam shortcuts keep working.
 #
 # The system->core/emulator mapping mirrors the pocknix defaults (see packages/
@@ -33,7 +33,15 @@ run_core() {
 run_appimage() {  # $1 = path under EMUS; remaining args = emulator flags (rom appended by caller)
   local app="${EMUS}/$1"; shift
   [ -x "${app}" ] || { echo "pocknix-play: emulator missing: ${app}" >&2; exit 1; }
-  exec "${app}" "$@"
+  # Scrub Steam's launch env: Steam injects LD_PRELOAD (gameoverlayrenderer.so) + its runtime
+  # LD_LIBRARY_PATH into shortcuts; AppImages with bundled Qt SIGABRT on that mix (ARMSX2,
+  # on-device 2026-07-06: instant crash from the Steam shortcut, fine with a clean env).
+  # System binaries (retroarch, dolphin) tolerate it — only the AppImage tier scrubs.
+  # FUSERMOUNT_PROG: under Steam's child env the AppImage runtime fails to find fusermount via
+  # PATH (verified on-device) — point it at the binary directly.
+  # ${_pin}: optional taskset prefix set by the caller (heavy emulators pin to the big cores).
+  exec env -u LD_PRELOAD -u LD_LIBRARY_PATH FUSERMOUNT_PROG=/usr/bin/fusermount \
+    ${_pin:-} "${app}" "$@"
 }
 
 case "${system}" in
@@ -72,7 +80,11 @@ case "${system}" in
     command -v dolphin-emu >/dev/null 2>&1 || { echo "pocknix-play: dolphin-emu not installed" >&2; exit 1; }
     exec dolphin-emu -b -e "${rom}" ;;                                   # -b batch: no GUI, quit on stop
   ps2)
-    run_appimage armsx2/ARMSX2.AppImage -batch -fullscreen -- "${rom}" ;;  # PCSX2-Qt flags (VERIFY on-device)
+    # Pin to the big cores (3-7: A710/A715 mids + X3 prime). Verified on-device 2026-07-06:
+    # unpinned, scx_lavd let the MTVU thread land on a little A510 -> constant chop + audio
+    # crackle; pinned = perfectly smooth. lavd schedules freely WITHIN the allowed set.
+    _pin="taskset -c 3-7"
+    run_appimage armsx2/ARMSX2.AppImage -batch -fullscreen -- "${rom}" ;;
   ps3)
     run_appimage rpcs3/rpcs3.AppImage --no-gui "${rom}" ;;
   switch)

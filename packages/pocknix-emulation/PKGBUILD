@@ -6,8 +6,8 @@
 # base.list/steam.list/desktop.list pattern. Reason (identical to pocknix-desktop): makepkg -s
 # would otherwise drag ES-DE/RetroArch/Qt/etc. into the BUILD chroot just to build this no-op
 # data package. So this package ships ONLY:
-#   - pocknix-roms-init         first-run (per deck login): create ~/ROMs/<system> + ~/ROMs/bios,
-#                               and SEED the ES-DE + RetroArch configs into the user's home if absent
+#   - pocknix-roms-init         first-run (per deck login): create ~/Emulation/{ROMs/<system>,BIOS,
+#                               Saves,States} and SEED the ES-DE/RetroArch/ARMSX2 configs if absent
 #                               (robust-location pattern: user configs live in $HOME, a package can't
 #                               write /home/deck, so we stage under /usr/share and copy on first login)
 #   - pocknix-roms-init.service the --user oneshot that runs it (enabled --global at image time)
@@ -18,13 +18,13 @@
 #   - pocknix-play              <system> <rom> launcher — the target of every favorite shortcut;
 #                               owns the system->core/emulator default mapping
 #   - es_find_rules.xml         ES-DE emulator lookup -> our binary/AppImage install paths
-#   - retroarch.cfg             sane RetroArch defaults (system_directory -> ~/ROMs/bios, Turnip)
-#   - ROMS-README.txt           dropped into ~/ROMs so the user knows where ROMs/BIOS/keys go
+#   - retroarch.cfg             sane RetroArch defaults (system_directory -> ~/Emulation/BIOS, Turnip)
+#   - ROMS-README.txt           dropped into ~/Emulation so the user knows where ROMs/BIOS/keys go
 #
 pkgname=pocknix-emulation
 pkgver=0.1.0
 pkgrel=2
-pkgdesc="ES-DE + preconfigured emulators for the RP6: drop ROMs into ~/ROMs and play; star -> Steam"
+pkgdesc="ES-DE + preconfigured emulators for the RP6: drop ROMs into ~/Emulation and play; star -> Steam"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
@@ -33,12 +33,12 @@ license=('GPL2')
 # WITHOUT the runtime present degrades gracefully instead of erroring.
 depends=('bash')
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
-        'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt'
+        'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
         # per-system RetroArch tuning seeds (content-dir overrides + shader presets), harvested
         # from on-device A/B sessions. NB: makepkg flattens these to $srcdir basenames — keep
         # basenames unique across systems (they're named after the content dir, so they are).
         'retroarch-config/mGBA/gba.cfg' 'retroarch-config/mGBA/gba.slangp')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
@@ -62,6 +62,11 @@ package() {
     "${pkgdir}/usr/share/pocknix-emulation/retroarch.cfg"
   install -Dm644 "${srcdir}/ROMS-README.txt" \
     "${pkgdir}/usr/share/pocknix-emulation/ROMS-README.txt"
+  # ARMSX2 (PS2) config template: skips the setup wizard, Vulkan renderer, SDL pad bindings,
+  # 2.5x upscale, standardized BIOS name — harvested from an on-device wizard run + tuning
+  # session (2026-07-06). Instantiated per-user by pocknix-roms-init.
+  install -Dm644 "${srcdir}/armsx2-PCSX2.ini.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/armsx2-PCSX2.ini.in"
   # Per-system RetroArch tuning (seeded into ~/.config/retroarch/config by pocknix-roms-init):
   # GBA = integer scaling + lcd3x (on-device tuned 2026-07-06). The lcd3x preset references the
   # vendored shader set (retroarch-shaders-pocknix) by relative path. The user's bezel overlay is

@@ -2,9 +2,10 @@
 # pocknix-roms-init — first-login setup for the emulation layer, run as the 'deck' user by
 # pocknix-roms-init.service (a --user oneshot). Two jobs, both idempotent:
 #
-#   1. Create the ROM drop tree ~/ROMs/<system> + ~/ROMs/bios, and drop ROMS-README.txt so the
-#      user knows exactly where to copy ROMs / BIOS / Switch keys. This is the whole "drop your
-#      files in a folder and they're picked up" promise — ES-DE scans ~/ROMs by default.
+#   1. Create the drop tree ~/Emulation/ROMs/<system> + ~/Emulation/BIOS (+Saves/States), and drop
+#      README.txt so the user knows exactly where to copy ROMs / BIOS / Switch keys. This is the
+#      whole "drop your files in a folder and they're picked up" promise. ES-DE defaults to ~/ROMs,
+#      so we also seed its ROMDirectory setting to the new location (es_settings.xml below).
 #
 #   2. Seed the ES-DE + RetroArch configs into $HOME IF THE USER HAS NONE (never clobber user
 #      edits). A pacman package cannot write /home/deck at install time, so the staged copies live
@@ -15,7 +16,8 @@
 set -u
 
 SHARE=/usr/share/pocknix-emulation
-ROMS="${HOME}/ROMs"
+EMU="${HOME}/Emulation"
+ROMS="${EMU}/ROMs"
 
 # ES-DE default folder names. Curated to the pocknix console list (RetroArch-core systems + the
 # standalone heavy hitters: gc/wii/wiiu, ps2, ps3, psvita, switch, xbox, n3ds). Creating the dir
@@ -29,12 +31,21 @@ SYSTEMS=(
   gc wii wiiu switch xbox
 )
 
-mkdir -p "${ROMS}/bios"
+mkdir -p "${EMU}/BIOS" "${EMU}/Saves" "${EMU}/States"
 for s in "${SYSTEMS[@]}"; do mkdir -p "${ROMS}/${s}"; done
 
 # Drop the guidance file at the root of the tree (refresh it each run so doc updates propagate).
 if [ -f "${SHARE}/ROMS-README.txt" ]; then
-  cp -f "${SHARE}/ROMS-README.txt" "${ROMS}/README.txt" 2>/dev/null || true
+  cp -f "${SHARE}/ROMS-README.txt" "${EMU}/README.txt" 2>/dev/null || true
+fi
+
+# --- seed ES-DE settings: ROM directory (only if the user has no settings yet) ---
+# ES-DE's default scan dir is ~/ROMs; ours is ~/Emulation/ROMs. Only seeded when ES-DE has never
+# run (no es_settings.xml) — never fight a user's own configuration.
+ESDE_SETTINGS="${HOME}/ES-DE/settings/es_settings.xml"
+if [ ! -f "${ESDE_SETTINGS}" ]; then
+  mkdir -p "${HOME}/ES-DE/settings"
+  printf '<?xml version="1.0"?>\n<string name="ROMDirectory" value="%s" />\n' "${ROMS}" > "${ESDE_SETTINGS}" 2>/dev/null || true
 fi
 
 # --- seed ES-DE custom find-rules (only if the user has none) ---
@@ -50,6 +61,16 @@ fi
 # backend on-device 2026-07-05. ES-DE + favorites reach Steam via pocknix-steam-sync's direct
 # shortcuts.vdf write, run by pocknix-steam at session start. The steam-rom-manager PKGBUILD
 # remains in-tree as an optional desktop tool; nothing here seeds or reads its config anymore.)
+
+# --- seed ARMSX2 (PS2) config: skip the setup wizard entirely ---
+# Template harvested from an on-device wizard run (2026-07-06): Vulkan renderer (Auto picked GL =
+# slow), full SDL pad bindings (the wizard writes none -> dead controller), 2.5x upscale (~1120p,
+# closest to the 1080p panel), BIOS = the standardized name ps2-bios.bin in ~/Emulation/BIOS
+# (users rename their dump to that -- see README). Never clobbers an existing config.
+if [ -f "${SHARE}/armsx2-PCSX2.ini.in" ] && [ ! -f "${HOME}/.config/PCSX2/inis/PCSX2.ini" ]; then
+  mkdir -p "${HOME}/.config/PCSX2/inis"
+  sed "s|__HOME__|${HOME}|g" "${SHARE}/armsx2-PCSX2.ini.in" > "${HOME}/.config/PCSX2/inis/PCSX2.ini" 2>/dev/null || true
+fi
 
 # --- seed RetroArch joypad autoconfig profiles (only what's missing) ---
 # From retroarch-autoconfig-pocknix (/usr/share/libretro/autoconfig). Copied (not symlinked) into

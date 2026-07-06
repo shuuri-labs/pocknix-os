@@ -1,7 +1,7 @@
 # es-de — the ES-DE frontend (EmulationStation Desktop Edition), OFFICIAL aarch64 AppImage.
 #
 # The emulation-layer frontend (see packages/pocknix-emulation): scans ~/ROMs, shows/launches the
-# library, and its per-game "favorite" star drives the Steam sync (pocknix-srm-sync).
+# library, and its per-game "favorite" star drives the Steam sync (pocknix-steam-sync).
 #
 # WHY THE APPIMAGE AND NOT A SOURCE BUILD: the source build (upstream's AUR recipe) hard-depends on
 # freeimage, which Arch dropped and ALARM never carried for aarch64 — `make packages` died on
