@@ -16,7 +16,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
-sync: ## Vendor ROCKNIX SM8550 kernel + device integration into vendor/
+sync: ## Vendor the ROCKNIX kernel + device integration for the selected DEVICE's SoC
 	@$(SCRIPTS)/sync.sh
 
 bootstrap: ## Download + verify + extract the ALARM base rootfs (root, Linux)
@@ -25,7 +25,7 @@ bootstrap: ## Download + verify + extract the ALARM base rootfs (root, Linux)
 build: ## Full build: bootstrap -> packages -> kernel -> assemble (root, Linux)
 	@$(SCRIPTS)/build-image.sh
 
-kernel: ## Build only the in-project kernel (linux-pocknix)
+kernel: ## Build only the in-project kernel (linux-pocknix-<soc>)
 	@$(SCRIPTS)/build-kernel.sh
 
 packages: ## Build local pocknix-* packages -> build/localrepo (root). PKG="a b" builds a subset

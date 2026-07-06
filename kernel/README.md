@@ -1,9 +1,14 @@
-# kernel/ — RP6 (SM8550) kernel inputs (pinned ROCKNIX nightly snapshot)
+# kernel/ — per-SoC kernel inputs (pinned ROCKNIX nightly snapshots)
 
-This directory holds the **complete kernel input set, committed in-repo** so pocknix-os is
-self-contained *and* reproducible: a clone builds the exact same kernel with no ROCKNIX
-checkout needed. Only **stock Linux source** and **stock firmware** are fetched at build
-(both version+sha pinned).
+Each `kernel/<soc>/` directory holds one SoC's **complete kernel input set, committed
+in-repo** so pocknix-os is self-contained *and* reproducible: a clone builds the exact
+same kernel with no ROCKNIX checkout needed. Only **stock Linux source** and **stock
+firmware** are fetched at build (both version+sha pinned, per-SoC in
+`kernel/<soc>/kernel.conf`). The device profile (`devices/<name>/profile.conf`) selects
+the SoC; devices on the same SoC (RP6 + AYN Odin 2, both `sm8550/`) share the tree —
+the boot image carries every board's dtb and the bootloader picks by board id.
+
+Currently: `sm8550/` (synced for the Retroid Pocket 6; the notes below describe it).
 
 ## Provenance — what's whose
 

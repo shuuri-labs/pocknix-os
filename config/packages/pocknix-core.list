@@ -1,0 +1,19 @@
+# Local [pocknix] packages every device installs (build-image.sh install_local_packages).
+# All are installed pocknix/-qualified — see the QUALIFY comment in build-image.sh.
+# Device-specific packages (BSP, kernel, metapackage) come from devices/<name>/packages.list
+# + the kernel step, NOT this list.
+
+# our epoch-2 trimmed/tuned mesa (freedreno/turnip only, ROCKNIX pin) replaces ALARM's
+mesa
+vulkan-freedreno
+
+gamescope              # ROCKNIX-patched (composite rotation); vanilla black-screens rotated panels
+inputplumber           # gamepad -> Steam Input (device config shipped by the device BSP)
+pocknix-steamos-shim   # steamos-update/branch/BIOS stubs so the Deck UI OOBE doesn't dead-end
+pocknix-sdcard-automount
+mangohud               # patched (Adreno sysfs reader + mangoapp pacing)
+pocknix-steam          # the Steam session (launcher + installer)
+fex-emu                # x86 emulator (thunks)
+fex-rootfs             # ~1.1 GB Arch x86 squashfs the games' libraries resolve from
+pocknix-desktop        # Plasma Mobile session + game<->desktop switch
+pocknix-decky          # Decky loader + Pocknix Control QAM plugin

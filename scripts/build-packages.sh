@@ -68,16 +68,41 @@ build_one() {
   rm -rf "${BROOT}/build/${name}"
   mkdir -p "${BROOT}/build"
   cp -r "${pkgdir}" "${BROOT}/build/${name}"
-  # linux-pocknix is a THIN package: it doesn't compile the kernel (no makepkg/toolchain in the
-  # chroot for that), it just packages `make kernel`'s output. Stage build/kernel/out into the
-  # package build dir as ./staged so its package() can lay it out as /boot + /usr/lib/modules.
-  if [ "${name}" = "linux-pocknix" ]; then
+  # linux-pocknix-<soc> is a THIN package: it doesn't compile the kernel (no makepkg/toolchain
+  # in the chroot for that), it just packages `make kernel`'s output. Stage build/kernel/out
+  # into the package build dir as ./staged so its package() can lay it out as /boot +
+  # /usr/lib/modules. NB: only the CURRENT device's SoC kernel can be staged (make kernel
+  # builds one SoC at a time); other SoCs' kernel packages skip with a warning.
+  case "${name}" in linux-pocknix-*)
+    if [ "${name}" != "${KERNEL_PKG}" ]; then
+      warn "${name}: not the current SoC's kernel (${KERNEL_PKG}) — skipping (build with the right DEVICE)"
+      return 1
+    fi
     local kout="${BUILD_DIR}/kernel/out"
     if [ ! -f "${kout}/Image" ] || [ ! -f "${kout}/kernelrelease" ]; then
-      warn "linux-pocknix: no kernel build at ${kout} — run 'make kernel' first; skipping"
+      warn "${name}: no kernel build at ${kout} — run 'make kernel' first; skipping"
       return 1
     fi
     cp -a "${kout}" "${BROOT}/build/${name}/staged"
+  ;; esac
+  # Drift guard: a device BSP's committed kernel-cmdline must byte-match its own device
+  # profile's KERNEL_CMDLINE (the boot image is built from the profile; the BSP file feeds
+  # the on-device /flash/KERNEL rebuild — they must agree). The device is derived from the
+  # package's path (devices/<dev>/packages/<pkg>); the subshell unsets the current profile's
+  # values so the checked device's own defaults apply.
+  if [ -f "${pkgdir}/kernel-cmdline" ]; then
+    local devdir want_cmdline
+    devdir="$(dirname "$(dirname "${pkgdir%/}")")"
+    if [ -f "${devdir}/profile.conf" ]; then
+      want_cmdline="$(unset SOC ROOT_LABEL KERNEL_CMDLINE KERNEL_CMDLINE_ROOT KERNEL_CMDLINE_EXTRA
+                      . "${devdir}/profile.conf"; printf '%s' "${KERNEL_CMDLINE}")"
+      if [ "$(cat "${pkgdir}/kernel-cmdline")" != "${want_cmdline}" ]; then
+        die "${name}: kernel-cmdline drifted from ${devdir}/profile.conf KERNEL_CMDLINE —
+  profile: ${want_cmdline}
+  package: $(cat "${pkgdir}/kernel-cmdline")
+Update one to match the other."
+      fi
+    fi
   fi
   # Persistent source cache: SRCDEST lives OUTSIDE the per-package build dir (which is wiped
   # every run), so makepkg downloads each source ONCE and reuses it. File sources (e.g.
@@ -87,7 +112,7 @@ build_one() {
   chroot "${BROOT}" chown -R builder:builder "/build/${name}"
   chroot "${BROOT}" chown builder:builder /build/srccache
   # makepkg refuses to run as root; build as the 'builder' user.
-  # -s syncs makedepends (gamescope needs many); pocknix-bsp has none so it's a no-op.
+  # -s syncs makedepends (gamescope needs many); the BSPs have none so it's a no-op.
   if ! chroot "${BROOT}" runuser -u builder -- \
       bash -lc "cd /build/${name} && SRCDEST=/build/srccache makepkg -s -f --noconfirm --nocheck --skippgpcheck"; then
     warn "makepkg failed for ${name} — keeping any previous build in ${LOCALREPO##*/}"
@@ -126,7 +151,7 @@ build_one() {
 
 main() {
   # Optional args = package names to build (subset); no args = build all in packages/.
-  # e.g. `make packages PKG="inputplumber pocknix-bsp"` to skip the slow gamescope rebuild.
+  # e.g. `make packages PKG="inputplumber pocknix-bsp-rp6"` to skip the slow gamescope rebuild.
   local want=("$@")
   mkdir -p "${LOCALREPO}"
   setup_chroot
@@ -156,7 +181,9 @@ main() {
 
   local built=0 name
   local -a failed=()
-  for pkgdir in "${PACKAGES_DIR}"/*/; do
+  # Shared packages (packages/*/) + every device's packages (devices/*/packages/*/ — the
+  # arch=any BSPs/metapackages build in seconds), so the repo always carries all devices.
+  for pkgdir in "${PACKAGES_DIR}"/*/ "${POCKNIX_ROOT}"/devices/*/packages/*/; do
     [ -f "${pkgdir}/PKGBUILD" ] || continue
     name="$(basename "${pkgdir}")"
     if [ "${#want[@]}" -gt 0 ]; then

@@ -1,0 +1,15 @@
+# Hard-required emulation layer from [pocknix] (build-image.sh install_local_packages):
+# ES-DE frontend, vendored core set, AppImage emulators — all data/vendor/straightforward
+# builds. ALARM-side runtime deps (retroarch, ppsspp, fuse2) come from emulation.list.
+# Source-built emulators (dolphin-emu, azahar, cemu) are optional-warn in build-image.sh,
+# not listed here.
+pocknix-emulation
+es-de
+libretro-cores-pocknix
+retroarch-autoconfig-pocknix
+retroarch-shaders-pocknix
+armsx2-bin
+rpcs3-bin
+eden-bin
+xemu-bin
+vita3k-bin

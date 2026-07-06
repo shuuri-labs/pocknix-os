@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# sync.sh — refresh the vendored ROCKNIX SM8550 inputs into two destinations:
+# sync.sh — refresh the vendored ROCKNIX inputs for the selected device's SoC
+# (kernel/${SOC}/, chosen by the device profile) into two destinations:
 #
-#   kernel/   (COMMITTED)  — the full kernel input set: patch stack, DTS, kernel
-#             config, firmware list, qcom-abl bootloader packaging. A PINNED
+#   kernel/${SOC}/ (COMMITTED) — the full kernel input set: patch stack, DTS,
+#             kernel config, firmware list, qcom-abl bootloader packaging. A PINNED
 #             SNAPSHOT of ROCKNIX `next` (nightly) + jaewun's suspend branch + our
 #             delta. The RP6 is officially supported upstream, so most of this is
 #             public ROCKNIX work; committing it makes pocknix-os self-contained
@@ -24,23 +25,23 @@ source "$(dirname "$0")/lib.sh"
   set DISTRIBUTION_DIR to your 'distribution' checkout, e.g.
   export DISTRIBUTION_DIR=\$HOME/Documents/Coding/distribution"
 
-log "syncing ROCKNIX SM8550 from ${ROCKNIX_PROJECT_DIR}"
+log "syncing ROCKNIX ${ROCKNIX_SOC} from ${ROCKNIX_PROJECT_DIR}"
 
-# --- committed kernel enablement -> kernel/ --------------------------------
-# The full patch stack ROCKNIX applies for SM8550, in order (PKG_PATCH_DIRS=
+# --- committed kernel enablement -> kernel/${SOC}/ --------------------------
+# The full patch stack ROCKNIX applies for this SoC, in order (PKG_PATCH_DIRS=
 # "mainline ${DEVICE} ... 7.0"). Stored as numbered subdirs so the build applies
-# them in the same order: 10-mainline -> 20-sm8550 -> 30-version.
-log "  kernel enablement -> kernel/ (committed)"
+# them in the same order: 10-mainline -> 20-<soc> -> 30-version.
+log "  kernel enablement -> kernel/${SOC}/ (committed)"
 mkdir -p "${KERNEL_DIR}/patches/10-mainline" \
-         "${KERNEL_DIR}/patches/20-sm8550" \
+         "${KERNEL_DIR}/patches/20-${SOC}" \
          "${KERNEL_DIR}/patches/30-version" \
          "${KERNEL_DIR}/dts" "${KERNEL_DIR}/config" "${KERNEL_DIR}/bootloader"
 # generic ROCKNIX backports applied BEFORE device patches
 rsync -a --delete "${ROCKNIX_PROJECT_DIR}/packages/linux/patches/mainline/" "${KERNEL_DIR}/patches/10-mainline/"
-# our SM8550/RP6 device patches
-rsync -a --delete "${ROCKNIX_DEVICE_DIR}/patches/linux/"                     "${KERNEL_DIR}/patches/20-sm8550/"
+# the SoC device patches
+rsync -a --delete "${ROCKNIX_DEVICE_DIR}/patches/linux/"                     "${KERNEL_DIR}/patches/20-${SOC}/"
 # generic version-specific patches applied AFTER device patches
-rsync -a --delete "${ROCKNIX_PROJECT_DIR}/packages/linux/patches/7.0/"       "${KERNEL_DIR}/patches/30-version/"
+rsync -a --delete "${ROCKNIX_PROJECT_DIR}/packages/linux/patches/${KERNEL_VERSION%.*}/" "${KERNEL_DIR}/patches/30-version/"
 # dts / config / bootloader packaging
 rsync -a --delete "${ROCKNIX_DEVICE_DIR}/linux/dts/"                 "${KERNEL_DIR}/dts/"
 rsync -a          "${ROCKNIX_DEVICE_DIR}/linux/linux.aarch64.conf"   "${KERNEL_DIR}/config/"
@@ -48,7 +49,7 @@ rsync -a          "${ROCKNIX_DEVICE_DIR}/config/kernel-firmware.dat" "${KERNEL_D
 rsync -a --delete "${ROCKNIX_DEVICE_DIR}/bootloader/"               "${KERNEL_DIR}/bootloader/"
 
 # --- gitignored build-time material -> vendor/ -----------------------------
-dst="${VENDOR_DIR}/rocknix-sm8550"
+dst="${VENDOR_DIR}/rocknix-${SOC}"
 log "  reference scripts + firmware overlay -> vendor/ (gitignored)"
 mkdir -p "${dst}/filesystem"
 rsync -a --delete "${ROCKNIX_DEVICE_DIR}/filesystem/" "${dst}/filesystem/"
@@ -69,5 +70,5 @@ for p in \
 done
 
 ok "sync complete:
-  kernel/  (committed)  $(find "${KERNEL_DIR}/patches" -name '*.patch' 2>/dev/null | wc -l | tr -d ' ') patches + dts + config
-  vendor/  (gitignored) reference scripts + firmware overlay"
+  kernel/${SOC}/  (committed)  $(find "${KERNEL_DIR}/patches" -name '*.patch' 2>/dev/null | wc -l | tr -d ' ') patches + dts + config
+  vendor/         (gitignored) reference scripts + firmware overlay"

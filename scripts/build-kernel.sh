@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# build-kernel.sh — build the linux-pocknix kernel for SM8550/RP6 and assemble the
-# qcom-abl boot image. Reproduces ROCKNIX's recipe (packages/linux/package.mk):
+# build-kernel.sh — build the linux-pocknix kernel for the selected device's SoC
+# (kernel/${SOC}/, chosen by the device profile) and assemble the qcom-abl boot
+# image. Reproduces ROCKNIX's recipe (packages/linux/package.mk):
 #
-#   stock kernel.org linux-${KERNEL_VERSION}
-#     + patch stack in order: kernel/patches/{10-mainline,20-sm8550,30-version}
-#     + RP6 device trees (kernel/dts) with ensured Makefile entries
-#     + SM8550 config (kernel/config/linux.aarch64.conf)
+#   stock kernel.org linux-${KERNEL_VERSION}   (pinned in kernel/${SOC}/kernel.conf)
+#     + patch stack in numeric subdir order: kernel/${SOC}/patches/*/
+#     + the SoC tree's device trees (kernel/${SOC}/dts) with ensured Makefile entries
+#     + the SoC config (kernel/${SOC}/config/linux.aarch64.conf)
 #   -> make Image dtbs modules
 #   -> boot image = gzip(Image) ++ appended DTBs, dummy ramdisk, mkbootimg (header v0)
 #
@@ -71,10 +72,13 @@ apply_patches() {
 }
 
 install_dts() {
-  log "installing RP6 device trees + ensuring Makefile entries"
+  log "installing ${SOC} device trees + ensuring Makefile entries"
   rsync -a "${KERNEL_DIR}/dts/" "${KSRC}/arch/arm64/boot/dts/"
+  # Register exactly the dts files the SoC tree ships (whatever their prefix —
+  # the boot image carries ALL of them; the qcom ABL selects by board id, which
+  # is what lets one SoC kernel package serve every device on that SoC).
   local mk="${KSRC}/arch/arm64/boot/dts/qcom/Makefile" dts name
-  for dts in "${KSRC}"/arch/arm64/boot/dts/qcom/qcs8550-*.dts; do
+  for dts in "${KERNEL_DIR}"/dts/qcom/*.dts; do
     [ -f "${dts}" ] || continue
     name="$(basename "${dts}" .dts)"
     if ! grep -q "${name}.dtb" "${mk}"; then
@@ -101,7 +105,7 @@ fixup_trace_events() {
 
 configure() {
   log "configuring kernel (.config from linux.aarch64.conf; no embedded initramfs)"
-  sed -e "s|@DEVICENAME@|${DEVICE}|g" \
+  sed -e "s|@DEVICENAME@|${DEVICE_HOSTNAME}|g" \
       -e 's|@INITRAMFS_SOURCE@||g' \
       "${KERNEL_DIR}/config/linux.aarch64.conf" > "${KSRC}/.config"
 
@@ -246,12 +250,13 @@ main() {
   build_kernel
   stage
   assemble_bootimg "$@"
-  # Stage the on-device boot-image rebuild inputs into out/ for the linux-pocknix package: the
-  # mkbootimg tool + the cmdline, so the package's alpm hook can rebuild /flash/KERNEL on the device
-  # (pacman -U linux-pocknix) exactly the way this build does. See packages/linux-pocknix.
+  # Stage the on-device boot-image rebuild inputs into out/ for the linux-pocknix-<soc>
+  # package: the mkbootimg tool, so the package's alpm hook can rebuild /flash/KERNEL on the
+  # device exactly the way this build does. (The cmdline the hook reads is shipped by the
+  # device BSP; out/cmdline is kept as a build record of what the boot image was given.)
   rm -rf "${KBUILD}/out/mkbootimg"
   cp -r "${KBUILD}/mkbootimg" "${KBUILD}/out/mkbootimg"
   printf '%s' "${KERNEL_CMDLINE}" > "${KBUILD}/out/cmdline"
-  ok "linux-pocknix build complete"
+  ok "${KERNEL_PKG} build complete"
 }
 main "$@"

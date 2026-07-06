@@ -21,9 +21,12 @@ stubbed with clear markers.
 ## Layout
 
 ```
-kernel/        COMMITTED RP6 kernel enablement: patches, DTS, config, fw list, bootloader
-config/        pacman.conf template, repo settings (pocknix.conf), package lists
-packages/      local makepkg PKGBUILDs (linux-pocknix, pocknix-bsp, session units…)
+devices/       device profiles (build-time facts) + per-device packages (BSP, metapackage);
+               `make build DEVICE=<name>` selects one — see devices/README.md
+kernel/<soc>/  COMMITTED per-SoC kernel enablement: patches, DTS, config, fw list, bootloader,
+               source pins (kernel.conf); shared by every device on that SoC
+config/        pacman.conf template, device-neutral settings (pocknix.conf), package lists
+packages/      shared makepkg PKGBUILDs (linux-pocknix-<soc>, pocknix-bsp-common, session pkgs…)
 scripts/       sync / bootstrap / build-image / packages / kernel / sd-image / install / check
 vendor/        GITIGNORED build-time material (reference scripts, firmware overlay); `make sync`
 build/         build output (rootfs, image, localrepo, cache)

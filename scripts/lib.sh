@@ -12,6 +12,24 @@ export POCKNIX_ROOT="$(cd "${_lib_dir}/.." && pwd)"
 # shellcheck source=../config/pocknix.conf
 source "${POCKNIX_ROOT}/config/pocknix.conf"
 
+# --- device profile + per-SoC kernel pins -----------------------------------
+# The device profile (devices/<name>/profile.conf) declares everything device-
+# specific: SoC, partition labels/names, kernel cmdline, firmware source,
+# device packages. It sets SOC, which selects the per-SoC kernel tree and its
+# source pins (kernel/<soc>/kernel.conf).
+if [ ! -f "${POCKNIX_ROOT}/devices/${DEVICE}/profile.conf" ]; then
+  printf 'error: unknown DEVICE=%s — available: %s\n' \
+    "${DEVICE}" "$(ls "${POCKNIX_ROOT}/devices" 2>/dev/null | tr '\n' ' ')" >&2
+  exit 1
+fi
+source "${POCKNIX_ROOT}/devices/${DEVICE}/profile.conf"
+source "${POCKNIX_ROOT}/kernel/${SOC}/kernel.conf"
+
+# Paths derived from the profile (must come after it):
+: "${DEVICE_DIR:=${POCKNIX_ROOT}/devices/${DEVICE}}"
+: "${KERNEL_DIR:=${POCKNIX_ROOT}/kernel/${SOC}}"
+: "${ROCKNIX_DEVICE_DIR:=${ROCKNIX_PROJECT_DIR}/devices/${ROCKNIX_SOC}}"
+
 # --- logging ---------------------------------------------------------------
 _c_blue=$'\033[1;34m'; _c_grn=$'\033[1;32m'; _c_yel=$'\033[1;33m'
 _c_red=$'\033[1;31m';  _c_rst=$'\033[0m'

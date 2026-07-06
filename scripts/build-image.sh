@@ -36,31 +36,24 @@ Server = file:///localrepo
 EOF
 }
 
-# Build the local pocknix-* packages and install them into the rootfs:
-#   pocknix-bsp (board support) + gamescope (ROCKNIX-patched, epoch=1 -> beats ALARM's;
-#   vanilla gamescope can't drive the RP6's rotated msm panel — see plan.md Phase 3).
+# Install the local [pocknix] packages into the rootfs: the shared core set
+# (config/packages/pocknix-core.list), the emulation set (pocknix-emulation.list),
+# the SoC kernel (${KERNEL_PKG}), then the device metapackage
+# (devices/${DEVICE}/packages.list) which pulls the device BSP.
 install_local_packages() {
   local root="$1"
   if [ ! -f "${LOCAL_REPO_DIR}/pocknix.db" ]; then
     warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping local pkgs"
     return 0
   fi
-  log "installing local pocknix packages (mesa, vulkan-freedreno, pocknix-bsp, gamescope, inputplumber, pocknix-steam, …)"
+  log "installing local pocknix packages (config/packages/pocknix-core.list + ${DEVICE} device set)"
   append_local_repo "${root}/etc/pacman.conf"
   mkdir -p "${root}/localrepo"
   mount --bind "${LOCAL_REPO_DIR}" "${root}/localrepo"
   chroot "${root}" pacman -Sy --noconfirm
-  # gamescope deps (xorg-xwayland, seatd, libdisplay-info, …) resolve from ALARM.
-  # inputplumber = gamepad -> Steam Input (RP6 config shipped by pocknix-bsp).
-  # pocknix-steam = the Steam session (launcher + installer); pulls local gtk2 + gamescope +
-  # pocknix-steamos-shim and ALARM deps (openal, libcups, lsof, noto-fonts*, networkmanager, …).
-  # pocknix-steamos-shim = steamos-update/branch/BIOS stubs so the Deck UI OOBE doesn't dead-end.
-  # fex-emu + fex-rootfs = x86 game content via Proton (FEX emulator + thunks + the ~1.1 GB Arch x86
-  # squashfs the games' libraries resolve from). Validated on hardware 2026-06-22; +~1.1 GB to the image.
-  # pocknix-desktop = the Plasma Mobile desktop session + the game<->desktop switch
-  # (steamos-session-select). The Plasma Mobile stack itself comes from desktop.list (installed
-  # above), not as deps of this package. Boot default stays game mode (the choice file defaults to
-  # gamescope); desktop is opt-in via the switch. See docs/plasma-mobile-plan.md.
+  # The shared package set lives in config/packages/pocknix-core.list (per-package notes
+  # there). Device packages (BSP + metapackage) come from devices/${DEVICE}/packages.list,
+  # installed AFTER the kernel step below (the metapackage depends on the kernel package).
   #
   # QUALIFY every target with `pocknix/`: `pacman -S <name>` selects the FIRST repo in pacman.conf
   # order that has the name (NOT the highest version), and [pocknix] is appended LAST — so an
@@ -71,12 +64,11 @@ install_local_packages() {
   # mesa + vulkan-freedreno: our epoch-2 trimmed/tuned builds (packages/mesa — freedreno/turnip
   # only, ROCKNIX's 25.1.5 pin, cortex-x3) REPLACE the ALARM copies base.list installed for
   # bootstrap. Same package names; epoch 2 > ALARM's 1, so pacman treats it as a plain upgrade.
-  chroot "${root}" pacman -S --noconfirm --needed \
-        pocknix/mesa pocknix/vulkan-freedreno \
-        pocknix/pocknix-bsp pocknix/gamescope pocknix/inputplumber pocknix/pocknix-steamos-shim \
-        pocknix/pocknix-sdcard-automount \
-        pocknix/mangohud pocknix/pocknix-steam pocknix/fex-emu pocknix/fex-rootfs pocknix/pocknix-desktop \
-        pocknix/pocknix-decky
+  local -a _pkgs=()
+  local _p
+  while read -r _p; do _pkgs+=("pocknix/${_p}"); done \
+    < <(read_pkglist "${CONFIG_DIR}/packages/pocknix-core.list")
+  chroot "${root}" pacman -S --noconfirm --needed "${_pkgs[@]}"
   # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
   # especially: ALARM's vanilla lacks --use-rotation-shader and black-screens on the RP6 (bitten 3x).
   local mesa_ver; mesa_ver="$(chroot "${root}" pacman -Q mesa 2>/dev/null | awk '{print $2}')"
@@ -99,17 +91,16 @@ install_local_packages() {
   chroot "${root}" pacman -Q pocknix-desktop >/dev/null 2>&1 || {
     die "pocknix-desktop not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=pocknix-desktop', confirm build/localrepo/pocknix-desktop-*.pkg.tar.* exists, then re-run."
   }
-  # Emulation layer (packages/pocknix-emulation + docs/there): ES-DE frontend, vendored core set,
-  # AppImage emulators. ALARM-side deps (retroarch, ppsspp, fuse2) came from emulation.list above.
-  # This set is hard-required — all are data/vendor/straightforward builds. NB: steam-rom-manager
-  # is NOT shipped — its Electron CLI deadlocked on-device (2026-07-05) and the Steam-library sync
-  # is done by pocknix-steam-sync (direct shortcuts.vdf write) instead; the PKGBUILD is retired to
+  # Emulation layer (config/packages/pocknix-emulation.list): ES-DE frontend, vendored core
+  # set, AppImage emulators. ALARM-side deps (retroarch, ppsspp, fuse2) came from
+  # emulation.list above. Hard-required. NB: steam-rom-manager is NOT shipped — its Electron
+  # CLI deadlocked on-device (2026-07-05) and the Steam-library sync is done by
+  # pocknix-steam-sync (direct shortcuts.vdf write) instead; the PKGBUILD is retired to
   # packages/attic/ (outside the build glob — makepkg + pacman -U it manually if ever wanted).
-  chroot "${root}" pacman -S --noconfirm --needed \
-        pocknix/pocknix-emulation pocknix/es-de pocknix/libretro-cores-pocknix \
-        pocknix/retroarch-autoconfig-pocknix pocknix/retroarch-shaders-pocknix \
-        pocknix/armsx2-bin pocknix/rpcs3-bin pocknix/eden-bin pocknix/xemu-bin \
-        pocknix/vita3k-bin
+  _pkgs=()
+  while read -r _p; do _pkgs+=("pocknix/${_p}"); done \
+    < <(read_pkglist "${CONFIG_DIR}/packages/pocknix-emulation.list")
+  chroot "${root}" pacman -S --noconfirm --needed "${_pkgs[@]}"
   # Source-built emulators are OPTIONAL-warn (first-ever aarch64 builds = likeliest to fail; a
   # missing one just leaves that system out of ES-DE, which degrades gracefully) — don't fail the
   # whole image over 3DS/GameCube/WiiU.
@@ -118,20 +109,30 @@ install_local_packages() {
     chroot "${root}" pacman -S --noconfirm --needed "pocknix/${oe}" 2>/dev/null \
       || warn "optional emulator ${oe} not in [pocknix] (build failed/skipped?) — image ships WITHOUT it"
   done
-  # Kernel: swap ALARM's generic linux-aarch64 for our linux-pocknix (Image + modules, built by
-  # `make kernel` -> staged into the package). Its own step (not bundled above) so a missing kernel
-  # build errors clearly, and the replace is deterministic. linux-pocknix `provides=linux`.
-  if chroot "${root}" pacman -Si pocknix/linux-pocknix >/dev/null 2>&1; then
+  # Kernel: swap ALARM's generic linux-aarch64 for our SoC kernel package (Image + modules,
+  # built by `make kernel` -> staged into the package). Its own step (not bundled above) so a
+  # missing kernel build errors clearly, and the replace is deterministic. `provides=linux`.
+  if chroot "${root}" pacman -Si "pocknix/${KERNEL_PKG}" >/dev/null 2>&1; then
     chroot "${root}" pacman -Rdd --noconfirm linux-aarch64 2>/dev/null || true
     rm -rf "${root}/boot/initramfs-linux"*.img 2>/dev/null || true
-    chroot "${root}" pacman -S --noconfirm pocknix/linux-pocknix
-    chroot "${root}" pacman -Q linux-pocknix >/dev/null 2>&1 || {
-      die "linux-pocknix failed to install — check the pacman output above."
+    chroot "${root}" pacman -S --noconfirm "pocknix/${KERNEL_PKG}"
+    chroot "${root}" pacman -Q "${KERNEL_PKG}" >/dev/null 2>&1 || {
+      die "${KERNEL_PKG} failed to install — check the pacman output above."
     }
-    log "kernel OK: $(chroot "${root}" pacman -Q linux-pocknix)"
+    log "kernel OK: $(chroot "${root}" pacman -Q "${KERNEL_PKG}")"
   else
-    die "linux-pocknix not in [pocknix] — run 'make kernel' first (build-packages.sh stages build/kernel/out into the package), then re-run. Without it the rootfs has no matching modules for the booted kernel."
+    die "${KERNEL_PKG} not in [pocknix] — run 'make kernel' first (build-packages.sh stages build/kernel/out into the package), then re-run. Without it the rootfs has no matching modules for the booted kernel."
   fi
+  # Device selection LAST: the per-device metapackage (devices/${DEVICE}/packages.list)
+  # pins the device identity and pulls the BSP + the kernel package (already present).
+  _pkgs=()
+  while read -r _p; do _pkgs+=("pocknix/${_p}"); done \
+    < <(read_pkglist "${DEVICE_DIR}/packages.list")
+  chroot "${root}" pacman -S --noconfirm --needed "${_pkgs[@]}"
+  chroot "${root}" pacman -Q "${DEVICE_BSP_PKG}" >/dev/null 2>&1 || {
+    die "${DEVICE_BSP_PKG} not installed — the device metapackage should have pulled it. Check devices/${DEVICE}/packages.list and 'make packages'."
+  }
+  log "device OK: $(chroot "${root}" pacman -Q "${DEVICE_META_PKG}" 2>/dev/null || echo "${DEVICE}")"
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
   # drop the build-only [pocknix] repo from the shipped config — its file:///localrepo
@@ -177,14 +178,15 @@ install_packages() {
   chroot "${root}" pacman -Syyu --noconfirm --needed "${pkgs[@]}"
 }
 
-# Install the SM8550 device firmware (ath12k wifi board data, adsp/cdsp, vpu, ...)
-# from ROCKNIX's synced overlay into the rootfs. It's a large synced vendor blob,
-# so installed directly here rather than packaged (could become pocknix-firmware later).
-FW_SRC="${VENDOR_DIR}/rocknix-sm8550/filesystem/usr/lib/kernel-overlays/base/lib/firmware"
+# Install the SoC device firmware (ath12k wifi board data, adsp/cdsp, vpu, ...)
+# from ROCKNIX's synced overlay into the rootfs. The path comes from the device
+# profile (FW_SRC_REL). It's a large synced vendor blob, so installed directly
+# here rather than packaged (could become pocknix-firmware-<soc> later).
+FW_SRC="${VENDOR_DIR}/${FW_SRC_REL}"
 install_firmware() {
   local root="$1"
   if [ -d "${FW_SRC}" ]; then
-    log "installing SM8550 device firmware -> rootfs /usr/lib/firmware ($(du -sh "${FW_SRC}" | cut -f1))"
+    log "installing ${SOC} device firmware -> rootfs /usr/lib/firmware ($(du -sh "${FW_SRC}" | cut -f1))"
     mkdir -p "${root}/usr/lib/firmware"
     # --chown=root:root: the vendor firmware tree is owned by the host build user (uid 1000); plain
     # rsync -a would bake that into the rootfs as 'alarm'-owned firmware (and re-own /usr). Force root.

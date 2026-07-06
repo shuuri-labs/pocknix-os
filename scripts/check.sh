@@ -17,27 +17,30 @@ if [ "$(uname -s)" = "Linux" ]; then note "host os" "Linux ok"
 else note "host os" "$(uname -s) (image build needs Linux)"; fi
 
 # --- project layout --------------------------------------------------------
-for d in config config/packages scripts packages vendor; do
+for d in config config/packages scripts packages vendor "devices/${DEVICE}"; do
   [ -d "${POCKNIX_ROOT}/${d}" ] && note "dir: ${d}/" "ok" || { note "dir: ${d}/" "MISSING"; fail=1; }
 done
-for f in config/pocknix.conf config/pacman.conf.in config/packages/base.list; do
+for f in config/pocknix.conf config/pacman.conf.in config/packages/base.list \
+         "devices/${DEVICE}/profile.conf" "kernel/${SOC}/kernel.conf"; do
   [ -f "${POCKNIX_ROOT}/${f}" ] && note "file: ${f}" "ok" || { note "file: ${f}" "MISSING"; fail=1; }
 done
+note "device" "${DEVICE} (${DEVICE_PRETTY:-?}) on ${SOC}"
 
 # --- scripts executable ----------------------------------------------------
-for s in sync.sh bootstrap.sh build-image.sh install.sh check.sh; do
+for s in sync.sh bootstrap.sh build-image.sh build-kernel.sh build-packages.sh \
+         build-sd-image.sh install.sh check.sh; do
   [ -x "${POCKNIX_ROOT}/scripts/${s}" ] && note "exec: scripts/${s}" "ok" || { note "exec: scripts/${s}" "not +x"; fail=1; }
 done
 
 # --- kernel enablement present? (committed; refreshable via sync) -----------
 _npatch=$(find "${KERNEL_DIR}/patches" -name '*.patch' 2>/dev/null | wc -l | tr -d ' ')
 if [ "${_npatch:-0}" -gt 0 ]; then
-  note "kernel: enablement (kernel/)" "${_npatch} patches (mainline+sm8550+version)"
+  note "kernel: enablement (kernel/${SOC}/)" "${_npatch} patches"
 else
-  note "kernel: enablement (kernel/)" "run 'make sync'"
+  note "kernel: enablement (kernel/${SOC}/)" "run 'make sync'"
 fi
 # vendor sync is build-time only (gitignored)
-if [ -d "${VENDOR_DIR}/rocknix-sm8550/reference" ]; then
+if [ -d "${VENDOR_DIR}/rocknix-${SOC}/reference" ]; then
   note "vendor: reference/firmware" "synced"
 else
   note "vendor: reference/firmware" "run 'make sync' (build host)"

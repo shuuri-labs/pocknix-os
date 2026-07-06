@@ -81,11 +81,19 @@ if command -v pocknix-steam-sync >/dev/null 2>&1; then
   pocknix-steam-sync || echo "[pocknix-steam] Steam-library sync failed (non-fatal)"
 fi
 
-# RP6 panel: native 1080x1920@120 portrait, mounted rotation=270 -> landscape 1920x1080.
-# Rotated via COMPOSITE-rotation (--force-composition-rotation, gamescope PR #2228 = our 0007
-# patch): the rotation is folded into the existing composite store (one pass) instead of a
-# separate rotation-shader pass. --force-orientation left sets the axis. See gamescope-rp6-gpu.
-W=1920; H=1080; REFRESH=120; ORIENT=left
+# Panel geometry/orientation come from the DEVICE layer: /usr/lib/pocknix/device.conf is
+# shipped by the device's BSP (pocknix-bsp-<device>); /etc/pocknix/device.conf is the optional
+# admin override (sourced last, wins). Fallbacks = the RP6 values, so behavior is unchanged
+# if no device.conf exists. Rotation is done via COMPOSITE-rotation
+# (--force-composition-rotation, gamescope PR #2228 = our 0007 patch): the rotation is folded
+# into the existing composite store (one pass) instead of a separate rotation-shader pass.
+# --force-orientation sets the axis. See gamescope-rp6-gpu.
+for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
+  [ -r "${_dc}" ] && . "${_dc}"
+done
+W="${POCKNIX_PANEL_W:-1920}"; H="${POCKNIX_PANEL_H:-1080}"
+REFRESH="${POCKNIX_PANEL_REFRESH:-120}"; ORIENT="${POCKNIX_PANEL_ORIENT:-left}"
+PANEL_MM="${POCKNIX_PANEL_MM:-177x100}"
 
 # NO core pin: scx_lavd (latency- + heterogeneity-aware, pocknix-lavd.service) places the bursty
 # game/compositor threads on the big cores itself, AND needs the A510 littles free to offload batch
@@ -118,7 +126,7 @@ set -o pipefail
 # it lets frames exceed 40. Now bare, matching ROCKNIX's launch. -noshaders matches ROCKNIX too (stops
 # Steam's fossilize background shader compile stealing CPU during play).
 env -u WAYLAND_DISPLAY \
-  GAMESCOPE_FAKE_OUTPUT_MM=177x100 \
+  GAMESCOPE_FAKE_OUTPUT_MM="${PANEL_MM}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --force-composition-rotation -e -- \
     env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles -noshaders \

@@ -1,0 +1,54 @@
+# pocknix-bsp-common — the device-NEUTRAL board-support mechanics shared by every
+# pocknix device: the sleep.d dispatcher + suspend hooks, the handheld power-key
+# policy, and the session udev rules. Device-specific quirks (input maps, audio
+# UCM, SoC suspend/cpuidle tweaks, device.conf) live in each device's BSP under
+# devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
+pkgname=pocknix-bsp-common
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=()
+optdepends=('inputplumber: the 001-inputplumber suspend hooks manage its USB/IP deck target')
+source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
+        'inputplumber-sleep-pre' 'inputplumber-sleep-post'
+        '20-pocknix-powerkey.conf'
+        '90-pocknix-backlight.rules' '60-pocknix-controllers.rules')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
+  install -Dm755 "${srcdir}/pocknix-sleep" \
+    "${pkgdir}/usr/lib/systemd/system-sleep/pocknix-sleep"
+
+  # suspend/resume hooks (run by the hook above, in name order)
+  # 001-inputplumber: drop the USB/IP virtual controller before sleep so vhci_hcd
+  # doesn't veto suspend (the `deck` target attaches over USB/IP); restore on resume.
+  install -Dm755 "${srcdir}/inputplumber-sleep-pre" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/pre/001-inputplumber"
+  install -Dm755 "${srcdir}/inputplumber-sleep-post" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/post/001-inputplumber"
+  # 003-sdam-debug: Qualcomm PMIC SDAM suspend breadcrumb (fail-soft on non-SPMI
+  # hardware — the dd just logs to kmsg and moves on).
+  install -Dm755 "${srcdir}/sdam-debug-pre" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/pre/003-sdam-debug"
+  install -Dm755 "${srcdir}/sdam-debug-post" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/post/003-sdam-debug"
+
+  # Power button: wake-and-stay (HandlePowerKey=ignore) instead of systemd's default
+  # poweroff (which made a wake-press shut the device down). Sleep via the Steam menu.
+  # Handheld policy, not a device quirk — pairs with pocknix-powerd (overlay).
+  install -Dm644 "${srcdir}/20-pocknix-powerkey.conf" \
+    "${pkgdir}/usr/lib/systemd/logind.conf.d/20-pocknix-powerkey.conf"
+
+  # udev rule: let the 'video' group (non-root session user) write panel brightness
+  # so Steam's brightness slider works as the deck user. Matches any backlight.
+  install -Dm644 "${srcdir}/90-pocknix-backlight.rules" \
+    "${pkgdir}/usr/lib/udev/rules.d/90-pocknix-backlight.rules"
+  # Controller uaccess for the non-root deck session (ALARM has no game-devices-udev).
+  # Critical for the InputPlumber 'deck' target (Valve 28de) hidraw that Steam Input reads.
+  install -Dm644 "${srcdir}/60-pocknix-controllers.rules" \
+    "${pkgdir}/usr/lib/udev/rules.d/60-pocknix-controllers.rules"
+}

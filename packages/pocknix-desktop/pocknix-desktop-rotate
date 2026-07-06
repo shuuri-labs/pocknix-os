@@ -22,8 +22,15 @@
 # This is the single biggest unknown in the desktop session and must be confirmed on hardware.
 set -u
 
-ROTATE="${POCKNIX_ROTATE:-left}"
-SCALE="${POCKNIX_SCALE:-2.5}"
+# Device values come from the BSP-shipped device.conf (POCKNIX_DESKTOP_ROTATE/_SCALE);
+# /etc/pocknix/device.conf is the admin override. The POCKNIX_ROTATE/POCKNIX_SCALE env
+# vars keep highest precedence (the existing escape hatch). Fallbacks = RP6 values.
+for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
+  [ -r "${_dc}" ] && . "${_dc}"
+done
+
+ROTATE="${POCKNIX_ROTATE:-${POCKNIX_DESKTOP_ROTATE:-left}}"
+SCALE="${POCKNIX_SCALE:-${POCKNIX_DESKTOP_SCALE:-2.5}}"
 OUTPUT="${POCKNIX_OUTPUT:-}"
 
 have() { command -v "$1" >/dev/null 2>&1; }

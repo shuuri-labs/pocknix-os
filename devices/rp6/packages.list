@@ -1,0 +1,5 @@
+# Device packages for the Retroid Pocket 6, installed from [pocknix] at the END of
+# install_local_packages (after the kernel step, so the metapackage's kernel dep is
+# already present). The metapackage pulls pocknix-bsp-rp6 + pocknix-bsp-common.
+# Extra ALARM package names may be listed here too if this device ever needs one.
+pocknix-device-rp6
