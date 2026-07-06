@@ -51,6 +51,18 @@ fi
 # shortcuts.vdf write, run by pocknix-steam at session start. The steam-rom-manager PKGBUILD
 # remains in-tree as an optional desktop tool; nothing here seeds or reads its config anymore.)
 
+# --- seed RetroArch joypad autoconfig profiles (only what's missing) ---
+# From retroarch-autoconfig-pocknix (/usr/share/libretro/autoconfig). Copied (not symlinked) into
+# RetroArch's default, WRITABLE autoconfig dir so user-saved custom profiles coexist. Without
+# these, RetroArch sees Steam Input's virtual X360 pad but has no bindings: controls fully dead
+# (bitten on-device 2026-07-06). -n = never clobber a user-customized profile.
+RA_AUTOCFG_SRC=/usr/share/libretro/autoconfig/udev
+RA_AUTOCFG_DST="${HOME}/.config/retroarch/autoconfig/udev"
+if [ -d "${RA_AUTOCFG_SRC}" ]; then
+  mkdir -p "${RA_AUTOCFG_DST}"
+  cp -n "${RA_AUTOCFG_SRC}/"*.cfg "${RA_AUTOCFG_DST}/" 2>/dev/null || true
+fi
+
 # --- seed RetroArch defaults (only if the user has no retroarch.cfg) ---
 # system_directory -> ~/ROMs/bios etc. RetroArch expands any missing keys itself on first run, so a
 # minimal seed is fine; if the user already has a config we leave it entirely alone.

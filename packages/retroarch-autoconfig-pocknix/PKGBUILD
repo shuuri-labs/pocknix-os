@@ -1,0 +1,33 @@
+# retroarch-autoconfig-pocknix — the official libretro joypad autoconfig profiles, vendored.
+#
+# WHY: Arch/ALARM's retroarch package ships NO autoconfig profiles and no ALARM package provides
+# them (checked 2026-07-06) — so RetroArch saw Steam Input's virtual "Microsoft X-Box 360 pad"
+# on the RP6 but had zero bindings for it: controls completely dead in every core. ROCKNIX ships
+# per-device profiles as part of its image; this is our equivalent, and vendoring the WHOLE
+# official set (~440 udev profiles) also covers Bluetooth pads out of the box.
+#
+# In game mode the pad RetroArch sees is Steam Input's virtual X360 pad (physical RSInput pad ->
+# InputPlumber -> Steam Input); in desktop mode it can be the "AYN Odin2 Gamepad" directly. Both
+# are in the official set.
+#
+# Installed to /usr/share/libretro/autoconfig; pocknix-roms-init COPIES the udev profiles into
+# ~/.config/retroarch/autoconfig (RetroArch's default, writable dir) so user-saved custom
+# profiles keep working alongside ours.
+pkgname=retroarch-autoconfig-pocknix
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="libretro joypad autoconfig profiles (udev) — controller bindings for RetroArch"
+arch=('any')
+url="https://github.com/libretro/retroarch-joypad-autoconfig"
+license=('MIT')
+depends=()
+_commit=86207989e43a636ee3746d190e73f25c23dc7b81   # master 2026-07-06
+source=("autoconfig-${_commit}.tar.gz::https://github.com/libretro/retroarch-joypad-autoconfig/archive/${_commit}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  install -dm755 "${pkgdir}/usr/share/libretro/autoconfig/udev"
+  cp "${srcdir}/retroarch-joypad-autoconfig-${_commit}/udev/"*.cfg \
+     "${pkgdir}/usr/share/libretro/autoconfig/udev/"
+  chmod 644 "${pkgdir}/usr/share/libretro/autoconfig/udev/"*.cfg
+}
