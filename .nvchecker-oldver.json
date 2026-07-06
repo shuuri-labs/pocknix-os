@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "data": {
+    "mesa": {"version": "25.1.5"},
+    "gamescope": {"version": "3.16.4"},
+    "mangohud": {"version": "0.8.3"},
+    "fex": {"version": "2605"},
+    "linux-stable": {"version": "7.0.11"}
+  }
+}

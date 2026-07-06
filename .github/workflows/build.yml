@@ -1,0 +1,77 @@
+# CI: fast checks on every push/PR; the heavy package/kernel build is manual
+# (workflow_dispatch) until it has had a supervised first run — the full build
+# needs an ALARM chroot + loop devices + ~1h of kernel compile, all of which the
+# aarch64 ubuntu-24.04-arm hosted runners CAN do, but which is wasteful to run
+# blind on every push. Signing/publishing NEVER happens in CI (the GPG key stays
+# on the build VM; see docs/pacman-repo.md).
+name: build
+on:
+  push:
+    branches: [main, refactor]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full_build:
+        description: "Run the full packages+kernel build (aarch64, ~1-2h)"
+        type: boolean
+        default: false
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax (bash -n) for every script + PKGBUILD
+        run: |
+          set -e
+          for f in scripts/*.sh; do bash -n "$f"; done
+          find packages devices -name PKGBUILD -print0 | xargs -0 -n1 bash -n
+          echo "syntax OK"
+      - name: shellcheck (informational)
+        run: |
+          sudo apt-get install -y -qq shellcheck >/dev/null
+          shellcheck -S warning scripts/*.sh || true
+      - name: Device profile chain resolves
+        run: |
+          set -e
+          for dev in devices/*/; do
+            dev="$(basename "$dev")"
+            DEVICE="$dev" bash -c 'source scripts/lib.sh
+              echo "$DEVICE: SOC=$SOC KERNEL_PKG=$KERNEL_PKG BSP=$DEVICE_BSP_PKG"
+              [ -f "$KERNEL_DIR/kernel.conf" ]
+              [ -f "$DEVICE_DIR/packages.list" ]'
+          done
+      - name: kernel-cmdline matches profile (drift guard, same check as build-packages.sh)
+        run: |
+          set -e
+          for f in devices/*/packages/*/kernel-cmdline; do
+            devdir="$(dirname "$(dirname "$(dirname "$f")")")"
+            want="$(bash -c "unset SOC ROOT_LABEL KERNEL_CMDLINE KERNEL_CMDLINE_ROOT KERNEL_CMDLINE_EXTRA
+                             source '$devdir/profile.conf'; printf '%s' \"\$KERNEL_CMDLINE\"")"
+            got="$(cat "$f")"
+            [ "$want" = "$got" ] || { echo "DRIFT in $f"; exit 1; }
+            echo "$f matches $devdir/profile.conf"
+          done
+
+  full-build:
+    # aarch64 hosted runner: native chroot + makepkg + kernel build, no qemu.
+    # First runs will need iteration (chroot bootstrap inside the runner) — treat
+    # this job as scaffolding to be hardened on its first supervised run.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_build }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host deps (the build bootstraps its own ALARM chroot)
+        run: sudo apt-get install -y -qq libarchive-tools curl rsync flex bison bc python3 git
+      - name: Bootstrap + packages + kernel
+        run: |
+          sudo make bootstrap
+          sudo make kernel
+          sudo make packages
+      - name: Upload localrepo as artifact (unsigned — sign locally with make publish)
+        uses: actions/upload-artifact@v4
+        with:
+          name: localrepo
+          path: build/localrepo/
+          retention-days: 14

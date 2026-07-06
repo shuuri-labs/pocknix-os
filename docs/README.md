@@ -10,7 +10,10 @@ Living references (current, kept up to date):
 - [fex-proton-plan.md](fex-proton-plan.md) — the FEX + Proton-ARM plan and rationale
 - [plasma-mobile-plan.md](plasma-mobile-plan.md) — desktop-session (Plasma Mobile) plan
 - [pacman-repo.md](pacman-repo.md) — the [pocknix] update repo: signing, hosting, `pacman -Syu` instead of reflashing
+- [patch-rebase.md](patch-rebase.md) — bumping mesa/gamescope/mangohud: the patch-series rebase loop + per-package landmines
+- [device-smoke-checklist.md](device-smoke-checklist.md) — the manual on-device test pass (CI has no RP6)
 - [../devices/README.md](../devices/README.md) — the device-abstraction boundary + new-device bring-up checklist
+- [../PATCHES.md](../PATCHES.md) — shared-patch ledger kept in sync with the armada fork
 
 Root-level: [../README.md](../README.md) (project intro + build flow), [../plan.md](../plan.md)
 (original phased build plan), [../progress.md](../progress.md) (the running journal).

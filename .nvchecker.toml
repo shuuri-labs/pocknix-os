@@ -1,0 +1,44 @@
+# nvchecker config — watches the upstreams our patched packages pin.
+# Run: `pip install nvchecker && nvchecker -c .nvchecker.toml` (or via the
+# upstream-watch GitHub Actions cron, which opens an issue on new versions).
+# "oldver" bookkeeping lives in .nvchecker-oldver.json (committed; nvtake updates it
+# when a bump lands: `nvtake -c .nvchecker.toml mesa`).
+
+[__config__]
+oldver = ".nvchecker-oldver.json"
+newver = ".nvchecker-newver.json"
+
+[mesa]
+# packages/mesa pins the release tarball (currently 25.1.5)
+source = "git"
+git = "https://gitlab.freedesktop.org/mesa/mesa.git"
+use_max_tag = true
+prefix = "mesa-"
+
+[gamescope]
+# packages/gamescope pins a Valve commit (3.16.0 era); watch tags for rebase points
+source = "github"
+github = "ValveSoftware/gamescope"
+use_max_tag = true
+
+[mangohud]
+# packages/mangohud pins tag v0.8.3
+source = "github"
+github = "flightlessmango/MangoHud"
+use_max_tag = true
+prefix = "v"
+
+[fex]
+# packages/fex-emu pins a commit on the monthly-tagged repo (FEX-2605 era);
+# see docs/fex-version-bump.md for the bump procedure
+source = "github"
+github = "FEX-Emu/FEX"
+use_max_tag = true
+prefix = "FEX-"
+
+[linux-stable]
+# kernel/sm8550/kernel.conf pins 7.0.11; ROCKNIX tracks its own bump cadence —
+# this only tells us stable moved (the real trigger is a ROCKNIX sync)
+source = "regex"
+url = "https://www.kernel.org/finger_banner"
+regex = "The latest stable version of the Linux kernel is:\\s+([0-9.]+)"

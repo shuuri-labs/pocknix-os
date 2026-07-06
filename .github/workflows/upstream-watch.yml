@@ -1,0 +1,40 @@
+# Weekly upstream-version watch: runs nvchecker against .nvchecker.toml and opens
+# (or updates) a "new upstream versions" issue when something we pin has moved.
+# Rebuilds/rebases stay manual — see docs/patch-rebase.md.
+name: upstream-watch
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run nvchecker
+        run: |
+          pipx install nvchecker
+          nvchecker -c .nvchecker.toml || true
+          echo "--- comparison ---"
+          nvcmp -c .nvchecker.toml | tee nv-diff.txt || true
+      - name: Open/update issue when versions moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s nv-diff.txt ]; then
+            title="upstream watch: new versions available"
+            body="$(printf 'nvchecker found upstream movement:\n\n```\n%s\n```\n\nBump procedure: docs/patch-rebase.md (mesa/gamescope/mangohud), docs/fex-version-bump.md (FEX). After a bump lands, run `nvtake -c .nvchecker.toml <name>` and commit .nvchecker-oldver.json.' "$(cat nv-diff.txt)")"
+            existing="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' || true)"
+            if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+              gh issue comment "$existing" --body "$body"
+            else
+              gh issue create --title "$title" --body "$body"
+            fi
+          else
+            echo "no upstream movement"
+          fi
