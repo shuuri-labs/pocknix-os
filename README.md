@@ -30,6 +30,11 @@ build/         build output (rootfs, image, localrepo, cache)
 plan.md        full phased plan
 ```
 
+Local-disk hygiene: everything under `vendor/` is regenerable (`make sync`), and
+`vendor/rocknix-binaries-20260702/` is a closed-investigation artifact nothing builds
+from — both are safe to delete on the build host. `git clean -fdX packages/` sweeps
+ignored build droppings (`__pycache__/`, `node_modules/`, `src/`, `pkg/`).
+
 ### Self-contained kernel (vs thorch)
 
 The full kernel input set lives **in the repo** under `kernel/` (patches, DTS, config, fw

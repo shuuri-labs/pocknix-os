@@ -25,9 +25,8 @@ bootstrap: ## Download + verify + extract the ALARM base rootfs (root, Linux)
 build: ## Full build: bootstrap -> packages -> kernel -> assemble (root, Linux)
 	@$(SCRIPTS)/build-image.sh
 
-kernel: ## Build only the in-project kernel (linux-pocknix) [Phase 1]
-	@if [ -x $(SCRIPTS)/build-kernel.sh ]; then $(SCRIPTS)/build-kernel.sh; \
-	 else echo "Phase 1 not implemented: scripts/build-kernel.sh missing"; exit 1; fi
+kernel: ## Build only the in-project kernel (linux-pocknix)
+	@$(SCRIPTS)/build-kernel.sh
 
 packages: ## Build local pocknix-* packages -> build/localrepo (root). PKG="a b" builds a subset
 	@$(SCRIPTS)/build-packages.sh $(PKG)

@@ -22,19 +22,6 @@ render_pacman_conf() {
   cp -f "${CONFIG_DIR}/pacman.conf.in" "${out}"
 }
 
-# Appended only when their packages are installed (Phase 3+), so the Phase 0 base
-# install never depends on an unwired/unreachable repo.
-append_holo_repo() {
-  local out="$1"
-  grep -q "^\[${HOLO_RELEASE}\]" "${out}" && return 0
-  log "adding holo repo (${HOLO_RELEASE})"
-  cat >> "${out}" <<EOF
-
-[${HOLO_RELEASE}]
-SigLevel = Optional TrustAll
-Server = ${HOLO_REPO_URL}/${HOLO_RELEASE}/os/aarch64
-EOF
-}
 # The local repo lives on the host; we bind-mount it to /localrepo inside the rootfs
 # chroot, so the repo Server is that in-chroot path.
 append_local_repo() {
@@ -116,8 +103,8 @@ install_local_packages() {
   # AppImage emulators. ALARM-side deps (retroarch, ppsspp, fuse2) came from emulation.list above.
   # This set is hard-required — all are data/vendor/straightforward builds. NB: steam-rom-manager
   # is NOT shipped — its Electron CLI deadlocked on-device (2026-07-05) and the Steam-library sync
-  # is done by pocknix-steam-sync (direct shortcuts.vdf write) instead; the PKGBUILD stays in-tree
-  # as an optional tool (pacman -U it manually if ever wanted).
+  # is done by pocknix-steam-sync (direct shortcuts.vdf write) instead; the PKGBUILD is retired to
+  # packages/attic/ (outside the build glob — makepkg + pacman -U it manually if ever wanted).
   chroot "${root}" pacman -S --noconfirm --needed \
         pocknix/pocknix-emulation pocknix/es-de pocknix/libretro-cores-pocknix \
         pocknix/retroarch-autoconfig-pocknix pocknix/retroarch-shaders-pocknix \

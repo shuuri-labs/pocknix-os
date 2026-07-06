@@ -29,8 +29,8 @@ arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 # JUST bash — see the header. The emulator runtime comes via config/packages/emulation.list. The
-# scripts `command -v`-guard their callees (retroarch, es-de, steam-rom-manager) so an install
-# WITHOUT the runtime present degrades gracefully instead of erroring.
+# scripts `command -v`-guard their callees (retroarch, es-de) so an install WITHOUT the runtime
+# present degrades gracefully instead of erroring.
 depends=('bash')
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
         'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'

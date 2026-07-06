@@ -36,6 +36,15 @@ RESCAN_SECS        = 5     # re-enumerate devices that (dis)appeared
 SUSPEND_TIMEOUT    = 5     # never let a stuck systemctl block the loop
 BACKLIGHT_GLOB     = "/sys/class/backlight/*/bl_power"
 
+# Per-event journal chatter (suspend/resume/screen-off lines) is off by default; set
+# Environment=POCKNIX_POWERD_DEBUG=1 on the unit to get it back. Device-discovery and
+# error lines stay unconditional.
+DEBUG = os.environ.get("POCKNIX_POWERD_DEBUG", "0") == "1"
+
+def dbg(msg):
+    if DEBUG:
+        print(f"pocknix-powerd: {msg}", flush=True)
+
 def boot_mono_delta():
     return time.clock_gettime(time.CLOCK_BOOTTIME) - time.clock_gettime(time.CLOCK_MONOTONIC)
 
@@ -56,7 +65,7 @@ def screen_is_on():
     return not found   # nodes exist and none were 0 -> off; no nodes at all -> assume on
 
 def do_suspend():
-    print("pocknix-powerd: short press -> suspending", flush=True)
+    dbg("short press -> suspending")
     try:
         subprocess.run(["systemctl", "suspend"], timeout=SUSPEND_TIMEOUT,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -115,8 +124,7 @@ while True:
     if delta - last_delta > 0.5:
         ignore_until = now + RESUME_IGNORE_SECS
         down_at.clear()            # a pre-suspend down must not pair with a post-resume up
-        print("pocknix-powerd: resume detected — ignoring power key for "
-              f"{RESUME_IGNORE_SECS}s", flush=True)
+        dbg(f"resume detected — ignoring power key for {RESUME_IGNORE_SECS}s")
     last_delta = delta
 
     for fd in ready:
@@ -138,8 +146,7 @@ while True:
                         # un-blanks on the input event; we just decline to suspend. First press
                         # wakes the screen, a later press (screen on) then suspends as normal.
                         if not screen_is_on():
-                            print("pocknix-powerd: screen off (idle-blank) -> wake only, "
-                                  "not suspending", flush=True)
+                            dbg("screen off (idle-blank) -> wake only, not suspending")
                             continue
                         # guard the freeze window too: events queued across our own
                         # suspend get dropped even before the delta jump is seen
