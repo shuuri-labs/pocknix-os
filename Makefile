@@ -28,7 +28,7 @@ build: ## Full build: bootstrap -> packages -> kernel -> assemble (root, Linux)
 kernel: ## Build only the in-project kernel (linux-pocknix-<soc>)
 	@$(SCRIPTS)/build-kernel.sh
 
-packages: ## Build local pocknix-* packages -> build/localrepo (root). PKG="a b" builds a subset
+packages: ## Build local pocknix-* packages -> build/localrepo (root); skips up-to-date ones. PKG="a b" forces a subset
 	@$(SCRIPTS)/build-packages.sh $(PKG)
 
 sd-image: ## Build a flashable SD boot-test image (needs build + kernel) (root, Linux)

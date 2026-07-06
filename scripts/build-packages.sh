@@ -63,11 +63,40 @@ setup_chroot() {
 }
 
 build_one() {
-  local pkgdir="$1" name; name="$(basename "${pkgdir}")"
-  log "makepkg: ${name}"
+  local pkgdir="$1" force="${2:-0}" name; name="$(basename "${pkgdir}")"
   rm -rf "${BROOT}/build/${name}"
   mkdir -p "${BROOT}/build"
   cp -r "${pkgdir}" "${BROOT}/build/${name}"
+  chroot "${BROOT}" chown -R builder:builder "/build/${name}"
+  # Incremental skip: if every artifact this PKGBUILD would produce (per `makepkg
+  # --packagelist`: name-[epoch:]ver-rel-arch, split siblings included) is already in the
+  # localrepo AND newer than every file in the package dir, there is nothing to do — so a
+  # re-run of `make build` doesn't recompile mesa/gamescope/the world. Editing any file in
+  # the package dir (patch, script, PKGBUILD) triggers a rebuild without needing a pkgrel
+  # bump. Force paths: `make packages PKG=<name>` always rebuilds the named packages;
+  # POCKNIX_FORCE_REBUILD=1 rebuilds everything. The kernel package also rebuilds whenever
+  # `make kernel` produced a newer Image than the packaged one.
+  if [ "${force}" -eq 0 ]; then
+    local uptodate=1 nlist=0 p f
+    while IFS= read -r p; do
+      nlist=$((nlist+1))
+      f="${LOCALREPO}/$(basename "${p}")"
+      if [ ! -f "${f}" ] || [ -n "$(find "${pkgdir}" -newer "${f}" -print -quit)" ]; then
+        uptodate=0; break
+      fi
+      case "${name}" in linux-pocknix-*)
+        if [ -f "${BUILD_DIR}/kernel/out/Image" ] && [ "${BUILD_DIR}/kernel/out/Image" -nt "${f}" ]; then
+          uptodate=0; break
+        fi
+      ;; esac
+    done < <(chroot "${BROOT}" runuser -u builder -- \
+               bash -lc "cd /build/${name} && makepkg --packagelist" 2>/dev/null)
+    if [ "${nlist}" -gt 0 ] && [ "${uptodate}" -eq 1 ]; then
+      log "skip: ${name} (already in localrepo, sources unchanged — force with PKG=${name})"
+      return 0
+    fi
+  fi
+  log "makepkg: ${name}"
   # linux-pocknix-<soc> is a THIN package: it doesn't compile the kernel (no makepkg/toolchain
   # in the chroot for that), it just packages `make kernel`'s output. Stage build/kernel/out
   # into the package build dir as ./staged so its package() can lay it out as /boot +
@@ -112,9 +141,16 @@ Update one to match the other."
   chroot "${BROOT}" chown -R builder:builder "/build/${name}"
   chroot "${BROOT}" chown builder:builder /build/srccache
   # makepkg refuses to run as root; build as the 'builder' user.
-  # -s syncs makedepends (gamescope needs many); the BSPs have none so it's a no-op.
+  # -s syncs makedepends (gamescope needs many). Device packages (devices/*/packages/*:
+  # BSPs + metapackages) are pure file-drop/meta packages built with --nodeps instead —
+  # with -s makepkg would install their RUNTIME dependency closure into the build chroot
+  # (the kernel package, the Steam stack, the ~1.1 GB fex-rootfs) just to lay out a few
+  # files, which is slow and was the failure mode for pocknix-device-rp6. Their depends=
+  # still ships in the .pkg metadata; -d only skips build-time resolution.
+  local mkflags="-s"
+  case "${pkgdir}" in */devices/*/packages/*) mkflags="-d" ;; esac
   if ! chroot "${BROOT}" runuser -u builder -- \
-      bash -lc "cd /build/${name} && SRCDEST=/build/srccache makepkg -s -f --noconfirm --nocheck --skippgpcheck"; then
+      bash -lc "cd /build/${name} && SRCDEST=/build/srccache makepkg ${mkflags} -f --noconfirm --nocheck --skippgpcheck"; then
     warn "makepkg failed for ${name} — keeping any previous build in ${LOCALREPO##*/}"
     return 1
   fi
@@ -150,8 +186,9 @@ Update one to match the other."
 }
 
 main() {
-  # Optional args = package names to build (subset); no args = build all in packages/.
-  # e.g. `make packages PKG="inputplumber pocknix-bsp-rp6"` to skip the slow gamescope rebuild.
+  # Optional args = package names to build (subset, always rebuilt); no args = build
+  # everything, skipping packages already up-to-date in the localrepo (see build_one).
+  # e.g. `make packages PKG="inputplumber pocknix-bsp-rp6"` to force just those two.
   local want=("$@")
   mkdir -p "${LOCALREPO}"
   setup_chroot
@@ -171,7 +208,7 @@ main() {
   # Build a package, publishing it to [pocknix] on success so later packages see it.
   try_build() {
     chroot "${BROOT}" pacman -Sy --noconfirm >/dev/null 2>&1 || true   # refresh dbs incl. [pocknix]
-    if build_one "$1"; then
+    if build_one "$1" "${2:-0}"; then
       built=$((built+1))
       chroot "${BROOT}" bash -lc "cd /localrepo && repo-add -q ${REPO_DB} *.pkg.tar.*"
       return 0
@@ -179,17 +216,21 @@ main() {
     return 1
   }
 
-  local built=0 name
+  local built=0 name force
   local -a failed=()
   # Shared packages (packages/*/) + every device's packages (devices/*/packages/*/ — the
   # arch=any BSPs/metapackages build in seconds), so the repo always carries all devices.
+  # Up-to-date packages are skipped (see build_one); PKG= names and
+  # POCKNIX_FORCE_REBUILD=1 force.
   for pkgdir in "${PACKAGES_DIR}"/*/ "${POCKNIX_ROOT}"/devices/*/packages/*/; do
     [ -f "${pkgdir}/PKGBUILD" ] || continue
     name="$(basename "${pkgdir}")"
+    force=0
+    [ "${POCKNIX_FORCE_REBUILD:-0}" = "1" ] && force=1
     if [ "${#want[@]}" -gt 0 ]; then
-      case " ${want[*]} " in *" ${name} "*) ;; *) continue ;; esac
+      case " ${want[*]} " in *" ${name} "*) force=1 ;; *) continue ;; esac
     fi
-    try_build "${pkgdir}" || failed+=("${pkgdir}")
+    try_build "${pkgdir}" "${force}" || failed+=("${pkgdir}")
   done
 
   # Dependency order != alphabetical: a package can depend on a sibling the glob builds LATER
