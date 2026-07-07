@@ -46,15 +46,13 @@ options=(!lto)
 # newer glibc (ALARM's 2.43) declares once_flag/call_once in stdlib.h per C2y, which
 # collides with mesa's bundled src/c11 pthread shim ("conflicting types for 'call_once'").
 # 25.1.5 predates the fix (ROCKNIX builds it against an older glibc, so they never hit it).
-source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz"
-        '0001-c11-threads-fix-build-on-c23.patch')
+source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz")
 # sha256 = ROCKNIX's PKG_SHA256 for mesa 25.1.5 (packages/graphics/mesa/package.mk)
-sha256sums=('072705caa9adf4740f1489194b13e278ad959166863b5271fe423a86353c9ab6'
-            'SKIP')
+sha256sums=('072705caa9adf4740f1489194b13e278ad959166863b5271fe423a86353c9ab6')
 
 prepare() {
   cd "mesa-${pkgver}"
-  patch -p1 < "${srcdir}/0001-c11-threads-fix-build-on-c23.patch"
+  # (the 25.1.5-era c11-threads C23 patch is upstream in 26.x — dropped)
   # Include the package release in the version string so Chromium/CEF (steamwebhelper!)
   # invalidates its GPU cache across our rebuilds — same trick as Arch's mesa.
   echo "${pkgver}-pocknix${epoch}.${pkgrel}" > VERSION
