@@ -254,7 +254,37 @@ main() {
     done
     [ "${progress}" -eq 1 ] || break
   done
-  [ "${#failed[@]}" -eq 0 ] || warn "still failing after dep-order retries: ${failed[*]##*/}"
+  # --- failure summary: surface the SILENT danger. A failed rebuild that left an OLDER build in
+  # localrepo gets installed by build-image with no error, so a stale package ships (exactly how an
+  # old pocknix-emulation reached an image, 2026-07-08). Split the failures into "stale artifact
+  # still present" (dangerous, loud) vs "no artifact" (build-image errors at install, not silent).
+  if [ "${#failed[@]}" -gt 0 ]; then
+    local -a stale=() gone=()
+    local fp fname base p af had line
+    for fp in "${failed[@]}"; do
+      fname="$(basename "${fp}")"; had=0
+      # artifact base name(s) this PKGBUILD produces (split pkgs -> several); --packagelist only
+      # reads the PKGBUILD so it works even though the build failed.
+      while IFS= read -r p; do
+        [ -n "${p}" ] || continue
+        base="$(basename "${p}")"; base="${base%-*}"; base="${base%-*}"; base="${base%-*}"
+        for af in "${LOCALREPO}/${base}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${base}"-*:*.pkg.tar.*; do
+          [ -e "${af}" ] || continue
+          stale+=("${base}  (localrepo still has $(basename "${af}"))"); had=1
+        done
+      done < <(chroot "${BROOT}" runuser -u builder -- \
+                 bash -lc "cd /build/${fname} 2>/dev/null && LC_ALL=C makepkg --packagelist" 2>/dev/null)
+      [ "${had}" -eq 0 ] && gone+=("${fname}")
+    done
+    echo >&2
+    warn "PACKAGE BUILD FAILURES (${#failed[@]}): ${failed[*]##*/}"
+    if [ "${#stale[@]}" -gt 0 ]; then
+      warn "  STALE ARTIFACT WILL SHIP: the rebuild failed but an OLD version stays in localrepo,"
+      warn "  so 'make build' installs the stale one with no error. Rebuild before building an image:"
+      while IFS= read -r line; do warn "    - ${line}"; done < <(printf '%s\n' "${stale[@]}" | sort -u)
+    fi
+    [ "${#gone[@]}" -gt 0 ] && warn "  no artifact in localrepo (build-image errors at install, not silent): ${gone[*]}"
+  fi
 
   umount "${BROOT}/localrepo"
   chroot_umount "${BROOT}"
