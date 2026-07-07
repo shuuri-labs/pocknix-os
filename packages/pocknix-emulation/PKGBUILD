@@ -34,11 +34,12 @@ license=('GPL2')
 depends=('bash')
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
         'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
+        'eden-qt-config.ini.in'
         # per-system RetroArch tuning seeds (content-dir overrides + shader presets), harvested
         # from on-device A/B sessions. NB: makepkg flattens these to $srcdir basenames — keep
         # basenames unique across systems (they're named after the content dir, so they are).
         'retroarch-config/mGBA/gba.cfg' 'retroarch-config/mGBA/gba.slangp')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
@@ -67,6 +68,10 @@ package() {
   # session (2026-07-06). Instantiated per-user by pocknix-roms-init.
   install -Dm644 "${srcdir}/armsx2-PCSX2.ini.in" \
     "${pkgdir}/usr/share/pocknix-emulation/armsx2-PCSX2.ini.in"
+  # Eden (Switch) config seed: Player-1 SDL pad bindings (Eden ships none, dead controller
+  # otherwise) + Mailbox vsync (smoothest pacing on the 120Hz panel). Verified 2026-07-07.
+  install -Dm644 "${srcdir}/eden-qt-config.ini.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/eden-qt-config.ini.in"
   # Per-system RetroArch tuning (seeded into ~/.config/retroarch/config by pocknix-roms-init):
   # GBA = integer scaling + lcd3x (on-device tuned 2026-07-06). The lcd3x preset references the
   # vendored shader set (retroarch-shaders-pocknix) by relative path. The user's bezel overlay is

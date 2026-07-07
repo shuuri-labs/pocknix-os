@@ -85,6 +85,15 @@ if [ -f "${SHARE}/armsx2-PCSX2.ini.in" ] && [ ! -f "${HOME}/.config/PCSX2/inis/P
   sed "s|__HOME__|${HOME}|g" "${SHARE}/armsx2-PCSX2.ini.in" > "${HOME}/.config/PCSX2/inis/PCSX2.ini" 2>/dev/null || true
 fi
 
+# --- seed Eden (Switch) config: pad bindings + Mailbox vsync ---
+# Eden ships no pad bindings (dead controller otherwise); Mailbox = smoothest pacing on the 120Hz
+# panel. Partial seed (Eden fills the rest with its defaults on first run). No paths, no subst.
+# Never clobbers an existing config.
+if [ -f "${SHARE}/eden-qt-config.ini.in" ] && [ ! -f "${HOME}/.config/eden/qt-config.ini" ]; then
+  mkdir -p "${HOME}/.config/eden"
+  cp "${SHARE}/eden-qt-config.ini.in" "${HOME}/.config/eden/qt-config.ini" 2>/dev/null || true
+fi
+
 # --- seed RetroArch joypad autoconfig profiles (only what's missing) ---
 # From retroarch-autoconfig-pocknix (/usr/share/libretro/autoconfig). Copied (not symlinked) into
 # RetroArch's default, WRITABLE autoconfig dir so user-saved custom profiles coexist. Without

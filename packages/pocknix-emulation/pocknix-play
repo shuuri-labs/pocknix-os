@@ -88,6 +88,11 @@ case "${system}" in
   ps3)
     run_appimage rpcs3/rpcs3.AppImage --no-gui "${rom}" ;;
   switch)
+    # Big-core pin (same as ps2: Eden's emulated-core thread landed on a little A510 unpinned,
+    # poor pacing; taskset 3-7 gives smooth 60, verified on-device 2026-07-07). Config (pad
+    # bindings + Mailbox vsync) seeded by pocknix-roms-init. System Turnip 26.1.4 runs Eden
+    # directly now (per-app driver shim retired with the mesa 26.1.4 bump).
+    _pin="taskset -c 3-7"
     run_appimage eden/Eden.AppImage -f -g "${rom}" ;;                      # yuzu-lineage flags
   xbox)
     run_appimage xemu/xemu.AppImage -full-screen -dvd_path "${rom}" ;;
