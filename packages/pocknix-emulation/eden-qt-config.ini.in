@@ -77,3 +77,7 @@ player_0_motionright="engine:keyboard,code:56,toggle:0"
 [Renderer]
 use_vsync\default=false
 use_vsync=1
+accelerate_astc\default=false
+accelerate_astc=0
+gpu_accuracy\default=false
+gpu_accuracy=0
