@@ -36,9 +36,11 @@ source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'po
         'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
         'eden-qt-config.ini.in'
         # per-system RetroArch tuning seeds (content-dir overrides + shader presets), harvested
-        # from on-device A/B sessions. NB: makepkg flattens these to $srcdir basenames — keep
-        # basenames unique across systems (they're named after the content dir, so they are).
-        'retroarch-config/mGBA/gba.cfg' 'retroarch-config/mGBA/gba.slangp')
+        # from on-device A/B sessions. FLAT names: makepkg cannot retrieve local sources from
+        # subdirectory paths (gba.cfg in retroarch-config/mGBA/ failed with "not found in the
+        # build directory", 2026-07-08); package() maps retroarch-<Core>-<file> into the
+        # retroarch-config/<Core>/ tree that pocknix-roms-init seeds from.
+        'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
@@ -76,6 +78,6 @@ package() {
   # GBA = integer scaling + lcd3x (on-device tuned 2026-07-06). The lcd3x preset references the
   # vendored shader set (retroarch-shaders-pocknix) by relative path. The user's bezel overlay is
   # deliberately NOT baked (trademarked console logo in the artwork) — device-only.
-  install -Dm644 "${srcdir}/gba.cfg"    "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.cfg"
-  install -Dm644 "${srcdir}/gba.slangp" "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.slangp"
+  install -Dm644 "${srcdir}/retroarch-mGBA-gba.cfg"    "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.cfg"
+  install -Dm644 "${srcdir}/retroarch-mGBA-gba.slangp" "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.slangp"
 }
