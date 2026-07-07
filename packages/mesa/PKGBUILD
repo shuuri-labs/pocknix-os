@@ -6,10 +6,12 @@
 #    dead weight in the image and build-time deps (llvm, rust, clang) we don't want.
 #  - CPU tuning: built with ROCKNIX's exact SM8550 flags (cortex-x3/armv9-a, see build()) like
 #    our gamescope/mangohud, instead of ALARM's generic armv8-a baseline.
-#  - Version pinned to ROCKNIX's mesa (25.1.5, their packages/graphics/mesa/package.mk pin and
-#    sha256) so the driver pair matches what the RP6 is validated against upstream. NB: ROCKNIX
-#    ships NO mesa patches on our pinned branch (packages/graphics/mesa has only package.mk) —
-#    "the same patches ROCKNIX ships" is the empty set; this is stock 25.1.5.
+#  - Version: 26.1.4 (latest stable) — a DELIBERATE divergence from ROCKNIX's 25.1.5 pin
+#    (2026-07-08). The original pin was bring-up-era parity ("match what the RP6 is validated
+#    against"); it was invalidated on-device: 25.1.5's Turnip GPU-faults under Eden/Switch
+#    (adreno CP opcode 0x0 -> Vulkan device loss), while Turnip 26.1.4 runs it flawlessly —
+#    Switch emulation is the one workload ROCKNIX never validated (they don't ship it). ALARM
+#    ships 26.1.4 as its standard mesa too. ROCKNIX still ships no mesa patches; stock source.
 #
 # Driver set mirrors ROCKNIX SM8550 (options: GRAPHIC_DRIVERS=freedreno -> config/graphic):
 #   gallium = freedreno + zink + softpipe (their default fallback), vulkan = freedreno (turnip).
@@ -23,9 +25,9 @@
 pkgbase=mesa
 pkgname=(mesa vulkan-freedreno)
 epoch=2
-pkgver=25.1.5
+pkgver=26.1.4
 pkgrel=1
-pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (ROCKNIX 25.1.5 pin)"
+pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (26.1.4)"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
 license=("MIT AND BSD-3-Clause AND SGI-B-2.0")
@@ -47,7 +49,7 @@ options=(!lto)
 source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz"
         '0001-c11-threads-fix-build-on-c23.patch')
 # sha256 = ROCKNIX's PKG_SHA256 for mesa 25.1.5 (packages/graphics/mesa/package.mk)
-sha256sums=('3c4f6b10ff6ee950d0ec6ea733cc6e6d34c569454e3d39a9b276de9115a3b363'
+sha256sums=('072705caa9adf4740f1489194b13e278ad959166863b5271fe423a86353c9ab6'
             'SKIP')
 
 prepare() {
@@ -90,8 +92,6 @@ build() {
     -Ddraw-use-llvm=false \
     -Dgallium-rusticl=false \
     -Dgallium-va=disabled \
-    -Dgallium-vdpau=disabled \
-    -Dgallium-xa=disabled \
     -Dgallium-extra-hud=false \
     -Dshader-cache=enabled \
     -Dandroid-libbacktrace=disabled \
