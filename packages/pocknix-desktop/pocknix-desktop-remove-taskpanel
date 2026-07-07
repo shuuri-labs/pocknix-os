@@ -1,0 +1,44 @@
+#!/bin/bash
+# pocknix-desktop-remove-taskpanel — delete Plasma Mobile's bottom taskpanel containment.
+#
+# WHY this exists: the image bakes gesturePanelEnabled=false + navigationPanelEnabled=false
+# (~deck/.config/plasmamobilerc) and the shell honors both, so the taskpanel asks its PanelView
+# for thickness 0. But plasma-workspace clamps every panel to the view minimum, ~12 logical px
+# (PanelView::setThickness -> minThickness()), and autoHidePanelsEnabled=true puts panels in
+# overlay mode, so the leftover strip floats semi-transparent ON TOP of app content. No config
+# value can hide it; the clean fix is removing the taskpanel containment itself via the
+# plasmashell scripting API. Navigation survives without it (confirmed on-device 2026-07-07).
+#
+# The removal persists in the shell's appletsrc, but plasma-mobile re-adds the panel from its
+# one-shot update scripts on version bumps (shell package updates/panelsfix.js), so this
+# re-asserts at every session launch (autostart, like pocknix-desktop-rotate) instead of trying
+# to bake a pre-trimmed appletsrc. Idempotent: removing an absent panel is a no-op.
+set -u
+
+have() { command -v "$1" >/dev/null 2>&1; }
+have qdbus6 || { echo "pocknix-desktop-remove-taskpanel: qdbus6 not found" >&2; exit 1; }
+
+log() { echo "pocknix-desktop-remove-taskpanel: $*" >&2; }
+
+# Snapshot panels() once: remove() shrinks the live list, so a fresh panels() call per index
+# walks off the end mid-loop.
+script='var ps = panels();
+var out = "";
+for (var i = 0; i < ps.length; i++) {
+    if (ps[i].type == "org.kde.plasma.mobile.taskpanel") {
+        ps[i].remove();
+        out += "removed taskpanel ";
+    }
+}
+print(out || "no taskpanel present");'
+
+# plasmashell can take a moment after login to register on D-Bus. Poll briefly.
+for _ in $(seq 1 30); do
+  if out="$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "${script}" 2>/dev/null)"; then
+    log "${out:-done}"
+    exit 0
+  fi
+  sleep 0.5
+done
+log "plasmashell not reachable on D-Bus after ~15s, taskpanel left in place"
+exit 1

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=pocknix taskpanel removal
+Comment=Remove the leftover Plasma Mobile gesture bar (taskpanel) once the session is up
+Exec=/usr/bin/pocknix-desktop-remove-taskpanel
+# Only meaningful inside a Plasma session (talks to the running plasmashell over D-Bus).
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2

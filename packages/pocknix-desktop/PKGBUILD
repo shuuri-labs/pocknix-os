@@ -9,6 +9,9 @@
 #   - pocknix-desktop            the launcher (.bash_profile execs it when the choice = plasma)
 #   - pocknix-desktop-rotate     applies the RP6 panel rotation+scale to the live kwin session
 #                                (autostarted via /etc/xdg/autostart) — the rotated-DSI crux
+#   - pocknix-desktop-remove-taskpanel  deletes the shell's bottom taskpanel containment each
+#                                session — with the baked gesture/navigation panels disabled it
+#                                still lingers as a ~12px overlay strip (PanelView min clamp)
 #   - steamos-session-select     the REAL game<->desktop switch (Steam "Switch to Desktop" + the
 #                                Plasma "Return to Game Mode" tile both call this)
 #   - return-to-gamemode.desktop an app-grid tile that runs `steamos-session-select gamescope`
@@ -17,7 +20,7 @@
 # docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=7
+pkgrel=8
 pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -30,10 +33,11 @@ license=('GPL2')
 # callees (startplasmamobile, kscreen-doctor) and fail gracefully if the stack is absent.
 depends=('bash')
 source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'
+        'pocknix-desktop-remove-taskpanel' 'pocknix-desktop-remove-taskpanel.desktop'
         'steamos-session-select' 'return-to-gamemode.desktop'
         'pocknix-flathub-setup' 'pocknix-flathub.service' 'ksplashrc' 'pocknix-x11.conf'
         'powerdevilrc')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
@@ -42,6 +46,11 @@ package() {
   # Autostart the rotation transform once the Plasma session (and kscreen kded) is up.
   install -Dm644 "${srcdir}/pocknix-desktop-rotate.desktop" \
     "${pkgdir}/etc/xdg/autostart/pocknix-desktop-rotate.desktop"
+  # Remove the leftover gesture-bar taskpanel every session (see the script header for why).
+  install -Dm755 "${srcdir}/pocknix-desktop-remove-taskpanel" \
+    "${pkgdir}/usr/bin/pocknix-desktop-remove-taskpanel"
+  install -Dm644 "${srcdir}/pocknix-desktop-remove-taskpanel.desktop" \
+    "${pkgdir}/etc/xdg/autostart/pocknix-desktop-remove-taskpanel.desktop"
   # "Return to Game Mode" tile in the Plasma app grid.
   install -Dm644 "${srcdir}/return-to-gamemode.desktop" \
     "${pkgdir}/usr/share/applications/return-to-gamemode.desktop"

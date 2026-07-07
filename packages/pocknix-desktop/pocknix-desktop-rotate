@@ -4,8 +4,13 @@
 # WHY this exists: the RP6 DSI panel is physically portrait (1080x1920) mounted rotated, so an
 # un-transformed Plasma session comes up sideways. gamescope side-steps this with a rotation SHADER
 # (--use-rotation-shader); kwin_wayland instead drives DRM directly and needs a REAL output
-# transform. kscreen-doctor can set that transform and PERSISTS it (~/.local/share/kscreen/...), so
-# this only has to run once per fresh home — but it's safe to run every session (idempotent).
+# transform. kscreen-doctor can set that transform, and kwin PERSISTS it (Plasma 6 stores output
+# config in ~/.config/kwinoutputconfig.json, not the old ~/.local/share/kscreen dir), so this only
+# has to run once per fresh home — but it's safe to run every session (idempotent).
+#
+# In practice on the RP6 the rotation half is a no-op belt-and-braces: kwin honors the DRM
+# panel-orientation hint natively. The SCALE half is the load-bearing part — kwin's auto default
+# is 1.5, not the 2.5 this panel needs (confirmed on-device 2026-07-07).
 #
 # It is launched from /etc/xdg/autostart/pocknix-desktop-rotate.desktop (i.e. AFTER the shell +
 # kscreen kded are up), because kscreen-doctor talks to the running KScreen daemon over D-Bus; it
@@ -39,9 +44,12 @@ have kscreen-doctor || { echo "pocknix-desktop-rotate: kscreen-doctor not found 
 log() { echo "pocknix-desktop-rotate: $*" >&2; }
 
 # kscreen kded can take a moment after login to register outputs over D-Bus. Poll briefly.
+# kscreen-doctor colorizes -o output even when piped (NO_COLOR is ignored), so strip ANSI SGR
+# escapes or the ^Output: anchor below never matches — this silently broke output detection
+# (and therefore the 2.5x scale) on every session until 2026-07-07.
 outputs=""
 for _ in $(seq 1 30); do
-  outputs="$(kscreen-doctor -o 2>/dev/null)" || outputs=""
+  outputs="$(kscreen-doctor -o 2>/dev/null | sed $'s/\x1b\\[[0-9;]*m//g')" || outputs=""
   [ -n "${outputs}" ] && break
   sleep 0.5
 done
