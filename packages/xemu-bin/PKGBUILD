@@ -5,18 +5,41 @@
 # run; keep them in ~/ROMs/bios (see ROMS-README).
 pkgname=xemu-bin
 pkgver=0.8.136
-pkgrel=1
+pkgrel=2
 pkgdesc="xemu — original Xbox emulator, official aarch64 AppImage (vendored)"
 arch=('aarch64')
 url="https://xemu.app"
 license=('GPL2')
 depends=('fuse2')
 options=('!strip')
-source=("xemu-${pkgver}.AppImage::https://github.com/xemu-project/xemu/releases/download/v${pkgver}/xemu-${pkgver}-aarch64.AppImage")
-sha256sums=('SKIP')
+source=("xemu-${pkgver}.AppImage::https://github.com/xemu-project/xemu/releases/download/v${pkgver}/xemu-${pkgver}-aarch64.AppImage"
+        'pocknix-xemu.desktop')
+sha256sums=('SKIP' 'SKIP')
 noextract=("xemu-${pkgver}.AppImage")
+
+prepare() {
+  # Extract the AppImage's own icon (.DirIcon, chasing symlinks) for the desktop entry.
+  # Native aarch64 AppImage: --appimage-extract runs fine in the build chroot, no FUSE.
+  cd "${srcdir}"
+  chmod u+x "xemu-${pkgver}.AppImage"
+  rm -rf squashfs-root AppDir
+  "./xemu-${pkgver}.AppImage" --appimage-extract ".DirIcon" >/dev/null 2>&1 || true
+  local root=squashfs-root; [ -d AppDir ] && root=AppDir
+  local tgt; tgt="$(readlink "${root}/.DirIcon" 2>/dev/null || true)"
+  while [ -n "${tgt}" ]; do
+    "./xemu-${pkgver}.AppImage" --appimage-extract "${tgt}" >/dev/null 2>&1 || true
+    local nxt; nxt="$(readlink "${root}/${tgt}" 2>/dev/null || true)"
+    [ -n "${nxt}" ] || break
+    tgt="${nxt}"
+  done
+  cp -L "${root}/${tgt:-.DirIcon}" "${srcdir}/icon.svg"
+  [ -s "${srcdir}/icon.svg" ]  # fail the build if the icon vanished upstream
+}
 
 package() {
   install -Dm755 "${srcdir}/xemu-${pkgver}.AppImage" \
     "${pkgdir}/opt/pocknix/emulators/xemu/xemu.AppImage"
+  # Plasma app-grid entry + the icon extracted in prepare().
+  install -Dm644 "${srcdir}/icon.svg" "${pkgdir}/opt/pocknix/emulators/xemu/icon.svg"
+  install -Dm644 "${srcdir}/pocknix-xemu.desktop" "${pkgdir}/usr/share/applications/pocknix-xemu.desktop"
 }

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=xemu
+GenericName=Original Xbox Emulator
+Exec=/opt/pocknix/emulators/xemu/xemu.AppImage
+Icon=/opt/pocknix/emulators/xemu/icon.svg
+Terminal=false
+Categories=Game;Emulator;

@@ -11,7 +11,7 @@
 # Steam favorites launch it via pocknix-play. AppImage needs fuse2 at runtime (emulation.list).
 pkgname=armsx2-bin
 pkgver=1.0.0
-pkgrel=1
+pkgrel=2
 pkgdesc="ARMSX2 — PS2 emulator, native-ARM64 PCSX2 fork (vendored AppImage)"
 arch=('aarch64')
 url="https://github.com/MaSieS4Fun/ARMSX2"
@@ -19,12 +19,35 @@ license=('GPL3')
 depends=('fuse2')
 options=('!strip')   # AppImage = ELF runtime + squashfs payload; strip would corrupt it
 # Tag is 'Linux-arm' (the release NAME is Linux-arm64-v1.0.0). URL verified 200 on 2026-07-05.
-source=("ARMSX2-${pkgver}.AppImage::https://github.com/MaSieS4Fun/ARMSX2/releases/download/Linux-arm/ARMSX2-linux-Qt-arm64.AppImage")
-sha256sums=('SKIP')
+source=("ARMSX2-${pkgver}.AppImage::https://github.com/MaSieS4Fun/ARMSX2/releases/download/Linux-arm/ARMSX2-linux-Qt-arm64.AppImage"
+        'pocknix-armsx2.desktop')
+sha256sums=('SKIP' 'SKIP')
 noextract=("ARMSX2-${pkgver}.AppImage")
+
+prepare() {
+  # Extract the AppImage's own icon (.DirIcon, chasing symlinks) for the desktop entry.
+  # Native aarch64 AppImage: --appimage-extract runs fine in the build chroot, no FUSE.
+  cd "${srcdir}"
+  chmod u+x "ARMSX2-${pkgver}.AppImage"
+  rm -rf squashfs-root AppDir
+  "./ARMSX2-${pkgver}.AppImage" --appimage-extract ".DirIcon" >/dev/null 2>&1 || true
+  local root=squashfs-root; [ -d AppDir ] && root=AppDir
+  local tgt; tgt="$(readlink "${root}/.DirIcon" 2>/dev/null || true)"
+  while [ -n "${tgt}" ]; do
+    "./ARMSX2-${pkgver}.AppImage" --appimage-extract "${tgt}" >/dev/null 2>&1 || true
+    local nxt; nxt="$(readlink "${root}/${tgt}" 2>/dev/null || true)"
+    [ -n "${nxt}" ] || break
+    tgt="${nxt}"
+  done
+  cp -L "${root}/${tgt:-.DirIcon}" "${srcdir}/icon.png"
+  [ -s "${srcdir}/icon.png" ]  # fail the build if the icon vanished upstream
+}
 
 package() {
   # Canonical name matches pocknix-emulation's es_find_rules.xml + pocknix-play.
   install -Dm755 "${srcdir}/ARMSX2-${pkgver}.AppImage" \
     "${pkgdir}/opt/pocknix/emulators/armsx2/ARMSX2.AppImage"
+  # Plasma app-grid entry + the icon extracted in prepare().
+  install -Dm644 "${srcdir}/icon.png" "${pkgdir}/opt/pocknix/emulators/armsx2/icon.png"
+  install -Dm644 "${srcdir}/pocknix-armsx2.desktop" "${pkgdir}/usr/share/applications/pocknix-armsx2.desktop"
 }

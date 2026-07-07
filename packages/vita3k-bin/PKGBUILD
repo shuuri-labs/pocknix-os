@@ -11,18 +11,41 @@
 # loose files; ES-DE's psvita flow passes a title-id shortcut. Treat as the most manual of the set.
 pkgname=vita3k-bin
 pkgver=0.2026.07.05
-pkgrel=1
+pkgrel=2
 pkgdesc="Vita3K — PS Vita emulator, native aarch64 AppImage (vendored, rolling upstream)"
 arch=('aarch64')
 url="https://vita3k.org"
 license=('GPL2')
 depends=('fuse2')
 options=('!strip')
-source=("Vita3K-${pkgver}.AppImage::https://github.com/Vita3K/Vita3K/releases/download/continuous/Vita3K-aarch64.AppImage")
-sha256sums=('SKIP')
+source=("Vita3K-${pkgver}.AppImage::https://github.com/Vita3K/Vita3K/releases/download/continuous/Vita3K-aarch64.AppImage"
+        'pocknix-vita3k.desktop')
+sha256sums=('SKIP' 'SKIP')
 noextract=("Vita3K-${pkgver}.AppImage")
+
+prepare() {
+  # Extract the AppImage's own icon (.DirIcon, chasing symlinks) for the desktop entry.
+  # Native aarch64 AppImage: --appimage-extract runs fine in the build chroot, no FUSE.
+  cd "${srcdir}"
+  chmod u+x "Vita3K-${pkgver}.AppImage"
+  rm -rf squashfs-root AppDir
+  "./Vita3K-${pkgver}.AppImage" --appimage-extract ".DirIcon" >/dev/null 2>&1 || true
+  local root=squashfs-root; [ -d AppDir ] && root=AppDir
+  local tgt; tgt="$(readlink "${root}/.DirIcon" 2>/dev/null || true)"
+  while [ -n "${tgt}" ]; do
+    "./Vita3K-${pkgver}.AppImage" --appimage-extract "${tgt}" >/dev/null 2>&1 || true
+    local nxt; nxt="$(readlink "${root}/${tgt}" 2>/dev/null || true)"
+    [ -n "${nxt}" ] || break
+    tgt="${nxt}"
+  done
+  cp -L "${root}/${tgt:-.DirIcon}" "${srcdir}/icon.png"
+  [ -s "${srcdir}/icon.png" ]  # fail the build if the icon vanished upstream
+}
 
 package() {
   install -Dm755 "${srcdir}/Vita3K-${pkgver}.AppImage" \
     "${pkgdir}/opt/pocknix/emulators/vita3k/Vita3K.AppImage"
+  # Plasma app-grid entry + the icon extracted in prepare().
+  install -Dm644 "${srcdir}/icon.png" "${pkgdir}/opt/pocknix/emulators/vita3k/icon.png"
+  install -Dm644 "${srcdir}/pocknix-vita3k.desktop" "${pkgdir}/usr/share/applications/pocknix-vita3k.desktop"
 }

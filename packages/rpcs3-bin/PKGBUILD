@@ -9,7 +9,7 @@
 # repo). Needs PS3 firmware (PS3UPDAT.PUP) installed via the GUI once — see ROMS-README.
 pkgname=rpcs3-bin
 pkgver=0.0.41.19559
-pkgrel=1
+pkgrel=2
 pkgdesc="RPCS3 — PS3 emulator, official aarch64 AppImage (vendored)"
 arch=('aarch64')
 url="https://rpcs3.net"
@@ -18,11 +18,34 @@ depends=('fuse2')
 options=('!strip')
 _build=build-d87cf99b655e1a3c85fa5913b2b591dec18a473a
 _asset=rpcs3-v0.0.41-19559-d87cf99b_linux_aarch64.AppImage
-source=("rpcs3-${pkgver}.AppImage::https://github.com/RPCS3/rpcs3-binaries-linux-arm64/releases/download/${_build}/${_asset}")
-sha256sums=('SKIP')
+source=("rpcs3-${pkgver}.AppImage::https://github.com/RPCS3/rpcs3-binaries-linux-arm64/releases/download/${_build}/${_asset}"
+        'pocknix-rpcs3.desktop')
+sha256sums=('SKIP' 'SKIP')
 noextract=("rpcs3-${pkgver}.AppImage")
+
+prepare() {
+  # Extract the AppImage's own icon (.DirIcon, chasing symlinks) for the desktop entry.
+  # Native aarch64 AppImage: --appimage-extract runs fine in the build chroot, no FUSE.
+  cd "${srcdir}"
+  chmod u+x "rpcs3-${pkgver}.AppImage"
+  rm -rf squashfs-root AppDir
+  "./rpcs3-${pkgver}.AppImage" --appimage-extract ".DirIcon" >/dev/null 2>&1 || true
+  local root=squashfs-root; [ -d AppDir ] && root=AppDir
+  local tgt; tgt="$(readlink "${root}/.DirIcon" 2>/dev/null || true)"
+  while [ -n "${tgt}" ]; do
+    "./rpcs3-${pkgver}.AppImage" --appimage-extract "${tgt}" >/dev/null 2>&1 || true
+    local nxt; nxt="$(readlink "${root}/${tgt}" 2>/dev/null || true)"
+    [ -n "${nxt}" ] || break
+    tgt="${nxt}"
+  done
+  cp -L "${root}/${tgt:-.DirIcon}" "${srcdir}/icon.svg"
+  [ -s "${srcdir}/icon.svg" ]  # fail the build if the icon vanished upstream
+}
 
 package() {
   install -Dm755 "${srcdir}/rpcs3-${pkgver}.AppImage" \
     "${pkgdir}/opt/pocknix/emulators/rpcs3/rpcs3.AppImage"
+  # Plasma app-grid entry + the icon extracted in prepare().
+  install -Dm644 "${srcdir}/icon.svg" "${pkgdir}/opt/pocknix/emulators/rpcs3/icon.svg"
+  install -Dm644 "${srcdir}/pocknix-rpcs3.desktop" "${pkgdir}/usr/share/applications/pocknix-rpcs3.desktop"
 }

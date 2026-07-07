@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Vita3K
+GenericName=PS Vita Emulator
+Exec=/opt/pocknix/emulators/vita3k/Vita3K.AppImage
+Icon=/opt/pocknix/emulators/vita3k/icon.png
+Terminal=false
+Categories=Game;Emulator;

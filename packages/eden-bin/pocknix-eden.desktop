@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Eden
+GenericName=Nintendo Switch Emulator
+Exec=/opt/pocknix/emulators/eden/Eden.AppImage
+Icon=/opt/pocknix/emulators/eden/icon.png
+Terminal=false
+Categories=Game;Emulator;

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ARMSX2
+GenericName=PlayStation 2 Emulator
+Exec=/opt/pocknix/emulators/armsx2/ARMSX2.AppImage
+Icon=/opt/pocknix/emulators/armsx2/icon.png
+Terminal=false
+Categories=Game;Emulator;

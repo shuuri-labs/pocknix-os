@@ -13,18 +13,41 @@
 # names on first run).
 pkgname=eden-bin
 pkgver=0.2.1
-pkgrel=1
+pkgrel=2
 pkgdesc="Eden — Nintendo Switch emulator, aarch64 clang-PGO AppImage (vendored)"
 arch=('aarch64')
 url="https://eden-emu.dev"
 license=('GPL3')
 depends=('fuse2')
 options=('!strip')
-source=("Eden-${pkgver}.AppImage::https://git.eden-emu.dev/eden-emu/eden/releases/download/v${pkgver}/Eden-Linux-v${pkgver}-aarch64-clang-pgo.AppImage")
-sha256sums=('SKIP')
+source=("Eden-${pkgver}.AppImage::https://git.eden-emu.dev/eden-emu/eden/releases/download/v${pkgver}/Eden-Linux-v${pkgver}-aarch64-clang-pgo.AppImage"
+        'pocknix-eden.desktop')
+sha256sums=('SKIP' 'SKIP')
 noextract=("Eden-${pkgver}.AppImage")
+
+prepare() {
+  # Extract the AppImage's own icon (.DirIcon, chasing symlinks) for the desktop entry.
+  # Native aarch64 AppImage: --appimage-extract runs fine in the build chroot, no FUSE.
+  cd "${srcdir}"
+  chmod u+x "Eden-${pkgver}.AppImage"
+  rm -rf squashfs-root AppDir
+  "./Eden-${pkgver}.AppImage" --appimage-extract ".DirIcon" >/dev/null 2>&1 || true
+  local root=squashfs-root; [ -d AppDir ] && root=AppDir
+  local tgt; tgt="$(readlink "${root}/.DirIcon" 2>/dev/null || true)"
+  while [ -n "${tgt}" ]; do
+    "./Eden-${pkgver}.AppImage" --appimage-extract "${tgt}" >/dev/null 2>&1 || true
+    local nxt; nxt="$(readlink "${root}/${tgt}" 2>/dev/null || true)"
+    [ -n "${nxt}" ] || break
+    tgt="${nxt}"
+  done
+  cp -L "${root}/${tgt:-.DirIcon}" "${srcdir}/icon.png"
+  [ -s "${srcdir}/icon.png" ]  # fail the build if the icon vanished upstream
+}
 
 package() {
   install -Dm755 "${srcdir}/Eden-${pkgver}.AppImage" \
     "${pkgdir}/opt/pocknix/emulators/eden/Eden.AppImage"
+  # Plasma app-grid entry + the icon extracted in prepare().
+  install -Dm644 "${srcdir}/icon.png" "${pkgdir}/opt/pocknix/emulators/eden/icon.png"
+  install -Dm644 "${srcdir}/pocknix-eden.desktop" "${pkgdir}/usr/share/applications/pocknix-eden.desktop"
 }

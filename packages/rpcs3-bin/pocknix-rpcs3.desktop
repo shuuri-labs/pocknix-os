@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=RPCS3
+GenericName=PlayStation 3 Emulator
+Exec=/opt/pocknix/emulators/rpcs3/rpcs3.AppImage
+Icon=/opt/pocknix/emulators/rpcs3/icon.svg
+Terminal=false
+Categories=Game;Emulator;
