@@ -6,8 +6,11 @@
 #     physically Y (North). The two swap entries below fix that.
 #   * the d-pad (BTN_DPAD_*) wasn't reaching the target without an explicit mapping.
 #   * BTN_MODE -> Guide, BTN_BACK -> QuickAccess (the RP6 "..." button).
-# Paddle entries (BTN_C/BTN_Z) are kept for parity but stay inert: this RP6's gamepad evdev
-# does not emit them (no back paddles). Gyro is unavailable (no IIO/IMU device on this build).
+# The back paddles emit BTN_Z (left) / BTN_C (right) on the separate gpio-keys/input0 node,
+# which 01-rsinput-rp6.yaml now composes into this device; they map to LeftPaddle1/RightPaddle1
+# (the Deck's L4/L5 back buttons). That node also carries the volume-up rocker: InputPlumber
+# grabs the source exclusively, so KEY_VOLUMEUP is re-emitted on the keyboard target below to
+# keep the physical volume-up button working. Gyro is unavailable (no IIO/IMU on this build).
 version: 2
 kind: CapabilityMap
 name: Retroid Pocket 6 Gamepad
@@ -137,7 +140,7 @@ mapping:
     target_event:
       gamepad: { button: DPadRight }
 
-  # Inert on this RP6 (no BTN_C/BTN_Z emitted) — kept for AYN-family parity / future revs.
+  # Back paddles: emitted on gpio-keys/input0 (BTN_Z left, BTN_C right) -> Deck L4/L5.
   - name: Left Paddle
     source_events:
       - evdev: { event_type: KEY, event_code: BTN_Z, value_type: button }
@@ -149,5 +152,13 @@ mapping:
       - evdev: { event_type: KEY, event_code: BTN_C, value_type: button }
     target_event:
       gamepad: { button: RightPaddle1 }
+
+  # Volume-up rocker shares the gpio-keys node; re-emit it on the keyboard target so the
+  # exclusive grab doesn't kill it. (Volume-down is on pmic_resin, a node we don't grab.)
+  - name: Volume Up
+    source_events:
+      - evdev: { event_type: KEY, event_code: KEY_VOLUMEUP, value_type: button }
+    target_event:
+      keyboard: KeyVolumeUp
 
 filtered_events: []
