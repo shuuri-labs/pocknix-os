@@ -140,6 +140,16 @@ configure() {
   #    helper bpf_trace_printk", BPF load -EINVAL -> scx_lavd crash-loops). BPF_EVENTS is
   #    def_bool y once (KPROBE_EVENTS||UPROBE_EVENTS) + PERF_EVENTS are on, which need the
   #    tracing core (FTRACE) + KPROBES.
+  #  - FUNCTION_TRACER + DYNAMIC_FTRACE (-> WITH_CALL_OPS/WITH_DIRECT_CALLS on arm64):
+  #    scx-scheds >= 1.1 attaches fentry programs (scx_lib_init_probe), which need the BPF
+  #    trampoline; on arm64 that requires dynamic-ftrace direct calls. Without it the attach
+  #    fails -ENOTSUPP (error 524), scx_lavd exits, systemd hits the start limit, and the
+  #    session falls back to EEVDF, where Steam's nice-19 main thread starves (sub-10fps UI,
+  #    low clocks). KPROBES alone was enough for scx 1.0.x; the rolling ALARM package moved.
+  #    DYNAMIC_FTRACE patches call sites to NOPs at boot, so runtime overhead when not
+  #    tracing is ~zero. The WITH_CALL_OPS/WITH_DIRECT_CALLS variants are not directly
+  #    selectable; they follow from these two via olddefconfig (verified in the built
+  #    .config by the assertion below).
   #  - default cpufreq governor performance -> schedutil: LAVD does its own per-core DVFS
   #    via scx_bpf_cpuperf_set(), which only takes effect under schedutil (the one governor
   #    that honours scheduler frequency hints). Under performance, clocks pin to max and
@@ -168,6 +178,8 @@ configure() {
     --enable DEBUG_INFO_BTF \
     --enable SCHED_CLASS_EXT \
     --enable FTRACE \
+    --enable FUNCTION_TRACER \
+    --enable DYNAMIC_FTRACE \
     --enable KPROBES \
     --enable KPROBE_EVENTS \
     --enable UPROBE_EVENTS \
@@ -180,6 +192,15 @@ configure() {
   # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,
   # abort the script with exit 141.
   kmake olddefconfig >/dev/null
+
+  # Assert the fentry/BPF-trampoline chain actually resolved (scx_lavd >= 1.1 needs it;
+  # olddefconfig can silently drop DYNAMIC_FTRACE_WITH_DIRECT_CALLS if a dependency is
+  # missing, and the failure would then only appear at runtime as ENOTSUPP).
+  local sym
+  for sym in FUNCTION_TRACER DYNAMIC_FTRACE DYNAMIC_FTRACE_WITH_DIRECT_CALLS; do
+    grep -q "^CONFIG_${sym}=y" "${KSRC}/.config" \
+      || die "kernel config: CONFIG_${sym} did not resolve to =y (scx_lavd fentry attach would fail ENOTSUPP)"
+  done
 }
 
 build_kernel() {
