@@ -5,7 +5,7 @@
 # come from pocknix-bsp-common. Successor to the old single 'pocknix-bsp'.
 pkgname=pocknix-bsp-rp6
 pkgver=0.1.0
-pkgrel=16
+pkgrel=17
 pkgdesc="pocknix board support: Retroid Pocket 6 (SM8550) — input map, suspend quirks, audio UCM, device.conf"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
