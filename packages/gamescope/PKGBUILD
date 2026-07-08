@@ -3,22 +3,33 @@
 # Vanilla gamescope (incl. ALARM's 3.16.24) CANNOT drive the RP6 panel: the panel is
 # mounted rotated (DTS rotation=<270>), so gamescope tries a DRM *plane* rotation that
 # the msm DPU rejects -> "Failed to prepare 1-layer flip (Invalid argument)" forever
-# (upstream issue #1883/#819). We rotate in the COMPOSITE instead — gamescope PR #2228
-# (0007) folds the rotation into the existing composite's store coordinate (one pass, like
-# kwin) rather than ROCKNIX's SEPARATE rotation-shader pass (0005). #2228 auto-engages when
-# the scanout plane can't rotate (our msm case); pass --force-composition-rotation to force
-# it. One less full-screen pass per frame = lighter present path. 0007 REPLACES 0005.
-# (0005 kept in-tree, unreferenced, as a fallback.) Confirmed on ARM (AYANEO Pocket S2/SM8650).
+# (upstream issue #1883/#819). We rotate in a compute SHADER instead — ROCKNIX's 0005
+# rotates the final composite in a separate pass (--use-rotation-shader), which the msm
+# DPU accepts. This is now the ROCKNIX patch set verbatim (same numbering).
+#
+# BASE BUMP fe78bc6 -> 4286887 (Valve master, 2026-06-12, "Bump wlroots to v0.19"): picks up
+# upstream's present/FIFO frame-callback rework to address games pacing at 60fps on the 120Hz
+# panel (FEX + rotated composite pushed marginal frames past the 8.3ms vblank boundary -> hard
+# 60). See memory dpu-ctl-start-instability. NB the fix is not guaranteed to be in these commits
+# — the on-device strace(msgrcv) instrument decides.
+#
+# Dropped vs our fe78bc6 set:
+#  - 0007 composite-rotation (PR #2228): the fps investigation A/B'd it as fps-neutral vs 0005
+#    (only a GPU-load nicety with the overlay up). Back to ROCKNIX's 0005 rotation-shader.
+#  - 0008 revert-e572411d: the new base 4286887 PREDATES e572411d, so mangoapp already nudges
+#    pre-composite (the behavior 0008 restored) natively — nothing to revert. If a checkout of
+#    this commit still carries the post-composite path, force app-timing via the
+#    cv_mangoapp_use_output_timing convar at session start (pocknix-steam) before re-adding 0008.
 #
 # epoch=1 so this is preferred over ALARM's [extra] gamescope when both are visible.
 pkgname=gamescope
 epoch=1
-pkgver=3.16.0.rocknix.fe78bc6
-pkgrel=4
-_commit=fe78bc685f247460d02c85f4b530b9de3ed07cdd
+pkgver=3.16.0.rocknix.4286887
+pkgrel=1
+_commit=428688779e481681ddf6e2ea346987889527a0b7
 # Grant CAP_SYS_NICE to the installed binary (realtime scheduling) — see gamescope.install.
 install=gamescope.install
-pkgdesc="SteamOS session compositing WM — patched (composite-rotation, PR #2228, for msm/rotated panels)"
+pkgdesc="SteamOS session compositing WM — patched (rotation-shader, for msm/rotated panels)"
 arch=('aarch64')
 url="https://github.com/ValveSoftware/gamescope"
 license=('BSD-2-Clause')
@@ -38,27 +49,23 @@ makedepends=('git' 'meson' 'ninja' 'cmake' 'pkgconf' 'glslang' 'vulkan-headers'
 source=("gamescope::git+https://github.com/ValveSoftware/gamescope.git#commit=${_commit}"
         '0001-WaylandBackend-wire-up-wl_touch-implementation.patch'
         '0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch'
-        '0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch'
-        '0007-composite-rotation.patch'
-        '0008-Revert-mangoapp-always-send-output-frametimings.patch')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        '0005-feature-add-rotation-shader-for-rotating-output.patch'
+        '0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
   cd gamescope
   # subprojects (wlroots, libliftoff, etc.) are git submodules at this commit.
   git submodule update --init --recursive
-  # ROCKNIX patch stack (same order/numbering as their package).
+  # ROCKNIX patch stack, verbatim (same order/numbering as their package.mk).
   patch -p1 < "${srcdir}/0001-WaylandBackend-wire-up-wl_touch-implementation.patch"
   patch -p1 < "${srcdir}/0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch"
+  # 0005 rotation-shader: rotate the final composite in a compute pass (--use-rotation-shader),
+  # the RP6's only working rotation path (msm rejects DRM plane rotation). Launched with
+  # -W 1080 -H 1920 --force-orientation left (native portrait; the shader swaps to landscape) —
+  # see packages/pocknix-steam/pocknix-steam and device.conf.
+  patch -p1 < "${srcdir}/0005-feature-add-rotation-shader-for-rotating-output.patch"
   patch -p1 < "${srcdir}/0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch"
-  # 0007 (gamescope PR #2228) REPLACES 0005's rotation shader with composite-rotation.
-  patch -p1 < "${srcdir}/0007-composite-rotation.patch"
-  # 0008 reverts upstream e572411d: nudge mangoapp at game COMMIT (pre-composite, like
-  # ROCKNIX's older gamescope) so the overlay redraw coalesces into the same composite
-  # instead of forcing an extra ~3.5ms rotated pass, and restore real (non-vblank-quantized)
-  # frametimes to the overlay readout. Pairs with mangohud's 0006 pacing fix. Measured:
-  # docs/archive/gamescope-fps-investigation.md "GPU-side session (2026-07-02)".
-  patch -p1 < "${srcdir}/0008-Revert-mangoapp-always-send-output-frametimings.patch"
 }
 
 build() {
@@ -83,6 +90,7 @@ build() {
     -Dbenchmark=disabled \
     -Dinput_emulation=disabled \
     -Drt_cap=enabled \
+    -Denable_tests=false \
     -Dsdl2_backend=enabled
   meson compile -C build
 }

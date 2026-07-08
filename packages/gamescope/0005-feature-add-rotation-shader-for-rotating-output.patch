@@ -218,7 +218,7 @@ index 65411dcf..81f46c9e 100644
 -	SHADER(EASU, 1, 1, 1);
 -	SHADER(NIS, 1, 1, 1);
 -	SHADER(RGB_TO_NV12, 1, 1, 1);
-+#define SHADER(type, layer_count, max_ycbcr, blur_layers, need_rotations) pipelineInfos[SHADER_TYPE_##type] = {SHADER_TYPE_##type, layer_count, max_ycbcr, blur_layers, need_rotations ? 3 : 0}
++#define SHADER(type, layer_count, max_ycbcr, blur_layers, need_rotations) pipelineInfos[SHADER_TYPE_##type] = {SHADER_TYPE_##type, layer_count, max_ycbcr, blur_layers, 0, 0, 0, false, (need_rotations) && g_bRotationShaderRequested ? 3u : 0u}
 +	SHADER(BLIT, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, 1, true);
 +	SHADER(BLUR, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, k_nMaxBlurLayers, true);
 +	SHADER(BLUR_COND, k_nMaxLayers, k_nMaxYcbcrMask_ToPreCompile, k_nMaxBlurLayers, true);
@@ -253,7 +253,7 @@ index 65411dcf..81f46c9e 100644
 +						VkPipeline newPipeline = compilePipeline(layerCount, ycbcrMask, info.shaderType, blur_layers, info.compositeDebug, info.colorspaceMask, info.outputEOTF, info.itmEnable, rotation);
 +						{
 +							std::lock_guard<std::mutex> lock(m_pipelineMutex);
-+							PipelineInfo_t key = {info.shaderType, layerCount, ycbcrMask, blur_layers, info.compositeDebug};
++							PipelineInfo_t key = {info.shaderType, layerCount, ycbcrMask, blur_layers, info.compositeDebug, info.colorspaceMask, info.outputEOTF, info.itmEnable, rotation};
 +							auto result = m_pipelineMap.emplace(std::make_pair(key, newPipeline));
 +							if (!result.second)
 +								vk.DestroyPipeline(device(), newPipeline, nullptr);

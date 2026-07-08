@@ -84,14 +84,15 @@ fi
 # Panel geometry/orientation come from the DEVICE layer: /usr/lib/pocknix/device.conf is
 # shipped by the device's BSP (pocknix-bsp-<device>); /etc/pocknix/device.conf is the optional
 # admin override (sourced last, wins). Fallbacks = the RP6 values, so behavior is unchanged
-# if no device.conf exists. Rotation is done via COMPOSITE-rotation
-# (--force-composition-rotation, gamescope PR #2228 = our 0007 patch): the rotation is folded
-# into the existing composite store (one pass) instead of a separate rotation-shader pass.
+# if no device.conf exists. Rotation is done in a compute SHADER (--use-rotation-shader,
+# ROCKNIX 0005 patch): a separate pass rotates the final composite, which the msm DPU accepts
+# (it rejects DRM plane rotation). NB the shader path wants -W/-H in NATIVE PORTRAIT
+# (1080x1920) and swaps to landscape itself — device.conf carries these transposed values.
 # --force-orientation sets the axis. See gamescope-rp6-gpu.
 for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
   [ -r "${_dc}" ] && . "${_dc}"
 done
-W="${POCKNIX_PANEL_W:-1920}"; H="${POCKNIX_PANEL_H:-1080}"
+W="${POCKNIX_PANEL_W:-1080}"; H="${POCKNIX_PANEL_H:-1920}"
 REFRESH="${POCKNIX_PANEL_REFRESH:-120}"; ORIENT="${POCKNIX_PANEL_ORIENT:-left}"
 PANEL_MM="${POCKNIX_PANEL_MM:-177x100}"
 
@@ -128,6 +129,6 @@ set -o pipefail
 env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM="${PANEL_MM}" \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
-    --force-orientation "${ORIENT}" --force-composition-rotation -e -- \
+    --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles -noshaders \
   2>&1 | tee "${GS_LOG}"
