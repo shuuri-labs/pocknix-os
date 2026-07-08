@@ -16,10 +16,12 @@
 # Dropped vs our fe78bc6 set:
 #  - 0007 composite-rotation (PR #2228): the fps investigation A/B'd it as fps-neutral vs 0005
 #    (only a GPU-load nicety with the overlay up). Back to ROCKNIX's 0005 rotation-shader.
-#  - 0008 revert-e572411d: the new base 4286887 PREDATES e572411d, so mangoapp already nudges
-#    pre-composite (the behavior 0008 restored) natively — nothing to revert. If a checkout of
-#    this commit still carries the post-composite path, force app-timing via the
-#    cv_mangoapp_use_output_timing convar at session start (pocknix-steam) before re-adding 0008.
+#  - 0008 revert-e572411d: the new base CARRIES e572411d, but upstream also added the official
+#    knob `cv_mangoapp_use_output_timing` (steamcompmgr.cpp, default true = output/vblank timing).
+#    So instead of re-patching, flip it false for app-rate timing (the 0008 requirement). ConVars
+#    are NOT env-settable (convar.h ctor reads only its default), so it is set via gamescope's
+#    runtime convar tool once the compositor is up (pocknix-steam, runtime re-assert). Whether
+#    false actually restores app-timing is confirmed on-device with the strace(msgrcv) instrument.
 #
 # epoch=1 so this is preferred over ALARM's [extra] gamescope when both are visible.
 pkgname=gamescope
