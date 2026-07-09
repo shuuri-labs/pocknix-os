@@ -80,6 +80,15 @@ upower               # battery %/time-to-empty estimate for Steam's gamepadui + 
                      #   Was only pulled transitively by powerdevil (desktop.list) + never enabled;
                      #   make it explicit + enabled (build-sd-image.sh) so the GAME session has it too.
 
+# --- storage ---
+udisks2              # Steam's Storage page enumerates FORMATTABLE external drives (microSD "Format"
+                     #   flow) over the UDisks2 D-Bus API. Steam's storage manager enumerates once at
+                     #   startup and doesn't recover if udisks2 starts late, so it must be running
+                     #   before Steam inits -> enabled in build-sd-image.sh. Was only pulled
+                     #   transitively; make it explicit so the format list is never empty. Mounted
+                     #   ext4 libraries still show via pocknix-sdcard-automount; this is the raw-drive
+                     #   list. Polkit grant for the deck session is in 50-pocknix-deck.rules.
+
 # --- memory / swap ---
 zram-generator       # compressed-RAM swap (zram0, zstd) via /etc/systemd/zram-generator.conf.
                      #   Memory headroom for big games + Waydroid + in-game Steam downloads on a

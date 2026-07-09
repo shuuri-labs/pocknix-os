@@ -208,8 +208,14 @@ EOF
   # free lets the USB-C port act as a host for peripherals (keyboard, storage, …).
   #   upower: battery %/time-to-empty for Steam's gamepadui (it reads battery only via the UPower
   #   D-Bus API) + Plasma. D-Bus-activated anyway, but enable it so it's up before Steam's first query.
+  #   udisks2: Steam's Storage page enumerates FORMATTABLE external drives (the microSD "Format"
+  #   flow) over the UDisks2 D-Bus API (CSystemStorageDeviceManagerLinux). It's D-Bus-activatable
+  #   but Steam's storage manager enumerates once at startup and does not recover if UDisks2 comes
+  #   up late, so a disabled udisks2 = empty format list even though the card is present. Enable it
+  #   so it is running before Steam inits. (Mounted ext4 libraries still show via our automount; this
+  #   is only the raw-drive/format list.) The UDisks2 polkit grant is in 50-pocknix-deck.rules.
   chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
-        bluetooth upower \
+        bluetooth upower udisks2 \
         pocknix-diag.service pocknix-expand-root.service \
         pocknix-lavd.service pocknix-gamescope-rt.service \
         >/dev/null 2>&1 || true
