@@ -10,4 +10,10 @@ polkit.addRule(function(action, subject) {
         action.id.indexOf("org.freedesktop.UDisks2.")         == 0) {  // removable storage
         return polkit.Result.YES;
     }
+    // SD-card format: Steam's Storage UI runs steamos-format-device, which pkexec's the hwsupport
+    // formatter. Authorize that one program (mmcblk-only, self-guarded) with no prompt.
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/lib/hwsupport/format-device.sh") {
+        return polkit.Result.YES;
+    }
 });

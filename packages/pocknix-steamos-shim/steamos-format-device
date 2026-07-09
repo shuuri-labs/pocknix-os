@@ -1,0 +1,10 @@
+#!/bin/bash
+# pocknix steamos-format-device shim — the Steam Deck Storage UI ("Format SD Card") shells out to
+# THIS helper by its full polkit-helper path:
+#   /usr/bin/steamos-polkit-helpers/steamos-format-device --validate --device DEV --label 'L' --force ...
+# It runs as the non-root 'deck' user, so it pkexec's the real hwsupport formatter (shipped by
+# pocknix-sdcard-automount) as root. 50-pocknix-deck.rules authorizes exactly this one program for
+# the wheel 'deck' session with no password prompt (the gamescope session can't show a polkit
+# dialog). Interface matches Valve's steamos-format-device. See format-device.sh for the mmcblk-only
+# guard and the deck=1000 owner stamp that keeps cards portable.
+exec pkexec /usr/lib/hwsupport/format-device.sh "$@"

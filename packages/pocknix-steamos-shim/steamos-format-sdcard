@@ -1,0 +1,6 @@
+#!/bin/bash
+# pocknix steamos-format-sdcard shim — legacy alias older Steam clients call (no --device) to format
+# the built-in microSD slot. Newer clients use steamos-format-device --device instead; we ship both
+# so either client works. Targets the RP6's SD slot (/dev/mmcblk0) and forwards any extra args
+# (e.g. --label). Same pkexec + polkit path as steamos-format-device.
+exec pkexec /usr/lib/hwsupport/format-device.sh --device /dev/mmcblk0 "$@"

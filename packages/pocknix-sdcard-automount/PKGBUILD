@@ -11,17 +11,21 @@
 # is the userspace half.
 pkgname=pocknix-sdcard-automount
 pkgver=0.1.0
-pkgrel=2
-pkgdesc="SteamOS-style microSD automount + Steam library registration for the gamescope session"
+pkgrel=3
+pkgdesc="SteamOS-style microSD automount + format + Steam library registration for the gamescope session"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-depends=('jq' 'util-linux' 'systemd')
-source=('sdcard-mount.sh' '99-pocknix-sdcard-automount.rules')
-sha256sums=('SKIP' 'SKIP')
+# parted + e2fsprogs (mkfs.ext4) for format-device.sh; jq/util-linux/systemd for the mount helper.
+depends=('jq' 'util-linux' 'systemd' 'parted' 'e2fsprogs')
+source=('sdcard-mount.sh' 'format-device.sh' '99-pocknix-sdcard-automount.rules')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/sdcard-mount.sh" "${pkgdir}/usr/lib/hwsupport/sdcard-mount.sh"
+  # Steam's Storage-UI "Format SD Card" formatter (pkexec'd by the steamos-format-device shim in
+  # pocknix-steamos-shim). mmcblk-only and stamps owner 1000 so cards stay portable to SteamOS.
+  install -Dm755 "${srcdir}/format-device.sh" "${pkgdir}/usr/lib/hwsupport/format-device.sh"
   install -Dm644 "${srcdir}/99-pocknix-sdcard-automount.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/99-pocknix-sdcard-automount.rules"
 }
