@@ -7,10 +7,18 @@
 # it over its pipe with steam://addlibraryfolder, so the card actually shows up in the gamescope
 # UI's Storage list. Without that IPC call Steam never surfaces a live-inserted card.
 #
-# Adapted from Valve's /usr/lib/hwsupport/sdcard-mount.sh. Two pocknix-specific changes vs Valve:
+# Adapted from Valve's /usr/lib/hwsupport/sdcard-mount.sh. Three pocknix-specific changes vs Valve:
 #   1. Session user is uid 1001 (`deck`), NOT Valve's 1000 — on pocknix uid 1000 is `alarm`.
 #   2. The steam:// URL is sent via the NATIVE ARM client (~/.local/share/Steam/steamrtarm64/steam);
 #      Valve's ./.steam/root/ubuntu12_32/steam is the x86 bootstrap and won't execute on aarch64.
+#   3. The card is mounted with an ext4 idmap that swaps SteamOS's deck uid/gid (1000) with ours
+#      (1001). Every SteamOS device numbers `deck`=1000, which is why an ext4 card roams freely
+#      between them. pocknix numbers `deck`=1001, so a card written elsewhere lands on-disk as 1000
+#      and Steam (running as 1001) can't write into steamapps -> "Missing file privileges". The
+#      idmap presents on-disk 1000 as our 1001 and writes our files back to disk as 1000, so a
+#      single card moves between a pocknix device and a real SteamOS device untouched. This
+#      replaces Valve's post-mount `chown` of the mount root, which only re-owned the top dir
+#      (leaving steamapps/ unwritable) and stamped an on-disk 1001 that broke the card elsewhere.
 
 usage()
 {
@@ -28,6 +36,8 @@ DEVICE="/dev/${DEVBASE}"
 
 # The Steam session user (pocknix: deck = 1001; NOT Valve's 1000 = alarm here).
 STEAM_UID=1001
+# SteamOS's deck uid/gid — what a foreign card's files are owned by on disk. Adjacent to ours.
+STEAMOS_UID=1000
 STEAM_HOME=/home/deck
 # Native ARM client + its runtime libs (see /usr/bin/pocknix-steam for the same contract).
 STEAM_CLIENT_DIR="${STEAM_HOME}/.local/share/Steam/steamrtarm64"
@@ -88,8 +98,15 @@ do_mount()
 
     /bin/mkdir -p -- "${MOUNT_POINT}"
 
-    # Global mount options
-    OPTS="rw,noatime"
+    # Global mount options, plus the deck<->SteamOS uid/gid swap (see header note 3). The map is
+    # full identity except the two singletons that trade STEAMOS_UID and STEAM_UID, so every other
+    # owner (root-owned lost+found, etc.) passes through unchanged instead of becoming `nobody`.
+    # STEAM_UID is STEAMOS_UID+1, so the trailing identity range starts at STEAM_UID+1.
+    TAIL_START=$((STEAM_UID + 1))
+    TAIL_COUNT=$((4294967295 - TAIL_START))
+    IDMAP="u:0:0:${STEAMOS_UID} u:${STEAMOS_UID}:${STEAM_UID}:1 u:${STEAM_UID}:${STEAMOS_UID}:1 u:${TAIL_START}:${TAIL_START}:${TAIL_COUNT}"
+    IDMAP+=" g:0:0:${STEAMOS_UID} g:${STEAMOS_UID}:${STEAM_UID}:1 g:${STEAM_UID}:${STEAMOS_UID}:1 g:${TAIL_START}:${TAIL_START}:${TAIL_COUNT}"
+    OPTS="rw,noatime,X-mount.idmap=${IDMAP}"
 
     # Steam only handles ext4 external drives for now (matches what its "Format" produces), so that's
     # all we automount — same guard as Valve.
@@ -105,7 +122,8 @@ do_mount()
         exit 1
     fi
 
-    chown ${STEAM_UID}:${STEAM_UID} -- "${MOUNT_POINT}"
+    # No chown: the idmap already presents deck-owned content as our uid, and chowning through the
+    # idmapped mount would stamp an on-disk owner that breaks the card on a real SteamOS device.
 
     echo "**** Mounted ${DEVICE} at ${MOUNT_POINT} ****"
 
