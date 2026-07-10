@@ -21,9 +21,14 @@
 # Never touches abl/xbl/modem/persist/super — only ROCKNIX, POCKNIX_ROOT, and userdata.
 set -euo pipefail
 
-DEVICE="${DEVICE:-/dev/sda}"
-BOOT_NAME="ROCKNIX"          # GPT name of the boot FAT  (pocknix-install-internal)
-ROOT_NAME="POCKNIX_ROOT"     # GPT name of the ext4 root
+# Device facts (internal disk + boot contract) come from the BSP's device.conf; the
+# defaults equal the RP6/SM8550 values (see pocknix-install-internal).
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+
+DEVICE="${DEVICE:-${POCKNIX_INTERNAL_DISK:-/dev/sda}}"
+BOOT_NAME="${POCKNIX_BOOT_GPT_NAME:-ROCKNIX}"     # GPT name of the boot FAT  (pocknix-install-internal)
+ROOT_NAME="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}"   # GPT name of the ext4 root
 DISABLE_BOOT=0 ; ENABLE_BOOT=0 ; DRY_RUN=0 ; ASSUME_YES=0
 
 say()  { echo -e "[\033[1;34mpocknix-uninstall\033[0m] $*"; }

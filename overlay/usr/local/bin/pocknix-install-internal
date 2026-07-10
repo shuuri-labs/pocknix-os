@@ -16,7 +16,13 @@
 #        pocknix-install-internal --detect    # read-only probe: k=v state for pocknix-installer-gui
 set -euo pipefail
 
-DEVICE="/dev/sda"                 # internal userdata LUN on SM8550 (sda17 = Android userdata)
+# Device facts (internal disk + boot contract) come from the BSP's device.conf; the
+# defaults below equal the RP6/SM8550 values, so behavior is unchanged if a key (or
+# the whole file) is absent. /etc/pocknix/device.conf is the admin override.
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+
+DEVICE="${POCKNIX_INTERNAL_DISK:-/dev/sda}"   # internal userdata LUN on SM8550 (sda17 = Android userdata)
 BOOT_MIB=512                      # FAT boot partition size. 512 (not the SD's 256) so the boot FAT is
                                   # a valid FAT32 at the UFS's 4096-byte sectors: a 256 MiB partition
                                   # at 4K sectors has too few clusters for FAT32 (mkfs.fat warns and
@@ -28,9 +34,9 @@ ANDROID_MIN_GIB=1                 # smallest Android userdata we'll leave
 #   * the internal UFS has 4096-byte logical sectors, so the boot FAT MUST be made with -S 4096
 #     (the SD is 512-byte; a default mkfs.vfat creates a 512-sector FAT the ABL reads as corrupt).
 #   * ROCKNIX names the internal boot partition ROCKNIX (the removable SD uses "system").
-BOOT_GPT_NAME="ROCKNIX"           # GPT partition name (ROCKNIX's internal convention)
-BOOT_FAT_LABEL="ROCKNIX"          # FAT label the ABL looks for
-ROOT_GPT_NAME="POCKNIX_ROOT"      # matches the kernel cmdline root=PARTLABEL=POCKNIX_ROOT
+BOOT_GPT_NAME="${POCKNIX_BOOT_GPT_NAME:-ROCKNIX}"     # GPT partition name (ROCKNIX's internal convention)
+BOOT_FAT_LABEL="${POCKNIX_BOOT_FAT_LABEL:-ROCKNIX}"   # FAT label the ABL looks for
+ROOT_GPT_NAME="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}"   # matches the kernel cmdline root=PARTLABEL=...
 DRY_RUN=0; ASSUME_YES=0; UD_GIB=""; DETECT=0
 
 while [ "$#" -gt 0 ]; do

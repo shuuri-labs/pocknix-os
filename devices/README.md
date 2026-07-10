@@ -48,6 +48,8 @@ Sourced by shared session scripts (`pocknix-steam`, `pocknix-desktop-rotate`);
 | `POCKNIX_PANEL_ORIENT` | pocknix-steam | gamescope --force-orientation |
 | `POCKNIX_PANEL_MM` | pocknix-steam | GAMESCOPE_FAKE_OUTPUT_MM (gamepadui DPI) |
 | `POCKNIX_DESKTOP_ROTATE/_SCALE` | pocknix-desktop-rotate | kscreen-doctor rotation/scale |
+| `POCKNIX_INTERNAL_DISK` | pocknix-install/uninstall-internal, installer-gui | internal disk (default /dev/sda) |
+| `POCKNIX_BOOT_GPT_NAME/_FAT_LABEL`, `POCKNIX_ROOT_LABEL` | pocknix-install/uninstall-internal | internal-install boot contract |
 
 Every consumer falls back to the RP6 values when a key (or the whole file) is absent, so
 a missing/partial device.conf degrades to known-good behavior instead of breaking.

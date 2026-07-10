@@ -15,7 +15,10 @@ TITLE="Pocknix Installer"
 LOG="/tmp/pocknix-installer.log"
 INSTALL_CLI="/usr/local/bin/pocknix-install-internal"
 UNINSTALL_CLI="/usr/local/bin/pocknix-uninstall-internal"
-DEVICE="/dev/sda"    # internal UFS (matches the CLIs' default)
+# Internal disk from the BSP's device.conf (matches the CLIs' resolution; RP6 default).
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+DEVICE="${POCKNIX_INTERNAL_DISK:-/dev/sda}"
 
 command -v kdialog >/dev/null 2>&1 || { echo "kdialog not installed" >&2; exit 1; }
 # qdbus drives the progress dialog (Arch names the Qt6 binary qdbus6; ships in qt6-tools).
