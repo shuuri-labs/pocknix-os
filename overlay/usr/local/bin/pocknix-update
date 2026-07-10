@@ -1,0 +1,36 @@
+#!/bin/bash
+# pocknix-update — terminal system updater (the "Pocknix Updater" Plasma entry runs this in konsole).
+#
+# Runs as the session user: confirm, then re-exec itself as root through pkexec (passwordless for
+# wheel via 50-pocknix-deck.rules, same pattern as the internal-storage installer, so no password
+# prompt). The root side is a plain `pacman -Syu`: -y refresh + -u full upgrade, never -Sy alone
+# (a refreshed index on an un-upgraded system sets up partial-upgrade breakage). pacman's own
+# package-list Y/n prompt stays interactive as the review step.
+set -euo pipefail
+
+SELF=/usr/local/bin/pocknix-update
+
+if [ "$(id -u)" = 0 ]; then
+  exec pacman -Syu
+fi
+
+echo "Pocknix Updater"
+echo "This refreshes the package database and installs all available updates."
+echo
+read -rp "Check for updates now? [y/N]: " a
+case "$a" in
+  y|Y) ;;
+  *) echo "Cancelled."; exit 0 ;;
+esac
+echo
+
+rc=0
+pkexec "$SELF" || rc=$?
+echo
+if [ "$rc" = 0 ]; then
+  echo "Update complete."
+else
+  echo "Update did not finish (failed or cancelled)."
+fi
+read -rp "Press Enter to close... " _ || true
+exit "$rc"

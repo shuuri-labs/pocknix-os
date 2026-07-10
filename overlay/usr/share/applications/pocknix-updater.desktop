@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pocknix Updater
+Comment=Download and install Pocknix system updates
+Exec=konsole -e /usr/local/bin/pocknix-update
+TryExec=/usr/local/bin/pocknix-update
+Icon=system-software-update
+Terminal=false
+Categories=System;
+Keywords=update;upgrade;pacman;

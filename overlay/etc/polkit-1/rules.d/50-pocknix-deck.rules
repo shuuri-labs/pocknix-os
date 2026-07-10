@@ -19,9 +19,11 @@ polkit.addRule(function(action, subject) {
     // Internal-storage installer: pocknix-installer-gui (the Plasma app) pkexec's the two CLIs
     // (detect probe + install/uninstall). Both are self-guarded (refuse removable disks, refuse
     // the disk / is on, explicit-layout checks); wheel = the device owner, same trust as above.
+    // pocknix-update (the "Pocknix Updater" entry) is a fixed `pacman -Syu`, nothing else.
     if (action.id == "org.freedesktop.policykit.exec" &&
         (action.lookup("program") == "/usr/local/bin/pocknix-install-internal" ||
-         action.lookup("program") == "/usr/local/bin/pocknix-uninstall-internal")) {
+         action.lookup("program") == "/usr/local/bin/pocknix-uninstall-internal" ||
+         action.lookup("program") == "/usr/local/bin/pocknix-update")) {
         return polkit.Result.YES;
     }
 });
