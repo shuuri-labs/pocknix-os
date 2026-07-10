@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/composite_device_v1.json
+# InputPlumber composite device for the AYN Odin 2 Portal gamepad.
+#
+# The Odin 2 Portal uses the same in-kernel RSInput MCU driver as the RP6, phys
+# "rsinput-gamepad/input0" (ROCKNIX ships ONE "AYN Layout" InputPlumber config for the
+# whole RP6 + Odin 2 family). The capability_map (odin2portal-gamepad.yaml, id odin2portal_gamepad)
+# is the same ayn_mcu-derived map: X/Y swap, explicit d-pad, Guide/QuickAccess, paddles.
+#
+# Target = `deck` (Steam Deck controller) so Steam Input gets a first-class Steam-native pad.
+#
+# gpio-keys/input0 is composed as a second source like on the RP6, with one difference:
+# the Ayn common DTS wires ONLY the volume-up rocker there (KEY_VOLUMEUP) — the RP6's
+# paddles-on-gpio-keys is an RP6 DTS addition. The Odin 2's back buttons (M1/M2) are
+# expected on the MCU node instead; the shared capability map covers BTN_Z/BTN_C from
+# either source, so the fold-in works regardless (VERIFY the codes with evtest on device).
+# Because the grab is exclusive, KEY_VOLUMEUP is re-emitted on the keyboard target so
+# volume up keeps working. (Gyro is unavailable — no IMU on any Odin 2 board.)
+version: 1
+kind: CompositeDevice
+name: AYN Odin 2 Portal (RSInput)
+
+# Always applicable on this device (one BSP per image; the pocknix-bsp guard ensures it).
+matches: []
+single_source: false
+
+source_devices:
+  - group: gamepad
+    evdev:
+      phys_path: rsinput-gamepad/input0
+      handler: event*
+    capability_map_id: odin2portal_gamepad
+
+  # Volume-up rocker lives here (and paddles too, if they turn out to be gpio-wired).
+  - group: gamepad
+    evdev:
+      name: gpio-keys
+      phys_path: gpio-keys/input0
+      handler: event*
+    capability_map_id: odin2portal_gamepad
+
+options:
+  auto_manage: true
+
+target_devices:
+  - deck
+  - keyboard

@@ -1,0 +1,173 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/capability_map_v2.json
+# InputPlumber capability map for the AYN Odin 2 (RSInput "AYN Odin2 Gamepad").
+# Same ayn_mcu-derived map as the RP6's (the two devices share the RSInput MCU):
+#   * X/Y are inverted at the driver — source BTN_NORTH is physically X (West), BTN_WEST is
+#     physically Y (North). The two swap entries below fix that.
+#   * the d-pad (BTN_DPAD_*) needs an explicit mapping (auto-detect drops it).
+#   * BTN_MODE -> Guide; BTN_BACK and KEY_F24 -> QuickAccess. ROCKNIX's ayn_mcu map shows
+#     the family emits BTN_BACK ("back") and KEY_F24 ("home") for the small nav buttons;
+#     which physical button emits which is unverified on the Odin 2 — both open the QAM
+#     for now, retune after evtest (e.g. KEY_F24 -> Guide if Home should be Steam).
+# Back paddles map BTN_Z (left) / BTN_C (right) -> LeftPaddle1/RightPaddle1 (Deck L4/L5);
+# unlike the RP6 they are expected on the MCU node, not gpio-keys — the map covers both.
+# gpio-keys carries the volume-up rocker: InputPlumber grabs sources exclusively, so
+# KEY_VOLUMEUP is re-emitted on the keyboard target below to keep the physical button
+# working. Gyro is unavailable (no IMU on any Odin 2 board).
+version: 2
+kind: CapabilityMap
+name: AYN Odin 2 Gamepad
+id: odin2_gamepad
+
+mapping:
+  - name: Guide Button
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_MODE, value_type: button }
+    target_event:
+      gamepad: { button: Guide }
+
+  - name: Quick Access Button (back)
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_BACK, value_type: button }
+    target_event:
+      gamepad: { button: QuickAccess }
+
+  - name: Quick Access Button (home)
+    source_events:
+      - evdev: { event_type: KEY, event_code: KEY_F24, value_type: button }
+    target_event:
+      gamepad: { button: QuickAccess }
+
+  - name: South Button
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_SOUTH, value_type: button }
+    target_event:
+      gamepad: { button: South }
+
+  - name: East Button
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_EAST, value_type: button }
+    target_event:
+      gamepad: { button: East }
+
+  # X/Y swap: physical X reports BTN_NORTH -> West; physical Y reports BTN_WEST -> North.
+  - name: West Button (physical X)
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_NORTH, value_type: button }
+    target_event:
+      gamepad: { button: West }
+
+  - name: North Button (physical Y)
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_WEST, value_type: button }
+    target_event:
+      gamepad: { button: North }
+
+  - name: Start Button
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_START, value_type: button }
+    target_event:
+      gamepad: { button: Start }
+
+  - name: Select Button
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_SELECT, value_type: button }
+    target_event:
+      gamepad: { button: Select }
+
+  - name: Left Bumper
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_TL, value_type: button }
+    target_event:
+      gamepad: { button: LeftBumper }
+
+  - name: Right Bumper
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_TR, value_type: button }
+    target_event:
+      gamepad: { button: RightBumper }
+
+  - name: Left Trigger
+    source_events:
+      - evdev: { event_type: ABS, event_code: ABS_Z, value_type: trigger }
+    target_event:
+      gamepad: { trigger: { name: LeftTrigger } }
+
+  - name: Right Trigger
+    source_events:
+      - evdev: { event_type: ABS, event_code: ABS_RZ, value_type: trigger }
+    target_event:
+      gamepad: { trigger: { name: RightTrigger } }
+
+  - name: Left Stick Click
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_THUMBL, value_type: button }
+    target_event:
+      gamepad: { button: LeftStick }
+
+  - name: Right Stick Click
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_THUMBR, value_type: button }
+    target_event:
+      gamepad: { button: RightStick }
+
+  - name: Left Stick
+    source_events:
+      - evdev: { event_type: ABS, event_code: ABS_X, value_type: joystick_x }
+      - evdev: { event_type: ABS, event_code: ABS_Y, value_type: joystick_y }
+    target_event:
+      gamepad: { axis: { name: LeftStick } }
+
+  - name: Right Stick
+    source_events:
+      - evdev: { event_type: ABS, event_code: ABS_RX, value_type: joystick_x }
+      - evdev: { event_type: ABS, event_code: ABS_RY, value_type: joystick_y }
+    target_event:
+      gamepad: { axis: { name: RightStick } }
+
+  - name: Dpad Up
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_DPAD_UP, value_type: button }
+    target_event:
+      gamepad: { button: DPadUp }
+
+  - name: Dpad Down
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_DPAD_DOWN, value_type: button }
+    target_event:
+      gamepad: { button: DPadDown }
+
+  - name: Dpad Left
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_DPAD_LEFT, value_type: button }
+    target_event:
+      gamepad: { button: DPadLeft }
+
+  - name: Dpad Right
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_DPAD_RIGHT, value_type: button }
+    target_event:
+      gamepad: { button: DPadRight }
+
+  # Back paddles (M1 left / M2 right) -> Deck L4/L5. Source node unverified on the
+  # Odin 2 (MCU expected; gpio-keys on the RP6) — both are composed, so either works.
+  - name: Left Paddle
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_Z, value_type: button }
+    target_event:
+      gamepad: { button: LeftPaddle1 }
+
+  - name: Right Paddle
+    source_events:
+      - evdev: { event_type: KEY, event_code: BTN_C, value_type: button }
+    target_event:
+      gamepad: { button: RightPaddle1 }
+
+  # Volume-up rocker shares the gpio-keys node; re-emit it on the keyboard target so the
+  # exclusive grab doesn't kill it. (Volume-down is on pmic_resin, a node we don't grab.)
+  - name: Volume Up
+    source_events:
+      - evdev: { event_type: KEY, event_code: KEY_VOLUMEUP, value_type: button }
+    target_event:
+      keyboard: KeyVolumeUp
+
+filtered_events: []
