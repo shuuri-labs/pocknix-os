@@ -76,6 +76,21 @@ for mp in $(lsblk -nro NAME "$DISK" | tail -n +2); do
     umount -l "/dev/${mp}" 2>/dev/null || true
 done
 
+# Sweep every OTHER mount namespace too: a service in a private mount ns (e.g. Decky's loader)
+# that started while the card was mounted keeps an inherited copy of the mount, and the block
+# device stays busy (mkfs/parted open O_EXCL) until it is unmounted in EVERY namespace — the
+# init-ns umount above doesn't propagate into private namespaces.
+declare -A ns_seen
+for proc in /proc/[0-9]*; do
+    ns="$(readlink "${proc}/ns/mnt" 2>/dev/null)" || continue
+    [[ -n "${ns_seen[$ns]:-}" ]] && continue
+    ns_seen[$ns]=1
+    grep -q "${DISK##*/}" "${proc}/mountinfo" 2>/dev/null || continue
+    for mp in $(lsblk -nro NAME "$DISK" | tail -n +2); do
+        nsenter -t "${proc#/proc/}" -m umount -A -l "/dev/${mp}" 2>/dev/null || true
+    done
+done
+
 # Scrub old signatures + partition table (primary and, via parted's relabel, the backup GPT).
 wipefs -a "$DISK" >/dev/null 2>&1 || true
 dd if=/dev/zero of="$DISK" bs=1M count=8 conv=fsync 2>/dev/null || die "failed to clear $DISK"
