@@ -63,4 +63,4 @@ a missing/partial device.conf degrades to known-good behavior instead of breakin
 3. `devices/<name>/packages/pocknix-device-<name>/PKGBUILD` + `packages.list`.
 4. `make build DEVICE=<name>` — no shared file should need editing; if one does, the
    boundary has a hole: fix the boundary, not the device.
-5. On-device checklist: docs/device-smoke-checklist.md.
+5. On-device checklist: docs/dev/device-smoke-checklist.md.

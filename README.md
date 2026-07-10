@@ -133,7 +133,7 @@ Settings can be global or set per game.
 ## Building from source
 
 pocknix-os builds a full image (kernel included) from this repo. See
-[`docs/building.md`](docs/building.md) for host requirements, the aarch64-vs-x86_64 notes, and
+[`docs/dev/building.md`](docs/dev/building.md) for host requirements, the aarch64-vs-x86_64 notes, and
 `make` quick start. For the phased plan and rationale, see [`plan.md`](plan.md).
 
 ## Thanks and references

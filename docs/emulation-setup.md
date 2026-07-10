@@ -1,87 +1,74 @@
-# Emulation setup
+# Emulation
 
-The emulation layer (`packages/pocknix-emulation` + friends) is "drop files in, play":
-ES-DE is the frontend, RetroArch + standalone emulators do the work, and starred
-favorites appear in the Steam library automatically. This doc covers what a user has
-to supply and where it goes.
+pocknix-os ships **ES-DE** as the frontend, with RetroArch and a few standalone emulators doing
+the work. It is "drop your files in and play": no per-emulator setup, and games you favorite in
+ES-DE show up in your Steam library automatically.
 
-## Folder layout
+For the full list of supported systems, see the [README](../README.md#emulation).
 
-Everything lives under `~/Emulation` (created on first login by `pocknix-roms-init`):
+## Where your files go
+
+Everything lives under `~/Emulation` (created for you on first login):
 
 ```
 ~/Emulation/
-  ROMs/<system>/     games, one folder per system (gba, snes, ps2, switch, …)
-  BIOS/              all BIOS / firmware / key files (see table below)
-  Saves/             in-game saves (RetroArch tier)
-  States/            save states (RetroArch tier)
-  README.txt         short version of this doc, refreshed each login
+  ROMs/<system>/     your games, one folder per system (gba, snes, ps1, ps2, ...)
+  BIOS/              BIOS / firmware / key files (see below)
+  Saves/             in-game saves
+  States/            save states
 ```
 
-A single copy of `~/Emulation` is self-contained — ROMs, BIOS, saves all travel together.
+Drop each game into the folder for its system (`~/Emulation/ROMs/gba/`, `~/Emulation/ROMs/snes/`,
+and so on), then rescan in ES-DE. A single copy of `~/Emulation` is self-contained: ROMs, BIOS,
+and saves all travel together.
 
-## Moving the ROM directory (e.g. to an SD card)
+### Putting ROMs on an SD card
 
-The ROM directory is **moveable** and ES-DE's setting is the single source of truth:
-**ES-DE Menu → Other Settings → ROM directory** → pick the new location (e.g.
-`/run/media/<card>/ROMs`). Everything follows automatically: `pocknix-roms-init`
-builds the per-system folder skeleton there on next login, and the favorites→Steam
-sync resolves game paths against it on next Game Mode entry. Move the actual files
-yourself, then rescan in ES-DE.
+The ROM directory can live anywhere, and ES-DE is the single source of truth. Go to **ES-DE Menu
+→ Other Settings → ROM directory** and point it at the new location (for example
+`/run/media/<card>/ROMs`). Move your files there, then rescan. `BIOS/`, `Saves/`, and `States/`
+stay in `~/Emulation`.
 
-`BIOS/`, `Saves/`, `States/` stay in `~/Emulation` on internal storage (small files;
-emulators reference them independently of the ROM location).
+## BIOS and firmware
 
-> NB the original dev device predates this layout and still uses `~/ROMs` with a nested
-> `bios/` — seeds never migrate an existing setup. Fresh images get `~/Emulation`.
+Some systems need BIOS or firmware files that pocknix cannot ship. Put them in
+`~/Emulation/BIOS/`, and **use the exact filenames** below:
 
-## BIOS files — names and locations
-
-All BIOS files go in `~/Emulation/BIOS/` (flat, except where noted). **Exact filenames
-matter**:
-
-| System | Expected file(s) | Notes |
+| System | File(s) | Notes |
 |---|---|---|
-| **PS2 (ARMSX2)** | **`ps2-bios.bin`** | **Rename your BIOS dump to exactly this.** The seeded ARMSX2 config (`armsx2-PCSX2.ini.in`) points at `~/Emulation/BIOS/ps2-bios.bin`, which is what makes PS2 zero-setup — wrong name = ARMSX2 reports no BIOS found. Any region dump works (PS2 emulation isn't region-locked). |
-| PS1 | `scph5501.bin` (US), `scph5500.bin` (JP), `scph5502.bin` (EU) | Standard libretro names, as dumped |
-| Dreamcast | `dc/dc_boot.bin`, `dc/dc_flash.bin` | Note the `dc/` subfolder — Flycast's convention |
-| GBA | `gba_bios.bin` | Optional (mGBA HLEs it); improves accuracy |
-| Sega CD | `bios_CD_U.bin`, `bios_CD_E.bin`, `bios_CD_J.bin` | Genesis Plus GX names |
-| Switch (Eden) | `prod.keys` + firmware | Drop in `BIOS/` or the folder Eden names on first run |
-| PS3 (RPCS3) | `PS3UPDAT.PUP` | Installed via the RPCS3 GUI (File → Install Firmware), not a folder drop |
-| Xbox (xemu) | BIOS/flash + HDD image | Selected in xemu's first-run settings; keep the files in `BIOS/` |
+| **PlayStation 2** | `ps2-bios.bin` | Rename your BIOS dump to exactly this. Any region works. |
+| PlayStation | `scph5501.bin` (US), `scph5500.bin` (JP), `scph5502.bin` (EU) | Standard names, as dumped. |
+| Dreamcast | `dc/dc_boot.bin`, `dc/dc_flash.bin` | Note the `dc/` subfolder. |
+| Sega CD | `bios_CD_U.bin`, `bios_CD_E.bin`, `bios_CD_J.bin` | One per region. |
+| Game Boy Advance | `gba_bios.bin` | Optional; improves accuracy. |
 
-If a game won't boot, the emulator's error message names the exact file it wants —
-missing/misnamed BIOS is the most common cause.
+If a game will not boot, the emulator's error message usually names the exact file it is missing.
+A missing or misnamed BIOS is the most common cause.
 
 ## Getting games into Steam
 
-Star a game in ES-DE (Favorite button) → quit ES-DE → re-enter Game Mode → the game is
-in the Steam library (in a "Pocknix" collection), launched via `pocknix-play`. Un-star
-to remove. The sync (`pocknix-steam-sync`) runs at game-session start, while Steam is
-down — favorites always appear on the *next* Game Mode entry, never mid-session.
+Favorite a game in ES-DE (the Favorite button), quit ES-DE, and re-enter Game Mode. The game
+appears in your Steam library in a "Pocknix" collection, ready to launch straight from Big
+Picture. Un-favorite to remove it. Favorites are synced when you enter Game Mode, so they show up
+on the next entry, never mid-session.
 
-## What's preconfigured (no user action)
+## Tweaking individual emulator settings
 
-- **RetroArch tier** (~25 systems): controller profiles (Steam Input virtual X360 pad),
-  120Hz-panel pacing (swap interval 2), left-stick-as-dpad, per-system tuning seeds
-  (GBA: integer scale + lcd3x).
-- **ARMSX2 (PS2)**: setup wizard skipped, Vulkan renderer, full pad bindings, 2.5x
-  upscale (~1120p), big-core pinning. User supplies `ps2-bios.bin` + games, nothing else.
-- **ES-DE**: scans `~/Emulation/ROMs`, emulator lookup wired to the pocknix install
-  paths (`es_find_rules.xml`).
+Defaults are tuned for the RP6, but you can change per-emulator settings any time:
 
-## Per-system status (on-device verification)
+- **RetroArch systems** (NES, SNES, N64, Game Boy, GBA, DS, Genesis, Saturn, Dreamcast,
+  PlayStation, PSP, Arcade, and more): while a game is running, open the **RetroArch Quick Menu**
+  (hold Select and press X on the controller, or press F1 on a keyboard). From there you can
+  change the core options, video/shader settings, controls, and save an override that applies to
+  that game or that whole system.
+- **Standalone emulators** (ARMSX2 for PS2, Dolphin for GameCube/Wii, PPSSPP for PSP, Azahar for
+  3DS): each has its own in-app settings menu. Launch the emulator from the desktop to reach its
+  full configuration UI.
 
-| System | Emulator | Status |
-|---|---|---|
-| GBA | RetroArch/mGBA | ✅ verified end-to-end (controls, pacing, shader, Steam launch) |
-| PS2 | ARMSX2 | ✅ verified end-to-end (Ape Escape 2: smooth @2.5x, pad works) |
-| Other RetroArch systems | various cores | shares GBA's plumbing; untested per-system |
-| Switch | Eden | installed, untested (needs user prod.keys) |
-| PS3 | RPCS3 | installed, untested (expect "advanced tier" perf) |
-| Xbox | xemu | installed, untested |
-| PS Vita | Vita3K | installed, untested (content installs via GUI) |
-| GC/Wii | Dolphin | pending VM source build |
-| 3DS | Azahar | pending VM source build (riskiest build) |
-| Wii U | Cemu (native source build) | pending VM build — upstream gained an ARM64 recompiler; the FEX route is retired |
+## What is already set up for you
+
+- **RetroArch**: controller mapping, 120Hz-panel frame pacing, and sensible per-system tuning
+  (for example integer scaling and an LCD shader on GBA).
+- **PlayStation 2 (ARMSX2)**: setup wizard skipped, Vulkan renderer, controller bound, and
+  upscaling enabled. You only supply `ps2-bios.bin` and your games.
+- **ES-DE**: scans `~/Emulation/ROMs` and already knows where every emulator is installed.

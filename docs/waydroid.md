@@ -1,89 +1,57 @@
-# Waydroid on pocknix-os
+# Android apps (Waydroid)
 
-Android apps via Waydroid. Target UX: each Android app opens as its own
-fullscreen, caption-less Plasma window on the deck (Plasma Mobile) session.
-Image is **VANILLA** (no Play Store — Aurora Store works; GApps needs re-init +
-device registration).
+pocknix-os can run Android apps through **Waydroid**. Each app opens as its own fullscreen
+window in the Plasma Mobile desktop session, so it behaves much like a native app.
 
-Kernel prerequisites (binder) live in `scripts/build-kernel.sh`
-(`ANDROID_BINDER_IPC` + `BINDERFS`). The `waydroid` package is in
-`config/packages/desktop.list`. First run still needs `waydroid init`.
+## First-time setup
 
-## How windowing actually works (non-obvious)
+Waydroid needs a one-time init to download its Android image. In the desktop session, open a
+terminal and run:
 
-`persist.waydroid.multi_windows` does **not** control the number of windows — it
-toggles Android *freeform* (draws a caption bar: min/max/close + back) vs
-*fullscreen* (no caption) windowing. Waydroid maps every `waydroid app launch
-<pkg>` to its own Plasma toplevel (`app_id waydroid.<pkg>`) either way. So:
+```bash
+sudo waydroid init
+```
 
-- `multi_windows=false` → clean per-app windows, **no caption**, **back-only**
-  nav bar. Home/Recents belong to the `show-full-ui` shell composite; here Plasma
-  is the shell (task switcher = recents, close = home). Intents spawn new app
-  windows. **This is the desired behaviour.**
-- The caption bar is Android freeform decoration — only removable via
-  `multi_windows=false` (or patching the Android system image; not worth it).
+Then launch **Waydroid** from the app grid (or `waydroid session start`). The first boot takes
+a minute or two.
 
-**Do not add a KWin fullscreen force rule.** It traps the bottom-edge swipe (so
-you can't reach the Plasma task switcher) and breaks the nav bar. The mobile
-default (`Placement=Maximizing` + `BorderlessMaximizedWindows`) already fills the
-screen once the panel strut is gone (below).
+## Installing apps
 
-## Baked into the image (overlay/)
+You have two easy options:
 
-- `overlay/usr/local/bin/pocknix-waydroid-tuning` + its `.service`
-  (`WantedBy=waydroid-container.service`, enabled in `build-sd-image.sh`). Runs
-  on every container start, waits for `sys.boot_completed`, then idempotently
-  re-asserts the four/five Android `/data` settings below. These live in Android
-  `/data`, so **`waydroid init` wipes them** — the hook restores them at launch.
-- `overlay/usr/local/bin/pocknix-waydroid-apk-install` + the deck
-  `waydroid-apk-install.desktop` — "Open With → Install with Waydroid" handler
-  for `.apk` files (auto-starts a session if needed). Set it as the default apk
-  handler on first run: `xdg-mime default waydroid-apk-install.desktop
-  application/vnd.android.package-archive`.
+**Aurora Store (recommended).** Aurora is an open-source client for the Google Play catalog, so
+you can browse and install the same apps you would from the Play Store, using anonymous sign-in.
+Install its APK (see below) once, then use it like a store.
 
-### The Android `/data` settings the hook pins
-1. `navigation_mode=0` + `threebutton` overlay (gesture nav conflicts with the
-   host Plasma edge gestures).
-2. `wm density 360` — **display size**. Waydroid auto-density drifts (seen
-   213/248/450); at 1080 a low value pushes smallestWidth ≥600dp → tablet UI
-   (taskbar nav, edge-swipe eaten as back). 360 → swdp ~432 → phone UI, user's
-   preferred size. Stored as `forcedDensity` in `display_settings.xml` (only
-   persists when the value ≠ physical).
-3. `font_scale=1.0` — **font size**.
-4. `policy_control=immersive.status=*` — hides Android status bar, keeps nav bar.
-5. `persist.waydroid.multi_windows=false` — read at container boot, so it takes
-   effect the **next** start (persists after).
+**Sideload an APK.** Download any `.apk` file, then open it from your file manager with
+**Open With → Install with Waydroid**. It installs the app (starting a Waydroid session first if
+needed) and adds a launcher shortcut automatically.
 
-## Host-side (Plasma) — NOT yet auto-baked
+> To make the APK handler the default so a double-click just installs, run once:
+> ```bash
+> xdg-mime default waydroid-apk-install.desktop application/vnd.android.package-archive
+> ```
 
-Applied on-device; survives `waydroid init` but not a fresh image. TODO: fold
-into the deck config skeleton safely (partial-file merge risk on the mobile
-shell config).
+> Want the official Google Play Store instead of Aurora? That needs a GApps Android image plus a
+> one-time Google device registration, and re-running `waydroid init`. Aurora is simpler and
+> reaches the same apps.
 
-- `~/.config/plasmamobilerc [General] autoHidePanelsEnabled=true` — the "Auto
-  Hide Panels" mobile-shell quicksetting. Removes the **top status-bar panel's
-  strut** so Waydroid sizes its wayland surface to the full work area (1080)
-  instead of 1025 — this is what closed the ~55px bottom gap. (Plain KWin
-  `panelVisibility` is ignored by the mobile panel.)
-  Apply: `kwriteconfig6 --file plasmamobilerc --group General --key
-  autoHidePanelsEnabled true` then restart plasmashell.
+## App shortcuts appear automatically
 
-## Storage layout
+Every app you install, however you install it, automatically gets its own entry in the Plasma
+Mobile app grid (Aurora, sideloaded APK, or Play Store all work the same way). Launch an Android
+app from there just like any other app, and it opens in its own window. Waydroid's built-in
+system apps stay hidden so they do not clutter your app list. No manual shortcut setup needed.
 
-- `/var/lib/waydroid/` — images, `waydroid.cfg`, overlays.
-- Android `/data` — `~/.local/share/waydroid/data/` (LXC rbind-mounts it). Owned
-  by host uid 1000 (`alarm`) because Android's `system` uid maps straight through
-  (no userns remap).
-- `/sdcard` = `.../data/media/0/` (Download there is app-uid:media_rw 1023, mode
-  770 → deck can't read it). FUSE emulated storage is active.
-- Routing Android downloads → host `~/Downloads`: bind-mount before session start
-  (rbind is a snapshot) + uid friction. **Open / not implemented.**
+## Using apps
 
-## App shortcuts are automatic
+- Apps open fullscreen with an Android **back** button in the nav bar.
+- Swipe or use the Plasma task switcher to move between apps (this doubles as Android Recents).
+- Closing an app window returns you to the desktop.
 
-Waydroid's `UserMonitor` (`tools/services/user_manager.py`) writes
-`~/.local/share/applications/waydroid.<pkg>.desktop` (`Exec=waydroid app launch
-<pkg>`) on **any** app install — Play Store, Aurora, sideload, `waydroid app
-install`. System apps get `NoDisplay=true` (hidden); user-installed apps show. So
-store-installed apps auto-get own-window shortcuts and the built-ins stay hidden
-— no configuration needed.
+## Files and storage
+
+- Android's shared storage (`/sdcard`) lives under
+  `~/.local/share/waydroid/data/media/0/`. Files an app downloads land there.
+- Your Android data survives normally, but note that **re-running `waydroid init` wipes the
+  Android data partition**, so back up anything important inside apps first.
