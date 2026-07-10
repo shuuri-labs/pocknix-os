@@ -42,7 +42,7 @@ order**, then the SM8550 config, then qcom-abl packaging.
 | Path | What | Apply order |
 |---|---|---|
 | `patches/10-mainline/` | ROCKNIX generic backports (joypad gpiolib, input-polldev, pwm, adc-keys, BT RTL8733BU) — 5 | 1st (before device) |
-| `patches/20-sm8550/` | SM8550 / RP6 device patches — 61: suspend/resume set, RP6 panel, RSInput gamepad, TSENS uplow-wake fix, audio, thermal, etc. | 2nd |
+| `patches/20-sm8550/` | SM8550 / RP6 device patches — 60: suspend/resume set, RP6 panel, RSInput gamepad, TSENS uplow-wake fix, audio, thermal, etc. | 2nd |
 | `patches/30-version/` | Generic version-specific patches (msm resource cleanup, rust build fix) — 2 | 3rd (after device) |
 | `dts/qcom/` | RP6 device tree (`qcs8550-retroidpocket-rp6.dts` + shared `.dtsi`s) | — |
 | `config/linux.aarch64.conf` | Kernel config | — |

@@ -1,0 +1,62 @@
+From: pocknix <pocknix@users.noreply.github.com>
+Subject: [PATCH] drm/msm/dpu: add module param to disable UBWC scanout modifiers
+
+On SM8550 command-mode panels (Retroid Pocket 6) scanning out
+UBWC-compressed framebuffers correlates with chronic CTL_START interrupt
+loss ("[dpu error] enc33 intf1 ctl start interrupt wait failed",
+"wait for commit done returned -22"): commits intermittently time out at
+rates from a handful to hundreds per minute, which the compositor
+experiences as sub-10fps output while CPU/GPU sit idle. The compositor
+(gamescope) negotiates XR30 + DRM_FORMAT_MOD_QCOM_COMPRESSED from the
+plane's IN_FORMATS with no userspace override, so provide a driver-level
+switch: msm.dpu_scanout_ubwc=0 removes the compressed modifier from the
+advertised list and from format_mod_supported(), forcing linear scanout.
+
+Default is true (unchanged behavior).
+
+---
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c
+@@ -90,6 +90,21 @@
+ 
+ static const uint64_t supported_format_modifiers[] = {
+ 	DRM_FORMAT_MOD_QCOM_COMPRESSED,
++	DRM_FORMAT_MOD_LINEAR,
++	DRM_FORMAT_MOD_INVALID
++};
++
++/*
++ * UBWC-compressed scanout can be disabled at runtime (msm.dpu_scanout_ubwc=0)
++ * for panels/pipelines where compressed fetch destabilizes command-mode
++ * kickoff (CTL_START timeouts). Selected at plane init; changing it after
++ * probe has no effect.
++ */
++static bool dpu_scanout_ubwc = true;
++module_param_named(dpu_scanout_ubwc, dpu_scanout_ubwc, bool, 0444);
++MODULE_PARM_DESC(dpu_scanout_ubwc, "Advertise UBWC-compressed scanout modifiers (default: true)");
++
++static const uint64_t linear_only_format_modifiers[] = {
+ 	DRM_FORMAT_MOD_LINEAR,
+ 	DRM_FORMAT_MOD_INVALID
+ };
+@@ -1787,7 +1802,8 @@
+ 	if (modifier == DRM_FORMAT_MOD_LINEAR)
+ 		return true;
+ 
+-	if (modifier == DRM_FORMAT_MOD_QCOM_COMPRESSED && !has_no_ubwc)
++	if (modifier == DRM_FORMAT_MOD_QCOM_COMPRESSED && !has_no_ubwc &&
++	    dpu_scanout_ubwc)
+ 		return dpu_find_format(format, qcom_compressed_supported_formats,
+ 				ARRAY_SIZE(qcom_compressed_supported_formats));
+ 
+@@ -1837,7 +1853,9 @@
+ 	pdpu = drmm_universal_plane_alloc(dev, struct dpu_plane, base,
+ 				0xff, &dpu_plane_funcs,
+ 				format_list, num_formats,
+-				supported_format_modifiers, type, NULL);
++				dpu_scanout_ubwc ? supported_format_modifiers :
++						   linear_only_format_modifiers,
++				type, NULL);
+ 	if (IS_ERR(pdpu))
+ 		return ERR_CAST(pdpu);
+ 

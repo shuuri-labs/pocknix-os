@@ -1,0 +1,37 @@
+From: pocknix <pocknix@users.noreply.github.com>
+Subject: [PATCH] drm/panel: vtdr6130-rp6: expose only the 120Hz mode
+
+The RP6 init sequence programs mode-dependent panel parameters (DSC PPS,
+frame-rate registers) based on vtdr6130_get_current_mode(), which guesses
+the active mode from connector->state->crtc at prepare() time - before the
+new state is reliably committed. With two modes exposed the guess races on
+every panel enable: when it picks the synthetic 60Hz mode while the DPU
+drives 120Hz timings, the panel's TE pulse never matches the tearcheck
+window and every command-mode kickoff times out ("ctl start interrupt wait
+failed", "wait for commit done returned -22") until the next enable
+re-rolls it. Observed on-device as whole sessions stuck at ~10fps from
+boot or resume, healed by a compositor restart.
+
+The 60Hz mode is not reachable in practice (gamescope refresh switching
+requires an EDID this DSI panel does not provide), so expose only 120Hz:
+get_current_mode() then has exactly one answer and panel programming is
+deterministic on every enable. Proper fix upstream would be plumbing the
+committed mode into prepare() instead of guessing.
+
+---
+--- a/drivers/gpu/drm/panel/panel-visionox-vtdr6130-cog.c
++++ b/drivers/gpu/drm/panel/panel-visionox-vtdr6130-cog.c
+@@ -270,7 +270,12 @@
+
+ static struct panel_desc vtdr6130_rp6_desc = {
+ 	.modes = vtdr6130_rp6_modes,
+-	.num_modes = ARRAY_SIZE(vtdr6130_rp6_modes),
++	/*
++	 * 120Hz only: init_sequence guesses the active mode at prepare() time
++	 * and races when more than one mode is exposed (60Hz programming vs
++	 * 120Hz DPU timings kills TE -> every commit times out). See 1021.
++	 */
++	.num_modes = 1,
+ 	.width_mm = 120,
+ 	.height_mm = 68,
+ 	.bpc = 8,

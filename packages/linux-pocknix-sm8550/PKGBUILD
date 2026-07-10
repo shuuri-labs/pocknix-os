@@ -19,7 +19,7 @@
 # (quirk params), owned by each device's BSP (e.g. pocknix-bsp-rp6).
 pkgname=linux-pocknix-sm8550
 pkgver=7.1.2
-pkgrel=1
+pkgrel=3
 pkgdesc="SM8550 kernel (stock ${pkgver} + ROCKNIX patch stack, all-boards dtbs) — packaged from 'make kernel' output"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"

@@ -112,10 +112,18 @@ configure() {
   # pocknix kernel config deltas (applied on top of the synced ROCKNIX config, so
   # they survive `make sync`):
   #  - zstd-compressed firmware loading (Arch ships firmware as .zst)
-  #  - DRM_MSM as a MODULE: built-in, it probes before the rootfs is mounted and its
-  #    GPU firmware (a740_sqe.fw, on the rootfs) fails to load (-2). As a module it
-  #    loads post-root via udev, when /usr/lib/firmware is available. We have no
-  #    initramfs, so early firmware must come via a module-load-after-root, not =y.
+  #  - DRM_MSM built-in (=y, matching ROCKNIX). It was a MODULE to dodge an a740_sqe.fw
+  #    "-2" at built-in probe (fw is on the not-yet-mounted root), BUT that made mdss+dpu+
+  #    dsi+gpu all bind LATE (~4.1s) via one post-root udev modprobe, so the first DPU
+  #    commit raced the panel's command-mode tearcheck into a PERSISTENT TE-dead latch
+  #    (~10fps, "ctl start interrupt wait failed" / commit-done -22) that survived reboots
+  #    (dummy panel regulators = the OS can't power-cycle the panel to reset it). =y makes
+  #    msm probe EARLY during kernel init, off disp_cc's fresh power-on-reset PLL/RCG state,
+  #    and bring the panel up clean — exactly ROCKNIX's bring-up. The "-2" is benign: the
+  #    a6xx GPU is a separate platform device that -EPROBE_DEFERs on missing firmware, so the
+  #    DISPLAY comes up regardless and the GPU retries once root mounts (ROCKNIX loads the fw
+  #    at ~11.9s). VALIDATE on-device that GPU accel recovers; if it doesn't on our
+  #    initramfs-less root, embed the fw via CONFIG_EXTRA_FIRMWARE rather than reverting to =m.
   #  - Android binder + binderfs for Waydroid: the synced config has
   #    ANDROID_BINDER_IPC off, so the Waydroid container can't start ("Failed to
   #    initialize Waydroid"). MEMFD_CREATE is already on, so modern Waydroid needs no
@@ -167,7 +175,6 @@ configure() {
     --enable UNICODE \
     --enable FW_LOADER_COMPRESS \
     --enable FW_LOADER_COMPRESS_ZSTD \
-    --module DRM_MSM \
     --enable ANDROID \
     --enable ANDROID_BINDER_IPC \
     --enable ANDROID_BINDERFS \
