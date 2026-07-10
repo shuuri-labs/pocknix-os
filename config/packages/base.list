@@ -9,6 +9,14 @@ systemd-sysvcompat
 dbus-broker
 mkinitcpio
 
+# --- boot splash ---
+plymouth             # spinner splash over the silent boot (cmdline: quiet loglevel=3 ... splash).
+                     #   We boot with NO initramfs, so this is plymouth's late mode: its systemd
+                     #   units start plymouthd from the rootfs at sysinit; DRM_MSM=y means the
+                     #   display is already up by then. Theme/config in overlay
+                     #   /etc/plymouth/plymouthd.conf. getty@tty1 waits on plymouth-quit-wait
+                     #   (upstream systemd ordering), so the spinner hands off to the session.
+
 # --- networking ---
 networkmanager
 iwd

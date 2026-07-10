@@ -111,12 +111,12 @@ PANEL_MM="${POCKNIX_PANEL_MM:-177x100}"
 # WITHOUT it and fail to load steamui.so's bundled libvpx.so.6 from steamrtarm64. Re-injecting it
 # with `env` right before the client restores it for the (non-secure) client. gamescope itself does
 # not need LD_LIBRARY_PATH (its libs are in the system paths).
-# Tee gamescope's output to a log (it otherwise goes to tty1 and is lost). Write it in the deck HOME
-# (deck can't write /var/log — that failed with "Permission denied" and lost the log). pocknix-diag
-# picks it up. Truncated each launch. NOT exec'd so the pipe stays intact; pkill -TERM gamescope
-# (session switch) still works (targets by name).
+# Gamescope's output goes to its log file, NOT the tty: tty1 must stay blank, it's what shows
+# between compositors on a session switch (the supervisor keeps it cleared; a tee to tty+file here
+# used to replay the whole scrollback on every switch). Written in the deck HOME (deck can't write
+# /var/log — that failed with "Permission denied" and lost the log). pocknix-diag picks it up.
+# Truncated each launch. Still NOT exec'd; pkill -TERM gamescope (session switch) targets by name.
 GS_LOG="${HOME}/pocknix-steam.log"
-set -o pipefail
 # Steam's gamepadui sizes its UI from the output's physical mm (DPI). 177x100 = armada's tested RP6
 # value (~275 DPI, handheld-correct UI); the old 508x286 was ~96 DPI -> a desktop monitor -> tiny UI.
 # The present-path env (vk_xwayland_wait_ready / GAMESCOPE_DISABLE_ASYNC_FLIPS / ENABLE_GAMESCOPE_WSI /
@@ -131,4 +131,4 @@ env -u WAYLAND_DISPLAY \
   gamescope -W "${W}" -H "${H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
     --force-orientation "${ORIENT}" --use-rotation-shader -e -- \
     env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles -noshaders \
-  2>&1 | tee "${GS_LOG}"
+  >"${GS_LOG}" 2>&1
