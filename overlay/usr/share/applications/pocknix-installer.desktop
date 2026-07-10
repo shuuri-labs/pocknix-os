@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pocknix Installer
+Comment=Install Pocknix to internal storage alongside Android, or remove an existing install
+Exec=/usr/local/bin/pocknix-installer-gui
+TryExec=/usr/local/bin/pocknix-installer-gui
+Icon=drive-harddisk
+Terminal=false
+Categories=System;Settings;
+Keywords=install;internal;pocknix;uninstall;

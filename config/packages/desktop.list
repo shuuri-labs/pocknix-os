@@ -54,3 +54,11 @@ discover             # plasma-discover — KDE app store with the Flatpak backen
 
 # --- Bluetooth (KDE UI) ---
 bluedevil            # Plasma Bluetooth applet/KCM (talks to bluez)
+
+# --- Pocknix Installer (install-to-internal GUI) ---
+# pocknix-installer-gui (overlay) is a kdialog front-end for pocknix-install/uninstall-internal,
+# launched from the "Pocknix Installer" app entry. kdialog's deps are all in the Plasma stack above.
+kdialog              # the dialogs (confirm / size picker / busy bar)
+qt6-tools            # qdbus6 — drives the kdialog progress dialog (indeterminate + close). Already
+                     #   on the image transitively (qdbusviewer6 is hidden via the overlay); explicit
+                     #   because the installer GUI depends on it.

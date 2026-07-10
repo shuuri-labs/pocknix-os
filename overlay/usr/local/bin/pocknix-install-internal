@@ -13,6 +13,7 @@
 # rsync the overlay, or (kernel) pacman -U linux-pocknix. This is the one-time gateway only.
 #
 # Usage: pocknix-install-internal [--dry-run] [--yes] [--userdata-gib N] [--device /dev/sdX]
+#        pocknix-install-internal --detect    # read-only probe: k=v state for pocknix-installer-gui
 set -euo pipefail
 
 DEVICE="/dev/sda"                 # internal userdata LUN on SM8550 (sda17 = Android userdata)
@@ -30,15 +31,16 @@ ANDROID_MIN_GIB=1                 # smallest Android userdata we'll leave
 BOOT_GPT_NAME="ROCKNIX"           # GPT partition name (ROCKNIX's internal convention)
 BOOT_FAT_LABEL="ROCKNIX"          # FAT label the ABL looks for
 ROOT_GPT_NAME="POCKNIX_ROOT"      # matches the kernel cmdline root=PARTLABEL=POCKNIX_ROOT
-DRY_RUN=0; ASSUME_YES=0; UD_GIB=""
+DRY_RUN=0; ASSUME_YES=0; UD_GIB=""; DETECT=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
     --yes|-y)  ASSUME_YES=1 ;;
+    --detect)  DETECT=1 ;;
     --userdata-gib) UD_GIB="${2:-}"; shift ;;
     --device) DEVICE="${2:-}"; shift ;;
-    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
   shift
@@ -72,14 +74,32 @@ partdev() { case "$DEVICE" in *mmcblk*|*nvme*) echo "${DEVICE}p$1" ;; *) echo "$
 # --- idempotency: bail if a pocknix install already exists on the internal disk ---
 existing="$(parted -m -s "$DEVICE" print 2>/dev/null | tail -n +2 | cut -d: -f6 || true)"
 if echo "$existing" | grep -qx -e "$ROOT_GPT_NAME"; then
+  if [ "$DETECT" = 1 ]; then
+    # --detect: machine-readable k=v state for pocknix-installer-gui. Read-only, exits 0.
+    echo "mode=occupied"
+    if echo "$existing" | grep -qx -e "$BOOT_GPT_NAME"; then echo "boot_disabled=0"; else echo "boot_disabled=1"; fi
+    parted -m -s "$DEVICE" unit B print | awk -F: -v r="$ROOT_GPT_NAME" -v b="$BOOT_GPT_NAME" '
+      NR>2 { sz=$4; sub("B","",sz)
+             if ($6=="userdata") a+=sz; else if ($6==r || $6==b) p+=sz }
+      END  { printf "android_gib=%d\npocknix_gib=%d\n", a/2^30, p/2^30 }'
+    exit 0
+  fi
   die "an existing install was found on $DEVICE (a $ROOT_GPT_NAME/$BOOT_GPT_NAME/STORAGE partition).
   This installer only does a fresh install. To reinstall, delete those partitions first
   (carefully, with parted) or restore Android, then re-run."
 fi
+# A ROCKNIX/STORAGE tail without POCKNIX_ROOT = an install this tool didn't create (e.g. an internal
+# ROCKNIX). Detect reports it as foreign; a plain install run fails the userdata-last check below.
+if [ "$DETECT" = 1 ] && echo "$existing" | grep -qx -e "$BOOT_GPT_NAME" -e "STORAGE"; then
+  echo "mode=foreign"; exit 0
+fi
 
 # --- find the Android userdata partition (exactly one) ---
 mapfile -t ud < <(parted -m -s "$DEVICE" unit B print | awk -F: 'NR>2 && $6=="userdata"')
-[ "${#ud[@]}" -eq 1 ] || { parted -s "$DEVICE" print >&2; die "could not uniquely find an Android 'userdata' partition on $DEVICE"; }
+if [ "${#ud[@]}" -ne 1 ]; then
+  [ "$DETECT" = 1 ] && { echo "mode=foreign"; exit 0; }
+  parted -s "$DEVICE" print >&2; die "could not uniquely find an Android 'userdata' partition on $DEVICE"
+fi
 IFS=: read -r UD_NUM UD_STARTB UD_ENDB _ <<< "${ud[0]}"
 UD_START="${UD_STARTB%B}"; UD_END="${UD_ENDB%B}"
 
@@ -88,6 +108,7 @@ last_end=0
 while IFS=: read -r _ _ eb _; do eb="${eb%B}"; [ "$eb" -gt "$last_end" ] && last_end="$eb"; done \
   < <(parted -m -s "$DEVICE" unit B print | awk -F: 'NR>2')
 if [ "$UD_END" -lt "$last_end" ]; then
+  [ "$DETECT" = 1 ] && { echo "mode=foreign"; exit 0; }
   parted -s "$DEVICE" print >&2
   die "userdata (#$UD_NUM) is not the last partition on $DEVICE — refusing (this installer assumes it is)."
 fi
@@ -100,7 +121,18 @@ ORIG_MIB=$(( UD_END_MIB - UD_START_MIB ))
 ORIG_GIB=$(( ORIG_MIB / 1024 ))
 MIN_UD_GIB=$ANDROID_MIN_GIB
 MAX_UD_GIB=$(( (ORIG_MIB - BOOT_MIB - ROOT_MIN_GIB*1024) / 1024 ))
-[ "$MAX_UD_GIB" -ge "$MIN_UD_GIB" ] || die "not enough space on $DEVICE (userdata is only ${ORIG_GIB} GiB)"
+if [ "$MAX_UD_GIB" -lt "$MIN_UD_GIB" ]; then
+  [ "$DETECT" = 1 ] && { echo "mode=toosmall"; echo "needed_gib=$(( ANDROID_MIN_GIB + ROOT_MIN_GIB + 1 ))"; echo "android_current_gib=${ORIG_GIB}"; exit 0; }
+  die "not enough space on $DEVICE (userdata is only ${ORIG_GIB} GiB)"
+fi
+
+if [ "$DETECT" = 1 ]; then
+  echo "mode=fresh"
+  echo "android_min_gib=${MIN_UD_GIB}"
+  echo "android_max_gib=${MAX_UD_GIB}"
+  echo "android_current_gib=${ORIG_GIB}"
+  exit 0
+fi
 
 say "Internal disk $DEVICE: Android userdata #$UD_NUM is ${ORIG_GIB} GiB."
 say "You can shrink it to between ${MIN_UD_GIB} and ${MAX_UD_GIB} GiB; pocknix gets the rest."

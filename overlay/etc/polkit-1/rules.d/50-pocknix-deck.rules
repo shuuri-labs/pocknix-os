@@ -16,4 +16,12 @@ polkit.addRule(function(action, subject) {
         action.lookup("program") == "/usr/lib/hwsupport/format-device.sh") {
         return polkit.Result.YES;
     }
+    // Internal-storage installer: pocknix-installer-gui (the Plasma app) pkexec's the two CLIs
+    // (detect probe + install/uninstall). Both are self-guarded (refuse removable disks, refuse
+    // the disk / is on, explicit-layout checks); wheel = the device owner, same trust as above.
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        (action.lookup("program") == "/usr/local/bin/pocknix-install-internal" ||
+         action.lookup("program") == "/usr/local/bin/pocknix-uninstall-internal")) {
+        return polkit.Result.YES;
+    }
 });

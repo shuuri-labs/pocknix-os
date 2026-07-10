@@ -1,0 +1,151 @@
+#!/bin/bash
+# pocknix-installer-gui — Plasma front-end for pocknix-install-internal / pocknix-uninstall-internal
+# (the armada-installer `gui` flow, ported to kdialog — the KDE stack is already on the image, so no
+# GTK/zenity pull; the busy dialog is a kdialog progressbar driven indeterminate over D-Bus).
+#
+# Launched by pocknix-installer.desktop as the normal session user; every privileged step goes
+# through pkexec, authorized for the wheel group with no prompt in 50-pocknix-deck.rules (same
+# pattern as the SD-format helper). Branches on where we're booted from:
+#   SD boot, nothing installed   -> guided install: Android-size picker -> confirm -> busy -> poweroff
+#   SD boot, pocknix installed   -> reinstall / re-enable internal boot / remove & restore Android
+#   internal boot                -> removal stage 1 (--disable-boot); finish from the SD with this app
+set -euo pipefail
+
+TITLE="Pocknix Installer"
+LOG="/tmp/pocknix-installer.log"
+INSTALL_CLI="/usr/local/bin/pocknix-install-internal"
+UNINSTALL_CLI="/usr/local/bin/pocknix-uninstall-internal"
+DEVICE="/dev/sda"    # internal UFS (matches the CLIs' default)
+
+command -v kdialog >/dev/null 2>&1 || { echo "kdialog not installed" >&2; exit 1; }
+# qdbus drives the progress dialog (Arch names the Qt6 binary qdbus6; ships in qt6-tools).
+QDBUS="$(command -v qdbus6 || command -v qdbus || true)"
+
+gui_die() { kdialog --title "$TITLE" --error "$1" || true; exit 1; }
+
+val() { sed -n "s/^$2=//p" <<<"$1" | head -1; }   # val "$info" key
+
+# Busy dialog around a privileged CLI run. The CLI's output is too sparse to drive a percentage,
+# so the bar is made indeterminate (Qt range 0..0). $ref is "service path" — two words, unquoted
+# on purpose. Output goes to $LOG for the failure dialogs.
+run_busy() {
+  local label="$1" ref rc=0; shift
+  ref=$(kdialog --title "$TITLE" --progressbar "$label" 100)
+  [ -n "$QDBUS" ] && $QDBUS $ref Set "" maximum 0 >/dev/null 2>&1 || true
+  pkexec "$@" >"$LOG" 2>&1 || rc=$?
+  [ -n "$QDBUS" ] && $QDBUS $ref close >/dev/null 2>&1 || true
+  return $rc
+}
+
+offer_poweroff() {
+  if kdialog --title "$TITLE" --yes-label "Power off" --no-label "Close" --yesno "$1"; then
+    systemctl poweroff
+  fi
+}
+
+# Android-size picker: a radio list of sensible sizes beats a slider here (kdialog sliders can't
+# set a default, and coarse presets are friendlier on a touch panel anyway).
+choose_android_size() {
+  local amin="$1" amax="$2" def g st args=()
+  def=$amin; [ "$amax" -ge 32 ] && def=32
+  for g in $(printf '%s\n' "$amin" 8 16 32 64 128 "$amax" | sort -nu); do
+    { [ "$g" -ge "$amin" ] && [ "$g" -le "$amax" ]; } || continue
+    st=off; [ "$g" = "$def" ] && st=on
+    args+=("$g" "${g} GB for Android" "$st")
+  done
+  kdialog --title "$TITLE" --radiolist \
+    "Choose how much internal storage Android keeps.<br/>Pocknix gets the rest." "${args[@]}"
+}
+
+install_flow() {
+  local info="$1" amin amax acur ud
+  amin=$(val "$info" android_min_gib); amax=$(val "$info" android_max_gib)
+  acur=$(val "$info" android_current_gib)
+
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "<b>Install Pocknix to internal storage, alongside Android?</b><br/><br/>This <b>factory-resets Android</b>: installed Android apps and their data are lost (the Android system itself is kept). The SD card is not touched.<br/><br/>Nothing before the Android data partition is modified, so the bootloader stays safe." \
+    || exit 0
+
+  ud=$(choose_android_size "$amin" "$amax") || exit 0
+  [ -n "$ud" ] || exit 0
+
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "<b>Ready to install.</b><br/><br/>Android: <b>${ud} GB</b><br/>Pocknix: <b>$((acur - ud)) GB</b><br/><br/>Resizing <b>factory-resets Android</b>. Continue?" \
+    || exit 0
+
+  run_busy "Installing Pocknix to internal storage — do not power off…" \
+      "$INSTALL_CLI" --yes --userdata-gib "$ud" \
+    || gui_die "Install failed (details in ${LOG}).<br/><br/>If internal storage was modified, do NOT boot it — re-run this installer from the SD card to finish."
+  offer_poweroff "<b>Install complete.</b><br/><br/>Power off, remove the SD card, then power on — Pocknix boots from internal storage."
+}
+
+remove_flow() {
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "<b>Remove Pocknix and give all internal storage back to Android?</b><br/><br/>This ERASES the internal Pocknix and factory-resets Android." \
+    || exit 0
+  run_busy "Removing Pocknix from internal storage — do not power off…" \
+      "$UNINSTALL_CLI" --yes \
+    || gui_die "Remove failed (details in ${LOG})."
+}
+
+manage_flow() {
+  local info="$1" android pocknix primary rc=0
+  android=$(val "$info" android_gib); pocknix=$(val "$info" pocknix_gib)
+
+  if [ "$(val "$info" boot_disabled)" = 1 ]; then
+    # Stage 1 of a removal was done (internal boot FAT deleted) but POCKNIX_ROOT is intact:
+    # offer to finish the removal, or to bring the internal install back (--enable-boot).
+    kdialog --title "$TITLE" --yes-label "Finish removal" --no-label "Re-enable internal boot" \
+      --cancel-label "Cancel" --warningyesnocancel \
+      "<b>Internal Pocknix is present but its boot is disabled</b> (removal step 1 was done).<br/><br/>Android: <b>${android} GB</b> &nbsp;&nbsp; Pocknix: <b>${pocknix} GB</b><br/><br/><b>Finish removal</b> gives the whole disk back to Android.<br/><b>Re-enable internal boot</b> brings the internal Pocknix back as it was." \
+      && rc=0 || rc=$?
+    case $rc in
+      0) remove_flow
+         offer_poweroff "<b>Pocknix removed.</b> Android has the full internal storage again (it factory-resets on its next boot).<br/><br/>Power off; remove the SD card to boot Android." ;;
+      1) run_busy "Re-enabling internal boot…" "$UNINSTALL_CLI" --enable-boot --yes \
+           || gui_die "Re-enable failed (details in ${LOG})."
+         offer_poweroff "<b>Internal boot re-enabled.</b><br/><br/>Power off, remove the SD card, then power on — internal Pocknix boots again." ;;
+    esac
+    return
+  fi
+
+  kdialog --title "$TITLE" --yes-label "Reinstall Pocknix" --no-label "Remove, restore Android" \
+    --cancel-label "Cancel" --warningyesnocancel \
+    "<b>Pocknix is installed on internal storage.</b><br/><br/>Android: <b>${android} GB</b> &nbsp;&nbsp; Pocknix: <b>${pocknix} GB</b><br/><br/><b>Reinstall</b> replaces it with the system running now (Android is factory-reset again).<br/><b>Remove</b> erases it and gives the whole disk back to Android." \
+    && rc=0 || rc=$?
+  case $rc in
+    0) run_busy "Removing the old install…" "$UNINSTALL_CLI" --yes \
+         || gui_die "Could not remove the old install (details in ${LOG})."
+       info=$(pkexec "$INSTALL_CLI" --detect 2>>"$LOG") || gui_die "Could not re-inspect internal storage after removal (details in ${LOG})."
+       [ "$(val "$info" mode)" = fresh ] || gui_die "Internal storage is not in a fresh state after removal (details in ${LOG})."
+       install_flow "$info" ;;
+    1) remove_flow
+       offer_poweroff "<b>Pocknix removed.</b> Android has the full internal storage again (it factory-resets on its next boot).<br/><br/>Power off; remove the SD card to boot Android." ;;
+  esac
+}
+
+internal_boot_flow() {
+  # Booted from the internal install: the disk under / can't be repartitioned, so the only action
+  # here is removal stage 1 (drop the internal boot FAT — safe while running; root is untouched).
+  kdialog --title "$TITLE" --yes-label "Disable internal boot" --no-label "Cancel" --warningyesno \
+    "<b>Pocknix is running from internal storage.</b><br/><br/>To remove it and give the storage back to Android:<br/>1. <b>Disable internal boot</b> (nothing else is touched, and it can be re-enabled later).<br/>2. Power off and insert the Pocknix SD card.<br/>3. Boot the SD and open ${TITLE} again to finish.<br/><br/>Without the SD card the device boots Android after this step." \
+    || exit 0
+  run_busy "Disabling internal boot…" "$UNINSTALL_CLI" --disable-boot --yes \
+    || gui_die "Could not disable internal boot (details in ${LOG})."
+  offer_poweroff "<b>Internal boot disabled.</b><br/><br/>Power off, then boot the Pocknix SD card and open ${TITLE} again to finish the removal (or to re-enable internal boot)."
+}
+
+# --- main ---
+src=$(findmnt -no SOURCE / 2>/dev/null || true)
+case "$src" in
+  "$DEVICE"*) internal_boot_flow; exit 0 ;;
+esac
+
+info=$(pkexec "$INSTALL_CLI" --detect 2>>"$LOG") || gui_die "Could not inspect internal storage (details in ${LOG})."
+case "$(val "$info" mode)" in
+  fresh)    install_flow "$info" ;;
+  occupied) manage_flow "$info" ;;
+  toosmall) gui_die "Internal storage is too small: Pocknix needs about $(val "$info" needed_gib) GB and Android's data partition is only $(val "$info" android_current_gib) GB." ;;
+  foreign)  gui_die "Internal storage has a Linux install this tool did not create (e.g. ROCKNIX).<br/><br/>Remove it first (bootloader menu → <b>Uninstall ROCKNIX</b>, or manually with parted), then relaunch." ;;
+  *)        gui_die "Unexpected internal-storage state (details in ${LOG})." ;;
+esac
