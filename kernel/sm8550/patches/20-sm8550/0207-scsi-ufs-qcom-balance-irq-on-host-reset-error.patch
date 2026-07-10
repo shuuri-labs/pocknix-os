@@ -7,13 +7,10 @@ error returns (reset_control_assert / reset_control_deassert failure) leave
 the IRQ disabled, leaking the disable depth and leaving the controller IRQ
 masked for the rest of the controller's life.
 
-This was previously masked: ufshcd_disable_irq() used the synchronous
-disable_irq(), which on the resume relink path hard-wedged before any of this
-could matter. Now that the wrapper masks with disable_irq_nosync() while
-pm_op_in_progress (see "scsi: ufs: don't synchronize_irq in ufshcd_disable_irq
-during PM"), this error path is genuinely reachable, so make it IRQ-depth
-balanced: route both failures through a common exit that re-enables the IRQ
-when it was enabled on entry.
+The relink path can now mask the IRQ with disable_irq_nosync() while PM is in
+progress, so these error exits must preserve IRQ depth as well. Route both
+failures through a common exit that re-enables the IRQ when it was enabled on
+entry.
 
 Signed-off-by: jaewun <jaewun@users.noreply.github.com>
 ---

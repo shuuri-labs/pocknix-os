@@ -40,8 +40,9 @@ mkdir -p "${KERNEL_DIR}/patches/10-mainline" \
 rsync -a --delete "${ROCKNIX_PROJECT_DIR}/packages/linux/patches/mainline/" "${KERNEL_DIR}/patches/10-mainline/"
 # the SoC device patches
 rsync -a --delete "${ROCKNIX_DEVICE_DIR}/patches/linux/"                     "${KERNEL_DIR}/patches/20-${SOC}/"
-# generic version-specific patches applied AFTER device patches
-rsync -a --delete "${ROCKNIX_PROJECT_DIR}/packages/linux/patches/${KERNEL_VERSION%.*}/" "${KERNEL_DIR}/patches/30-version/"
+# generic version-specific patches applied AFTER device patches (dir name set in
+# kernel.conf - ROCKNIX keeps using "7.0" for the 7.1.x series)
+rsync -a --delete "${ROCKNIX_PROJECT_DIR}/packages/linux/patches/${ROCKNIX_VERSION_PATCH_DIR:-${KERNEL_VERSION%.*}}/" "${KERNEL_DIR}/patches/30-version/"
 # dts / config / bootloader packaging
 rsync -a --delete "${ROCKNIX_DEVICE_DIR}/linux/dts/"                 "${KERNEL_DIR}/dts/"
 rsync -a          "${ROCKNIX_DEVICE_DIR}/linux/linux.aarch64.conf"   "${KERNEL_DIR}/config/"

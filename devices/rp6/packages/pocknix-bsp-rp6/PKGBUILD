@@ -20,7 +20,7 @@ replaces=('pocknix-bsp')
 optdepends=('inputplumber: gamepad -> Steam Input mapping (uses 01-rsinput-rp6.yaml)'
             'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin2 UCM)')
 # NOTE: the spurious deep-sleep wake is FIXED in the kernel — kernel/sm8550/patches/20-sm8550/
-# 0504-wakeup-qcom-ipcc-remove-IRQF-NO-SUSPEND.patch (ported from ROCKNIX's SM8750/Odin 3)
+# 0502-wakeup-qcom-ipcc-remove-IRQF-NO-SUSPEND.patch (ported from ROCKNIX's SM8750/Odin 3)
 # masks the IPCC mailbox during suspend so the ADSP charger firmware can't wake the SoC.
 # See docs/archive/sm8550-suspend-wake-report.md.
 source=('10-pocknix-deeponly.conf' '30-pocknix-cpuidle.conf'

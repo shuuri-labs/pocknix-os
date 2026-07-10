@@ -1,3 +1,14 @@
+From: jaewun <jaewun@users.noreply.github.com>
+Subject: [PATCH] mailbox: qcom-ipcc: drop IRQF_NO_SUSPEND
+
+IRQF_NO_SUSPEND keeps the IPCC parent IRQ enabled through
+suspend_device_irqs(). It is not wake configuration.
+
+Let the PM core mask the IRQ during suspend; wake-capable users should use the
+normal wake IRQ path.
+
+Signed-off-by: jaewun <jaewun@users.noreply.github.com>
+
 diff --git a/drivers/mailbox/qcom-ipcc.c b/drivers/mailbox/qcom-ipcc.c
 index d957d989c..2e4bb5efb 100644
 --- a/drivers/mailbox/qcom-ipcc.c
