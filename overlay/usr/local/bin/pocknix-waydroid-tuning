@@ -49,4 +49,18 @@ if [ "$(ws getprop persist.waydroid.multi_windows)" != "false" ]; then
     echo "pocknix-waydroid-tuning: set multi_windows=false (effective next boot)"
 fi
 
+# 6) Disable GAPPS phone-centric apps (Contacts / Messages / Phone): useless on a
+#    handheld, and every enabled app gets a Plasma Mobile shortcut via Waydroid's
+#    app sync. Disabling Android-side drops the shortcut but keeps the sync
+#    mechanism (and the Play Store) intact. Absent on the vanilla image -> no-op.
+for pkg in com.google.android.contacts com.google.android.apps.messaging com.google.android.dialer; do
+    if ws pm list packages -e | grep -q "^package:${pkg}$"; then
+        ws pm disable-user --user 0 "$pkg" >/dev/null
+        echo "pocknix-waydroid-tuning: disabled ${pkg}"
+    fi
+    # Waydroid's sync unlinks the shortcut itself on the package-change event;
+    # this covers files left behind from before the app was disabled.
+    rm -f "/home/deck/.local/share/applications/waydroid.${pkg}.desktop"
+done
+
 echo "pocknix-waydroid-tuning: done"
