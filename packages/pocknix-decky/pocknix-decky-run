@@ -14,7 +14,11 @@
 # chown of the seeded tree instead.
 set -eu
 
-exec unshare --user --map-users=0,0,4294967295 --map-groups=0,0,4294967295 --mount \
+# --propagation slave (not unshare's default private): init-ns mount/umount events still
+# propagate IN, so the loader and its plugin backends see current mounts (SD automounts)
+# instead of pinning a stale copy that keeps the block device busy across a format. Our
+# own mounts (the binfmt instance) still never propagate back out.
+exec unshare --user --map-users=0,0,4294967295 --map-groups=0,0,4294967295 --mount --propagation slave \
   /bin/bash -c '
     set -eu
     mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc

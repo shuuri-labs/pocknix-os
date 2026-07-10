@@ -10,6 +10,8 @@
 /packages/**/*.pkg.tar.zst
 /packages/**/src/
 /packages/**/pkg/
+# the makepkg srcdir rule above must not swallow the plugin's TypeScript sources
+!/packages/pocknix-decky/pocknix-control/src/
 
 # decky plugin frontend build deps (dist/ IS committed — built on the dev Mac, needed by PKGBUILD)
 /packages/pocknix-decky/pocknix-control/node_modules/

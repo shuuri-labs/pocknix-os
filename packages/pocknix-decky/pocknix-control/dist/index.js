@@ -26,6 +26,8 @@ const getConfig = () => call("get_config");
 const setFanMode = (mode) => call("set_fan_mode", mode);
 const setLavdMode = (mode) => call("set_lavd_mode", mode);
 const saveTweaks = (data) => call("save_tweaks", data);
+const detectSdcard = () => call("detect_sdcard");
+const formatSdcard = (label) => call("format_sdcard", label);
 
 function SelectEdit({ label, value, options, onChange }) {
     const rgOptions = options.map((option) => (typeof option === "string" ? { data: option, label: option } : option));
@@ -214,7 +216,91 @@ function Content() {
             load();
         }
     };
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) })] }), SP_JSX.jsx(FexSection, { config: config, setConfig: setConfig })] }));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) })] }), SP_JSX.jsx(FexSection, { config: config, setConfig: setConfig }), SP_JSX.jsx(SdcardSection, {})] }));
+}
+function cardSummary(card) {
+    if (!card)
+        return "Checking…";
+    if (!card.present)
+        return "No SD card detected";
+    const size = card.sizeBytes ? `${(card.sizeBytes / 1e9).toFixed(1)} GB` : "";
+    const state = card.fstype === "ext4" ? (card.mountpoint ? "mounted" : "") : "not formatted for Steam";
+    return [card.label || "unlabeled", size, card.fstype || "no filesystem", state].filter(Boolean).join(" · ");
+}
+// showModal injects closeModal into this wrapper. We deliberately do NOT forward it to
+// ConfirmModal: its internal OK handler would close the dialog immediately, and we want
+// it held open (with the confirm button greyed out) until the format finishes.
+function FormatConfirmModal({ summary, onConfirm, closeModal }) {
+    const [text, setText] = SP_REACT.useState("");
+    const [running, setRunning] = SP_REACT.useState(false);
+    const armedRef = SP_REACT.useRef(false);
+    const runningRef = SP_REACT.useRef(false);
+    armedRef.current = text.trim().toLowerCase() === "format";
+    runningRef.current = running;
+    const start = async () => {
+        if (!armedRef.current || runningRef.current)
+            return;
+        setRunning(true);
+        await onConfirm();
+        closeModal?.();
+    };
+    return (SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Format SD Card", strDescription: running
+            ? "Formatting… This can take a minute. Do not remove the card."
+            : `This erases ALL data on the card (${summary}) and formats it for Steam. Type "format" and press Enter to confirm.`, strOKButtonText: running ? "Formatting…" : "Erase and Format", bDestructiveWarning: true, bOKDisabled: !armedRef.current || running, bCancelDisabled: running, bDisableBackgroundDismiss: true, bHideCloseIcon: true, onCancel: () => {
+            if (!runningRef.current)
+                closeModal?.();
+        }, onOK: start, children: !running ? (SP_JSX.jsx(DFL.TextField, { value: text, focusOnMount: true, onChange: (event) => setText(event.target.value), onKeyDown: (event) => {
+                if (event.key === "Enter")
+                    start();
+            } })) : null }));
+}
+function SdcardSection() {
+    const [card, setCard] = SP_REACT.useState(null);
+    const [label, setLabel] = SP_REACT.useState("SDCARD");
+    const [busy, setBusy] = SP_REACT.useState(false);
+    const [status, setStatus] = SP_REACT.useState("");
+    const busyRef = SP_REACT.useRef(false);
+    busyRef.current = busy;
+    SP_REACT.useEffect(() => {
+        let cancelled = false;
+        const refresh = async () => {
+            if (busyRef.current)
+                return;
+            try {
+                const next = await detectSdcard();
+                if (!cancelled && !busyRef.current)
+                    setCard(next);
+            }
+            catch (error) {
+                if (!cancelled)
+                    setStatus(String(error));
+            }
+        };
+        refresh();
+        const timer = window.setInterval(refresh, 5000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, []);
+    const runFormat = async () => {
+        if (busyRef.current)
+            return;
+        setBusy(true);
+        setStatus("");
+        try {
+            const next = await formatSdcard(label);
+            setCard(next);
+        }
+        catch (error) {
+            setStatus(String(error));
+        }
+        finally {
+            setBusy(false);
+        }
+    };
+    const confirmFormat = () => DFL.showModal(SP_JSX.jsx(FormatConfirmModal, { summary: cardSummary(card), onConfirm: runFormat }));
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "SD CARD", children: [SP_JSX.jsx(DFL.Field, { label: "Card", description: cardSummary(card) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Label", value: label, disabled: busy, onChange: (event) => setLabel(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16)) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: !card?.present || busy, onClick: confirmFormat, children: busy ? "Formatting…" : "Format SD Card" }) }), status ? SP_JSX.jsx(DFL.Field, { label: "", description: status }) : null] }));
 }
 function FexSection({ config, setConfig }) {
     const runtimeGame = config.game;
