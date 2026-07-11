@@ -1,0 +1,28 @@
+# bootaa64.efi provenance
+
+Vendored ROCKNIX GRUB binary, extracted verbatim from the FAT partition
+(EFI/BOOT/bootaa64.efi) of the official release image:
+
+  release:  https://github.com/ROCKNIX/distribution/releases/tag/20260701
+  asset:    ROCKNIX-SM8250.aarch64-20260701.img.gz
+  img.gz sha256: c4bd6943abe46b438b97d66060b02b8b4a9169c99972b3c8cbcfba94a8228df0
+  bootaa64.efi sha256: d6d0939dce9462f8ad675e4f26d833f3833e0e0a2461a2d4e7b5e25247801675
+
+It is GRUB 2.14-rc1 built by ROCKNIX (GPL-3.0-or-later; source: ROCKNIX
+distribution repo, packages/tools/grub: package.mk + 5 patches, notably
+grub-silent-boot, framebuffer rotation, and the partfind/strsearch rawsearch
+commands their board-autodetect grub.cfg uses). Vendored rather than
+self-built so the SM8250 boot chain uses the exact binary ROCKNIX ships and
+tests against the same ABL. To self-build instead: ALARM's grub +
+grub-mkimage -O arm64-efi -p /boot/grub with ROCKNIX's module list (their
+package.mk makeinstall_target), plus their patches if the autodetect cfg
+commands are wanted.
+
+grubenv is the pristine environment block from the same image. grubenv on
+/flash is user state (saved menu choice) — never overwritten on upgrade.
+
+grub.cfg.rocknix-reference is the GENERATED grub.cfg from the same image
+(boot=LABEL LibreELEC-style cmdline, savedefault menu, one entry per board) —
+kept as the reference for porting the multi-board menu/autodetect when a
+second sm8250 board lands. Our shipped grub.cfg is the pocknix-authored
+static one (root=PARTLABEL, single rp5 entry, timeout 0).

@@ -1,0 +1,60 @@
+# linux-pocknix-sm8250 — the SM8250 kernel as a pacman package. Per-SoC, not
+# per-device: /boot/dtbs carries EVERY board's dtb from kernel/sm8250/dts, so
+# this one package serves the RP5 and its siblings. Sibling of
+# linux-pocknix-sm8550 (see that PKGBUILD for the thin-package rationale).
+#
+# THIN package by design: it does NOT compile the kernel. build-packages.sh
+# stages `make kernel DEVICE=sm8250` output (build/kernel/out) into this
+# package's build dir as ./staged; package() lays it out as /boot/Image +
+# /boot/dtbs + /usr/lib/modules/<ver>.
+#
+# arm-efi difference vs the sm8550 package: there is NO boot image and NO
+# mkbootimg. GRUB loads /flash/KERNEL as a RAW Image and the board dtb as a
+# separate /flash/boot/grub/<board>.dtb; the cmdline lives in grub.cfg
+# (pocknix-bootloader-sm8250). The alpm hook therefore just copies Image +
+# dtbs to /flash (pocknix-update-boot) instead of rebuilding a bootimg.
+pkgname=linux-pocknix-sm8250
+pkgver=7.1.2
+pkgrel=1
+pkgdesc="SM8250 kernel (stock ${pkgver} + ROCKNIX patch stack, all-boards dtbs) — packaged from 'make kernel' output"
+arch=('aarch64')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-only')
+# We own the kernel on this device; drop ALARM's generic one (pre-installed in
+# the base tarball). No 'linux-pocknix' provides/replaces: that migration name
+# belongs to the sm8550 lineage.
+provides=("linux=${pkgver}")
+conflicts=('linux-aarch64')
+replaces=('linux-aarch64')
+install=linux-pocknix.install
+options=('!strip')          # don't strip the kernel Image / DTBs (modules are already stripped by modules_install)
+source=('pocknix-update-boot' '90-linux-pocknix.hook')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  local out="${startdir}/staged"     # = build/kernel/out, copied in by scripts/build-packages.sh
+  if [ ! -f "${out}/Image" ] || [ ! -f "${out}/kernelrelease" ]; then
+    echo "${pkgname}: no staged kernel at ${out}." >&2
+    echo "  Run 'make kernel DEVICE=sm8250' first (it produces build/kernel/out), then rebuild this package." >&2
+    return 1
+  fi
+  local kver; kver="$(cat "${out}/kernelrelease")"
+
+  # kernel image + device trees
+  install -Dm644 "${out}/Image" "${pkgdir}/boot/Image"
+  install -d "${pkgdir}/boot/dtbs"
+  cp "${out}/dtbs/"*.dtb "${pkgdir}/boot/dtbs/"
+
+  # modules (already depmod'd by modules_install during `make kernel`; the .install re-runs depmod
+  # post-transaction so modules.dep is correct against the live /usr/lib/modules path).
+  install -d "${pkgdir}/usr/lib/modules"
+  cp -a "${out}/modroot/lib/modules/${kver}" "${pkgdir}/usr/lib/modules/${kver}"
+
+  # record the kver so the install scriptlet (and the /flash refresh hook) know the modules dir.
+  install -Dm644 /dev/stdin "${pkgdir}/usr/lib/pocknix/kernelrelease" <<<"${kver}"
+
+  # On-device /flash refresh: raw Image + dtbs copy (arm-efi, no bootimg) + the
+  # alpm hook that runs it after a kernel pacman txn.
+  install -Dm755 "${srcdir}/pocknix-update-boot"    "${pkgdir}/usr/bin/pocknix-update-boot"
+  install -Dm644 "${srcdir}/90-linux-pocknix.hook"  "${pkgdir}/usr/share/libalpm/hooks/90-linux-pocknix.hook"
+}

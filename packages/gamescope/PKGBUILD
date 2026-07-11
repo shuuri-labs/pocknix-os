@@ -93,7 +93,10 @@ build() {
   # devices/SM8550/options): armv9-a + their feature set (SVE off), tuned for the X3 prime,
   # -mno-outline-atomics per their arch config. Appended last so -march/-mtune override
   # ALARM's generic armv8-a defaults; propagates into wlroots/libliftoff subprojects too.
-  local _rocknix_tune="-march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics"
+  # Per-SoC: build-packages.sh injects POCKNIX_TUNE_CFLAGS from config/tuning/${SOC}.conf
+  # (sm8250 = armv8.2/a76.a55); the fallback is the sm8550 string so a standalone makepkg
+  # reproduces the original build.
+  local _rocknix_tune="${POCKNIX_TUNE_CFLAGS:--march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics}"
   export CFLAGS+=" ${_rocknix_tune}" CXXFLAGS+=" ${_rocknix_tune}"
   meson setup build \
     --prefix=/usr --buildtype=release -Db_lto=false \

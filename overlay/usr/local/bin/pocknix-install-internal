@@ -22,6 +22,15 @@ set -euo pipefail
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 
+# Boot-style gate: this script implements the qcom-abl (SM8550) internal contract
+# ONLY. arm-efi boards (sm8250: GRUB on an EFI FAT, different copy set) must refuse
+# here rather than fall through to the RP6 defaults below and write the wrong
+# layout to internal storage. The arm-efi flow is tracked for the RP5 bring-up.
+if [ "${POCKNIX_BOOT_STYLE:-qcom-abl}" != "qcom-abl" ]; then
+  echo "pocknix-install-internal: boot style '${POCKNIX_BOOT_STYLE}' not supported yet (qcom-abl only)" >&2
+  exit 1
+fi
+
 DEVICE="${POCKNIX_INTERNAL_DISK:-/dev/sda}"   # internal userdata LUN on SM8550 (sda17 = Android userdata)
 BOOT_MIB=512                      # FAT boot partition size. 512 (not the SD's 256) so the boot FAT is
                                   # a valid FAT32 at the UFS's 4096-byte sectors: a 256 MiB partition

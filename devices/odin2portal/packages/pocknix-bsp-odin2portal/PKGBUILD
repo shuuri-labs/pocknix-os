@@ -5,7 +5,7 @@
 # come from pocknix-bsp-common. Same-SoC sibling of pocknix-bsp-rp6.
 pkgname=pocknix-bsp-odin2portal
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix board support: AYN Odin 2 Portal (SM8550) — input map, suspend quirks, audio UCM, device.conf"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

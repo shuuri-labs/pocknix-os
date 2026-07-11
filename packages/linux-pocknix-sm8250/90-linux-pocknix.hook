@@ -1,0 +1,16 @@
+# Refresh the arm-efi /flash boot files (raw KERNEL Image + boot/grub dtbs) whenever the pocknix
+# kernel's Image/dtbs/modules change, so a `pacman -U linux-pocknix-sm8250` on the device is a
+# complete kernel deploy. No-ops in the image-build chroot (pocknix-update-boot skips when /flash
+# isn't mounted).
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = boot/Image
+Target = boot/dtbs/*
+Target = usr/lib/modules/*
+
+[Action]
+Description = pocknix: refreshing /flash KERNEL + dtbs (arm-efi)...
+When = PostTransaction
+Exec = /usr/bin/pocknix-update-boot

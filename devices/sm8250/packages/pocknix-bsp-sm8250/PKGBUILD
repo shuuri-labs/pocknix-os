@@ -1,0 +1,80 @@
+# pocknix-bsp-sm8250 — board support for the SM8250 FAMILY (Retroid Pocket 5).
+# First per-SoC BSP: ONE package serves every board on the SoC. The runtime
+# board facts live in /usr/lib/pocknix/boards/<board>.conf and
+# /usr/lib/pocknix/device.conf is a sourced DISPATCHER that picks one by
+# devicetree model; InputPlumber configs are gated per-board the same way
+# (matches: on the dt model). Adding an sm8250 board = a new boards/ file +
+# its inputplumber yaml(s) + a dispatcher case arm — no new package.
+#
+# Deliberately ABSENT vs the sm8550 BSPs (all verified against ROCKNIX):
+#   * 10-pocknix-deeponly.conf — s2idle wedging is an SM8550 quirk; ROCKNIX
+#     leaves suspend fully enabled on SM8250 (no 030-suspend_mode).
+#   * 30-pocknix-cpuidle.conf — the cpu0 state1 GMU issue is SM8550-only
+#     (ROCKNIX SM8550 096-cpuidle has no SM8250 counterpart).
+#   * kernel-cmdline — arm-efi: the runtime cmdline lives in grub.cfg
+#     (pocknix-bootloader-sm8250), not in a boot-image rebuild file.
+pkgname=pocknix-bsp-sm8250
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix board support: SM8250 family (Retroid Pocket 5) — runtime board dispatch, input map, audio UCM, wake quirks"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('pocknix-bsp-common')
+# Exactly one device BSP may be installed: every pocknix-bsp-<target> provides and
+# conflicts 'pocknix-bsp', so pacman refuses a second target's BSP (the wrong-device
+# guard for a shared repo).
+provides=('pocknix-bsp')
+conflicts=('pocknix-bsp')
+optdepends=('inputplumber: gamepad -> Steam Input mapping (01-retroid-controller.yaml)'
+            'alsa-ucm-conf: base UCM (codec include sequences for the RetroidPocket UCM)')
+source=('device.conf'
+        '01-retroid-controller.yaml' 'rp5-gamepad.yaml'
+        'RetroidPocket.conf' 'HiFi-RP.conf'
+        '99-retroid-pocket.rules' '99-wcd938x-nosleep.rules'
+        '50-audio-quantum')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  # Runtime device facts: the model dispatcher + per-board files. boards/ is
+  # not in source= (makepkg local sources are flat); taken from startdir,
+  # which build-packages.sh populates with the whole package dir.
+  install -Dm644 "${srcdir}/device.conf" "${pkgdir}/usr/lib/pocknix/device.conf"
+  local b
+  for b in "${startdir}/boards/"*.conf; do
+    install -Dm644 "${b}" "${pkgdir}/usr/lib/pocknix/boards/$(basename "${b}")"
+  done
+
+  # InputPlumber composite-device config (dt-model gated) + capability_map for
+  # the RP5's retroid-pocket-gamepad MCU (paddle-free retroid_mcu port).
+  install -Dm644 "${srcdir}/01-retroid-controller.yaml" \
+    "${pkgdir}/usr/share/inputplumber/devices/01-retroid-controller.yaml"
+  install -Dm644 "${srcdir}/rp5-gamepad.yaml" \
+    "${pkgdir}/usr/share/inputplumber/capability_maps/rp5-gamepad.yaml"
+
+  # ALSA UCM for the "RetroidPocket" card (sm8250-sndcard). Mirrors ROCKNIX's
+  # tree: master conf under Qualcomm/sm8250 + card-longname symlinks under
+  # conf.d/sm8250 (plain 0002 names + the RP5 legacy-loader variant from their
+  # patch 0003; extra symlinks are inert — the matching one wins on device).
+  local ucm="${pkgdir}/usr/share/alsa/ucm2"
+  install -Dm644 "${srcdir}/RetroidPocket.conf" "${ucm}/Qualcomm/sm8250/RetroidPocket.conf"
+  install -Dm644 "${srcdir}/HiFi-RP.conf"       "${ucm}/Qualcomm/sm8250/HiFi-RP.conf"
+  install -d "${ucm}/conf.d/sm8250"
+  local l
+  for l in RetroidPocket.conf retroidpocket-RetroidPocket5.conf retroid-RetroidPocket5-conf; do
+    ln -sf "../../Qualcomm/sm8250/RetroidPocket.conf" "${ucm}/conf.d/sm8250/${l}"
+  done
+
+  # udev quirks (verbatim from ROCKNIX devices/SM8250/filesystem):
+  # gamepad joystick tagging + haptics uaccess; wcd938x runtime-PM off so the
+  # headphone jack detection works.
+  install -Dm644 "${srcdir}/99-retroid-pocket.rules" \
+    "${pkgdir}/usr/lib/udev/rules.d/99-retroid-pocket.rules"
+  install -Dm644 "${srcdir}/99-wcd938x-nosleep.rules" \
+    "${pkgdir}/usr/lib/udev/rules.d/99-wcd938x-nosleep.rules"
+
+  # Post-resume PipeWire quantum bounce (ROCKNIX SM8250 wake quirk), run by
+  # pocknix-bsp-common's pocknix-sleep dispatcher.
+  install -Dm755 "${srcdir}/50-audio-quantum" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/post/50-audio-quantum"
+}

@@ -26,6 +26,13 @@ set -euo pipefail
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 
+# Boot-style gate: qcom-abl (SM8550) internal contract only — arm-efi boards must
+# refuse rather than fall through to the RP6 defaults (see pocknix-install-internal).
+if [ "${POCKNIX_BOOT_STYLE:-qcom-abl}" != "qcom-abl" ]; then
+  echo "pocknix-uninstall-internal: boot style '${POCKNIX_BOOT_STYLE}' not supported yet (qcom-abl only)" >&2
+  exit 1
+fi
+
 DEVICE="${DEVICE:-${POCKNIX_INTERNAL_DISK:-/dev/sda}}"
 BOOT_NAME="${POCKNIX_BOOT_GPT_NAME:-ROCKNIX}"     # GPT name of the boot FAT  (pocknix-install-internal)
 ROOT_NAME="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}"   # GPT name of the ext4 root

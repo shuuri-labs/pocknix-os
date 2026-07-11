@@ -1,5 +1,5 @@
 [Unit]
-Description=pocknix RP6 (SM8550) fan curve
+Description=pocknix fan curve (hwmon pwm auto-discovery)
 After=multi-user.target
 
 [Service]

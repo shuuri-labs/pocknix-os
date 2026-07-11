@@ -23,7 +23,7 @@
 #
 pkgname=pocknix-emulation
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="ES-DE + preconfigured emulators for the RP6: drop ROMs into ~/Emulation and play; star -> Steam"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

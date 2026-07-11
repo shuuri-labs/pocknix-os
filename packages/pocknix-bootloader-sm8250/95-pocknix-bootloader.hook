@@ -1,0 +1,14 @@
+# Refresh the arm-efi bootloader files on /flash whenever the bootloader package's
+# payload changes, so a `pacman -U pocknix-bootloader-sm8250` on the device deploys
+# GRUB + grub.cfg + the abl payload. No-ops in the image-build chroot
+# (pocknix-update-grub skips when /flash isn't mounted).
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/pocknix/bootloader/*
+
+[Action]
+Description = pocknix: refreshing /flash bootloader (arm-efi GRUB)...
+When = PostTransaction
+Exec = /usr/bin/pocknix-update-grub

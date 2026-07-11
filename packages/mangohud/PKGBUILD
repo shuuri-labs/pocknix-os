@@ -30,21 +30,33 @@ makedepends=('meson' 'ninja' 'git' 'glslang' 'vulkan-headers' 'libglvnd' 'libdrm
 source=("git+https://github.com/flightlessmango/MangoHud.git#tag=v${pkgver}"
         '0001-Qualcomm-GPU-support.patch'
         '0002-SM8550-GPU.patch'
+        '0002-SM8250-GPU.patch'
         '0003-Battery-name.patch'
         '0004-Qualcomm-battery-power-now.patch'
         '0005-RAM-name.patch'
         '0006-mangoapp-pace-redraw-to-frame-messages.patch')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
   cd MangoHud
   # Adreno/Qualcomm GPU + battery readers — order matters (0001 must precede 0002).
+  # 0002 is PER-SoC (drop-in alternatives, same hunks): both point the kgsl reader
+  # at the devfreq node /sys/class/devfreq/3d00000.gpu (same GPU MMIO base on
+  # sm8550 AND sm8250), but the hwmon thermal-zone name differs — gpuss_0_thermal
+  # (sm8550) vs gpu_top_thermal (sm8250, ROCKNIX's own SM8250 mangohud patch).
+  # build-packages.sh injects POCKNIX_SOC; the fallback keeps standalone makepkg
+  # building the sm8550 flavor.
   # 0006 = the composite-tax fix: mangoapp's visible-overlay loop free-runs (new_frame
   # latches, never cleared) -> repaints at up to display refresh -> forces gamescope's
   # ~3.5ms rotated composite at 72-120/s = up to ~32-41% of the GPU = ~10fps off the game.
   # Pace redraws to gamescope's per-frame messages instead. Measured root cause:
   # docs/archive/gamescope-fps-investigation.md "GPU-side session (2026-07-02)".
-  for p in 0001-Qualcomm-GPU-support 0002-SM8550-GPU 0003-Battery-name \
+  local _socpatch
+  case "${POCKNIX_SOC:-sm8550}" in
+    sm8250) _socpatch=0002-SM8250-GPU ;;
+    *)      _socpatch=0002-SM8550-GPU ;;
+  esac
+  for p in 0001-Qualcomm-GPU-support "${_socpatch}" 0003-Battery-name \
            0004-Qualcomm-battery-power-now 0005-RAM-name \
            0006-mangoapp-pace-redraw-to-frame-messages; do
     echo "  applying ${p}.patch"
@@ -59,7 +71,10 @@ build() {
   # TARGET_CPU_FLAGS=+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2, plus their
   # -mno-outline-atomics). Appended after ALARM's defaults so -march/-mtune override them.
   # buildtype=plain -> meson respects these env flags.
-  local _rocknix_tune="-march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics"
+  # Per-SoC: build-packages.sh injects POCKNIX_TUNE_CFLAGS from config/tuning/${SOC}.conf
+  # (sm8250 = armv8.2/a76.a55); the fallback is the sm8550 string so a standalone makepkg
+  # reproduces the original build.
+  local _rocknix_tune="${POCKNIX_TUNE_CFLAGS:--march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics}"
   export CFLAGS="${CFLAGS} ${_rocknix_tune}"
   export CXXFLAGS="${CXXFLAGS} ${_rocknix_tune}"
   # mangoapp=true builds the standalone overlay app gamescope --mangoapp launches.

@@ -1,0 +1,100 @@
+insmod part_gpt
+insmod part_msdos
+load_env
+
+if [ "${saved_entry}" ]; then
+  set timeout=2
+  set default="${saved_entry}"
+else
+  set timeout=-1
+fi
+
+if [ x"${feature_menuentry_id}" = xy ]; then
+  menuentry_id_option="--id"
+else
+  menuentry_id_option=""
+fi
+export menuentry_id_option
+
+function savedefault {
+  saved_entry="${chosen}"
+  save_env saved_entry
+}
+
+set timeout_style=menu
+set lang=en_US
+loadfont /boot/grub/dejavu-mono.pf2
+set rotation=270
+set gfxmode=auto
+insmod efi_gop
+insmod gfxterm
+terminal_output gfxterm
+set menu_color_normal=cyan/blue
+set menu_color_highlight=white/blue
+
+menuentry 'Retroid Pocket 5' $menuentry_id_option 'rp5' {
+        savedefault
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off
+        devicetree /boot/grub/sm8250-retroidpocket-rp5.dtb
+}
+menuentry 'Retroid Pocket Flip2' $menuentry_id_option 'rpflip2' {
+        savedefault
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off
+        devicetree /boot/grub/sm8250-retroidpocket-flip2.dtb
+}
+menuentry 'Retroid Pocket Mini' $menuentry_id_option 'rpmini' {
+        savedefault
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off
+        devicetree /boot/grub/sm8250-retroidpocket-rpmini.dtb
+}
+menuentry 'Retroid Pocket Mini V2' $menuentry_id_option 'rpminiv2' {
+        savedefault
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off
+        devicetree /boot/grub/sm8250-retroidpocket-rpminiv2.dtb
+}
+menuentry 'AYN Thor Lite' $menuentry_id_option 'thorlite' {
+        savedefault
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off
+        devicetree /boot/grub/sm8250-ayn-thorlite.dtb
+}
+menuentry 'MANGMI Pocket Max' $menuentry_id_option 'pocketmax' {
+        savedefault
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off
+        devicetree /boot/grub/sm8250-mangmi-pocket-max.dtb
+}
+menuentry 'Retroid Pocket 5 RECOVERY' $menuentry_id_option 'rp5-recovery' {
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off recovery
+        devicetree /boot/grub/sm8250-retroidpocket-rp5.dtb
+}
+menuentry 'Retroid Pocket Flip2 RECOVERY' $menuentry_id_option 'rpflip2-recovery' {
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off recovery
+        devicetree /boot/grub/sm8250-retroidpocket-flip2.dtb
+}
+menuentry 'Retroid Pocket Mini RECOVERY' $menuentry_id_option 'rpmini-recovery' {
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off recovery
+        devicetree /boot/grub/sm8250-retroidpocket-rpmini.dtb
+}
+menuentry 'Retroid Pocket Mini V2 RECOVERY' $menuentry_id_option 'rpminiv2-recovery' {
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off recovery
+        devicetree /boot/grub/sm8250-retroidpocket-rpminiv2.dtb
+}
+menuentry 'AYN Thor Lite RECOVERY' $menuentry_id_option 'thorlite-recovery' {
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off recovery
+        devicetree /boot/grub/sm8250-ayn-thorlite.dtb
+}
+menuentry 'MANGMI Pocket Max RECOVERY' $menuentry_id_option 'pocketmax-recovery' {
+        search --set -f /KERNEL
+        linux /KERNEL boot=LABEL=ROCKNIX disk=LABEL=STORAGE grub_portable quiet rootwait console=tty0 video=efifb:off recovery
+        devicetree /boot/grub/sm8250-mangmi-pocket-max.dtb
+}

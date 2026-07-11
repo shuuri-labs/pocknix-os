@@ -1,5 +1,5 @@
 #!/bin/sh
-# pocknix-fancontrol — RP6 (SM8550) fan curve.
+# pocknix-fancontrol — fan curve (device-neutral: auto-discovers the hwmon pwm; RP5 sm8250 has one too).
 # Ported from ROCKNIX hardware/quirks/platforms/SM8550/bin/fancontrol (+ 005-thermal_path /
 # 020-fan_control). Without this nothing takes PWM control of the fan, so it never spins and the
 # device cooks. Discovers the hwmon PWM fan + the CPU/GPU thermal zones, then drives pwm1 from a
@@ -19,11 +19,12 @@ FAN_PWM="$(ls /sys/class/hwmon/hwmon*/pwm1 2>/dev/null | head -1)"
 [ -n "${FAN_PWM}" ] || { echo "pocknix-fancontrol: no hwmon pwm1 fan found, exiting"; exit 0; }
 FAN_EN="${FAN_PWM}_enable"
 
-# CPU + GPU thermal zones only — ROCKNIX 005-thermal_path (type cpu*/gpuss*).
+# CPU + GPU thermal zones only — ROCKNIX 005-thermal_path. gpu* (not gpuss*):
+# sm8550 zones are gpuss-N-thermal but sm8250's GPU zone is gpu-top-thermal.
 SENSORS=""
 for z in /sys/devices/virtual/thermal/thermal_zone*/; do
   case "$(cat "${z}type" 2>/dev/null)" in
-    cpu*|gpuss*) SENSORS="${SENSORS} ${z}temp" ;;
+    cpu*|gpu*) SENSORS="${SENSORS} ${z}temp" ;;
   esac
 done
 [ -n "${SENSORS}" ] || { echo "pocknix-fancontrol: no cpu/gpu thermal zones, exiting"; exit 0; }

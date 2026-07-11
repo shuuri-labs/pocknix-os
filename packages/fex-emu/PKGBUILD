@@ -112,17 +112,21 @@ build() {
   cd "${srcdir}/fex"
   # FEX requires clang as the host compiler; makepkg defaults to gcc, so force it.
   export CC=clang CXX=clang++
-  # TUNE_CPU=cortex-a78 matches ROCKNIX. Its FEX package.mk deliberately remaps the SM8550
-  # TARGET_CPU (cortex-x3) DOWN to cortex-a78 for the FEX build (case cortex-x3|cortex-x4 ->
-  # TUNE_CPU=cortex-a78). This only tunes FEXCore's OWN engine to a safe armv8.2 baseline; the
-  # JIT output (the translated game) is runtime-tuned to the real CPU regardless, so tuning the
-  # engine to the X3/armv9 prime buys nothing and risks an armv9 host-tool SIGILL on the build
-  # host. (Our earlier cortex-x3 was a misread of the device TARGET_CPU; FEX never uses it raw.)
+  # TUNE_CPU matches ROCKNIX, per SoC (injected by build-packages.sh from
+  # config/tuning/${SOC}.conf; fallback = the sm8550 value for standalone makepkg).
+  # ROCKNIX's FEX package.mk deliberately remaps the SM8550 TARGET_CPU (cortex-x3) DOWN to
+  # cortex-a78 (case cortex-x3|cortex-x4 -> TUNE_CPU=cortex-a78), and on SM8250 derives
+  # cortex-a55 from the a76.a55 pair (TUNE_CPU="${TARGET_CPU##*.}" = the LITTLE core: FEX
+  # worker threads land on the littles too). Either way this only tunes FEXCore's OWN engine
+  # to a safe armv8.2 baseline; the JIT output (the translated game) is runtime-tuned to the
+  # real CPU regardless, so tuning the engine to the big/prime core buys nothing and risks an
+  # armv9 host-tool SIGILL on the build host. (Our earlier cortex-x3 was a misread of the
+  # device TARGET_CPU; FEX never uses it raw.)
   cmake -G Ninja -S . -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_INSTALL_LIBDIR=lib \
-    -DTUNE_CPU=cortex-a78 \
+    -DTUNE_CPU="${POCKNIX_FEX_TUNE_CPU:-cortex-a78}" \
     -DUSE_LINKER=lld \
     -DENABLE_OFFLINE_TELEMETRY=OFF \
     -DBUILD_TESTING=OFF \

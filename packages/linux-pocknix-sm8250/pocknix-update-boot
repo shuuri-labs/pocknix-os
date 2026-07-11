@@ -1,0 +1,27 @@
+#!/bin/bash
+# pocknix-update-boot — refresh the arm-efi boot files on /flash from the installed kernel.
+#
+# Run by the linux-pocknix alpm hook after a kernel install/upgrade (and runnable by hand).
+# arm-efi contract (SM8250): GRUB's "linux /KERNEL" loads a RAW arm64 Image and the board dtb
+# is a separate "devicetree /boot/grub/<board>.dtb" — so a kernel deploy is two copies, no
+# mkbootimg. Keeps /flash/KERNEL.bak and writes /flash/KERNEL.md5 (contract parity with the
+# qcom-abl devices; GRUB itself doesn't check it).
+set -euo pipefail
+
+FLASH="${FLASH:-/flash}"
+
+[ -f /boot/Image ] || { echo "pocknix-update-boot: no /boot/Image — nothing to do"; exit 0; }
+# In the image-build chroot /flash isn't a real mount; build-sd-image.sh populates the FAT
+# there instead, so skip. On the device /flash is the FAT boot partition (fstab) -> refresh.
+mountpoint -q "$FLASH" || { echo "pocknix-update-boot: $FLASH not mounted — skipping (build chroot?)"; exit 0; }
+
+mount -o remount,rw "$FLASH" 2>/dev/null || true
+[ -f "$FLASH/KERNEL" ] && cp -f "$FLASH/KERNEL" "$FLASH/KERNEL.bak"
+cp -f /boot/Image "$FLASH/KERNEL"
+( cd "$FLASH" && md5sum KERNEL > KERNEL.md5 )
+if ls /boot/dtbs/*.dtb >/dev/null 2>&1; then
+  mkdir -p "$FLASH/boot/grub"
+  cp -f /boot/dtbs/*.dtb "$FLASH/boot/grub/"
+fi
+sync
+echo "pocknix-update-boot: refreshed $FLASH/KERNEL + boot/grub dtbs (kernel $(cat /usr/lib/pocknix/kernelrelease 2>/dev/null || echo '?'); KERNEL.bak kept)"

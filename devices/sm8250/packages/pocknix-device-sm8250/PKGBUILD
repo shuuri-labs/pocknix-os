@@ -1,0 +1,27 @@
+# pocknix-device-sm8250 — metapackage: the complete SM8250 family system.
+# Depends on the family BSP + the SoC kernel + the arm-efi bootloader payload +
+# the shared session stack. Installing this (and nothing else pocknix-specific)
+# turns an ALARM base into pocknix for any sm8250 board (Retroid Pocket 5).
+pkgname=pocknix-device-sm8250
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix device metapackage: SM8250 family (Retroid Pocket 5)"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('pocknix-bsp-sm8250'
+         'linux-pocknix-sm8250'
+         'pocknix-bootloader-sm8250'
+         'pocknix-steam'
+         'pocknix-desktop'
+         'pocknix-emulation'
+         'pocknix-decky'
+         'pocknix-sdcard-automount')
+# Exactly one device metapackage per install (wrong-device guard, same pattern
+# as the BSPs).
+provides=('pocknix-device')
+conflicts=('pocknix-device')
+
+package() {
+  :   # pure metapackage
+}
