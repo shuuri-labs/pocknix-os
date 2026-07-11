@@ -24,8 +24,12 @@
 
 source "$(dirname "$0")/lib.sh"
 
-LOCALREPO="${BUILD_DIR}/localrepo"
+# Per-SoC: each SoC's repo is a self-contained tree published under
+# <remote>/<soc> (tuned packages share pkgnames across SoCs with different
+# binaries). Run once per SoC: `make publish DEVICE=<target of that soc>`.
+LOCALREPO="${LOCALREPO_DIR}"
 REPO_DB="pocknix.db.tar.gz"
+RCLONE_DEST="${POCKNIX_REPO_RCLONE_REMOTE:+${POCKNIX_REPO_RCLONE_REMOTE}/${SOC}}"
 unsigned=0 serve=0
 for a in "$@"; do
   case "$a" in
@@ -64,17 +68,27 @@ else
   warn "publishing UNSIGNED (LAN testing only — device stanza needs SigLevel = Optional TrustAll)"
 fi
 
-if [ -n "${POCKNIX_REPO_RCLONE_REMOTE}" ]; then
+if [ -n "${RCLONE_DEST}" ]; then
   need_tool rclone
-  log "syncing -> ${POCKNIX_REPO_RCLONE_REMOTE}"
+  log "syncing -> ${RCLONE_DEST}"
   # order matters for a window-free publish: packages+sigs first, database last, so a
   # client never sees a db entry whose package isn't uploaded yet
-  rclone copy --include '*.pkg.tar.*' "${LOCALREPO}" "${POCKNIX_REPO_RCLONE_REMOTE}"
+  rclone copy --include '*.pkg.tar.*' "${LOCALREPO}" "${RCLONE_DEST}"
   rclone copy --include 'pocknix.db*' --include 'pocknix.files*' --include 'pocknix-repo.gpg' \
-    "${LOCALREPO}" "${POCKNIX_REPO_RCLONE_REMOTE}"
+    "${LOCALREPO}" "${RCLONE_DEST}"
   # prune package versions that no longer exist locally (keeps the bucket bounded)
-  rclone sync "${LOCALREPO}" "${POCKNIX_REPO_RCLONE_REMOTE}"
-  ok "published to ${POCKNIX_REPO_RCLONE_REMOTE}"
+  rclone sync "${LOCALREPO}" "${RCLONE_DEST}"
+  ok "published to ${RCLONE_DEST}"
+  # TEMPORARY migration mirror: images built before the per-SoC split point their
+  # [pocknix] stanza at the bare remote root. Mirror the sm8550 tree there too so
+  # those devices keep updating; remove once the fleet's pacman.conf has moved to
+  # <base>/sm8550 (tracked for the sm8550 family-image collapse).
+  if [ "${SOC}" = "sm8550" ]; then
+    log "mirroring sm8550 repo to the legacy root path (pre-split images)"
+    rclone copy --include '*.pkg.tar.*' "${LOCALREPO}" "${POCKNIX_REPO_RCLONE_REMOTE}"
+    rclone copy --include 'pocknix.db*' --include 'pocknix.files*' --include 'pocknix-repo.gpg' \
+      "${LOCALREPO}" "${POCKNIX_REPO_RCLONE_REMOTE}"
+  fi
 else
   warn "POCKNIX_REPO_RCLONE_REMOTE unset — nothing uploaded (repo prepared in ${LOCALREPO})"
 fi
@@ -82,7 +96,9 @@ fi
 if [ "${serve}" -eq 1 ]; then
   need_tool python3
   ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  log "serving ${LOCALREPO} on http://${ip:-<this-host>}:8000 (Ctrl-C to stop)"
-  log "device stanza:  [pocknix]  SigLevel = Optional TrustAll  Server = http://${ip:-<vm-ip>}:8000"
-  python3 -m http.server 8000 -d "${LOCALREPO}"
+  # serve the PARENT dir: shipped stanzas point at <base>/<soc>, so the URL path
+  # must include the SoC segment (matches images built with POCKNIX_REPO_URL=http://<vm-ip>:8000)
+  log "serving ${BUILD_DIR}/localrepo on http://${ip:-<this-host>}:8000 (Ctrl-C to stop)"
+  log "device stanza:  [pocknix]  SigLevel = Optional TrustAll  Server = http://${ip:-<vm-ip>}:8000/${SOC}"
+  python3 -m http.server 8000 -d "${BUILD_DIR}/localrepo"
 fi

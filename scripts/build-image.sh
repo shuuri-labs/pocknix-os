@@ -14,7 +14,7 @@ need_linux
 need_root build
 for t in curl tar rsync sed; do need_tool "$t"; done
 
-LOCAL_REPO_DIR="${BUILD_DIR}/localrepo"
+LOCAL_REPO_DIR="${LOCALREPO_DIR}"   # per-SoC: build/localrepo/${SOC} (set in lib.sh)
 
 render_pacman_conf() {
   local out="$1"
@@ -141,9 +141,12 @@ install_local_packages() {
   # repo that carries the name, so pocknix must outrank ALARM for our same-name packages
   # (mesa, gamescope, ...). Without it the image ships reflash-only, as before.
   sed -i '/^\[pocknix\]/,+2d' "${root}/etc/pacman.conf"
+  # Per-SoC published repo: POCKNIX_REPO_URL is the BASE url; each SoC's tree
+  # lives under it (tuned packages share pkgnames across SoCs with different
+  # binaries, so the trees must not mix — see docs/dev/pacman-repo.md).
   if [ -n "${POCKNIX_REPO_URL}" ]; then
-    log "shipping [pocknix] repo stanza -> ${POCKNIX_REPO_URL} (SigLevel ${POCKNIX_REPO_SIGLEVEL})"
-    sed -i "0,/^\[core\]/s||[pocknix]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}\n\n[core]|" \
+    log "shipping [pocknix] repo stanza -> ${POCKNIX_REPO_URL}/${SOC} (SigLevel ${POCKNIX_REPO_SIGLEVEL})"
+    sed -i "0,/^\[core\]/s||[pocknix]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}/${SOC}\n\n[core]|" \
       "${root}/etc/pacman.conf"
     # Trust the repo key out of the box: bake the exported public key + lsign it, so a
     # fresh image can `pacman -Syu` without a manual pacman-key dance.
@@ -205,12 +208,18 @@ install_packages() {
 FW_SRC="${VENDOR_DIR}/${FW_SRC_REL}"
 install_firmware() {
   local root="$1"
-  if [ -d "${FW_SRC}" ]; then
+  if [ -d "${FW_SRC}" ] && [ -n "$(ls -A "${FW_SRC}" 2>/dev/null)" ]; then
     log "installing ${SOC} device firmware -> rootfs /usr/lib/firmware ($(du -sh "${FW_SRC}" | cut -f1))"
     mkdir -p "${root}/usr/lib/firmware"
     # --chown=root:root: the vendor firmware tree is owned by the host build user (uid 1000); plain
     # rsync -a would bake that into the rootfs as 'alarm'-owned firmware (and re-own /usr). Force root.
     rsync -a --chown=root:root "${FW_SRC}/" "${root}/usr/lib/firmware/"
+  elif [ "${SOC}" = "sm8250" ]; then
+    # Expected: ROCKNIX ships NO firmware overlay for SM8250 — every blob in
+    # kernel/sm8250/config/kernel-firmware.dat (a650 GPU, adsp/cdsp, ath11k,
+    # BT) comes from upstream linux-firmware, which ALARM's linux-firmware/
+    # linux-firmware-qcom packages already put in the rootfs.
+    log "no ${SOC} firmware overlay (expected: all blobs come from ALARM linux-firmware packages)"
   else
     warn "ROCKNIX firmware overlay not at ${FW_SRC} — run 'make sync' (wifi/audio firmware will be missing)"
   fi

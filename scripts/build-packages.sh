@@ -13,8 +13,12 @@ need_linux
 need_root build-packages
 for t in curl tar rsync; do need_tool "$t"; done
 
-BROOT="${BUILD_DIR}/pkgbuild-root"     # the makepkg build chroot (reused across runs)
-LOCALREPO="${BUILD_DIR}/localrepo"
+# Both are PER-SoC: tuned packages (mesa/gamescope/mangohud/fex-emu) share
+# pkgnames across SoCs with different binaries, so each SoC gets its own repo;
+# the chroot is split too so one SoC's tuned makedepends (mesa installed as a
+# dep) can never leak into another SoC's builds.
+BROOT="${BUILD_DIR}/pkgbuild-root-${SOC}"   # the makepkg build chroot (reused across runs)
+LOCALREPO="${LOCALREPO_DIR}"                # build/localrepo/${SOC} (set in lib.sh)
 TARBALL="${CACHE_DIR}/${ALARM_TARBALL}"
 REPO_DB="pocknix.db.tar.gz"
 
@@ -116,6 +120,11 @@ build_one() {
       warn "${name}: no kernel build at ${kout} — run 'make kernel' first; skipping"
       return 1
     fi
+    # build/kernel/ is shared across image targets: refuse another SoC's staged kernel
+    if [ -f "${kout}/soc" ] && [ "$(cat "${kout}/soc")" != "${SOC}" ]; then
+      warn "${name}: ${kout} was built for SOC=$(cat "${kout}/soc"), not ${SOC} — run 'make kernel DEVICE=${DEVICE}' first; skipping"
+      return 1
+    fi
     cp -a "${kout}" "${BROOT}/build/${name}/staged"
   ;; esac
   # Drift guard: a device BSP's committed kernel-cmdline must byte-match its own device
@@ -137,6 +146,22 @@ Update one to match the other."
       fi
     fi
   fi
+  # Drift guard (arm-efi): the SoC bootloader package's grub.cfg carries the RUNTIME kernel
+  # cmdline (its "linux /KERNEL <cmdline>" line); the profile's KERNEL_CMDLINE is what the
+  # build records and docs promise. They must byte-match, same contract as kernel-cmdline
+  # above. Only checked when building the current SoC's own bootloader package.
+  case "${name}" in pocknix-bootloader-*)
+    if [ "${name#pocknix-bootloader-}" = "${SOC}" ] && [ -f "${pkgdir}/grub.cfg" ]; then
+      local grub_cmdline
+      grub_cmdline="$(sed -n 's|^[[:space:]]*linux /KERNEL ||p' "${pkgdir}/grub.cfg" | head -1)"
+      if [ "${grub_cmdline}" != "${KERNEL_CMDLINE}" ]; then
+        die "${name}: grub.cfg cmdline drifted from the ${SOC} profile's KERNEL_CMDLINE —
+  profile: ${KERNEL_CMDLINE}
+  grub.cfg: ${grub_cmdline}
+Update one to match the other."
+      fi
+    fi
+  ;; esac
   # Persistent source cache: SRCDEST lives OUTSIDE the per-package build dir (which is wiped
   # every run), so makepkg downloads each source ONCE and reuses it. File sources (e.g.
   # fex-emu's pinned x86 sysroot .pkg.tar.zst, ~70 MB) are kept by name; the git source becomes
@@ -151,10 +176,14 @@ Update one to match the other."
   # (the kernel package, the Steam stack, the ~1.1 GB fex-rootfs) just to lay out a few
   # files, which is slow and was the failure mode for pocknix-device-rp6. Their depends=
   # still ships in the .pkg metadata; -d only skips build-time resolution.
-  local mkflags="-s"
+  # Per-SoC tuning (config/tuning/${SOC}.conf via lib.sh) rides the makepkg
+  # environment: the tuned PKGBUILDs read POCKNIX_TUNE_CFLAGS/POCKNIX_FEX_TUNE_CPU
+  # (falling back to their sm8550 strings when unset, e.g. standalone makepkg).
+  local mkflags="-s" tune_env
   case "${pkgdir}" in */devices/*/packages/*) mkflags="-d" ;; esac
+  tune_env="POCKNIX_SOC=$(printf %q "${SOC}") POCKNIX_TUNE_CFLAGS=$(printf %q "${POCKNIX_TUNE_CFLAGS}") POCKNIX_FEX_TUNE_CPU=$(printf %q "${POCKNIX_FEX_TUNE_CPU}")"
   if ! chroot "${BROOT}" runuser -u builder -- \
-      bash -lc "cd /build/${name} && LC_ALL=C SRCDEST=/build/srccache makepkg ${mkflags} -f --noconfirm --nocheck --skippgpcheck"; then
+      bash -lc "cd /build/${name} && LC_ALL=C SRCDEST=/build/srccache ${tune_env} makepkg ${mkflags} -f --noconfirm --nocheck --skippgpcheck"; then
     warn "makepkg failed for ${name} — keeping any previous build in ${LOCALREPO##*/}"
     return 1
   fi
@@ -226,15 +255,31 @@ main() {
     return 1
   }
 
-  local built=0 name force
+  local built=0 name force devdir devsoc othersoc skip
   local -a failed=()
-  # Shared packages (packages/*/) + every device's packages (devices/*/packages/*/ — the
-  # arch=any BSPs/metapackages build in seconds), so the repo always carries all devices.
+  # Shared packages (packages/*/) + device packages (devices/*/packages/*/ — the
+  # arch=any BSPs/metapackages build in seconds). Everything is scoped to the
+  # CURRENT SoC's repo: device packages whose profile declares another SOC are
+  # skipped, as are per-SoC shared packages named *-<othersoc> (linux-pocknix-*,
+  # pocknix-bootloader-*). Each SoC's repo is built with its own DEVICE, so the
+  # repo always carries all of that SoC's devices and none of another's.
   # Up-to-date packages are skipped (see build_one); PKG= names and
   # POCKNIX_FORCE_REBUILD=1 force.
   for pkgdir in "${PACKAGES_DIR}"/*/ "${POCKNIX_ROOT}"/devices/*/packages/*/; do
     [ -f "${pkgdir}/PKGBUILD" ] || continue
     name="$(basename "${pkgdir}")"
+    case "${pkgdir}" in */devices/*/packages/*)
+      devdir="$(dirname "$(dirname "${pkgdir%/}")")"
+      devsoc="$(unset SOC; . "${devdir}/profile.conf" >/dev/null 2>&1; printf '%s' "${SOC}")"
+      [ "${devsoc}" = "${SOC}" ] || continue
+    ;; esac
+    skip=0
+    for othersoc in "${POCKNIX_ROOT}"/kernel/*/; do
+      othersoc="$(basename "${othersoc}")"
+      [ "${othersoc}" = "${SOC}" ] && continue
+      case "${name}" in *"-${othersoc}") skip=1; break ;; esac
+    done
+    [ "${skip}" -eq 1 ] && continue
     force=0
     [ "${POCKNIX_FORCE_REBUILD:-0}" = "1" ] && force=1
     if [ "${#want[@]}" -gt 0 ]; then

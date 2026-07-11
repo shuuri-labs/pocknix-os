@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# build-sd-image.sh — assemble a flashable SD image to boot-test pocknix on the RP6
-# WITHOUT touching internal ROCKNIX. Layout mirrors ROCKNIX's qcom-abl SD so the
-# device's existing ABL boots it:
+# build-sd-image.sh — assemble a flashable SD image to boot-test pocknix WITHOUT
+# touching internal ROCKNIX. Layout mirrors ROCKNIX's SD for the SoC's
+# BOOTLOADER style so the device's existing (ROCKNIX-flashed) ABL boots it:
 #
-#   GPT  p1  fat32  name "${SD_BOOT_PARTNAME}" (label ${SD_FAT_LABEL})  -> /KERNEL
+#   GPT  p1  fat32  name "${SD_BOOT_PARTNAME}" (label ${SD_FAT_LABEL})  -> /KERNEL [+ GRUB]
 #        p2  ext4   name "${ROOT_LABEL}"                                -> Arch base rootfs
 #
-# Boot path: ABL loads /KERNEL from the FAT; our kernel mounts root=PARTLABEL=
-# ${ROOT_LABEL} directly (no initramfs — UFS/ext4 are built in). ROCKNIX also puts
-# a SYSTEM squashfs on the FAT; we don't need it (plain ext4 root).
+# qcom-abl (sm8550): ABL loads /KERNEL (Android boot image, cmdline baked in).
+# arm-efi  (sm8250): ABL chainloads /EFI/BOOT/bootaa64.efi -> /boot/grub/grub.cfg
+#   -> "linux /KERNEL" (raw Image) + "devicetree /boot/grub/<board>.dtb"; the
+#   FAT additionally carries EFI/, boot/grub/ (cfg + grubenv + dtbs) and
+#   rocknix_abl/. ROCKNIX sets legacy_boot on p1 for BOTH styles (no esp flag).
+# Either way our kernel mounts root=PARTLABEL=${ROOT_LABEL} directly (no
+# initramfs — UFS/ext4 are built in). ROCKNIX also puts a SYSTEM squashfs on
+# the FAT; we don't need it (plain ext4 root).
 #
 # Prereqs: `sudo make build` (rootfs) + `make kernel` (KERNEL). Run as root (loop+mount).
 # Flash:   sudo dd if=build/image/pocknix-sd.img of=/dev/sdX bs=4M conv=fsync status=progress
@@ -36,6 +41,10 @@ trap cleanup EXIT
 # Make sure the rootfs carries the pocknix kernel modules + drops the generic
 # ALARM kernel, in case `make build` ran before the kernel existed (idempotent).
 ensure_kernel_in_rootfs() {
+  # build/kernel/ is shared across image targets: refuse another SoC's staged kernel
+  if [ -f "${KOUT}/soc" ] && [ "$(cat "${KOUT}/soc")" != "${SOC}" ]; then
+    die "build/kernel/out was built for SOC=$(cat "${KOUT}/soc"), not ${SOC} — run 'make kernel DEVICE=${DEVICE}' first"
+  fi
   if [ -d "${KOUT}/modroot/lib/modules" ]; then
     local kver; kver="$(cat "${KOUT}/kernelrelease" 2>/dev/null)"
     log "syncing pocknix modules (${kver}) into rootfs + removing generic kernel"
@@ -47,6 +56,22 @@ ensure_kernel_in_rootfs() {
   else
     warn "no kernel modules in ${KOUT} — rootfs may lack matching modules"
   fi
+}
+
+# arm-efi boot partition contents beyond /KERNEL: GRUB + grub.cfg/grubenv +
+# every board dtb + the ROCKNIX ABL payload. All of it except the dtbs is
+# shipped in the rootfs by pocknix-bootloader-${SOC} (single source of truth:
+# its alpm hook refreshes /flash from the same tree on upgrades); the dtbs come
+# from the kernel build (grub.cfg references /boot/grub/<board>.dtb).
+populate_arm_efi_boot() {
+  local mnt="$1" bl="${ROOTFS_DIR}/usr/share/pocknix/bootloader"
+  [ -f "${bl}/EFI/BOOT/bootaa64.efi" ] \
+    || die "arm-efi: ${bl#${ROOTFS_DIR}}/EFI/BOOT/bootaa64.efi missing from the rootfs — is pocknix-bootloader-${SOC} built and installed? (make packages + make build)"
+  [ -f "${bl}/boot/grub/grub.cfg" ] \
+    || die "arm-efi: ${bl#${ROOTFS_DIR}}/boot/grub/grub.cfg missing from the rootfs"
+  rsync -a "${bl}/EFI" "${bl}/boot" "${mnt}/"
+  [ -d "${bl}/rocknix_abl" ] && rsync -a "${bl}/rocknix_abl" "${mnt}/"
+  cp "${KOUT}/dtbs/"*.dtb "${mnt}/boot/grub/"
 }
 
 firstboot_config() {
@@ -270,10 +295,11 @@ main() {
   mkfs.ext4 -F -q -L "${ROOT_LABEL}" "${LOOP}p2"
 
   MNT="$(mktemp -d)"
-  # boot partition: just our KERNEL (+ md5)
+  # boot partition: KERNEL (+ md5); arm-efi additionally GRUB + dtbs + abl payload
   mount "${LOOP}p1" "${MNT}"
   cp "${KERNEL_IMG}" "${MNT}/KERNEL"
   ( cd "${MNT}" && md5sum KERNEL > KERNEL.md5 )
+  [ "${BOOTLOADER}" = "arm-efi" ] && populate_arm_efi_boot "${MNT}"
   sync; umount "${MNT}"
   # root partition: the rootfs
   mount "${LOOP}p2" "${MNT}"
@@ -294,7 +320,7 @@ main() {
   echo
   log "Flash it (DOUBLE-CHECK the device with lsblk first!):"
   echo "    sudo dd if=${OUT} of=/dev/sdX bs=4M conv=fsync status=progress"
-  log "Then insert into the RP6 and boot. root password: ${SD_ROOT_PASSWORD}"
+  log "Then insert into the device (${DEVICE_PRETTY:-${DEVICE}}) and boot. root password: ${SD_ROOT_PASSWORD}"
   log "Internal ROCKNIX is untouched; remove the SD to boot it again."
 }
 main "$@"

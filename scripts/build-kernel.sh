@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # build-kernel.sh — build the linux-pocknix kernel for the selected device's SoC
-# (kernel/${SOC}/, chosen by the device profile) and assemble the qcom-abl boot
-# image. Reproduces ROCKNIX's recipe (packages/linux/package.mk):
+# (kernel/${SOC}/, chosen by the device profile) and stage the boot artifact for
+# the SoC's BOOTLOADER style: qcom-abl (mkbootimg Android boot image, sm8550) or
+# arm-efi (raw Image loaded by GRUB, sm8250). Reproduces ROCKNIX's recipe
+# (packages/linux/package.mk):
 #
 #   stock kernel.org linux-${KERNEL_VERSION}   (pinned in kernel/${SOC}/kernel.conf)
 #     + patch stack in numeric subdir order: kernel/${SOC}/patches/*/
@@ -15,8 +17,9 @@
 # LibreELEC boot=/disk=LABEL= convention, and the ramdisk stays a dummy.
 #
 # Outputs:
-#   build/kernel/out/{Image,dtbs/,modroot/lib/modules/<ver>/,kernelrelease}
-#   build/image/KERNEL   (the qcom-abl boot image -> deploy to /flash/KERNEL)
+#   build/kernel/out/{Image,dtbs/,modroot/lib/modules/<ver>/,kernelrelease,soc}
+#   build/image/KERNEL   (qcom-abl: the boot image; arm-efi: the raw Image
+#                         -> either way, deploy to /flash/KERNEL)
 
 source "$(dirname "$0")/lib.sh"
 need_linux
@@ -284,14 +287,33 @@ main() {
   configure
   build_kernel
   stage
-  assemble_bootimg "$@"
-  # Stage the on-device boot-image rebuild inputs into out/ for the linux-pocknix-<soc>
-  # package: the mkbootimg tool, so the package's alpm hook can rebuild /flash/KERNEL on the
-  # device exactly the way this build does. (The cmdline the hook reads is shipped by the
-  # device BSP; out/cmdline is kept as a build record of what the boot image was given.)
-  rm -rf "${KBUILD}/out/mkbootimg"
-  cp -r "${KBUILD}/mkbootimg" "${KBUILD}/out/mkbootimg"
+  case "${BOOTLOADER}" in
+    arm-efi)
+      # ROCKNIX arm-efi contract (SM8250): the ABL chainloads GRUB, whose
+      # "linux /KERNEL" line loads a RAW arm64 Image. The dtb is a separate
+      # "devicetree /boot/grub/<board>.dtb" file and the cmdline lives in
+      # grub.cfg (shipped by pocknix-bootloader-<soc>). No Android boot image,
+      # no mkbootimg, no appended dtbs.
+      mkdir -p "${IMAGE_DIR}"
+      cp "${KBUILD}/out/Image" "${IMAGE_DIR}/KERNEL"
+      ok "raw Image staged -> ${IMAGE_DIR}/KERNEL (arm-efi: cmdline + dtb come from GRUB)"
+      ;;
+    *)
+      assemble_bootimg "$@"
+      # Stage the on-device boot-image rebuild inputs into out/ for the linux-pocknix-<soc>
+      # package: the mkbootimg tool, so the package's alpm hook can rebuild /flash/KERNEL on the
+      # device exactly the way this build does. (The cmdline the hook reads is shipped by the
+      # device BSP; out/cmdline is kept as a build record of what the boot image was given.)
+      rm -rf "${KBUILD}/out/mkbootimg"
+      cp -r "${KBUILD}/mkbootimg" "${KBUILD}/out/mkbootimg"
+      ;;
+  esac
   printf '%s' "${KERNEL_CMDLINE}" > "${KBUILD}/out/cmdline"
+  # SoC marker: build/kernel/ is shared across image targets, so record which
+  # SoC produced out/. build-packages.sh refuses to stage a mismatched out/
+  # into linux-pocknix-<soc> (switching DEVICE across SoCs without `make
+  # kernel` would otherwise silently package the wrong kernel).
+  printf '%s' "${SOC}" > "${KBUILD}/out/soc"
   ok "${KERNEL_PKG} build complete"
 }
 main "$@"
