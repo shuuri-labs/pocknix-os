@@ -33,9 +33,9 @@ native one.
 |---|---|
 | Retroid Pocket 6 | ✅ Supported |
 | Retroid Pocket 5 | 🚧 In progress |
-| AYN Odin 2 | 🚧 In progress |
-| AYN Odin 2 Portal | 🚧 In progress |
-| AYN Odin 2 Mini | 🚧 In progress |
+| AYN Odin 2 | 🧪 Untested |
+| AYN Odin 2 Portal | 🧪 Untested |
+| AYN Odin 2 Mini | 🧪 Untested |
 | AYN Odin 3 | 🚧 In progress |
 | AYN Thor | 📋 Planned |
 
