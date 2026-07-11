@@ -1,0 +1,3 @@
+# [pocknix] packages installed for the sm8250 family image (metapackage pulls
+# the BSP + kernel + bootloader + shared session packages).
+pocknix-device-sm8250

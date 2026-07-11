@@ -24,11 +24,21 @@ if [ ! -f "${POCKNIX_ROOT}/devices/${DEVICE}/profile.conf" ]; then
 fi
 source "${POCKNIX_ROOT}/devices/${DEVICE}/profile.conf"
 source "${POCKNIX_ROOT}/kernel/${SOC}/kernel.conf"
+# Per-SoC userspace compiler tuning (mesa/gamescope/mangohud/fex-emu are built
+# with these; build-packages.sh injects them into makepkg's environment).
+source "${POCKNIX_ROOT}/config/tuning/${SOC}.conf"
 
 # Paths derived from the profile (must come after it):
 : "${DEVICE_DIR:=${POCKNIX_ROOT}/devices/${DEVICE}}"
 : "${KERNEL_DIR:=${POCKNIX_ROOT}/kernel/${SOC}}"
 : "${ROCKNIX_DEVICE_DIR:=${ROCKNIX_PROJECT_DIR}/devices/${ROCKNIX_SOC}}"
+# Boot-image style for the SoC's bootloader: qcom-abl (ABL boots an Android
+# boot image, sm8550) or arm-efi (ABL chainloads GRUB, raw Image, sm8250).
+# Set per-profile; default keeps the original qcom-abl devices untouched.
+: "${BOOTLOADER:=qcom-abl}"
+# Per-SoC pacman repo: tuned packages (mesa etc.) share pkgnames across SoCs
+# with different binaries, so each SoC gets its own localrepo/published tree.
+: "${LOCALREPO_DIR:=${BUILD_DIR}/localrepo/${SOC}}"
 
 # --- logging ---------------------------------------------------------------
 _c_blue=$'\033[1;34m'; _c_grn=$'\033[1;32m'; _c_yel=$'\033[1;33m'
