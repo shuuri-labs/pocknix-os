@@ -6,9 +6,13 @@ same kernel with no ROCKNIX checkout needed. Only **stock Linux source** and **s
 firmware** are fetched at build (both version+sha pinned, per-SoC in
 `kernel/<soc>/kernel.conf`). The device profile (`devices/<name>/profile.conf`) selects
 the SoC; devices on the same SoC (RP6 + AYN Odin 2, both `sm8550/`) share the tree —
-the boot image carries every board's dtb and the bootloader picks by board id.
+every board's dtb ships and the bootloader picks it (qcom-abl: by board id from the
+boot image's appended dtbs; arm-efi: by the grub.cfg menuentry's `devicetree` line).
 
-Currently: `sm8550/` (synced for the Retroid Pocket 6; the notes below describe it).
+Currently: `sm8550/` (synced for the Retroid Pocket 6; the notes below describe it)
+and `sm8250/` (synced for the Retroid Pocket 5 — same recipe, 28 SoC patches from
+ROCKNIX `devices/SM8250/patches/linux`, arm-efi boot so its `bootloader/` holds
+ROCKNIX's update.sh reference rather than qcom-abl packaging).
 
 ## Provenance — what's whose
 
