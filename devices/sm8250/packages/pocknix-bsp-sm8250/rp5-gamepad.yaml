@@ -2,7 +2,8 @@
 # Capability map for the RP5's retroid-pocket-gamepad MCU. Ported from
 # ROCKNIX's shared retroid_mcu map MINUS the LeftPaddle1/RightPaddle1 entries:
 # the RP5 has no back paddles (confirmed on hardware; the shared map also
-# serves Retroid boards that do). F1 (BTN_BACK) and Guide kept.
+# serves Retroid boards that do). BTN_BACK -> QuickAccess (Steam QAM; ROCKNIX
+# had KeyF1 for their UI), BTN_MODE -> Guide.
 # Schema version number
 version: 2
 
@@ -87,14 +88,18 @@ mapping:
       gamepad:
         button: Select
 
-  - name: F1 Key
+  # pocknix delta vs ROCKNIX's retroid_mcu: BTN_BACK is the QAM button, not F1.
+  # ROCKNIX maps it to KeyF1 for their own UI; on the deck target QuickAccess
+  # opens Steam's Quick Access Menu (same as the RP6 map's "..." button).
+  - name: Quick Access Button
     source_events:
       - evdev:
           event_type: KEY
           event_code: BTN_BACK
           value_type: button
     target_event:
-      keyboard: KeyF1
+      gamepad:
+        button: QuickAccess
 
   - name: Right Trigger
     source_events:

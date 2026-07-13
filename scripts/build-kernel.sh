@@ -172,7 +172,17 @@ configure() {
   #    upstream driver has an SDR104 tuning/clock regression on sm8550, which is why
   #    the vendor DTs cap the slot to legacy High-Speed. =y like MMC_SDHCI_MSM (which
   #    stays on; distinct compatibles + driver names, no conflict).
-  #  - UNICODE (UTF-8 normalization + casefolding tables): the ROCKNIX config ships this off.
+  #  - QCOM_Q6V5_PAS as MODULE: the synced sm8250 config has it =y (built-in), so the
+#    adsp/cdsp/slpi remoteprocs probe at ~1s — before our initramfs-less root (and thus
+#    /usr/lib/firmware) exists — and remoteproc does NOT retry a failed request_firmware:
+#    the DSPs sit offline forever and the q6 sound card never assembles ("no soundcards",
+#    RP5 bring-up 2026-07-13; LPASS pinctrl also fails its clocks without the ADSP).
+#    =m loads post-root exactly like the sm8550 config already ships (=m there, which is
+#    why RP6 audio never hit this), the firmware is present, the ADSP authenticates and
+#    boots, and LPASS/soundwire/codecs cascade in (verified live via manual rebind).
+#    No-op on sm8550. (cdsp still fails PAS auth -22 on the RP5 with linux-firmware's
+#    blob — harmless, nothing uses it; same on ROCKNIX.)
+#  - UNICODE (UTF-8 normalization + casefolding tables): the ROCKNIX config ships this off.
   #    SteamOS formats every SD card with the ext4 `casefold` feature (case-insensitive dir
   #    lookups, so mixed-case Windows/Proton game paths resolve). ext4 REFUSES to mount a
   #    casefold filesystem without CONFIG_UNICODE ("Filesystem with casefold feature cannot be
@@ -181,6 +191,7 @@ configure() {
   #    module: filesystems may be mounted before modules load). Pairs with the SD automount
   #    stack (pocknix-sdcard-automount) that mounts + registers the card with Steam.
   "${KSRC}/scripts/config" --file "${KSRC}/.config" \
+    --module QCOM_Q6V5_PAS \
     --enable UNICODE \
     --enable MMC_SDHCI_MSM_DOWNSTREAM \
     --enable FW_LOADER_COMPRESS \
