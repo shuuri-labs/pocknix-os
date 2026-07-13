@@ -140,10 +140,15 @@ configure() {
   #    ALARM scx-scheds package, run --autopilot by pocknix-lavd.service) can load. BPF
   #    syscall/JIT are already on; a sched_ext program only attaches if the kernel exposes
   #    BTF at /sys/kernel/btf/vmlinux, which needs DEBUG_INFO_BTF=y AND pahole (dwarves)
-  #    present in the build VM at compile time. The base config also sets
+  #    present in the build VM at compile time. The sm8550 base config sets
   #    DEBUG_INFO_REDUCED=y, which strips the type info BTF needs (BTF depends on
   #    !DEBUG_INFO_REDUCED) — so we turn REDUCED off too, else olddefconfig silently
   #    drops BTF *and* SCHED_CLASS_EXT (they vanish, with no "is not set" line).
+  #    The sm8250 base config has NO debug-info block at all, so the choice defaults
+  #    to DEBUG_INFO_NONE and BTF gets dropped the same silent way (shipped once:
+  #    lavd skipped on the RP5, session fell back to EEVDF, 2026-07-13) — force the
+  #    choice off NONE onto DWARF_TOOLCHAIN_DEFAULT (no-op on sm8550, which already
+  #    has it). Both symbols are now covered by the post-olddefconfig assertions.
   #  - tracing / BPF events (FTRACE, KPROBES, KPROBE_EVENTS, PERF_EVENTS -> BPF_EVENTS):
   #    scx_lavd's BPF objects call bpf_trace_printk and attach futex/execve tracepoints.
   #    The ROCKNIX config ships FTRACE off, so bpf_trace_printk's helper proto is absent
@@ -202,6 +207,8 @@ configure() {
     --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" \
     --module USBIP_CORE \
     --module USBIP_VHCI_HCD \
+    --disable DEBUG_INFO_NONE \
+    --enable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT \
     --disable DEBUG_INFO_REDUCED \
     --enable DEBUG_INFO_BTF \
     --enable SCHED_CLASS_EXT \
@@ -239,13 +246,16 @@ configure() {
   # abort the script with exit 141.
   kmake olddefconfig >/dev/null
 
-  # Assert the fentry/BPF-trampoline chain actually resolved (scx_lavd >= 1.1 needs it;
-  # olddefconfig can silently drop DYNAMIC_FTRACE_WITH_DIRECT_CALLS if a dependency is
-  # missing, and the failure would then only appear at runtime as ENOTSUPP).
+  # Assert the whole scx_lavd chain actually resolved: the fentry/BPF-trampoline
+  # symbols (attach fails ENOTSUPP without them) AND BTF + sched_ext themselves —
+  # olddefconfig silently drops any of these when a dependency is missing (bitten
+  # twice: REDUCED on sm8550, DEBUG_INFO_NONE on sm8250), and the failure only
+  # shows up on-device as pocknix-lavd's ConditionPathExists quietly skipping.
   local sym
-  for sym in FUNCTION_TRACER DYNAMIC_FTRACE DYNAMIC_FTRACE_WITH_DIRECT_CALLS; do
+  for sym in FUNCTION_TRACER DYNAMIC_FTRACE DYNAMIC_FTRACE_WITH_DIRECT_CALLS \
+             DEBUG_INFO_BTF SCHED_CLASS_EXT; do
     grep -q "^CONFIG_${sym}=y" "${KSRC}/.config" \
-      || die "kernel config: CONFIG_${sym} did not resolve to =y (scx_lavd fentry attach would fail ENOTSUPP)"
+      || die "kernel config: CONFIG_${sym} did not resolve to =y (scx_lavd would not run — check the dependency olddefconfig dropped it for)"
   done
 }
 
