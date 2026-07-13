@@ -1,0 +1,15 @@
+[Unit]
+Description=pocknix sm8250 LPASS audio probe heal
+# The script does its own waiting (adsp remoteproc, then retry loop); it only
+# needs modules/udev to exist, so start it with basic system bring-up. Audio
+# consumers (deck session PipeWire/WirePlumber) pick the card up via hotplug
+# whenever it appears — no ordering against them is needed.
+After=basic.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/pocknix/pocknix-sm8250-audio-heal
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

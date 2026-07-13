@@ -1,0 +1,44 @@
+#!/bin/sh
+# pocknix-sm8250-audio-heal — retry hard-failed LPASS probes until the sound card exists.
+#
+# The sm8250 q6 audio stack depends on ADSP services that settle asynchronously:
+# we boot the ADSP from a module at ~6s (ROCKNIX embeds the firmware and boots it
+# at ~1s, long before any consumer probes). Any LPASS driver probing inside the
+# settling window gets a clock -ETIMEDOUT, and the kernel NEVER retries a hard
+# probe failure — the card never assembles ("no soundcards"). A different driver
+# loses the race each boot (lpass pinctrl once, va_macro another time; both seen
+# live on the RP5). Heal: once the adsp remoteproc is running, reload the modular
+# LPASS drivers whose devices are still unbound until the RetroidPocket card
+# appears. Requires the macros built =m (build-kernel.sh sm8250 config delta).
+card_up() { grep -q RetroidPocket /proc/asound/cards 2>/dev/null; }
+bound()   { [ -e "/sys/bus/platform/devices/$1/driver" ]; }
+reload()  { modprobe -r "$1" 2>/dev/null; modprobe "$1" 2>/dev/null; }
+
+# Wait for the adsp remoteproc (module load + firmware + boot; up to 60s).
+i=0
+until [ "$i" -ge 60 ]; do
+  for r in /sys/class/remoteproc/remoteproc*; do
+    [ "$(cat "$r/name" 2>/dev/null)" = adsp ] && \
+    [ "$(cat "$r/state" 2>/dev/null)" = running ] && break 2
+  done
+  i=$((i+1)); sleep 1
+done
+[ "$i" -ge 60 ] && { echo "audio-heal: adsp never came up, giving up" >&2; exit 0; }
+
+try=0
+until card_up || [ "$try" -ge 15 ]; do
+  sleep 2
+  bound 33c0000.pinctrl || reload pinctrl_sm8250_lpass_lpi
+  bound 3370000.codec   || reload snd_soc_lpass_va_macro
+  bound 3200000.rxmacro || reload snd_soc_lpass_rx_macro
+  bound 3220000.txmacro || reload snd_soc_lpass_tx_macro
+  bound 3240000.codec   || reload snd_soc_lpass_wsa_macro
+  try=$((try+1))
+done
+
+if card_up; then
+  echo "audio-heal: RetroidPocket card up (retries: ${try})"
+else
+  echo "audio-heal: card still absent after ${try} retries" >&2
+fi
+exit 0

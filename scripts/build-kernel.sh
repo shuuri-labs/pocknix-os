@@ -216,6 +216,24 @@ configure() {
     --disable CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
     --enable CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
 
+  # sm8250-only: the LPASS macro codecs as MODULES (=y in the synced config; the
+  # symbols are unset on sm8550, so this must not run there — --module would turn
+  # them ON). Same disease as Q6V5_PAS one layer down: the q6 audio clocks these
+  # drivers enable come from ADSP services that settle asynchronously AFTER the
+  # remoteproc reports "up", so any macro probing inside the window hard-fails
+  # -ETIMEDOUT and the kernel never retries a failed probe (va_macro at 9.7s with
+  # the adsp up at 6.7s, RP5 2026-07-13; a different driver loses the race each
+  # boot). Built-in they are unhealable (no bind attrs); as modules the BSP's
+  # pocknix-sm8250-audio-heal service reloads whichever ones lost the race until
+  # the sound card assembles.
+  if [ "${SOC}" = "sm8250" ]; then
+    "${KSRC}/scripts/config" --file "${KSRC}/.config" \
+      --module SND_SOC_LPASS_WSA_MACRO \
+      --module SND_SOC_LPASS_VA_MACRO \
+      --module SND_SOC_LPASS_RX_MACRO \
+      --module SND_SOC_LPASS_TX_MACRO
+  fi
+
   # olddefconfig auto-accepts defaults for any new symbols (no prompts, no stdin).
   # NB: do NOT pipe `yes` into it — `yes` would take SIGPIPE and, under pipefail,
   # abort the script with exit 141.
