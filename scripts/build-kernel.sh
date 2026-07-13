@@ -152,6 +152,13 @@ configure() {
   #    baseline — already ships =y) + force the choice off NONE onto
   #    DWARF_TOOLCHAIN_DEFAULT (both no-ops on sm8550). Both target symbols are
   #    covered by the post-olddefconfig assertions, which is how this was caught.
+  #  - KALLSYMS_ALL: also DEBUG_KERNEL-gated, also missing from the sm8250 base
+  #    config (sm8550 ships =y). scx_lavd's BPF resolves the per-cpu 'runqueues'
+  #    ksym via kallsyms, and DATA symbols are only listed with _ALL — without it
+  #    the prog load dies with "ldimm64 failed to find the address for kernel
+  #    symbol 'runqueues'" (seen on the RP5 once BTF was fixed). Asserted below.
+  #  - SCHED_CLUSTER: sm8550-baseline parity (cluster-aware scheduler topology;
+  #    the 865 is 4xA77+4xA55 DynamIQ, same shape the option exists for).
   #  - tracing / BPF events (FTRACE, KPROBES, KPROBE_EVENTS, PERF_EVENTS -> BPF_EVENTS):
   #    scx_lavd's BPF objects call bpf_trace_printk and attach futex/execve tracepoints.
   #    The ROCKNIX config ships FTRACE off, so bpf_trace_printk's helper proto is absent
@@ -211,6 +218,8 @@ configure() {
     --module USBIP_CORE \
     --module USBIP_VHCI_HCD \
     --enable DEBUG_KERNEL \
+    --enable KALLSYMS_ALL \
+    --enable SCHED_CLUSTER \
     --disable DEBUG_INFO_NONE \
     --enable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT \
     --disable DEBUG_INFO_REDUCED \
@@ -257,7 +266,7 @@ configure() {
   # shows up on-device as pocknix-lavd's ConditionPathExists quietly skipping.
   local sym
   for sym in FUNCTION_TRACER DYNAMIC_FTRACE DYNAMIC_FTRACE_WITH_DIRECT_CALLS \
-             DEBUG_INFO_BTF SCHED_CLASS_EXT; do
+             DEBUG_INFO_BTF SCHED_CLASS_EXT KALLSYMS_ALL; do
     grep -q "^CONFIG_${sym}=y" "${KSRC}/.config" \
       || die "kernel config: CONFIG_${sym} did not resolve to =y (scx_lavd would not run — check the dependency olddefconfig dropped it for)"
   done
