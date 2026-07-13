@@ -1,5 +1,11 @@
-ROCKNIX ABL for SM8250 (one-time flash from the Android side; scripts verbatim
-from ROCKNIX's rocknix-abl package, flash_abl.sh templated for SM8250):
+ROCKNIX ABL for SM8250 — YOU PROBABLY DO NOT NEED THIS. The Retroid Pocket 5's
+STOCK ABL boots this SD directly (it chainloads EFI/BOOT/bootaa64.efi; verified
+on hardware 2026-07 — the same way stock boots ROCKNIX SDs), and the ROCKNIX ABL
+is known to be flaky on SM8250, so most users avoid flashing it there. This
+folder is kept for parity with ROCKNIX's SD layout and for boards/situations
+where the stock ABL cannot SD-boot. If you truly need it (one-time flash from
+the Android side; scripts verbatim from ROCKNIX's rocknix-abl package,
+flash_abl.sh templated for SM8250):
 
 - Copy the rocknix_abl folder from the SD card to the root of Android Internal Storage
 - Execute as root the backup_abl.sh script from the Internal Storage to backup your current ABL
