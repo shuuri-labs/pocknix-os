@@ -152,6 +152,17 @@ EOF
   # NM integrates DNS via systemd-resolved; point glibc at resolved's stub.
   ln -sf /run/systemd/resolve/stub-resolv.conf "${root}/etc/resolv.conf"
 
+  # The ALARM base ships systemd-networkd ENABLED, but pocknix networking is
+  # NetworkManager(+iwd): networkd manages no interfaces, so its enabled
+  # wait-online blocks network-online.target for its full 120s timeout on EVERY
+  # boot — stalling multi-user.target and everything ordered after it
+  # (fancontrol, diag, decky all started ~2 minutes late; found on the RP5
+  # bring-up, but every image paid it). systemd-resolved stays (NM uses it).
+  chroot "${root}" systemctl disable systemd-networkd.service systemd-networkd.socket \
+        systemd-networkd-wait-online.service \
+        systemd-networkd-varlink.socket systemd-networkd-resolve-hook.socket \
+        systemd-networkd-varlink-metrics.socket >/dev/null 2>&1 || true
+
   if [ -n "${SD_WIFI_SSID}" ]; then
     # Guard: a Wi-Fi SSID with no password silently ships an unusable image (the SSID is logged but
     # an empty PSK only surfaces as a boot-time association failure). Fail the build instead.
