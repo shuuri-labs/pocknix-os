@@ -144,11 +144,14 @@ configure() {
   #    DEBUG_INFO_REDUCED=y, which strips the type info BTF needs (BTF depends on
   #    !DEBUG_INFO_REDUCED) — so we turn REDUCED off too, else olddefconfig silently
   #    drops BTF *and* SCHED_CLASS_EXT (they vanish, with no "is not set" line).
-  #    The sm8250 base config has NO debug-info block at all, so the choice defaults
-  #    to DEBUG_INFO_NONE and BTF gets dropped the same silent way (shipped once:
-  #    lavd skipped on the RP5, session fell back to EEVDF, 2026-07-13) — force the
-  #    choice off NONE onto DWARF_TOOLCHAIN_DEFAULT (no-op on sm8550, which already
-  #    has it). Both symbols are now covered by the post-olddefconfig assertions.
+  #    The sm8250 base config disables DEBUG_KERNEL entirely, which HIDES the whole
+  #    debug-info choice from Kconfig: our DWARF selection gets dropped as invisible,
+  #    the choice defaults to DEBUG_INFO_NONE, and BTF vanishes the same silent way
+  #    (shipped once: lavd skipped on the RP5, session fell back to EEVDF,
+  #    2026-07-13). Enable DEBUG_KERNEL (a visibility gate; sm8550 — our perf
+  #    baseline — already ships =y) + force the choice off NONE onto
+  #    DWARF_TOOLCHAIN_DEFAULT (both no-ops on sm8550). Both target symbols are
+  #    covered by the post-olddefconfig assertions, which is how this was caught.
   #  - tracing / BPF events (FTRACE, KPROBES, KPROBE_EVENTS, PERF_EVENTS -> BPF_EVENTS):
   #    scx_lavd's BPF objects call bpf_trace_printk and attach futex/execve tracepoints.
   #    The ROCKNIX config ships FTRACE off, so bpf_trace_printk's helper proto is absent
@@ -207,6 +210,7 @@ configure() {
     --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" \
     --module USBIP_CORE \
     --module USBIP_VHCI_HCD \
+    --enable DEBUG_KERNEL \
     --disable DEBUG_INFO_NONE \
     --enable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT \
     --disable DEBUG_INFO_REDUCED \
