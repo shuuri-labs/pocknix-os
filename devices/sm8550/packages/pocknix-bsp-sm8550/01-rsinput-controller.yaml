@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/composite_device_v1.json
+# InputPlumber composite device for the SM8550 family gamepad (RSInput MCU).
+#
+# ONE config serves every board in the family — Retroid Pocket 6 (+TOP-DPAD),
+# AYN Odin 2 / Mini / Portal — exactly like ROCKNIX's 02-ayn-controller.yaml:
+# they all use the in-kernel RSInput driver (phys "rsinput-gamepad/input0")
+# with the paddles + volume-up rocker on a separate gpio-keys node, and the
+# same capability_map fixes the same driver quirks (X/Y swap, explicit d-pad,
+# Guide/QuickAccess). Gated on the devicetree model so the config only
+# activates on family hardware (the sm8250 boards ship their own).
+#
+# gpio-keys is grabbed as a second source: the DTS wires the back paddles
+# there as BTN_Z (left) / BTN_C (right), and since kernel 7.1.2 they emit
+# again, so Steam saw them as a stray "gpio keys" controller. The map folds
+# them into the deck pad as LeftPaddle1/RightPaddle1 (the Deck's L4/L5 back
+# buttons). That node also carries the volume-up rocker (KEY_VOLUMEUP);
+# because the grab is exclusive, the map re-emits it on the keyboard target
+# so volume up keeps working. (Gyro is still unavailable — no IIO/IMU.)
+#
+# Target = `deck` (Steam Deck controller) so Steam Input gets a first-class
+# Steam-native pad.
+version: 1
+kind: CompositeDevice
+name: SM8550 family (RSInput)
+
+matches:
+  - udev:
+      sys_path: /sys/firmware/devicetree/base
+      attributes:
+        - name: model
+          value: Retroid Pocket 6
+  - udev:
+      sys_path: /sys/firmware/devicetree/base
+      attributes:
+        - name: model
+          value: Retroid Pocket 6 TOP-DPAD
+  - udev:
+      sys_path: /sys/firmware/devicetree/base
+      attributes:
+        - name: model
+          value: AYN Odin 2
+  - udev:
+      sys_path: /sys/firmware/devicetree/base
+      attributes:
+        - name: model
+          value: AYN Odin 2 Mini
+  - udev:
+      sys_path: /sys/firmware/devicetree/base
+      attributes:
+        - name: model
+          value: AYN Odin 2 Portal
+
+single_source: false
+
+source_devices:
+  - group: gamepad
+    evdev:
+      phys_path: rsinput-gamepad/input0
+      handler: event*
+    capability_map_id: sm8550_gamepad
+
+  # Back paddles (+ volume-up rocker) live here, not on the gamepad node.
+  - group: gamepad
+    evdev:
+      name: gpio-keys
+      phys_path: gpio-keys/input0
+      handler: event*
+    capability_map_id: sm8550_gamepad
+
+options:
+  auto_manage: true
+
+target_devices:
+  - deck
+  - keyboard

@@ -1,0 +1,3 @@
+# [pocknix] packages installed for the sm8550 family image (metapackage pulls
+# the BSP + kernel + shared session packages).
+pocknix-device-sm8550

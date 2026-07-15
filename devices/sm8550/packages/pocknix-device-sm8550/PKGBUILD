@@ -1,0 +1,27 @@
+# pocknix-device-sm8550 — metapackage: the complete SM8550 family system.
+# Depends on the family BSP + the SoC kernel + the shared session stack.
+# Successor to the retired per-device metapackages; 'replaces' migrates
+# installed devices (e.g. an internal-installed RP6) on their next pacman -Syu.
+pkgname=pocknix-device-sm8550
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="pocknix device metapackage: SM8550 family (Retroid Pocket 6, AYN Odin 2 family)"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('pocknix-bsp-sm8550'
+         'linux-pocknix-sm8550'
+         'pocknix-steam'
+         'pocknix-desktop'
+         'pocknix-emulation'
+         'pocknix-decky'
+         'pocknix-sdcard-automount')
+# Exactly one device metapackage per install (wrong-device guard, same pattern
+# as the BSPs).
+provides=('pocknix-device')
+conflicts=('pocknix-device')
+replaces=('pocknix-device-rp6' 'pocknix-device-odin2' 'pocknix-device-odin2mini' 'pocknix-device-odin2portal')
+
+package() {
+  :   # pure metapackage
+}

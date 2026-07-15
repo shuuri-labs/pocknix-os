@@ -16,7 +16,7 @@
 # the FAT; we don't need it (plain ext4 root).
 #
 # Prereqs: `sudo make build` (rootfs) + `make kernel` (KERNEL). Run as root (loop+mount).
-# Flash:   sudo dd if=build/image/pocknix-sd.img of=/dev/sdX bs=4M conv=fsync status=progress
+# Flash:   sudo dd if=build/image/pocknix-<soc>-sd.img of=/dev/sdX bs=4M conv=fsync status=progress
 
 source "$(dirname "$0")/lib.sh"
 need_linux
@@ -25,7 +25,7 @@ for t in parted mkfs.vfat mkfs.ext4 losetup rsync chroot truncate du; do need_to
 
 KERNEL_IMG="${IMAGE_DIR}/KERNEL"
 KOUT="${BUILD_DIR}/kernel/out"
-OUT="${IMAGE_DIR}/pocknix-sd.img"
+OUT="${IMAGE_DIR}/pocknix-${SOC}-sd.img"   # one image per SoC family -> name it so
 
 [ -f "${KERNEL_IMG}" ] || die "no ${KERNEL_IMG} — run 'make kernel' first"
 [ -d "${ROOTFS_DIR}" ] || die "no rootfs at ${ROOTFS_DIR} — run 'sudo make build' first"

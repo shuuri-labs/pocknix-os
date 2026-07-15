@@ -1,5 +1,0 @@
-# Device packages for the AYN Odin 2 Mini, installed from [pocknix] at the END of
-# install_local_packages (after the kernel step, so the metapackage's kernel dep is
-# already present). The metapackage pulls pocknix-bsp-odin2mini + pocknix-bsp-common.
-# Extra ALARM package names may be listed here too if this device ever needs one.
-pocknix-device-odin2mini

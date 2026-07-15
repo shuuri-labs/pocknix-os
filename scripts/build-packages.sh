@@ -227,7 +227,7 @@ Update one to match the other."
 main() {
   # Optional args = package names to build (subset, always rebuilt); no args = build
   # everything, skipping packages already up-to-date in the localrepo (see build_one).
-  # e.g. `make packages PKG="inputplumber pocknix-bsp-rp6"` to force just those two.
+  # e.g. `make packages PKG="inputplumber pocknix-bsp-sm8550"` to force just those two.
   local want=("$@")
   mkdir -p "${LOCALREPO}"
   setup_chroot
