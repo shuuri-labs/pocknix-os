@@ -16,18 +16,30 @@
 # Dropped vs our fe78bc6 set:
 #  - 0007 composite-rotation (PR #2228): the fps investigation A/B'd it as fps-neutral vs 0005
 #    (only a GPU-load nicety with the overlay up). Back to ROCKNIX's 0005 rotation-shader.
-#  - 0008 revert-e572411d: the new base CARRIES e572411d, but upstream also added the official
-#    knob `cv_mangoapp_use_output_timing` (steamcompmgr.cpp, default true = output/vblank timing).
-#    So instead of re-patching, flip it false for app-rate timing (the 0008 requirement). ConVars
-#    are NOT env-settable (convar.h ctor reads only its default), so it is set via gamescope's
-#    runtime convar tool once the compositor is up (pocknix-steam, runtime re-assert). Whether
-#    false actually restores app-timing is confirmed on-device with the strace(msgrcv) instrument.
+#
+# 0008 (revert of upstream e572411d) is NOT carried on this base. DO NOT re-add it without
+# re-measuring first — I added it on a false premise (2026-07-13) and it made things worse:
+#  - It was NOT the perf regression. The ROCKNIX gap was already back BEFORE 0008 was ever
+#    installed (pacman.log: gamescope -1 was live the whole time), so a missing 0008 cannot have
+#    caused it.
+#  - It does not rebase cleanly in BEHAVIOUR onto 4286887. Its hunk-2 early-returns out of
+#    mangoapp_output_update(), which on THIS base also skips `wlserver_app_presented()` — a call
+#    that did not exist on fe78bc6. That silently drops the game's presentation feedback and is a
+#    plausible cause of the frame-pacing spikiness seen with it installed.
+#  - Its guard is `if (!g_bCurrentBasePlaneIsFifo) return;` and IsPerfOverlayFIFO() is
+#    `fifo || is_steam`, so it only suppresses the nudge for NON-FIFO content anyway.
+#  - The overlay tax it targeted is NOT occurring here: measured on-device, gamescope runs exactly
+#    ONE composite per present (ring-0 submits == present rate) on both the Steam UI and in-game.
+# NB upstream's `cv_mangoapp_use_output_timing` convar is NOT a substitute either — it only gates
+# `wlserver_app_presented()`, while the `mangoapp_update()` nudge fires unconditionally.
+# If the overlay tax ever genuinely returns (tell: ring-0 composites >> present rate), rebase 0008
+# properly for this base rather than restoring the old patch verbatim.
 #
 # epoch=1 so this is preferred over ALARM's [extra] gamescope when both are visible.
 pkgname=gamescope
 epoch=1
 pkgver=3.16.0.rocknix.4286887
-pkgrel=1
+pkgrel=3
 _commit=428688779e481681ddf6e2ea346987889527a0b7
 # Grant CAP_SYS_NICE to the installed binary (realtime scheduling) — see gamescope.install.
 install=gamescope.install
