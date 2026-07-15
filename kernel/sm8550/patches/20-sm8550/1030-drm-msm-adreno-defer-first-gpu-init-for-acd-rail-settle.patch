@@ -1,0 +1,58 @@
+From: pocknix <pocknix@localhost>
+Subject: [PATCH] drm/msm/adreno: defer first GPU init until rails settle (ACD 50% clamp)
+
+On SM8550 handhelds (Retroid Pocket 6, and per armada/ROCKNIX the whole
+family), if the GPU/GMU first initializes early in boot (any DRM open
+triggers the lazy adreno_load_gpu - plymouth's KMS-only splash at ~2-5s
+is enough) the power rails are not yet settled and the GMU's ACD
+(adaptive clock distribution) latches a "voltage low" state, holding
+effective GPU clocks at ~50% for the entire session. devfreq/PLL
+counters still report full rate, so this is invisible to every standard
+instrument. Measured on RP6: 299 vs 597 GFLOPS (vkbench, exactly 50%);
+ROCKNIX only escapes because its slower boot first touches the GPU at
+~11.5s.
+
+Defer the first GPU init until boottime passes a threshold. Early DRM
+opens simply get no GPU yet - the same benign, well-trodden path as
+missing GPU firmware (priv->gpu stays NULL, the open succeeds, every
+later open retries). Display/KMS is unaffected, so the boot splash
+still works. msm.gpu_init_min_uptime_ms=0 disables the gate.
+
+---
+--- a/drivers/gpu/drm/msm/adreno/adreno_device.c
++++ b/drivers/gpu/drm/msm/adreno/adreno_device.c
+@@ -28,6 +28,19 @@
+ MODULE_PARM_DESC(no_gpu, "Disable GPU driver register (0=enable GPU driver register (default), 1=skip GPU driver register");
+ module_param(skip_gpu, bool, 0400);
+ 
++/*
++ * If the GPU/GMU first initializes while the power rails are still settling
++ * early in boot, the GMU's ACD latches "voltage low" and holds effective GPU
++ * clocks at ~50% for the whole session while devfreq still reports full rate.
++ * Defer the first (lazy) GPU init until boottime passes this threshold; DRM
++ * opens before then get no GPU yet (same benign path as missing firmware)
++ * and retry on later opens. 0 disables the gate.
++ */
++static unsigned int gpu_init_min_uptime_ms = 12000;
++MODULE_PARM_DESC(gpu_init_min_uptime_ms,
++	"Defer first GPU init until this many ms after boot (default 12000, 0=off)");
++module_param(gpu_init_min_uptime_ms, uint, 0600);
++
+ extern const struct adreno_gpulist a2xx_gpulist;
+ extern const struct adreno_gpulist a3xx_gpulist;
+ extern const struct adreno_gpulist a4xx_gpulist;
+@@ -72,6 +85,14 @@
+ 	struct msm_gpu *gpu = NULL;
+ 	struct adreno_gpu *adreno_gpu;
+ 	int ret;
++
++	if (gpu_init_min_uptime_ms &&
++	    ktime_get_boottime_ns() < (u64)gpu_init_min_uptime_ms * NSEC_PER_MSEC) {
++		dev_warn_once(dev->dev,
++			      "deferring GPU init until %u ms uptime (ACD rail settle)\n",
++			      gpu_init_min_uptime_ms);
++		return NULL;
++	}
+ 
+ 	if (pdev)
+ 		gpu = dev_to_gpu(&pdev->dev);
