@@ -86,7 +86,7 @@ Sourced by shared session scripts (`pocknix-steam`, `pocknix-desktop-rotate`,
 | `POCKNIX_PANEL_MM` | pocknix-steam | GAMESCOPE_FAKE_OUTPUT_MM (gamepadui DPI; deliberately faked on small panels) |
 | `POCKNIX_DESKTOP_ROTATE/_SCALE` | pocknix-desktop-rotate | kscreen-doctor rotation/scale |
 | `POCKNIX_BIG_CORES` | pocknix-play | taskset big-core mask for emulator pinning |
-| `POCKNIX_BOOT_STYLE` | pocknix-install/uninstall-internal | qcom-abl (default) or arm-efi; non-qcom-abl refuses until the arm-efi install flow lands |
+| `POCKNIX_BOOT_STYLE` | pocknix-install/uninstall-internal | qcom-abl (default) or arm-efi: selects the internal-install boot-file handling (arm-efi pins grub.cfg + fstab to internal PARTUUIDs) |
 | `POCKNIX_INTERNAL_DISK` | pocknix-install/uninstall-internal, installer-gui | internal disk (default /dev/sda) |
 | `POCKNIX_BOOT_GPT_NAME/_FAT_LABEL`, `POCKNIX_ROOT_LABEL` | pocknix-install/uninstall-internal | internal-install boot contract |
 
