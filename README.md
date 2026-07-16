@@ -29,15 +29,16 @@ native one.
 
 ## Supported devices
 
-| Device | Status |
-|---|---|
-| Retroid Pocket 6 | ✅ Supported |
-| Retroid Pocket 5 | 🚧 In progress |
-| AYN Odin 2 | 🧪 Untested |
-| AYN Odin 2 Portal | 🧪 Untested |
-| AYN Odin 2 Mini | 🧪 Untested |
-| AYN Odin 3 | 🚧 In progress |
-| AYN Thor | 📋 Planned |
+| Device | SoC Family | Status |
+|---|---|---|
+| Retroid Pocket 6 | SM8550 | ✅ Supported |
+| Retroid Pocket 5 | SM8250 | ✅ Supported |
+| Retroid Pocket Flip 2 | SM8250 | 🧪 Untested (should work - virtually identical to the RP5) |
+| AYN Odin 2 | SM8550 | 🧪 Untested |
+| AYN Odin 2 Portal | SM8550 | 🧪 Untested |
+| AYN Odin 2 Mini | SM8550 | 🧪 Untested |
+| AYN Odin 3 | SM8750 | 🚧 In progress |
+| AYN Thor | SM8550 | 📋 Planned |
 
 > **Why is the AYN Thor only "planned"?** The Thor is a dual-screen device, and pocknix gaming
 > is built around gamescope, which is single-screen by design. Making the second screen useful
