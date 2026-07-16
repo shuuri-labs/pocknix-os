@@ -11,7 +11,7 @@
 #   -> "linux /KERNEL" (raw Image) + "devicetree /boot/grub/<board>.dtb"; the
 #   FAT additionally carries EFI/, boot/grub/ (cfg + grubenv + dtbs) and
 #   rocknix_abl/. ROCKNIX sets legacy_boot on p1 for BOTH styles (no esp flag).
-# Either way our kernel mounts root=PARTLABEL=${ROOT_LABEL} directly (no
+# Either way our kernel mounts its root directly by PARTUUID (fixed SD GUIDs; no
 # initramfs — UFS/ext4 are built in). ROCKNIX also puts a SYSTEM squashfs on
 # the FAT; we don't need it (plain ext4 root).
 #
@@ -21,7 +21,7 @@
 source "$(dirname "$0")/lib.sh"
 need_linux
 need_root sd-image
-for t in parted mkfs.vfat mkfs.ext4 losetup rsync chroot truncate du; do need_tool "$t"; done
+for t in parted sgdisk mkfs.vfat mkfs.ext4 losetup rsync chroot truncate du; do need_tool "$t"; done   # sgdisk: gptfdisk pkg
 
 KERNEL_IMG="${IMAGE_DIR}/KERNEL"
 KOUT="${BUILD_DIR}/kernel/out"
@@ -81,8 +81,8 @@ firstboot_config() {
   cat > "${root}/etc/fstab" <<EOF
 # pocknix-os test image
 # noatime: no software here needs atime; dropping atime write-backs cuts flash writes (SteamOS/ROCKNIX do the same).
-PARTLABEL=${ROOT_LABEL}        /       ext4  rw,noatime         0 1
-PARTLABEL=${SD_BOOT_PARTNAME}  /flash  vfat  rw,noatime,nofail  0 2
+PARTUUID=${SD_ROOT_PARTUUID}  /       ext4  rw,noatime         0 1
+PARTUUID=${SD_BOOT_PARTUUID}  /flash  vfat  rw,noatime,nofail  0 2
 EOF
   echo "pocknix" > "${root}/etc/hostname"
   # Default timezone: the ALARM base ships NO /etc/localtime, so libc (and thus the SteamOS/Plasma
@@ -285,6 +285,11 @@ main() {
   parted -s "${OUT}" mkpart "${SD_BOOT_PARTNAME}" fat32 1MiB "${boot_end}MiB"
   parted -s "${OUT}" mkpart "${ROOT_LABEL}"        ext4  "${boot_end}MiB" 100%
   parted -s "${OUT}" set 1 legacy_boot on
+  # Deterministic partition GUIDs (see SD_*_PARTUUID in config/pocknix.conf):
+  # the arm-efi grub.cfg and the fstab below pin these, so an internal install's
+  # identical POCKNIX_ROOT name/label can never steal the SD boot's root.
+  sgdisk --partition-guid=1:"${SD_BOOT_PARTUUID}" \
+         --partition-guid=2:"${SD_ROOT_PARTUUID}" "${OUT}" >/dev/null
 
   LOOP="$(losetup --show -fP "${OUT}")"
   log "loop: ${LOOP}"

@@ -29,7 +29,7 @@
 # from the same tree.
 pkgname=pocknix-bootloader-sm8250
 pkgver=20260701          # the ROCKNIX release bootaa64.efi was extracted from
-pkgrel=2
+pkgrel=3
 _ablver=1.1.4
 pkgdesc="SM8250 arm-efi boot payload: ROCKNIX GRUB + pocknix grub.cfg + ROCKNIX ABL (${_ablver})"
 arch=('aarch64')

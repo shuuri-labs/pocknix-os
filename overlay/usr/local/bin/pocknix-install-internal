@@ -265,7 +265,7 @@ if [ "$BOOT_STYLE" = "arm-efi" ]; then
   [ -f "$BMNT/boot/grub/grub.cfg" ]    || die "SD boot FAT has no boot/grub/grub.cfg"
   ROOT_PARTUUID="$(blkid -s PARTUUID -o value "$ROOT_PART")"
   [ -n "$ROOT_PARTUUID" ] || die "could not read PARTUUID of $ROOT_PART"
-  sed -i "s|root=PARTLABEL=[^ ]*|root=PARTUUID=${ROOT_PARTUUID}|g" "$BMNT/boot/grub/grub.cfg"
+  sed -i -E "s|root=PART(LABEL\|UUID)=[^ ]*|root=PARTUUID=${ROOT_PARTUUID}|g" "$BMNT/boot/grub/grub.cfg"
   grep -q "root=PARTUUID=${ROOT_PARTUUID}" "$BMNT/boot/grub/grub.cfg" \
     || die "failed to pin the internal grub.cfg root= (unexpected cmdline format?)"
   say "Pinned internal grub.cfg to root=PARTUUID=${ROOT_PARTUUID}"

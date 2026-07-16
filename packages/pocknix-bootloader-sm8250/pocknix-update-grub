@@ -26,6 +26,17 @@ fi
 if [ -f "$BL/boot/grub/grub.cfg" ]; then
   mkdir -p "$FLASH/boot/grub"
   cp -f "$BL/boot/grub/grub.cfg" "$FLASH/boot/grub/grub.cfg"
+  # Re-pin root= to the RUNNING root partition's PARTUUID: the packaged cfg
+  # carries the fixed pocknix-SD GUID (fresh images), but this system's root
+  # may be an internal install or an older SD with a random GUID — the cfg on
+  # /flash must always point at the root that booted us.
+  ROOT_SRC="$(findmnt -no SOURCE / 2>/dev/null)"
+  ROOT_PU="$(blkid -s PARTUUID -o value "$ROOT_SRC" 2>/dev/null)"
+  if [ -n "$ROOT_PU" ]; then
+    sed -i -E "s|root=PART(LABEL\|UUID)=[^ ]*|root=PARTUUID=${ROOT_PU}|g" "$FLASH/boot/grub/grub.cfg"
+  else
+    echo "pocknix-update-grub: WARNING could not resolve the running root's PARTUUID; grub.cfg keeps the packaged default root=" >&2
+  fi
 fi
 if [ -f "$BL/boot/grub/grubenv" ] && [ ! -f "$FLASH/boot/grub/grubenv" ]; then
   mkdir -p "$FLASH/boot/grub"
