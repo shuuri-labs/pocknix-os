@@ -1,0 +1,20 @@
+#!/bin/sh
+# Post-resume PipeWire quantum bounce — ROCKNIX SM8250 wake quirk (their
+# quirks/platforms/SM8250/sleep.d/post/003-audio + /usr/sbin/quantum): after
+# resume the sm8250 qdsp6 audio path can come back glitched; forcing the graph
+# quantum to 1023 and then back to 1024 kicks it into shape.
+#
+# Runs from pocknix-sm8250-audio-resume.service (WantedBy=suspend.target,
+# After=systemd-suspend.service) — i.e. AFTER the sleep transaction completes
+# and user.slice is thawed. It MUST NOT be a system-sleep (sleep.d) hook:
+# those run while user.slice is still FROZEN, so pw-metadata blocks forever on
+# the frozen PipeWire and systemd-sleep never thaws the slice — the "freeze on
+# wake" (frozen frame, no network, live kernel) diagnosed on the RP5
+# 2026-07-16. timeout is belt-and-braces so no PipeWire state can ever wedge
+# the service.
+DECK_UID=1001
+RUNDIR="/run/user/${DECK_UID}"
+[ -S "${RUNDIR}/pipewire-0" ] || exit 0
+timeout 5 runuser -u deck -- env XDG_RUNTIME_DIR="${RUNDIR}" pw-metadata -n settings 0 clock.force-quantum 1023 >/dev/null 2>&1 || exit 0
+timeout 5 runuser -u deck -- env XDG_RUNTIME_DIR="${RUNDIR}" pw-metadata -n settings 0 clock.force-quantum 1024 >/dev/null 2>&1 || true
+exit 0

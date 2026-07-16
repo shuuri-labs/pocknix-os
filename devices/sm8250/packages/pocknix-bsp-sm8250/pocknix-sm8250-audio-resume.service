@@ -1,0 +1,13 @@
+[Unit]
+Description=pocknix sm8250 post-resume PipeWire quantum bounce
+# Runs after the whole sleep transaction (incl. the user.slice thaw) — see the
+# script header for why this must NOT be a system-sleep hook.
+After=systemd-suspend.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/pocknix/pocknix-sm8250-audio-resume
+TimeoutStartSec=20
+
+[Install]
+WantedBy=suspend.target

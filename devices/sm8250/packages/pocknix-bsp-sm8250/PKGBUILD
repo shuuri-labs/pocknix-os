@@ -15,7 +15,7 @@
 #     (pocknix-bootloader-sm8250), not in a boot-image rebuild file.
 pkgname=pocknix-bsp-sm8250
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc="pocknix board support: SM8250 family (Retroid Pocket 5) — runtime board dispatch, input map, audio UCM, wake quirks"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -34,10 +34,10 @@ source=('device.conf'
         '01-retroid-controller.yaml' 'rp5-gamepad.yaml'
         'RetroidPocket.conf' 'HiFi-RP.conf'
         '99-retroid-pocket.rules' '99-wcd938x-nosleep.rules'
-        '50-audio-quantum'
+        'pocknix-sm8250-audio-resume' 'pocknix-sm8250-audio-resume.service'
         'pocknix-sm8250-audio-heal' 'pocknix-sm8250-audio-heal.service'
         '51-pocknix-softmixer.conf' '60-pocknix-speaker-loudness.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # Runtime device facts: the model dispatcher + per-board files. boards/ is
@@ -77,10 +77,18 @@ package() {
   install -Dm644 "${srcdir}/99-wcd938x-nosleep.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/99-wcd938x-nosleep.rules"
 
-  # Post-resume PipeWire quantum bounce (ROCKNIX SM8250 wake quirk), run by
-  # pocknix-bsp-common's pocknix-sleep dispatcher.
-  install -Dm755 "${srcdir}/50-audio-quantum" \
-    "${pkgdir}/usr/lib/pocknix/sleep.d/post/50-audio-quantum"
+  # Post-resume PipeWire quantum bounce (ROCKNIX SM8250 wake quirk) as a
+  # suspend.target service — NOT a sleep.d hook: system-sleep hooks run while
+  # user.slice is still frozen, so pw-metadata against the frozen PipeWire
+  # deadlocked systemd-sleep and the slice never thawed ("freeze on wake",
+  # RP5 2026-07-16). Enabled via a shipped wants symlink.
+  install -Dm755 "${srcdir}/pocknix-sm8250-audio-resume" \
+    "${pkgdir}/usr/lib/pocknix/pocknix-sm8250-audio-resume"
+  install -Dm644 "${srcdir}/pocknix-sm8250-audio-resume.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-sm8250-audio-resume.service"
+  install -d "${pkgdir}/usr/lib/systemd/system/suspend.target.wants"
+  ln -sf ../pocknix-sm8250-audio-resume.service \
+    "${pkgdir}/usr/lib/systemd/system/suspend.target.wants/pocknix-sm8250-audio-resume.service"
 
   # The RP5 loudness stack (validated by ear 2026-07-16; see each file's header):
   #   * soft-mixer: PipeWire's hardware-volume mapping caps the path at 0dB
