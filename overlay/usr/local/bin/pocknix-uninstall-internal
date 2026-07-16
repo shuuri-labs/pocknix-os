@@ -26,12 +26,15 @@ set -euo pipefail
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 
-# Boot-style gate: qcom-abl (SM8550) internal contract only — arm-efi boards must
-# refuse rather than fall through to the RP6 defaults (see pocknix-install-internal).
-if [ "${POCKNIX_BOOT_STYLE:-qcom-abl}" != "qcom-abl" ]; then
-  echo "pocknix-uninstall-internal: boot style '${POCKNIX_BOOT_STYLE}' not supported yet (qcom-abl only)" >&2
-  exit 1
-fi
+# Boot style: the full uninstall (delete the pocknix partitions, re-grow userdata)
+# and --disable-boot (delete the boot FAT — no bootaa64.efi/KERNEL = nothing to
+# chainload) are style-agnostic. Only --enable-boot's KERNEL regeneration is
+# qcom-abl-specific (pocknix-build-bootimg); on arm-efi it refuses below.
+BOOT_STYLE="${POCKNIX_BOOT_STYLE:-qcom-abl}"
+case "$BOOT_STYLE" in
+  qcom-abl|arm-efi) ;;
+  *) echo "pocknix-uninstall-internal: unknown boot style '${BOOT_STYLE}'" >&2; exit 1 ;;
+esac
 
 DEVICE="${DEVICE:-${POCKNIX_INTERNAL_DISK:-/dev/sda}}"
 BOOT_NAME="${POCKNIX_BOOT_GPT_NAME:-ROCKNIX}"     # GPT name of the boot FAT  (pocknix-install-internal)
@@ -70,6 +73,8 @@ ROOT_NUM="$(partnum "$ROOT_NAME" || true)"
 # (intact) internal POCKNIX_ROOT. Run FROM THE SD. No re-clone. MUST be before the Stage-2 fallthrough.
 # ---------------------------------------------------------------------------------------------------
 if [ "$ENABLE_BOOT" = 1 ]; then
+  [ "$BOOT_STYLE" = "qcom-abl" ] \
+    || die "--enable-boot is qcom-abl only (its KERNEL regeneration uses pocknix-build-bootimg). On ${BOOT_STYLE}, re-run pocknix-install-internal instead."
   [ -z "$BOOT_NUM" ] || die "a '$BOOT_NAME' partition already exists on $DEVICE — boot isn't disabled (nothing to do)."
   [ -n "$ROOT_NUM" ] || die "no '$ROOT_NAME' on $DEVICE — nothing to re-enable; do a full pocknix-install-internal."
   root_src="$(findmnt -no SOURCE / || true)"
