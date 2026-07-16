@@ -39,6 +39,14 @@ source "${POCKNIX_ROOT}/config/tuning/${SOC}.conf"
 # Per-SoC pacman repo: tuned packages (mesa etc.) share pkgnames across SoCs
 # with different binaries, so each SoC gets its own localrepo/published tree.
 : "${LOCALREPO_DIR:=${BUILD_DIR}/localrepo/${SOC}}"
+# Per-SoC kernel + image outputs: with one family per SoC, a shared build/kernel
+# and build/image/KERNEL meant "whatever family built last" — switching families
+# forced a full kernel rebuild just to regenerate an unchanged image, and the
+# out/soc guards had to police mixups. Per-SoC dirs keep each family's outputs
+# resident side by side. (build/cache and build/rootfs stay shared: the cache is
+# SoC-neutral downloads, the rootfs is wiped by bootstrap.sh on every build.)
+: "${KERNEL_BUILD_DIR:=${BUILD_DIR}/kernel/${SOC}}"
+: "${IMAGE_DIR:=${BUILD_DIR}/image/${SOC}}"
 
 # --- logging ---------------------------------------------------------------
 _c_blue=$'\033[1;34m'; _c_grn=$'\033[1;32m'; _c_yel=$'\033[1;33m'

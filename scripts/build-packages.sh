@@ -89,7 +89,7 @@ build_one() {
         uptodate=0; break
       fi
       case "${name}" in linux-pocknix-*)
-        if [ -f "${BUILD_DIR}/kernel/out/Image" ] && [ "${BUILD_DIR}/kernel/out/Image" -nt "${f}" ]; then
+        if [ -f "${KERNEL_BUILD_DIR}/out/Image" ] && [ "${KERNEL_BUILD_DIR}/out/Image" -nt "${f}" ]; then
           uptodate=0; break
         fi
       ;; esac
@@ -115,12 +115,12 @@ build_one() {
       warn "${name}: not the current SoC's kernel (${KERNEL_PKG}) — skipping (build with the right DEVICE)"
       return 1
     fi
-    local kout="${BUILD_DIR}/kernel/out"
+    local kout="${KERNEL_BUILD_DIR}/out"
     if [ ! -f "${kout}/Image" ] || [ ! -f "${kout}/kernelrelease" ]; then
       warn "${name}: no kernel build at ${kout} — run 'make kernel' first; skipping"
       return 1
     fi
-    # build/kernel/ is shared across image targets: refuse another SoC's staged kernel
+    # SoC marker sanity (kernel outputs are per-SoC dirs now; insurance only)
     if [ -f "${kout}/soc" ] && [ "$(cat "${kout}/soc")" != "${SOC}" ]; then
       warn "${name}: ${kout} was built for SOC=$(cat "${kout}/soc"), not ${SOC} — run 'make kernel DEVICE=${DEVICE}' first; skipping"
       return 1

@@ -16,16 +16,16 @@
 # cmdline uses a standard root= spec (KERNEL_CMDLINE) instead of ROCKNIX's
 # LibreELEC boot=/disk=LABEL= convention, and the ramdisk stays a dummy.
 #
-# Outputs:
-#   build/kernel/out/{Image,dtbs/,modroot/lib/modules/<ver>/,kernelrelease,soc}
-#   build/image/KERNEL   (qcom-abl: the boot image; arm-efi: the raw Image
-#                         -> either way, deploy to /flash/KERNEL)
+# Outputs (per SoC):
+#   build/kernel/<soc>/out/{Image,dtbs/,modroot/lib/modules/<ver>/,kernelrelease,soc}
+#   build/image/<soc>/KERNEL   (qcom-abl: the boot image; arm-efi: the raw Image
+#                               -> either way, deploy to /flash/KERNEL)
 
 source "$(dirname "$0")/lib.sh"
 need_linux
 for t in curl tar xz gzip make gcc bc flex bison python3 git rsync patch; do need_tool "$t"; done
 
-KBUILD="${BUILD_DIR}/kernel"
+KBUILD="${KERNEL_BUILD_DIR}"   # per-SoC: build/kernel/${SOC} (set in lib.sh)
 KSRC="${KBUILD}/linux-${KERNEL_VERSION}"
 JOBS="${JOBS:-$(nproc)}"
 MKBOOTIMG=""
@@ -361,10 +361,9 @@ main() {
       ;;
   esac
   printf '%s' "${KERNEL_CMDLINE}" > "${KBUILD}/out/cmdline"
-  # SoC marker: build/kernel/ is shared across image targets, so record which
-  # SoC produced out/. build-packages.sh refuses to stage a mismatched out/
-  # into linux-pocknix-<soc> (switching DEVICE across SoCs without `make
-  # kernel` would otherwise silently package the wrong kernel).
+  # SoC marker: records which SoC produced out/. Kernel outputs live in
+  # per-SoC dirs now, so the downstream marker checks are insurance against
+  # manual copies/renames rather than a shared-dir necessity.
   printf '%s' "${SOC}" > "${KBUILD}/out/soc"
   ok "${KERNEL_PKG} build complete"
 }

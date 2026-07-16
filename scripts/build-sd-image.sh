@@ -16,7 +16,7 @@
 # the FAT; we don't need it (plain ext4 root).
 #
 # Prereqs: `sudo make build` (rootfs) + `make kernel` (KERNEL). Run as root (loop+mount).
-# Flash:   sudo dd if=build/image/pocknix-<soc>-sd.img of=/dev/sdX bs=4M conv=fsync status=progress
+# Flash:   sudo dd if=build/image/<soc>/pocknix-<soc>-sd.img of=/dev/sdX bs=4M conv=fsync status=progress
 
 source "$(dirname "$0")/lib.sh"
 need_linux
@@ -24,7 +24,7 @@ need_root sd-image
 for t in parted sgdisk mkfs.vfat mkfs.ext4 losetup rsync chroot truncate du; do need_tool "$t"; done   # sgdisk: gptfdisk pkg
 
 KERNEL_IMG="${IMAGE_DIR}/KERNEL"
-KOUT="${BUILD_DIR}/kernel/out"
+KOUT="${KERNEL_BUILD_DIR}/out"   # per-SoC (set in lib.sh)
 OUT="${IMAGE_DIR}/pocknix-${SOC}-sd.img"   # one image per SoC family -> name it so
 
 [ -f "${KERNEL_IMG}" ] || die "no ${KERNEL_IMG} — run 'make kernel' first"
@@ -41,9 +41,10 @@ trap cleanup EXIT
 # Make sure the rootfs carries the pocknix kernel modules + drops the generic
 # ALARM kernel, in case `make build` ran before the kernel existed (idempotent).
 ensure_kernel_in_rootfs() {
-  # build/kernel/ is shared across image targets: refuse another SoC's staged kernel
+  # SoC marker sanity (kernel outputs are per-SoC dirs now, so this should never
+  # fire — kept as cheap insurance against manual copies/renames)
   if [ -f "${KOUT}/soc" ] && [ "$(cat "${KOUT}/soc")" != "${SOC}" ]; then
-    die "build/kernel/out was built for SOC=$(cat "${KOUT}/soc"), not ${SOC} — run 'make kernel DEVICE=${DEVICE}' first"
+    die "${KOUT} was built for SOC=$(cat "${KOUT}/soc"), not ${SOC} — run 'make kernel DEVICE=${DEVICE}' first"
   fi
   if [ -d "${KOUT}/modroot/lib/modules" ]; then
     local kver; kver="$(cat "${KOUT}/kernelrelease" 2>/dev/null)"

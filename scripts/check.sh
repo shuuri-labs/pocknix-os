@@ -47,8 +47,8 @@ else
 fi
 
 # --- built artifacts (only checked if they exist) --------------------------
-if [ -d "${BUILD_DIR}/kernel/out" ]; then
-  note "kernel build" "$(cat "${BUILD_DIR}/kernel/out/kernelrelease" 2>/dev/null || echo present)"
+if [ -d "${KERNEL_BUILD_DIR}/out" ]; then
+  note "kernel build" "$(cat "${KERNEL_BUILD_DIR}/out/kernelrelease" 2>/dev/null || echo present)"
 else
   note "kernel build" "run 'make kernel'"
 fi

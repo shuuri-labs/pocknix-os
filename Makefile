@@ -47,14 +47,14 @@ du: ## Show build/ disk usage breakdown (find the space hogs)
 	@du -sh build/* 2>/dev/null | sort -h; \
 	 [ -d build/kernel ] && { echo '--- build/kernel ---'; du -sh build/kernel/* 2>/dev/null | sort -h; } || true
 
-trim: ## Reclaim space: drop the regenerable kernel SOURCE tree (keeps KERNEL+modules+rootfs+image)
-	@sudo rm -rf build/kernel/linux-* build/kernel/mkbootimg-src
+trim: ## Reclaim space: drop the regenerable kernel SOURCE trees (keeps KERNEL+modules+rootfs+image)
+	@sudo rm -rf build/kernel/*/linux-* build/kernel/*/mkbootimg-src
 	@echo "trimmed kernel source tree (regenerated on next 'make kernel'); kept out/, rootfs, image, cache"
 
-clean: ## Remove build output: rootfs, image, kernel, package chroot (keeps download cache)
-	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel build/pkgbuild-root
+clean: ## Remove build output: rootfs, image, kernel, package chroots (keeps download cache)
+	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel build/pkgbuild-root*
 	@echo "cleaned build artifacts (download cache kept)"
 
 distclean: ## Remove all build output including caches
-	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel build/pkgbuild-root build/cache
+	@sudo rm -rf build/rootfs build/image build/localrepo build/kernel build/pkgbuild-root* build/cache
 	@echo "removed all build output"
