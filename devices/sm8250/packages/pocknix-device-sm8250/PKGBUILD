@@ -5,7 +5,7 @@
 pkgname=pocknix-device-sm8250
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="pocknix device metapackage: SM8250 family (Retroid Pocket 5)"
+pkgdesc="pocknix device metapackage: SM8250 family (RP5, RP Flip 2)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')

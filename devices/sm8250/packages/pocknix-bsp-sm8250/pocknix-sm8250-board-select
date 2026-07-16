@@ -1,0 +1,46 @@
+#!/bin/sh
+# pocknix-sm8250-board-select — fix the GRUB default entry when the booted dtb
+# doesn't match the physical board.
+#
+# The static grub.cfg defaults to the rp5 dtb; a Flip 2 therefore first-boots
+# as an RP5 (fully functional — its DTS is the RP5's plus the lid sensor).
+# This service reads the board token from the Android vbmeta_system_a
+# partition (the same source ROCKNIX's in-GRUB autodetect uses; our vendored
+# GRUB predates their rawsearch commands) and, on mismatch, writes
+# saved_entry=<board> into /flash/boot/grub/grubenv so the NEXT boot loads the
+# right dtb. The env block is written directly (1024 bytes, '#'-padded) — no
+# grub-editenv dependency. No auto-reboot: the corrected dtb applies on the
+# user's next boot; everything except the Flip 2 lid works meanwhile.
+FLASH="${FLASH:-/flash}"
+GRUBENV="${FLASH}/boot/grub/grubenv"
+
+model="$(cat /proc/device-tree/model 2>/dev/null | tr -d '\0')"
+vb=/dev/disk/by-partlabel/vbmeta_system_a
+[ -e "$vb" ] || exit 0                       # no Android alongside: nothing to detect from
+mountpoint -q "$FLASH" || exit 0
+
+content="$(tr -cd '[:print:]' < "$vb" 2>/dev/null)"
+want=""
+case "$content" in                            # longest token first (ROCKNIX ordering)
+  *RPFlip2*) want=rpflip2 ;;
+  *RP5*)     want=rp5 ;;
+esac
+[ -n "$want" ] || exit 0                      # unknown board fingerprint: leave defaults
+
+booted=""
+case "$model" in
+  "Retroid Pocket 5")     booted=rp5 ;;
+  "Retroid Pocket Flip2") booted=rpflip2 ;;
+esac
+[ "$want" = "$booted" ] && exit 0             # correct dtb already
+
+body="# GRUB Environment Block
+saved_entry=${want}
+"
+len=${#body}
+pad=$((1024 - len))
+mount -o remount,rw "$FLASH" 2>/dev/null || true
+{ printf '%s' "$body"; [ "$pad" -gt 0 ] && head -c "$pad" /dev/zero | tr '\0' '#'; } > "${GRUBENV}.new" \
+  && mv "${GRUBENV}.new" "$GRUBENV" && sync
+echo "board-select: hardware is '${want}' but booted the '${booted:-unknown}' dtb — grub default updated, takes effect next boot"
+exit 0

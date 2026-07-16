@@ -1,4 +1,5 @@
-# pocknix-bsp-sm8250 — board support for the SM8250 FAMILY (Retroid Pocket 5).
+# pocknix-bsp-sm8250 — board support for the SM8250 FAMILY (Retroid Pocket 5,
+# Retroid Pocket Flip 2).
 # First per-SoC BSP: ONE package serves every board on the SoC. The runtime
 # board facts live in /usr/lib/pocknix/boards/<board>.conf and
 # /usr/lib/pocknix/device.conf is a sourced DISPATCHER that picks one by
@@ -15,8 +16,8 @@
 #     (pocknix-bootloader-sm8250), not in a boot-image rebuild file.
 pkgname=pocknix-bsp-sm8250
 pkgver=0.1.0
-pkgrel=6
-pkgdesc="pocknix board support: SM8250 family (Retroid Pocket 5) — runtime board dispatch, input map, audio UCM, wake quirks"
+pkgrel=7
+pkgdesc="pocknix board support: SM8250 family (RP5, RP Flip 2) — runtime board dispatch, input maps, audio UCM, wake quirks"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
@@ -32,12 +33,15 @@ optdepends=('inputplumber: gamepad -> Steam Input mapping (01-retroid-controller
             'alsa-ucm-conf: base UCM (codec include sequences for the RetroidPocket UCM)')
 source=('device.conf'
         '01-retroid-controller.yaml' 'rp5-gamepad.yaml'
+        '02-retroid-flip2-controller.yaml' 'rpflip2-gamepad.yaml'
         'RetroidPocket.conf' 'HiFi-RP.conf'
         '99-retroid-pocket.rules' '99-wcd938x-nosleep.rules'
         'pocknix-sm8250-audio-resume' 'pocknix-sm8250-audio-resume.service'
         'pocknix-sm8250-audio-heal' 'pocknix-sm8250-audio-heal.service'
+        'pocknix-sm8250-board-select' 'pocknix-sm8250-board-select.service'
         '51-pocknix-softmixer.conf' '60-pocknix-speaker-loudness.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # Runtime device facts: the model dispatcher + per-board files. boards/ is
@@ -49,12 +53,17 @@ package() {
     install -Dm644 "${b}" "${pkgdir}/usr/lib/pocknix/boards/$(basename "${b}")"
   done
 
-  # InputPlumber composite-device config (dt-model gated) + capability_map for
-  # the RP5's retroid-pocket-gamepad MCU (paddle-free retroid_mcu port).
+  # InputPlumber composite-device configs (dt-model gated) + capability maps.
+  # RP5: paddle-free map (confirmed on hardware). Flip 2: same MCU, ROCKNIX's
+  # full map incl. paddles (hardware-unverified; unused mappings are inert).
   install -Dm644 "${srcdir}/01-retroid-controller.yaml" \
     "${pkgdir}/usr/share/inputplumber/devices/01-retroid-controller.yaml"
   install -Dm644 "${srcdir}/rp5-gamepad.yaml" \
     "${pkgdir}/usr/share/inputplumber/capability_maps/rp5-gamepad.yaml"
+  install -Dm644 "${srcdir}/02-retroid-flip2-controller.yaml" \
+    "${pkgdir}/usr/share/inputplumber/devices/02-retroid-flip2-controller.yaml"
+  install -Dm644 "${srcdir}/rpflip2-gamepad.yaml" \
+    "${pkgdir}/usr/share/inputplumber/capability_maps/rpflip2-gamepad.yaml"
 
   # ALSA UCM for the "RetroidPocket" card (sm8250-sndcard). Mirrors ROCKNIX's
   # tree: master conf under Qualcomm/sm8250 + card-longname symlinks under
@@ -65,7 +74,8 @@ package() {
   install -Dm644 "${srcdir}/HiFi-RP.conf"       "${ucm}/Qualcomm/sm8250/HiFi-RP.conf"
   install -d "${ucm}/conf.d/sm8250"
   local l
-  for l in RetroidPocket.conf retroidpocket-RetroidPocket5.conf retroid-RetroidPocket5-conf; do
+  for l in RetroidPocket.conf retroidpocket-RetroidPocket5.conf retroid-RetroidPocket5-conf \
+           retroidpocket-RetroidPocketFlip2.conf; do
     ln -sf "../../Qualcomm/sm8250/RetroidPocket.conf" "${ucm}/conf.d/sm8250/${l}"
   done
 
@@ -106,6 +116,17 @@ package() {
     "${pkgdir}/usr/share/wireplumber/wireplumber.conf.d/51-pocknix-softmixer.conf"
   install -Dm644 "${srcdir}/60-pocknix-speaker-loudness.conf" \
     "${pkgdir}/usr/share/pipewire/pipewire.conf.d/60-pocknix-speaker-loudness.conf"
+
+  # GRUB board-select correction (see the script header): the static grub.cfg
+  # defaults to the rp5 dtb; on a Flip 2 this service detects the real board
+  # from vbmeta_system_a and writes grubenv so the next boot loads its dtb.
+  install -Dm755 "${srcdir}/pocknix-sm8250-board-select" \
+    "${pkgdir}/usr/lib/pocknix/pocknix-sm8250-board-select"
+  install -Dm644 "${srcdir}/pocknix-sm8250-board-select.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-sm8250-board-select.service"
+  install -d "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants"
+  ln -sf ../pocknix-sm8250-board-select.service \
+    "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants/pocknix-sm8250-board-select.service"
 
   # LPASS probe self-heal (see the script header): the q6 audio clock services
   # settle asynchronously after the adsp remoteproc boots, hard-failed macro

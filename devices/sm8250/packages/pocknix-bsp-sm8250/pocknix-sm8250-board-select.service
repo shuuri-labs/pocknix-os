@@ -1,0 +1,12 @@
+[Unit]
+Description=pocknix sm8250 GRUB board-select correction
+# Needs /flash (fstab, nofail) for grubenv; runs once per boot, exits fast.
+After=flash.mount
+ConditionPathIsMountPoint=/flash
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/pocknix/pocknix-sm8250-board-select
+
+[Install]
+WantedBy=multi-user.target

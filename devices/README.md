@@ -18,7 +18,7 @@ Current families:
 
 * **sm8550** (qcom-abl): Retroid Pocket 6 (+TOP-DPAD), AYN Odin 2 / Mini / Portal —
   one RSInput controller config for all boards.
-* **sm8250** (arm-efi): Retroid Pocket 5.
+* **sm8250** (arm-efi): Retroid Pocket 5, Retroid Pocket Flip 2 (Flip 2 hardware-unverified).
 
 Adding a **board to an existing family**: a `boards/<board>.conf` + a dispatcher case
 arm + (if its controller differs) an inputplumber yaml/map with the board's dt-model
