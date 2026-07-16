@@ -16,7 +16,7 @@
 #     (pocknix-bootloader-sm8250), not in a boot-image rebuild file.
 pkgname=pocknix-bsp-sm8250
 pkgver=0.1.0
-pkgrel=7
+pkgrel=8
 pkgdesc="pocknix board support: SM8250 family (RP5, RP Flip 2) — runtime board dispatch, input maps, audio UCM, wake quirks"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -33,15 +33,14 @@ optdepends=('inputplumber: gamepad -> Steam Input mapping (01-retroid-controller
             'alsa-ucm-conf: base UCM (codec include sequences for the RetroidPocket UCM)')
 source=('device.conf'
         '01-retroid-controller.yaml' 'rp5-gamepad.yaml'
-        '02-retroid-flip2-controller.yaml' 'rpflip2-gamepad.yaml'
         'RetroidPocket.conf' 'HiFi-RP.conf'
         '99-retroid-pocket.rules' '99-wcd938x-nosleep.rules'
         'pocknix-sm8250-audio-resume' 'pocknix-sm8250-audio-resume.service'
         'pocknix-sm8250-audio-heal' 'pocknix-sm8250-audio-heal.service'
         'pocknix-sm8250-board-select' 'pocknix-sm8250-board-select.service'
         '51-pocknix-softmixer.conf' '60-pocknix-speaker-loudness.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # Runtime device facts: the model dispatcher + per-board files. boards/ is
@@ -53,17 +52,13 @@ package() {
     install -Dm644 "${b}" "${pkgdir}/usr/lib/pocknix/boards/$(basename "${b}")"
   done
 
-  # InputPlumber composite-device configs (dt-model gated) + capability maps.
-  # RP5: paddle-free map (confirmed on hardware). Flip 2: same MCU, ROCKNIX's
-  # full map incl. paddles (hardware-unverified; unused mappings are inert).
+  # InputPlumber composite-device config (dt-model gated, one for RP5 + Flip 2:
+  # identical MCU and both boards paddle-free, user-confirmed) + the shared
+  # paddle-free capability map.
   install -Dm644 "${srcdir}/01-retroid-controller.yaml" \
     "${pkgdir}/usr/share/inputplumber/devices/01-retroid-controller.yaml"
   install -Dm644 "${srcdir}/rp5-gamepad.yaml" \
     "${pkgdir}/usr/share/inputplumber/capability_maps/rp5-gamepad.yaml"
-  install -Dm644 "${srcdir}/02-retroid-flip2-controller.yaml" \
-    "${pkgdir}/usr/share/inputplumber/devices/02-retroid-flip2-controller.yaml"
-  install -Dm644 "${srcdir}/rpflip2-gamepad.yaml" \
-    "${pkgdir}/usr/share/inputplumber/capability_maps/rpflip2-gamepad.yaml"
 
   # ALSA UCM for the "RetroidPocket" card (sm8250-sndcard). Mirrors ROCKNIX's
   # tree: master conf under Qualcomm/sm8250 + card-longname symlinks under

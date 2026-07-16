@@ -1,9 +1,9 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/capability_map_v2.json
-# Capability map for the RP5's retroid-pocket-gamepad MCU. Ported from
-# ROCKNIX's shared retroid_mcu map MINUS the LeftPaddle1/RightPaddle1 entries:
-# the RP5 has no back paddles (confirmed on hardware; the shared map also
-# serves Retroid boards that do). BTN_BACK -> QuickAccess (Steam QAM; ROCKNIX
-# had KeyF1 for their UI), BTN_MODE -> Guide.
+# Capability map for the retroid-pocket-gamepad MCU, shared by the RP5 AND
+# the Flip 2 (both paddle-free, user-confirmed). Ported from ROCKNIX's shared
+# retroid_mcu map MINUS the LeftPaddle1/RightPaddle1 entries (their map also
+# serves Retroid boards that have paddles). BTN_BACK -> QuickAccess (Steam
+# QAM; ROCKNIX had KeyF1 for their UI), BTN_MODE -> Guide.
 # Schema version number
 version: 2
 
