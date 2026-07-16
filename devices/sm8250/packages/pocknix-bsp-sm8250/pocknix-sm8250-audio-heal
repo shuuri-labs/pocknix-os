@@ -14,6 +14,34 @@ card_up() { grep -q RetroidPocket /proc/asound/cards 2>/dev/null; }
 bound()   { [ -e "/sys/bus/platform/devices/$1/driver" ]; }
 reload()  { modprobe -r "$1" 2>/dev/null; modprobe "$1" 2>/dev/null; }
 
+# Plant the validated mixer gains once the card exists. Nothing on Arch runs
+# the UCM BootSequence (alsaucm boot), and PipeWire runs soft-mixer on this
+# card (51-pocknix-softmixer.conf) so it never touches the hardware mixer —
+# this is the ONE place the hardware gains are set. Values validated by ear
+# on the RP5 (2026-07-16): speakers at the clean-gain ceiling (the perceived
+# loudness on top comes from the PipeWire limiter, 60-pocknix-speaker-
+# loudness.conf); headphones +6dB analog (max) +18dB digital, clean on loud
+# content. 8.5V is the wsa881x boost maximum — drop to "7.500 V" first if
+# speaker longevity ever becomes a concern. -D hw:0 bypasses the UCM ctl
+# remap layer (name lookups fail on the default device once the remap is up).
+apply_gains() {
+  set_c() { amixer -D hw:0 cset "name=\"$1\"" "$2" >/dev/null 2>&1 || echo "audio-heal: cset '$1' failed" >&2; }
+  # speakers: WSA path
+  set_c "WSA_RX0 Digital Volume" 124
+  set_c "WSA_RX1 Digital Volume" 124
+  set_c "SpkrLeft PA Volume" 12
+  set_c "SpkrRight PA Volume" 12
+  set_c "SpkrLeft Smart Boost Level" "8.500 V"
+  set_c "SpkrRight Smart Boost Level" "8.500 V"
+  # headphones: wcd938x analog + rx-macro digital
+  set_c "HPHL Volume" 24
+  set_c "HPHR Volume" 24
+  set_c "RX_RX0 Digital Volume" 102
+  set_c "RX_RX1 Digital Volume" 102
+  # headset mic (UCM BootSequence value)
+  set_c "ADC2 Volume" 10
+}
+
 # Wait for the adsp remoteproc (module load + firmware + boot; up to 60s).
 i=0
 until [ "$i" -ge 60 ]; do
@@ -37,7 +65,8 @@ until card_up || [ "$try" -ge 15 ]; do
 done
 
 if card_up; then
-  echo "audio-heal: RetroidPocket card up (retries: ${try})"
+  apply_gains
+  echo "audio-heal: RetroidPocket card up (retries: ${try}); gains planted"
 else
   echo "audio-heal: card still absent after ${try} retries" >&2
 fi

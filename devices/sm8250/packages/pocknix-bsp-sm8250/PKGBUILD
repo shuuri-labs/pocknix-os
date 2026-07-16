@@ -15,12 +15,14 @@
 #     (pocknix-bootloader-sm8250), not in a boot-image rebuild file.
 pkgname=pocknix-bsp-sm8250
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="pocknix board support: SM8250 family (Retroid Pocket 5) — runtime board dispatch, input map, audio UCM, wake quirks"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-depends=('pocknix-bsp-common')
+# swh-plugins: the LADSPA fast lookahead limiter used by the speaker loudness
+# filter-chain (60-pocknix-speaker-loudness.conf).
+depends=('pocknix-bsp-common' 'swh-plugins')
 # Exactly one device BSP may be installed: every pocknix-bsp-<target> provides and
 # conflicts 'pocknix-bsp', so pacman refuses a second target's BSP (the wrong-device
 # guard for a shared repo).
@@ -33,8 +35,9 @@ source=('device.conf'
         'RetroidPocket.conf' 'HiFi-RP.conf'
         '99-retroid-pocket.rules' '99-wcd938x-nosleep.rules'
         '50-audio-quantum'
-        'pocknix-sm8250-audio-heal' 'pocknix-sm8250-audio-heal.service')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'pocknix-sm8250-audio-heal' 'pocknix-sm8250-audio-heal.service'
+        '51-pocknix-softmixer.conf' '60-pocknix-speaker-loudness.conf')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # Runtime device facts: the model dispatcher + per-board files. boards/ is
@@ -79,11 +82,29 @@ package() {
   install -Dm755 "${srcdir}/50-audio-quantum" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/50-audio-quantum"
 
+  # The RP5 loudness stack (validated by ear 2026-07-16; see each file's header):
+  #   * soft-mixer: PipeWire's hardware-volume mapping caps the path at 0dB
+  #     total, discarding the +54dB of positive gain the UCM plants for the
+  #     tiny speakers (why Steam was drastically quieter than raw-ALSA
+  #     players, on ROCKNIX too). soft-mixer keeps PipeWire off the hardware
+  #     mixer; volume becomes a software attenuator below the hot ceiling.
+  #   * loudness filter-chain: +9dB makeup into a lookahead limiter as a
+  #     WirePlumber SMART filter in front of the speaker sink only (jack
+  #     switching to uncompressed headphones keeps working).
+  #   * the hardware gains themselves are planted by the audio-heal service
+  #     (nothing on Arch executes the UCM BootSequence, and with soft-mixer
+  #     PipeWire never writes the mixer).
+  install -Dm644 "${srcdir}/51-pocknix-softmixer.conf" \
+    "${pkgdir}/usr/share/wireplumber/wireplumber.conf.d/51-pocknix-softmixer.conf"
+  install -Dm644 "${srcdir}/60-pocknix-speaker-loudness.conf" \
+    "${pkgdir}/usr/share/pipewire/pipewire.conf.d/60-pocknix-speaker-loudness.conf"
+
   # LPASS probe self-heal (see the script header): the q6 audio clock services
   # settle asynchronously after the adsp remoteproc boots, hard-failed macro
   # probes are never retried by the kernel, so a boot-time service reloads the
   # losers until the card assembles. Enabled via a shipped wants symlink so a
-  # plain pacman -U activates it (no build-script systemctl needed).
+  # plain pacman -U activates it (no build-script systemctl needed). It also
+  # plants the validated hardware mixer gains (see above).
   install -Dm755 "${srcdir}/pocknix-sm8250-audio-heal" \
     "${pkgdir}/usr/lib/pocknix/pocknix-sm8250-audio-heal"
   install -Dm644 "${srcdir}/pocknix-sm8250-audio-heal.service" \
