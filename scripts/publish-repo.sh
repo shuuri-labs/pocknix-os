@@ -79,16 +79,6 @@ if [ -n "${RCLONE_DEST}" ]; then
   # prune package versions that no longer exist locally (keeps the bucket bounded)
   rclone sync "${LOCALREPO}" "${RCLONE_DEST}"
   ok "published to ${RCLONE_DEST}"
-  # TEMPORARY migration mirror: images built before the per-SoC split point their
-  # [pocknix] stanza at the bare remote root. Mirror the sm8550 tree there too so
-  # those devices keep updating; remove once the fleet's pacman.conf has moved to
-  # <base>/sm8550 (tracked for the sm8550 family-image collapse).
-  if [ "${SOC}" = "sm8550" ]; then
-    log "mirroring sm8550 repo to the legacy root path (pre-split images)"
-    rclone copy --include '*.pkg.tar.*' "${LOCALREPO}" "${POCKNIX_REPO_RCLONE_REMOTE}"
-    rclone copy --include 'pocknix.db*' --include 'pocknix.files*' --include 'pocknix-repo.gpg' \
-      "${LOCALREPO}" "${POCKNIX_REPO_RCLONE_REMOTE}"
-  fi
 else
   warn "POCKNIX_REPO_RCLONE_REMOTE unset — nothing uploaded (repo prepared in ${LOCALREPO})"
 fi
