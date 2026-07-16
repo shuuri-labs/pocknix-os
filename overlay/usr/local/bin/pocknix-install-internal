@@ -272,7 +272,7 @@ if [ "$BOOT_STYLE" = "arm-efi" ]; then
 fi
 
 # Clone the running rootfs onto the internal ext4 (stay on the root fs; skip virtual + mountpoints).
-say "Cloning rootfs to $ROOT_PART (this takes a few minutes) ..."
+say "Cloning rootfs to $ROOT_PART — can take a long time. Be patient - nothing's broken :)"
 rsync -aHAXx --numeric-ids \
   --exclude='/proc/*' --exclude='/sys/*' --exclude='/dev/*' --exclude='/run/*' \
   --exclude='/tmp/*'  --exclude='/mnt/*' --exclude='/media/*' --exclude='/lost+found' \
