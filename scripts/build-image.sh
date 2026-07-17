@@ -31,7 +31,7 @@ append_local_repo() {
   cat >> "${out}" <<EOF
 
 [pocknix]
-SigLevel = Optional TrustAll
+SigLevel = Never
 Server = file:///localrepo
 EOF
 }
