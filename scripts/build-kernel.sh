@@ -23,7 +23,9 @@
 
 source "$(dirname "$0")/lib.sh"
 need_linux
-for t in curl tar xz gzip make gcc bc flex bison python3 git rsync patch; do need_tool "$t"; done
+# pahole (pkg: dwarves) is required for CONFIG_DEBUG_INFO_BTF; without it olddefconfig
+# silently drops BTF and the config gate dies late with a confusing message.
+for t in curl tar xz gzip make gcc bc flex bison python3 git rsync patch pahole; do need_tool "$t"; done
 
 KBUILD="${KERNEL_BUILD_DIR}"   # per-SoC: build/kernel/${SOC} (set in lib.sh)
 KSRC="${KBUILD}/linux-${KERNEL_VERSION}"
