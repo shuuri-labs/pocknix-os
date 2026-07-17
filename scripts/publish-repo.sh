@@ -72,12 +72,17 @@ if [ -n "${RCLONE_DEST}" ]; then
   need_tool rclone
   log "syncing -> ${RCLONE_DEST}"
   # order matters for a window-free publish: packages+sigs first, database last, so a
-  # client never sees a db entry whose package isn't uploaded yet
-  rclone copy --include '*.pkg.tar.*' "${LOCALREPO}" "${RCLONE_DEST}"
-  rclone copy --include 'pocknix.db*' --include 'pocknix.files*' --include 'pocknix-repo.gpg' \
-    "${LOCALREPO}" "${RCLONE_DEST}"
+  # client never sees a db entry whose package isn't uploaded yet.
+  # -L/--copy-links: repo-add makes pocknix.db / pocknix.files (the exact names pacman
+  # fetches) SYMLINKS to the .tar.gz; without -L rclone skips them and the device 404s
+  # on the db. --exclude '*.old*': repo-add's local backups are not for publishing.
+  rclone copy --include '*.pkg.tar.*' --exclude '*.old*' "${LOCALREPO}" "${RCLONE_DEST}"
+  rclone copy -L --include 'pocknix.db*' --include 'pocknix.files*' --include 'pocknix-repo.gpg' \
+    --exclude '*.old*' "${LOCALREPO}" "${RCLONE_DEST}"
   # prune package versions that no longer exist locally (keeps the bucket bounded)
-  rclone sync "${LOCALREPO}" "${RCLONE_DEST}"
+  rclone sync -L --exclude '*.old*' "${LOCALREPO}" "${RCLONE_DEST}"
+  # sweep any *.old* a pre-fix publish uploaded (idempotent; harmless if none)
+  rclone delete --include '*.old*' "${RCLONE_DEST}" 2>/dev/null || true
   ok "published to ${RCLONE_DEST}"
 else
   warn "POCKNIX_REPO_RCLONE_REMOTE unset — nothing uploaded (repo prepared in ${LOCALREPO})"
