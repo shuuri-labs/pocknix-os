@@ -133,9 +133,19 @@ Settings can be global or set per game.
 
 ## Building from source
 
-pocknix-os builds a full image (kernel included) from this repo. See
-[`docs/dev/building.md`](docs/dev/building.md) for host requirements, the aarch64-vs-x86_64 notes, and
-`make` quick start.
+pocknix-os builds a full image (kernel included) from this repo. The build needs an
+**aarch64 Linux host with root** (it chroots); an Arch/Fedora VM on Apple Silicon or an
+ARM cloud box both work. Quick start:
+
+```bash
+make check          # preflight (runs anywhere, no root)
+sudo make kernel    # compile the kernel -> boot image
+sudo make build     # bootstrap + packages + assemble the rootfs
+sudo make sd-image  # flashable SD image -> build/image/<soc>/
+```
+
+`make help` lists every target. Kernel enablement is committed under `kernel/`; only stock
+Linux source and firmware are fetched at build time.
 
 ## Thanks and references
 

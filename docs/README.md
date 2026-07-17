@@ -10,4 +10,5 @@ User guides for pocknix-os. New here? Start with the [project README](../README.
 
 ## For developers
 
-Build, packaging, maintenance, and investigation notes live in [dev/](dev/README.md).
+See "Building from source" in the [project README](../README.md). Maintainer
+procedures and infrastructure notes live in the maintainer's private notes repo.

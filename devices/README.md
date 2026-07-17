@@ -107,4 +107,4 @@ on an arm-efi board's internal storage.)
    grub.cfg menuentry.
 5. Bump pkgrels; `make build DEVICE=<soc>` — no shared file should need editing; if one
    does, the boundary has a hole: fix the boundary, not the device.
-6. On-device checklist: docs/dev/device-smoke-checklist.md.
+6. On-device checklist: pocknix-notes dev/device-smoke-checklist.md.

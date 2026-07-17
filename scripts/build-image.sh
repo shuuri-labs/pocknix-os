@@ -143,7 +143,7 @@ install_local_packages() {
   sed -i '/^\[pocknix\]/,+2d' "${root}/etc/pacman.conf"
   # Per-SoC published repo: POCKNIX_REPO_URL is the BASE url; each SoC's tree
   # lives under it (tuned packages share pkgnames across SoCs with different
-  # binaries, so the trees must not mix — see docs/dev/pacman-repo.md).
+  # binaries, so the trees must not mix — see pocknix-notes dev/pacman-repo.md).
   if [ -n "${POCKNIX_REPO_URL}" ]; then
     log "shipping [pocknix] repo stanza -> ${POCKNIX_REPO_URL}/${SOC} (SigLevel ${POCKNIX_REPO_SIGLEVEL})"
     sed -i "0,/^\[core\]/s||[pocknix]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}/${SOC}\n\n[core]|" \

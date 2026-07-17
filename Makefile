@@ -1,5 +1,5 @@
 # pocknix-os — Arch-ARM dual-session distro for the Retroid Pocket 6 (SM8550)
-# See docs/dev/building.md for the build documentation.
+# See "Building from source" in README.md for the build quick start.
 #
 # Most targets build an aarch64 Linux image and must run on a Linux host as root
 # (chroot/mount). Override config in config/pocknix.conf or via the environment.
@@ -34,10 +34,10 @@ packages: ## Build local pocknix-* packages -> build/localrepo (root); skips up-
 sd-image: ## Build a flashable SD boot-test image (needs build + kernel) (root, Linux)
 	@$(SCRIPTS)/build-sd-image.sh
 
-publish: ## Sign build/localrepo + publish it as the [pocknix] update repo (see docs/dev/pacman-repo.md)
+publish: ## Sign build/localrepo + publish it as the [pocknix] update repo
 	@$(SCRIPTS)/publish-repo.sh $(PUBLISH_ARGS)
 
-publish-image: ## Compress + checksum + upload the SD image for download (see docs/dev/pacman-repo.md)
+publish-image: ## Compress + checksum + upload the SD image for download
 	@$(SCRIPTS)/publish-image.sh
 
 install: ## Install to internal storage, preserving ABL [Phase 6] (on-device)
