@@ -18,6 +18,11 @@ grub-mkimage -O arm64-efi -p /boot/grub with ROCKNIX's module list (their
 package.mk makeinstall_target), plus their patches if the autodetect cfg
 commands are wanted.
 
+Note: the RP5's factory ABL already provides the UEFI environment that
+chainloads this bootaa64.efi, so pocknix does not flash a ROCKNIX ABL on
+sm8250 (unlike sm8550's qcom-abl path). "tests against the same ABL" above
+refers to ROCKNIX validating this GRUB binary against that factory ABL.
+
 grubenv is the pristine environment block from the same image. grubenv on
 /flash is user state (saved menu choice) — never overwritten on upgrade.
 

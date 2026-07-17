@@ -7,10 +7,10 @@
 #        p2  ext4   name "${ROOT_LABEL}"                                -> Arch base rootfs
 #
 # qcom-abl (sm8550): ABL loads /KERNEL (Android boot image, cmdline baked in).
-# arm-efi  (sm8250): ABL chainloads /EFI/BOOT/bootaa64.efi -> /boot/grub/grub.cfg
-#   -> "linux /KERNEL" (raw Image) + "devicetree /boot/grub/<board>.dtb"; the
-#   FAT additionally carries EFI/, boot/grub/ (cfg + grubenv + dtbs) and
-#   rocknix_abl/. ROCKNIX sets legacy_boot on p1 for BOTH styles (no esp flag).
+# arm-efi  (sm8250): the factory ABL chainloads /EFI/BOOT/bootaa64.efi ->
+#   /boot/grub/grub.cfg -> "linux /KERNEL" (raw Image) + "devicetree
+#   /boot/grub/<board>.dtb"; the FAT additionally carries EFI/ and boot/grub/
+#   (cfg + grubenv + dtbs). ROCKNIX sets legacy_boot on p1 for BOTH styles (no esp flag).
 # Either way our kernel mounts its root directly by PARTUUID (fixed SD GUIDs; no
 # initramfs — UFS/ext4 are built in). ROCKNIX also puts a SYSTEM squashfs on
 # the FAT; we don't need it (plain ext4 root).
@@ -71,7 +71,6 @@ populate_arm_efi_boot() {
   [ -f "${bl}/boot/grub/grub.cfg" ] \
     || die "arm-efi: ${bl#${ROOTFS_DIR}}/boot/grub/grub.cfg missing from the rootfs"
   rsync -a "${bl}/EFI" "${bl}/boot" "${mnt}/"
-  [ -d "${bl}/rocknix_abl" ] && rsync -a "${bl}/rocknix_abl" "${mnt}/"
   cp "${KOUT}/dtbs/"*.dtb "${mnt}/boot/grub/"
 }
 

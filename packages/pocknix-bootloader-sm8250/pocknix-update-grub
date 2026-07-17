@@ -3,10 +3,10 @@
 # installed pocknix-bootloader-<soc> package tree (/usr/share/pocknix/bootloader).
 #
 # Run by the 95-pocknix-bootloader alpm hook after a package upgrade (and runnable
-# by hand). Mirrors ROCKNIX's devices/SM8250/bootloader/update.sh: GRUB binary,
-# grub.cfg and the rocknix_abl payload are refreshed; grubenv is installed only if
-# missing (it stores the user's saved menu choice). dtbs are NOT handled here —
-# they belong to the kernel package (pocknix-update-boot).
+# by hand). Mirrors ROCKNIX's devices/SM8250/bootloader/update.sh: the GRUB binary
+# and grub.cfg are refreshed; grubenv is installed only if missing (it stores the
+# user's saved menu choice). dtbs are NOT handled here — they belong to the kernel
+# package (pocknix-update-boot).
 set -euo pipefail
 
 FLASH="${FLASH:-/flash}"
@@ -41,10 +41,6 @@ fi
 if [ -f "$BL/boot/grub/grubenv" ] && [ ! -f "$FLASH/boot/grub/grubenv" ]; then
   mkdir -p "$FLASH/boot/grub"
   cp "$BL/boot/grub/grubenv" "$FLASH/boot/grub/grubenv"
-fi
-if [ -d "$BL/rocknix_abl" ]; then
-  mkdir -p "$FLASH/rocknix_abl"
-  cp -f "$BL/rocknix_abl/"* "$FLASH/rocknix_abl/"
 fi
 sync
 echo "pocknix-update-grub: refreshed $FLASH bootloader files (grubenv preserved)"

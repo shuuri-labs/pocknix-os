@@ -1,16 +1,18 @@
 # pocknix-bootloader-sm8250 — the arm-efi boot chain payload for SM8250 boards.
 #
-# SM8250 boot contract (ROCKNIX): XBL -> ROCKNIX ABL (abl_signed-SM8250.elf,
-# flashed once to the internal abl_a/abl_b partitions) -> UEFI GRUB
-# (EFI/BOOT/bootaa64.efi on the FAT) -> boot/grub/grub.cfg -> "linux /KERNEL"
+# SM8250 boot contract: XBL -> the device's FACTORY ABL (which provides UEFI) ->
+# GRUB (EFI/BOOT/bootaa64.efi on the FAT) -> boot/grub/grub.cfg -> "linux /KERNEL"
 # (raw Image from linux-pocknix-sm8250) + "devicetree /boot/grub/<board>.dtb".
+# pocknix does NOT flash an ABL: the RP5's factory ABL already chainloads UEFI
+# GRUB, and flashing the ROCKNIX ABL is neither required nor recommended here.
+# (Contrast sm8550, qcom-abl, where the ROCKNIX ABL IS needed — a different path.)
 #
 # Contents and provenance:
 #   bootaa64.efi   VENDORED ROCKNIX BINARY (grub 2.14-rc1 + their 5 patches:
 #                  silent boot, menu rotation, partfind/strsearch autodetect),
 #                  extracted from the official ROCKNIX-SM8250 release image
 #                  named by pkgver — the exact binary proven to chainload from
-#                  the RP5's ROCKNIX ABL. See README.provenance. Fallback if we
+#                  the RP5's factory ABL. See README.provenance. Fallback if we
 #                  ever need to self-build: ALARM's grub + grub-mkimage with
 #                  ROCKNIX's module list (their packages/tools/grub/package.mk).
 #   grub.cfg       pocknix-authored, static. Single source of truth for the
@@ -19,42 +21,28 @@
 #   grubenv        pristine GRUB env block (from ROCKNIX packages/tools/grub/
 #                  config). Only installed to /flash if missing — it stores the
 #                  user's saved menu choice.
-#   rocknix_abl/   abl_signed-SM8250.elf from the pinned ROCKNIX/abl release +
-#                  their flash/backup/restore helpers (run from the Android
-#                  side; kept on the FAT for contract parity with ROCKNIX).
 #
 # The alpm hook (95-pocknix-bootloader.hook -> pocknix-update-grub) refreshes
-# /flash from /usr/share/pocknix/bootloader on upgrade, mirroring ROCKNIX's
-# devices/SM8250/bootloader/update.sh; build-sd-image.sh populates a fresh SD
-# from the same tree.
+# /flash from /usr/share/pocknix/bootloader on upgrade; build-sd-image.sh
+# populates a fresh SD from the same tree. Every source is vendored locally, so
+# the package builds with no network.
 pkgname=pocknix-bootloader-sm8250
 pkgver=20260701          # the ROCKNIX release bootaa64.efi was extracted from
-pkgrel=4
-_ablver=1.1.4
-pkgdesc="SM8250 arm-efi boot payload: ROCKNIX GRUB + pocknix grub.cfg + ROCKNIX ABL (${_ablver})"
+pkgrel=5
+pkgdesc="SM8250 arm-efi boot payload: ROCKNIX GRUB + pocknix grub.cfg"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"
-license=('GPL-3.0-or-later')   # GRUB; the ABL blob is ROCKNIX's signed build
+license=('GPL-3.0-or-later')   # GRUB
 source=('bootaa64.efi'
         'grub.cfg'
         'grubenv'
         'pocknix-update-grub'
-        '95-pocknix-bootloader.hook'
-        'flash_abl.sh'
-        'backup_abl.sh'
-        'restore_backup_abl.sh'
-        'README.rocknix-abl'
-        "rocknix-abl-v${_ablver}.tar.gz::https://github.com/ROCKNIX/abl/releases/download/v${_ablver}/rocknix-abl-v${_ablver}.tar.gz")
+        '95-pocknix-bootloader.hook')
 sha256sums=('SKIP'
             'SKIP'
             'SKIP'
             'SKIP'
-            'SKIP'
-            'SKIP'
-            'SKIP'
-            'SKIP'
-            'SKIP'
-            '48485b66be051b7d1cba509954608b214e48c47433f2ecf96389ec9b96e8e27e')
+            'SKIP')
 
 package() {
   local bl="${pkgdir}/usr/share/pocknix/bootloader"
@@ -62,17 +50,6 @@ package() {
   install -Dm644 "${srcdir}/bootaa64.efi" "${bl}/EFI/BOOT/bootaa64.efi"
   install -Dm644 "${srcdir}/grub.cfg"     "${bl}/boot/grub/grub.cfg"
   install -Dm644 "${srcdir}/grubenv"      "${bl}/boot/grub/grubenv"
-
-  # ROCKNIX ABL payload: the SM8250 elf (per-elf .sha256 shipped in the tarball
-  # is verified here) + the Android-side flash helpers.
-  local abl="rocknix-abl-v${_ablver}"
-  ( cd "${srcdir}/${abl}" && sha256sum -c "abl_signed-SM8250.elf.sha256" >/dev/null ) \
-    || { echo "abl_signed-SM8250.elf failed its shipped sha256" >&2; return 1; }
-  install -Dm644 "${srcdir}/${abl}/abl_signed-SM8250.elf" "${bl}/rocknix_abl/abl_signed-SM8250.elf"
-  install -Dm755 "${srcdir}/flash_abl.sh"          "${bl}/rocknix_abl/flash_abl.sh"
-  install -Dm755 "${srcdir}/backup_abl.sh"         "${bl}/rocknix_abl/backup_abl.sh"
-  install -Dm755 "${srcdir}/restore_backup_abl.sh" "${bl}/rocknix_abl/restore_backup_abl.sh"
-  install -Dm644 "${srcdir}/README.rocknix-abl"    "${bl}/rocknix_abl/README"
 
   install -Dm755 "${srcdir}/pocknix-update-grub"        "${pkgdir}/usr/bin/pocknix-update-grub"
   install -Dm644 "${srcdir}/95-pocknix-bootloader.hook" "${pkgdir}/usr/share/libalpm/hooks/95-pocknix-bootloader.hook"
