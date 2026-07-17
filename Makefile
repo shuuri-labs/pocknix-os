@@ -22,7 +22,7 @@ sync: ## Vendor the ROCKNIX kernel + device integration for the selected DEVICE'
 bootstrap: ## Download + verify + extract the ALARM base rootfs (root, Linux)
 	@$(SCRIPTS)/bootstrap.sh
 
-build: ## Full build: bootstrap -> packages -> kernel -> assemble (root, Linux)
+build: ## Image build: bootstrap -> packages -> assemble; needs 'make kernel' first (root, Linux)
 	@$(SCRIPTS)/build-image.sh
 
 kernel: ## Build only the in-project kernel (linux-pocknix-<soc>)
