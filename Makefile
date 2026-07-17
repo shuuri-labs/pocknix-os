@@ -1,5 +1,5 @@
 # pocknix-os — Arch-ARM dual-session distro for the Retroid Pocket 6 (SM8550)
-# See plan.md for the full phased build plan.
+# See docs/dev/building.md for the build documentation.
 #
 # Most targets build an aarch64 Linux image and must run on a Linux host as root
 # (chroot/mount). Override config in config/pocknix.conf or via the environment.

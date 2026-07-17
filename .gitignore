@@ -19,11 +19,8 @@
 # local Claude Code settings
 /.claude/
 
-# personal learning journal + working-conventions doc — not part of the project
-/learnings.md
+# personal working-conventions doc — not part of the project
 /conventions.md
-/suspend-resume-writeup.md
-/suspend-resume-explainer.md
 
 # macOS / editor cruft
 .DS_Store
