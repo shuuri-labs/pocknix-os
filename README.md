@@ -77,8 +77,7 @@ pocknix-os is based on the **ROCKNIX SM8550 kernel** with tweaks layered on top:
 3. In the game's **Properties → Compatibility**, force it to use **Proton 11 ARM**.
 4. Play.
 
-x86 games run through FEX (x86-on-ARM translation) plus Proton, so most Windows titles work,
-though not everything runs and performance varies by game.
+x86 games run through FEX (x86-on-ARM translation) plus Proton, so many Windows titles "just work". Generally, performance should match or exceed PC emulation under Android through apps like Gamehub/Game Native. Compatibility (the amount of games that boot at all) is likely a little worse, but trust in Gabe - Valve and their contractors are working on it and things are improving rapidly. 
 
 ## Emulation
 
@@ -173,19 +172,8 @@ And on the wider ecosystem pocknix ships on top of, with thanks to all who build
 
 ## A note on AI
 
-I am a software engineer with almost 10 years of experience. This project is **not
-"vibe-coded"**: the architecture and final design decisions are mine, and I read, understand,
-and verify what ships. In the interest of transparency, I do use AI as a tool for:
-
-- **Performance tuning**: interpreting traces and benchmarks, reasoning about scheduler,
-  frame-pacing, and kernel/driver knobs.
-- **Bug finding and debugging**: chasing hard bugs (panel bring-up, suspend, audio xruns),
-  forming and poking holes in hypotheses, reading logs and stack traces.
-- **Comparing upstream to mine**: diffing upstream device trees, drivers, and configs against my
-  own to spot changes and porting candidates.
-- Research and rubber-ducking through unfamiliar subsystems and upstream code.
-- Boilerplate, scaffolding, and repetitive edits; codebase search and log/diff summaries.
-- Drafting docs like this README, plus reviews, typo-catching, and alternatives I then vet.
-
-AI is a real force multiplier here, but it makes none of the engineering decisions, and nothing
-lands without me understanding and verifying it.
+In the interest of transparency: I do use AI as a tool - debugging and performance work,
+comparing against upstream, research, boilerplate, and drafting docs like this one. The
+architecture and every design decision are mine, and nothing lands without me understanding
+and verifying it. I would consider myself an "AI sceptic", however, I'll admit it's been a
+real force multiplier for a lone developer working on this project.
