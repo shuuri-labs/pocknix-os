@@ -29,8 +29,8 @@ use_max_tag = true
 prefix = "v"
 
 [fex]
-# packages/fex-emu pins a commit on the monthly-tagged repo (FEX-2605 era);
-# see docs/fex-version-bump.md for the bump procedure
+# packages/fex-emu pins a commit on the monthly-tagged repo (FEX-2607 tag);
+# see pocknix-notes dev/fex-version-bump.md for the bump procedure
 source = "github"
 github = "FEX-Emu/FEX"
 use_max_tag = true

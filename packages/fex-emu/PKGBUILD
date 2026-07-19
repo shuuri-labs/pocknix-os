@@ -12,13 +12,16 @@
 # from pinned Arch x86_64 + lib32 packages (archive.archlinux.org) instead of Fedora
 # RPMs, so the whole build stays inside our `make packages` chroot.
 #
-# Pinned to the same FEX commit as ROCKNIX + armada (a04b0241). Patches 0001/0002/0003/
-# 0005/0006 (NOT 0004 nix). 0006 is armada-original: fixes glibc>=2.41 SVE math-header
-# leakage in thunkgen (our Arch glibc is 2.43, so we need it).
+# Pinned to FEX-2607 (1cc4b93e, 2026-07-02) — ahead of ROCKNIX + armada, both still on
+# 2605/a04b0241. Patches 0001/0002/0005/0006 (NOT 0004 nix). 0003 was dropped at 2607:
+# upstream's new target_include_directories_from_pkgconfig() helper strips /usr/include
+# itself ("to avoid mixing foreign-architecture standard library headers"), which is the
+# exact leak 0003 patched around. 0006 is armada-original: fixes glibc>=2.41 SVE
+# math-header leakage in thunkgen (our Arch glibc is 2.43, so we need it).
 pkgname=fex-emu
-_commit=a04b0241c2fe3911729842205cd8643981108aad
-pkgver=2605.20260520.a04b0241
-pkgrel=4
+_commit=1cc4b93e7a71c883ec021b71359f136394dc1f3c
+pkgver=2607.20260702.1cc4b93e
+pkgrel=1
 pkgdesc="Fast usermode x86/x86-64 emulator for AArch64, built with host+guest thunks"
 arch=('aarch64')
 url="https://github.com/FEX-Emu/FEX"
@@ -52,7 +55,6 @@ _arch='https://archive.archlinux.org/packages'
 source=("fex::git+https://github.com/FEX-Emu/FEX.git#commit=${_commit}"
         '0001-fexcore-aarch64-workaround-llvm18-ice.patch'
         '0002-split-thunk-build-thunkgen-only.patch'
-        '0003-hostlibs-use-sysroot-deps.patch'
         '0005-host-thunks-aarch64-char-signed-char.patch'
         '0006-thunkgen-march-armv8-sve.patch'
         'toolchain_x86_64.cmake'
@@ -71,7 +73,7 @@ noextract=('fexsysroot-glibc.pkg.tar.zst'
            'fexsysroot-gcc-libs.pkg.tar.zst'
            'fexsysroot-lib32-gcc-libs.pkg.tar.zst'
            'fexsysroot-linux-api-headers.pkg.tar.zst')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
@@ -79,9 +81,9 @@ prepare() {
   # FEX vendors its deps (vixl, jemalloc, Vulkan-Headers, zydis, ...) as submodules,
   # pinned at this commit. makepkg's git source does not recurse them — do it here.
   git submodule update --init --recursive
-  # Patch stack (armada order; 0004 nix is intentionally absent).
+  # Patch stack (armada order; 0004 nix intentionally absent, 0003 obsolete since 2607).
   local p
-  for p in 0001 0002 0003 0005 0006; do
+  for p in 0001 0002 0005 0006; do
     patch -p1 < "${srcdir}/${p}-"*.patch
   done
 
