@@ -60,15 +60,33 @@ pocknix-os is based on the **ROCKNIX SM8550 kernel** with tweaks layered on top:
 
 ## How to install
 
-1. **Install the ROCKNIX ABL bootloader** on your RP6 (follow ROCKNIX's instructions).
+Grab the image for your device from the [latest release](https://github.com/shuuri-labs/pocknix-os/releases/latest),
+decompress it (`zstd -d`, or let your flasher handle it), and flash it to a microSD card
+(Balena Etcher, `dd`, etc.). Then follow the steps for your SoC family below.
+
+### SM8550 (Retroid Pocket 6, AYN Odin 2 family)
+
+1. **Install the ROCKNIX ABL bootloader** (follow ROCKNIX's instructions). The stock ABL
+   cannot boot pocknix on these devices.
 2. **Boot into ABL.** Hold **Volume -** while powering on or rebooting. Set your device and
    boot mode there.
-3. **Flash the pocknix-os image to a microSD card**, insert it, and boot. pocknix-os comes up
-   from the SD card.
+3. **Insert the flashed microSD and boot.** pocknix-os comes up from the SD card.
 
 > The internal ROCKNIX install boots first. To boot pocknix from SD you may need to uninstall
 > ROCKNIX from internal storage. A **Pocknix Installer** app in the desktop session can install
 > pocknix to internal storage and manage Android/ROCKNIX boot for you.
+
+### SM8250 (Retroid Pocket 5, Retroid Pocket Flip 2)
+
+**No ROCKNIX bootloader is needed** - the stock (factory) ABL boots pocknix directly via
+UEFI GRUB. You only need to switch its boot mode away from Android:
+
+1. **Boot into the stock ABL menu.** Hold **Volume -** while powering on or rebooting.
+2. **Switch the boot mode from Android** to SD/alternative boot.
+3. **Insert the flashed microSD and boot.** pocknix-os comes up from the SD card.
+
+> Android stays untouched on internal storage; switch the boot mode back in the same menu
+> to return to it.
 
 ## How to play games
 
