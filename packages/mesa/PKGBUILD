@@ -6,7 +6,7 @@
 #    dead weight in the image and build-time deps (llvm, rust, clang) we don't want.
 #  - CPU tuning: built with ROCKNIX's exact SM8550 flags (cortex-x3/armv9-a, see build()) like
 #    our gamescope/mangohud, instead of ALARM's generic armv8-a baseline.
-#  - Version: 26.1.4 (latest stable) — a DELIBERATE divergence from ROCKNIX's 25.1.5 pin
+#  - Version: 26.1.5 (latest stable) — a DELIBERATE divergence from ROCKNIX's 25.1.5 pin
 #    (2026-07-08). The original pin was bring-up-era parity ("match what the RP6 is validated
 #    against"); it was invalidated on-device: 25.1.5's Turnip GPU-faults under Eden/Switch
 #    (adreno CP opcode 0x0 -> Vulkan device loss), while Turnip 26.1.4 runs it flawlessly —
@@ -25,9 +25,9 @@
 pkgbase=mesa
 pkgname=(mesa vulkan-freedreno)
 epoch=2
-pkgver=26.1.4
+pkgver=26.1.5
 pkgrel=1
-pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (26.1.4)"
+pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (26.1.5)"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
 license=("MIT AND BSD-3-Clause AND SGI-B-2.0")
@@ -47,8 +47,8 @@ options=(!lto)
 # collides with mesa's bundled src/c11 pthread shim ("conflicting types for 'call_once'").
 # 25.1.5 predates the fix (ROCKNIX builds it against an older glibc, so they never hit it).
 source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz")
-# sha256 = ROCKNIX's PKG_SHA256 for mesa 25.1.5 (packages/graphics/mesa/package.mk)
-sha256sums=('072705caa9adf4740f1489194b13e278ad959166863b5271fe423a86353c9ab6')
+# sha256 computed from the upstream archive.mesa3d.org tarball
+sha256sums=('79e421c7ce18cd9e790b8375920325779f10798630bf30e0b22f1a21c8617122')
 
 prepare() {
   cd "mesa-${pkgver}"
