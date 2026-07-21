@@ -60,9 +60,16 @@ setup_chroot() {
 
   # Local [pocknix] repo so a package can depend on another locally-built one
   # (e.g. pocknix-steam -> gamescope, gtk2). Points at the bind-mounted /localrepo.
+  # SigLevel Never, same reason as build-image.sh's append_local_repo: make publish signs
+  # the localrepo db in place, so Optional TrustAll dies on the unknown key when makepkg -s
+  # installs a locally-built dep (first bitten by proton-cachyos -> pocknix-steam). The
+  # sed branch repairs REUSED chroots that were created with the old stanza.
   if ! grep -q '^\[pocknix\]' "${BROOT}/etc/pacman.conf"; then
-    printf '\n[pocknix]\nSigLevel = Optional TrustAll\nServer = file:///localrepo\n' \
+    printf '\n[pocknix]\nSigLevel = Never\nServer = file:///localrepo\n' \
       >> "${BROOT}/etc/pacman.conf"
+  else
+    sed -i '/^\[pocknix\]/,/^\[/{s/^SigLevel = Optional TrustAll$/SigLevel = Never/;}' \
+      "${BROOT}/etc/pacman.conf"
   fi
 }
 
