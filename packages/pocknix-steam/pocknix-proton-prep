@@ -34,6 +34,18 @@ apply() {
   [ -f "${TOOLDIR}/compatibilitytool.vdf" ] || install -Dm644 "${RES}/proton-compatibilitytool.vdf" "${TOOLDIR}/compatibilitytool.vdf"
   [ -f "${TOOLDIR}/toolmanifest.vdf" ]      || install -Dm644 "${RES}/proton-toolmanifest.vdf"      "${TOOLDIR}/toolmanifest.vdf"
 
+  # 1b) SYSTEM compat tools (pacman-shipped, e.g. proton-cachyos): also read at STARTUP.
+  #     Whether the native ARM client scans /usr/share/steam/compatibilitytools.d itself is
+  #     unverified, so mirror each system tool into the user dir as ONE symlink to its
+  #     constant tool dir — pacman updates flow through with no re-link. Guarded like part 1
+  #     (-e follows the link, so a dangling link from a removed package re-links/clears).
+  local sysd name
+  for sysd in /usr/share/steam/compatibilitytools.d/*/; do
+    [ -d "${sysd}" ] || continue
+    name="$(basename "${sysd}")"
+    [ -e "${STEAM}/compatibilitytools.d/${name}" ] || ln -sfn "${sysd%/}" "${STEAM}/compatibilitytools.d/${name}"
+  done
+
   [ -d "${PROTON_DIR}" ] || return 0
 
   # 2a) Native-tool path: keep the DOWNLOADED app's toolmanifest require_tool_appid-free. Steam
