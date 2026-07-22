@@ -1,0 +1,93 @@
+Input: retroid - stretch the firmware's fixed home button pulse
+
+The MCU firmware never reports the home button's real state: it emits
+a fixed ~150ms BTN_MODE pulse no matter how long the button is held
+(long holds emit a BTN_DPAD_DOWN pulse train instead, and the physical
+release is never reported). That makes home unusable as a chord
+modifier (Guide+A -> Steam QAM on the back-buttonless Flip 2): the
+chord window is the pulse itself.
+
+Report the press edge and defer the release by home_pulse_stretch_ms
+(default 400, 0 restores raw firmware behavior), swallowing the
+firmware's early release edge. Validated at 400ms against the real
+MCU timing via a userspace uinput shim on the RP5 (2026-07-22).
+
+--- a/drivers/input/joystick/retroid.c
++++ b/drivers/input/joystick/retroid.c
+@@ -10,6 +10,7 @@
+  */
+ 
+ #include <linux/delay.h>
++#include <linux/devm-helpers.h>
+ #include <linux/errno.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/init.h>
+@@ -62,11 +63,21 @@
+ 	struct gpio_desc *reset_gpio;
+ 	struct input_dev *dev_input;
+ 	struct platform_device *platform_dev;
++	struct delayed_work mode_release_work;
+ };
+ 
+ static bool rumble_enable = true;
+ module_param(rumble_enable, bool, 0660);
+ 
++/*
++ * The MCU firmware never reports the home button's real state: it emits a
++ * fixed ~150ms BTN_MODE pulse regardless of how long the button is held.
++ * Stretch the reported press to this long so userspace chords (Guide+A)
++ * get a usable window. 0 disables the stretch.
++ */
++static int home_pulse_stretch_ms = 400;
++module_param(home_pulse_stretch_ms, int, 0660);
++
+ static int update_params=0;
+ 
+ static int trigger_left_max=0x610;
+@@ -195,6 +206,15 @@
+ 	msleep(100);
+ }
+ 
++static void gamepad_mode_release_work(struct work_struct *work)
++{
++	struct gamepad_device *dev = container_of(work, struct gamepad_device,
++						  mode_release_work.work);
++
++	input_report_key(dev->dev_input, BTN_MODE, 0);
++	input_sync(dev->dev_input);
++}
++
+ static void gamepad_input_handler(struct gamepad_device *dev,
+ 				  struct gamepad_data *data)
+ {
+@@ -245,6 +265,18 @@
+ 	bitmap_xor(&changes, &current_states, &prev_states, ARRAY_SIZE(keymap));
+ 
+ 	for_each_set_bit(i, &changes, ARRAY_SIZE(keymap)) {
++		if (keymap[i] == BTN_MODE && home_pulse_stretch_ms > 0) {
++			/* the firmware release edge is not the real one (see
++			 * home_pulse_stretch_ms); swallow it and release from
++			 * the delayed work instead */
++			if (current_states & BIT(i)) {
++				input_report_key(indev, BTN_MODE, 1);
++				mod_delayed_work(system_wq,
++						 &dev->mode_release_work,
++						 msecs_to_jiffies(home_pulse_stretch_ms));
++			}
++			continue;
++		}
+ 		input_report_key(indev, keymap[i], (current_states & BIT(i)));
+ 	}
+ 
+@@ -490,6 +522,11 @@
+ 
+ 		input_set_capability(gamepad_dev->dev_input, EV_FF, FF_RUMBLE);
+ 		input_ff_create_memless(gamepad_dev->dev_input, NULL, retroid_rumble_play);
++
++	ret = devm_delayed_work_autocancel(dev, &gamepad_dev->mode_release_work,
++					   gamepad_mode_release_work);
++	if (ret)
++		return dev_err_probe(dev, ret, "Could not init mode release work\n");
+ 
+ 	ret = input_register_device(gamepad_dev->dev_input);
+ 	if (ret)

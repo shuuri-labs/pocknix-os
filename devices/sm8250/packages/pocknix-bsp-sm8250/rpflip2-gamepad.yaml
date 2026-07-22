@@ -8,11 +8,13 @@
 #   * Guide+A       -> QuickAccess (chord; press Steam first, then A — the
 #                      chord table only matches buttons still held unclaimed)
 #   * Guide alone   -> Guide, emitted as a ~100ms tap ON RELEASE
-#                      (delayed_chord). This is the disambiguation cost: the
-#                      Steam button can no longer be HELD on this board, so
-#                      hold-Steam chords (shortcut overlay, Steam+B force
-#                      quit, Steam+X keyboard) do not work — QAM chording was
-#                      judged worth more than those.
+#                      (delayed_chord). Hold-Steam chords (shortcut overlay,
+#                      Steam+B force quit) do not exist on this MCU anyway:
+#                      the firmware only ever emits a fixed ~150ms BTN_MODE
+#                      pulse, never the real hold (RP5 capture 2026-07-22).
+#                      Kernel patch 0018 stretches that pulse to 400ms
+#                      (home_pulse_stretch_ms), which IS the chord window —
+#                      validated at 400ms on the RP5 via a uinput shim.
 #   * A alone       -> South, via a single-source chord entry: once BTN_SOUTH
 #                      participates in any chord, its plain mapping is
 #                      unreachable (translator dispatch returns after the
