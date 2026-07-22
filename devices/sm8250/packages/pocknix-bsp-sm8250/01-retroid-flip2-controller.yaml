@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/composite_device_v1.json
+# InputPlumber composite device for the Retroid Pocket Flip 2. Split from
+# 01-retroid-controller.yaml (RP5): same serial-MCU gamepad (the Flip2 DTS
+# #includes the RP5's, phys "retroid-pocket-gamepad/input0"), but the Flip 2
+# has no physical back button, so it gets its own capability map that carries
+# the Guide+A -> QuickAccess chord (see rpflip2-gamepad.yaml for the chord
+# semantics and the hold-the-Steam-button trade-off). DT-model gated like
+# every sm8250 config; target stays `deck` so Steam sees a stock Deck pad —
+# the chord resolves on the source side before Steam ever sees it.
+version: 1
+kind: CompositeDevice
+name: Retroid Pocket Flip 2
+
+matches:
+  - udev:
+      sys_path: /sys/firmware/devicetree/base
+      attributes:
+        - name: model
+          value: Retroid Pocket Flip2
+
+single_source: false
+
+source_devices:
+  - group: gamepad
+    evdev:
+      phys_path: retroid-pocket-gamepad/input0
+      handler: event*
+    capability_map_id: retroid_rpflip2
+
+options:
+  auto_manage: true
+
+target_devices:
+  - deck
+  - keyboard
