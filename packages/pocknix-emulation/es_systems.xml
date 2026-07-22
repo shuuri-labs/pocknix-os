@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!--
+  pocknix ES-DE custom system definitions. Seeded to ~/ES-DE/custom_systems/es_systems.xml by
+  pocknix-roms-init. A custom entry REPLACES the bundled system of the same name, so each entry
+  here is the FULL definition (copied from ES-DE's bundled linuxarm es_systems.xml) with only
+  the launch command changed.
+
+  ps2: ES-DE's linuxarm build offers ONLY the RetroArch pcsx2 core (LRPS2) for PS2 — no
+  standalone-PCSX2 command at all — and pocknix deliberately doesn't ship that core (PS2 default
+  is ARMSX2, see the PCSX2 note in es_find_rules.xml). Command drives the es-armsx2 big-core pin
+  wrapper with pocknix-play's verified ARMSX2 flags.
+-->
+<systemList>
+    <system>
+        <name>ps2</name>
+        <fullname>Sony PlayStation 2</fullname>
+        <path>%ROMPATH%/ps2</path>
+        <extension>.bin .BIN .chd .CHD .ciso .CISO .cso .CSO .desktop .dump .DUMP .elf .ELF .gz .GZ .m3u .M3U .mdf .MDF .img .IMG .iso .ISO .isz .ISZ .ngr .NRG .zso .ZSO</extension>
+        <command label="ARMSX2">/usr/lib/pocknix/es-armsx2 -batch -fullscreen -- %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>ps2</platform>
+        <theme>ps2</theme>
+    </system>
+</systemList>

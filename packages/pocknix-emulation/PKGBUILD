@@ -23,7 +23,7 @@
 #
 pkgname=pocknix-emulation
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc="ES-DE + preconfigured emulators for the RP6: drop ROMs into ~/Emulation and play; star -> Steam"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -34,7 +34,7 @@ license=('GPL2')
 depends=('bash')
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
         'es-eden' 'es-armsx2'
-        'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
+        'es_find_rules.xml' 'es_systems.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
         'eden-qt-config.ini.in'
         # per-system RetroArch tuning seeds (content-dir overrides + shader presets), harvested
         # from on-device A/B sessions. FLAT names: makepkg cannot retrieve local sources from
@@ -42,7 +42,7 @@ source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'po
         # build directory", 2026-07-08); package() maps retroarch-<Core>-<file> into the
         # retroarch-config/<Core>/ tree that pocknix-roms-init seeds from.
         'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
@@ -68,6 +68,10 @@ package() {
   # the user has none yet (never clobbers user edits).
   install -Dm644 "${srcdir}/es_find_rules.xml" \
     "${pkgdir}/usr/share/pocknix-emulation/es_find_rules.xml"
+  # Custom system definitions: full-entry overrides where ES-DE's bundled launch command is
+  # wrong for pocknix (ps2 -> ARMSX2 via the pin wrapper; ES-DE only offers the RA core).
+  install -Dm644 "${srcdir}/es_systems.xml" \
+    "${pkgdir}/usr/share/pocknix-emulation/es_systems.xml"
   install -Dm644 "${srcdir}/retroarch.cfg" \
     "${pkgdir}/usr/share/pocknix-emulation/retroarch.cfg"
   install -Dm644 "${srcdir}/ROMS-README.txt" \

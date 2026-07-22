@@ -19,6 +19,19 @@
 -->
 <ruleList>
 
+  <!-- RetroArch: ES-DE's bundled rule is systempath-only (PATH lookup), which fails under the
+       Steam-launched ES-DE environment on-device while /usr/bin/retroarch exists (RP5
+       2026-07-22: %EMULATOR_RETROARCH% unresolved -> "couldn't find emulator" for every
+       RetroArch system; favorites via pocknix-play masked it). Pin the absolute path. -->
+  <emulator name="RETROARCH">
+    <rule type="systempath">
+      <entry>retroarch</entry>
+    </rule>
+    <rule type="staticpath">
+      <entry>/usr/bin/retroarch</entry>
+    </rule>
+  </emulator>
+
   <!-- GameCube / Wii -->
   <emulator name="DOLPHIN">
     <rule type="staticpath">

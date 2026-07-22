@@ -77,6 +77,14 @@ if [ -f "${SHARE}/es_find_rules.xml" ] && [ ! -f "${ESDE_CUSTOM}/es_find_rules.x
   cp "${SHARE}/es_find_rules.xml" "${ESDE_CUSTOM}/es_find_rules.xml" 2>/dev/null || true
 fi
 
+# --- seed ES-DE custom system definitions (only if the user has none) ---
+# Full-entry overrides for systems whose bundled launch command is wrong for pocknix (ps2:
+# ES-DE only offers the RetroArch pcsx2 core, which we don't ship — see that file's header).
+if [ -f "${SHARE}/es_systems.xml" ] && [ ! -f "${ESDE_CUSTOM}/es_systems.xml" ]; then
+  mkdir -p "${ESDE_CUSTOM}"
+  cp "${SHARE}/es_systems.xml" "${ESDE_CUSTOM}/es_systems.xml" 2>/dev/null || true
+fi
+
 # (Steam ROM Manager is RETIRED from the sync flow — its Electron CLI deadlocked on every display
 # backend on-device 2026-07-05. ES-DE + favorites reach Steam via pocknix-steam-sync's direct
 # shortcuts.vdf write, run by pocknix-steam at session start. The steam-rom-manager PKGBUILD
