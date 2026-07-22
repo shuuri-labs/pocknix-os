@@ -127,6 +127,9 @@ setup needed.
 **Star a game as a favorite in ES-DE and it appears in your Steam library**, so you can launch
 it straight from Big Picture / game mode alongside your Steam titles.
 
+See the [emulation docs](docs/emulation-setup.md) for where ROMs and BIOS files go, and how
+to tweak per-emulator settings.
+
 Supported systems:
 
 | System | Emulator |
