@@ -41,6 +41,7 @@ Some systems need BIOS or firmware files that pocknix cannot ship. Put them in
 | Dreamcast | `dc/dc_boot.bin`, `dc/dc_flash.bin` | Note the `dc/` subfolder. |
 | Sega CD | `bios_CD_U.bin`, `bios_CD_E.bin`, `bios_CD_J.bin` | One per region. |
 | Game Boy Advance | `gba_bios.bin` | Optional; improves accuracy. |
+| **Nintendo Switch** | `prod.keys`, `title.keys` + firmware | Eden uses its own folders, not `BIOS/`: keys go in `~/.local/share/eden/keys/`, firmware `.nca` files in `~/.local/share/eden/nand/system/Contents/registered/`. |
 
 If a game will not boot, the emulator's error message usually names the exact file it is missing.
 A missing or misnamed BIOS is the most common cause.
@@ -62,8 +63,8 @@ Defaults are tuned for the RP6, but you can change per-emulator settings any tim
   change the core options, video/shader settings, controls, and save an override that applies to
   that game or that whole system.
 - **Standalone emulators** (ARMSX2 for PS2, Dolphin for GameCube/Wii, PPSSPP for PSP, Azahar for
-  3DS): each has its own in-app settings menu. Launch the emulator from the desktop to reach its
-  full configuration UI.
+  3DS, Eden for Switch): each has its own in-app settings menu. Launch the emulator from the
+  desktop to reach its full configuration UI.
 
 ## What is already set up for you
 
@@ -71,4 +72,6 @@ Defaults are tuned for the RP6, but you can change per-emulator settings any tim
   (for example integer scaling and an LCD shader on GBA).
 - **PlayStation 2 (ARMSX2)**: setup wizard skipped, Vulkan renderer, controller bound, and
   upscaling enabled. You only supply `ps2-bios.bin` and your games.
+- **Nintendo Switch (Eden)**: controller bound and vsync tuned for the panel. You supply your
+  own keys and firmware (see above) and your games.
 - **ES-DE**: scans `~/Emulation/ROMs` and already knows where every emulator is installed.
