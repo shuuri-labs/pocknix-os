@@ -27,9 +27,11 @@
     </rule>
   </emulator>
 
-  <!-- PS2 -> ARMSX2 (native ARM64 PCSX2 fork). Stock PS2 command uses the PCSX2 emulator name. -->
+  <!-- PS2 -> ARMSX2 (native ARM64 PCSX2 fork). Stock PS2 command uses the PCSX2 emulator name.
+       First entry is the big-core pin wrapper (es-armsx2); raw AppImage kept as fallback. -->
   <emulator name="PCSX2">
     <rule type="staticpath">
+      <entry>/usr/lib/pocknix/es-armsx2</entry>
       <entry>/opt/pocknix/emulators/armsx2/ARMSX2.AppImage</entry>
       <entry>/usr/bin/armsx2</entry>
     </rule>
@@ -83,9 +85,11 @@
 
   <!-- Nintendo Switch: Eden (pocknix default — Snapdragon-committed, aarch64 clang-PGO build;
        see packages/eden-bin). If ES-DE's switch system doesn't know the EDEN emulator name on
-       this version, add a custom es_systems.xml switch entry on-device. -->
+       this version, add a custom es_systems.xml switch entry on-device.
+       First entry is the big-core pin wrapper (es-eden); raw AppImage kept as fallback. -->
   <emulator name="EDEN">
     <rule type="staticpath">
+      <entry>/usr/lib/pocknix/es-eden</entry>
       <entry>/opt/pocknix/emulators/eden/Eden.AppImage</entry>
     </rule>
   </emulator>

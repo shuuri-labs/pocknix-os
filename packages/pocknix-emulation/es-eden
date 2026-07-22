@@ -1,0 +1,9 @@
+#!/bin/bash
+# ES-DE launch wrapper for Eden (Switch): big-core taskset pin, mirroring pocknix-play.
+# ES-DE's bundled launch commands do NOT go through pocknix-play, so without this the pin
+# only applied to Steam-favorite launches. Unpinned, Eden's emulated-core thread lands on a
+# little core -> choppy pacing (RP6 2026-07-07, RP5 2026-07-22, both verified on-device).
+# es_find_rules.xml points ES-DE here instead of at the AppImage.
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+exec taskset -c "${POCKNIX_BIG_CORES:-3-7}" /opt/pocknix/emulators/eden/Eden.AppImage "$@"

@@ -23,7 +23,7 @@
 #
 pkgname=pocknix-emulation
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="ES-DE + preconfigured emulators for the RP6: drop ROMs into ~/Emulation and play; star -> Steam"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -33,6 +33,7 @@ license=('GPL2')
 # present degrades gracefully instead of erroring.
 depends=('bash')
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
+        'es-eden' 'es-armsx2'
         'es_find_rules.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
         'eden-qt-config.ini.in'
         # per-system RetroArch tuning seeds (content-dir overrides + shader presets), harvested
@@ -41,7 +42,7 @@ source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'po
         # build directory", 2026-07-08); package() maps retroarch-<Core>-<file> into the
         # retroarch-config/<Core>/ tree that pocknix-roms-init seeds from.
         'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
@@ -50,6 +51,12 @@ package() {
   # session start; Steam down, no display needed, <1s). Replaced the whole SRM pipeline — see
   # the pocknix-steam-sync header for the burial notes.
   install -Dm755 "${srcdir}/pocknix-steam-sync" "${pkgdir}/usr/bin/pocknix-steam-sync"
+
+  # ES-DE launch wrappers: big-core taskset pin for the heavy standalones (Eden, ARMSX2).
+  # ES-DE's bundled launch commands bypass pocknix-play, so es_find_rules.xml points at these
+  # instead of the raw AppImages (unpinned = choppy pacing, verified RP6 + RP5).
+  install -Dm755 "${srcdir}/es-eden"   "${pkgdir}/usr/lib/pocknix/es-eden"
+  install -Dm755 "${srcdir}/es-armsx2" "${pkgdir}/usr/lib/pocknix/es-armsx2"
 
   # --user oneshot: runs pocknix-roms-init on the deck login (create tree + seed configs). Enabled
   # for all users with `systemctl --global enable pocknix-roms-init.service` in build-sd-image.sh
@@ -71,7 +78,9 @@ package() {
   install -Dm644 "${srcdir}/armsx2-PCSX2.ini.in" \
     "${pkgdir}/usr/share/pocknix-emulation/armsx2-PCSX2.ini.in"
   # Eden (Switch) config seed: Player-1 SDL pad bindings (Eden ships none, dead controller
-  # otherwise) + Mailbox vsync (smoothest pacing on the 120Hz panel). Verified 2026-07-07.
+  # otherwise) + 1x resolution (Eden's 1.5x default slips frames on the RP5 GPU) + vsync,
+  # which pocknix-roms-init rewrites per device at seed time (120Hz -> Mailbox, 60Hz -> FIFO).
+  # RP6 verified 2026-07-07, RP5 verified 2026-07-22.
   install -Dm644 "${srcdir}/eden-qt-config.ini.in" \
     "${pkgdir}/usr/share/pocknix-emulation/eden-qt-config.ini.in"
   # Per-system RetroArch tuning (seeded into ~/.config/retroarch/config by pocknix-roms-init):
