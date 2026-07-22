@@ -23,7 +23,7 @@
 #
 pkgname=pocknix-emulation
 pkgver=0.1.0
-pkgrel=5
+pkgrel=6
 pkgdesc="ES-DE + preconfigured emulators for the RP6: drop ROMs into ~/Emulation and play; star -> Steam"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -33,16 +33,17 @@ license=('GPL2')
 # present degrades gracefully instead of erroring.
 depends=('bash')
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
-        'es-eden' 'es-armsx2'
+        'es-eden' 'es-armsx2' 'es-dolphin'
         'es_find_rules.xml' 'es_systems.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
         'eden-qt-config.ini.in'
+        'dolphin-Dolphin.ini.in' 'dolphin-GFX.ini.in' 'dolphin-GCPadNew.ini.in'
         # per-system RetroArch tuning seeds (content-dir overrides + shader presets), harvested
         # from on-device A/B sessions. FLAT names: makepkg cannot retrieve local sources from
         # subdirectory paths (gba.cfg in retroarch-config/mGBA/ failed with "not found in the
         # build directory", 2026-07-08); package() maps retroarch-<Core>-<file> into the
         # retroarch-config/<Core>/ tree that pocknix-roms-init seeds from.
         'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
@@ -55,8 +56,9 @@ package() {
   # ES-DE launch wrappers: big-core taskset pin for the heavy standalones (Eden, ARMSX2).
   # ES-DE's bundled launch commands bypass pocknix-play, so es_find_rules.xml points at these
   # instead of the raw AppImages (unpinned = choppy pacing, verified RP6 + RP5).
-  install -Dm755 "${srcdir}/es-eden"   "${pkgdir}/usr/lib/pocknix/es-eden"
-  install -Dm755 "${srcdir}/es-armsx2" "${pkgdir}/usr/lib/pocknix/es-armsx2"
+  install -Dm755 "${srcdir}/es-eden"    "${pkgdir}/usr/lib/pocknix/es-eden"
+  install -Dm755 "${srcdir}/es-armsx2"  "${pkgdir}/usr/lib/pocknix/es-armsx2"
+  install -Dm755 "${srcdir}/es-dolphin" "${pkgdir}/usr/lib/pocknix/es-dolphin"
 
   # --user oneshot: runs pocknix-roms-init on the deck login (create tree + seed configs). Enabled
   # for all users with `systemctl --global enable pocknix-roms-init.service` in build-sd-image.sh
@@ -87,6 +89,14 @@ package() {
   # RP6 verified 2026-07-07, RP5 verified 2026-07-22.
   install -Dm644 "${srcdir}/eden-qt-config.ini.in" \
     "${pkgdir}/usr/share/pocknix-emulation/eden-qt-config.ini.in"
+  # Dolphin (GameCube/Wii) config seeds: Vulkan backend, 2x internal res, evdev pad bindings,
+  # analytics/confirm-stop modals pre-answered (blocking in game mode). RP5-authored 2026-07-22.
+  install -Dm644 "${srcdir}/dolphin-Dolphin.ini.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/dolphin-Dolphin.ini.in"
+  install -Dm644 "${srcdir}/dolphin-GFX.ini.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/dolphin-GFX.ini.in"
+  install -Dm644 "${srcdir}/dolphin-GCPadNew.ini.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/dolphin-GCPadNew.ini.in"
   # Per-system RetroArch tuning (seeded into ~/.config/retroarch/config by pocknix-roms-init):
   # GBA = integer scaling + lcd3x (on-device tuned 2026-07-06). The lcd3x preset references the
   # vendored shader set (retroarch-shaders-pocknix) by relative path. The user's bezel overlay is

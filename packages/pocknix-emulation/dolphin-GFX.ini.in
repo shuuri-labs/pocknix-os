@@ -1,0 +1,11 @@
+# Dolphin graphics seed (-> ~/.config/dolphin-emu/GFX.ini). 2x internal resolution (960p on the
+# 1080p panels; native 480p looks rough upscaled). Drop to 1 if a device struggles.
+# ShaderCompilationMode 3 = Asynchronous (Skip Drawing): default synchronous compile stalled
+# whole frames on every first-seen effect (RP5 2026-07-22: presents 60/s with multi-frame dips
+# to ~6/s, GPU NOT saturated). Skip-drawing trades the stall for brief object pop-in.
+# Known-open on the RP5 (2026-07-22, Mario Golf): mild intermittent 2D-asset flicker + rare
+# audio-slowing blips at 2x. A/B'd and REVERTED as no-help: SafeTextureCacheColorSamples=512,
+# ImmediateXFBEnable=True. Don't re-add without new evidence.
+[Settings]
+InternalResolution = 2
+ShaderCompilationMode = 3

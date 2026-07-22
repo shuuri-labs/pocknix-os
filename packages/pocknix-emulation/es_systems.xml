@@ -9,8 +9,32 @@
   standalone-PCSX2 command at all — and pocknix deliberately doesn't ship that core (PS2 default
   is ARMSX2, see the PCSX2 note in es_find_rules.xml). Command drives the es-armsx2 big-core pin
   wrapper with pocknix-play's verified ARMSX2 flags.
+
+  gc/wii: bundled default is the RetroArch dolphin core, also not shipped (pocknix default =
+  standalone Dolphin, same commands as bundled "Dolphin (Standalone)" alternative — promoted to
+  the default here).
 -->
 <systemList>
+    <system>
+        <name>gc</name>
+        <fullname>Nintendo GameCube</fullname>
+        <path>%ROMPATH%/gc</path>
+        <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>
+        <command label="Dolphin">/usr/lib/pocknix/es-dolphin -b -e %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>gc</platform>
+        <theme>gc</theme>
+    </system>
+    <system>
+        <name>wii</name>
+        <fullname>Nintendo Wii</fullname>
+        <path>%ROMPATH%/wii</path>
+        <extension>.ciso .CISO .dff .DFF .dol .DOL .elf .ELF .gcm .GCM .gcz .GCZ .iso .ISO .json .JSON .m3u .M3U .rvz .RVZ .tgc .TGC .wad .WAD .wbfs .WBFS .wia .WIA .7z .7Z .zip .ZIP</extension>
+        <command label="Dolphin">/usr/lib/pocknix/es-dolphin -b -e %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>wii</platform>
+        <theme>wii</theme>
+    </system>
     <system>
         <name>ps2</name>
         <fullname>Sony PlayStation 2</fullname>

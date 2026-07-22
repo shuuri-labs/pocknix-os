@@ -1,0 +1,12 @@
+# Dolphin core config seed (-> ~/.config/dolphin-emu/Dolphin.ini). First-pass authored for the
+# handheld session: Vulkan (Adreno/Turnip stack), no confirm-stop dialog (unreachable in game
+# mode), analytics prompt pre-answered (a blocking modal on first run otherwise).
+[Core]
+GFXBackend = Vulkan
+[Display]
+Fullscreen = True
+[Interface]
+ConfirmStop = False
+[Analytics]
+Enabled = False
+PermissionAsked = True

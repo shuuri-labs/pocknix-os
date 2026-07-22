@@ -114,6 +114,16 @@ if [ -f "${SHARE}/eden-qt-config.ini.in" ] && [ ! -f "${HOME}/.config/eden/qt-co
     > "${HOME}/.config/eden/qt-config.ini" 2>/dev/null || true
 fi
 
+# --- seed Dolphin (GameCube/Wii) config: Vulkan + pad bindings + no blocking dialogs ---
+# Dolphin ships keyboard-only pad bindings (dead controller) and pops two modals unreachable in
+# game mode (analytics consent, confirm-stop). Never clobbers an existing config.
+if [ -f "${SHARE}/dolphin-Dolphin.ini.in" ] && [ ! -f "${HOME}/.config/dolphin-emu/Dolphin.ini" ]; then
+  mkdir -p "${HOME}/.config/dolphin-emu"
+  cp "${SHARE}/dolphin-Dolphin.ini.in"   "${HOME}/.config/dolphin-emu/Dolphin.ini"   2>/dev/null || true
+  cp "${SHARE}/dolphin-GFX.ini.in"       "${HOME}/.config/dolphin-emu/GFX.ini"       2>/dev/null || true
+  cp "${SHARE}/dolphin-GCPadNew.ini.in"  "${HOME}/.config/dolphin-emu/GCPadNew.ini"  2>/dev/null || true
+fi
+
 # --- seed RetroArch joypad autoconfig profiles (only what's missing) ---
 # From retroarch-autoconfig-pocknix (/usr/share/libretro/autoconfig). Copied (not symlinked) into
 # RetroArch's default, WRITABLE autoconfig dir so user-saved custom profiles coexist. Without

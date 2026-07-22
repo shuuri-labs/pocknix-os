@@ -1,0 +1,7 @@
+#!/bin/bash
+# ES-DE launch wrapper for Dolphin (GameCube/Wii): big-core taskset pin, mirroring es-eden/
+# es-armsx2. Unpinned Dolphin chops on the RP5 (2026-07-22, user-confirmed); same little-core
+# thread placement story as the other heavy standalones.
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+exec taskset -c "${POCKNIX_BIG_CORES:-3-7}" /usr/bin/dolphin-emu "$@"

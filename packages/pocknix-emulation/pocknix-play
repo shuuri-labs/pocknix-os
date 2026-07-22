@@ -84,8 +84,9 @@ case "${system}" in
     done
     echo "pocknix-play: ppsspp not installed" >&2; exit 1 ;;
   gc|wii)
+    # Big-core pin (same story as ps2/switch; unpinned Dolphin chops, RP5-confirmed 2026-07-22).
     command -v dolphin-emu >/dev/null 2>&1 || { echo "pocknix-play: dolphin-emu not installed" >&2; exit 1; }
-    exec dolphin-emu -b -e "${rom}" ;;                                   # -b batch: no GUI, quit on stop
+    exec taskset -c "${_big_cores}" dolphin-emu -b -e "${rom}" ;;        # -b batch: no GUI, quit on stop
   ps2)
     # Pin to the big cores (POCKNIX_BIG_CORES, see top). Verified on-device 2026-07-06 (RP6):
     # unpinned, scx_lavd let the MTVU thread land on a little A510 -> constant chop + audio
