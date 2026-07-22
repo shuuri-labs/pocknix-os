@@ -96,6 +96,19 @@ get them:
 - **Pocknix Updater**: switch to desktop mode and launch the **Pocknix Updater** shortcut.
 - **pacman**: run `sudo pacman -Syu` in a terminal, like any Arch system.
 
+## Installing to internal storage
+
+Running from the SD card works, but the OS and your games load much faster from internal
+storage. Installing there requires resizing Android's `userdata` partition, which
+**essentially factory-resets the Android side** (Android itself stays bootable, its user
+data is wiped). Two ways, both from a system booted off the SD:
+
+- **Pocknix Installer**: switch to desktop mode and launch the **Pocknix Installer** shortcut.
+- **Terminal**: run `pocknix-install-internal` (do a `--dry-run` first and read the plan).
+
+See [Install to internal storage](docs/install-to-internal.md) for the full walkthrough,
+including how to uninstall and restore the space to Android.
+
 ## How to play games
 
 1. In your Steam **Library**, search for **"Proton 11 ARM"**, then download and install it.
