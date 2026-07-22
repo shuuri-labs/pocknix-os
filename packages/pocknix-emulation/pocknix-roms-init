@@ -17,6 +17,13 @@ set -u
 
 SHARE=/usr/share/pocknix-emulation
 EMU="${HOME}/Emulation"
+
+# Panel refresh drives per-device seed values (RetroArch refresh/swap-interval, Eden vsync).
+# The seeds were authored on the RP6 (120Hz); 60Hz panels (RP5/Flip 2) need different values,
+# substituted at seed time below. Fallback = 120 (the authored values pass through unchanged).
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+REFRESH="${POCKNIX_PANEL_REFRESH:-120}"
 # The ROM dir is MOVEABLE: ES-DE's ROMDirectory setting is the single source of truth (ES-DE
 # Menu > Other Settings > ROM directory — e.g. point it at an SD card). Everything follows it:
 # this script builds the system-folder skeleton there, pocknix-steam-sync resolves favorites
@@ -85,13 +92,18 @@ if [ -f "${SHARE}/armsx2-PCSX2.ini.in" ] && [ ! -f "${HOME}/.config/PCSX2/inis/P
   sed "s|__HOME__|${HOME}|g" "${SHARE}/armsx2-PCSX2.ini.in" > "${HOME}/.config/PCSX2/inis/PCSX2.ini" 2>/dev/null || true
 fi
 
-# --- seed Eden (Switch) config: pad bindings + Mailbox vsync ---
-# Eden ships no pad bindings (dead controller otherwise); Mailbox = smoothest pacing on the 120Hz
-# panel. Partial seed (Eden fills the rest with its defaults on first run). No paths, no subst.
-# Never clobbers an existing config.
+# --- seed Eden (Switch) config: pad bindings + per-device vsync + 1x resolution ---
+# Eden ships no pad bindings (dead controller otherwise). vsync is per-device: Mailbox (1) =
+# smoothest pacing on the 120Hz RP6 panel; FIFO (2) paces evenly on 60Hz panels (RP5-validated
+# 2026-07-22, Mailbox was bouncy there). resolution_setup=2 (1x) in the seed overrides Eden's
+# 1.5x default: 1620p internal render pegged the RP5 GPU and slipped frames; 1x = flat
+# frametimes, and docked 1x already matches the 1080p panels. Partial seed (Eden fills the
+# rest with its defaults on first run). Never clobbers an existing config.
 if [ -f "${SHARE}/eden-qt-config.ini.in" ] && [ ! -f "${HOME}/.config/eden/qt-config.ini" ]; then
   mkdir -p "${HOME}/.config/eden"
-  cp "${SHARE}/eden-qt-config.ini.in" "${HOME}/.config/eden/qt-config.ini" 2>/dev/null || true
+  _vs=2; [ "${REFRESH}" -ge 120 ] 2>/dev/null && _vs=1
+  sed "s/^use_vsync=.*/use_vsync=${_vs}/" "${SHARE}/eden-qt-config.ini.in" \
+    > "${HOME}/.config/eden/qt-config.ini" 2>/dev/null || true
 fi
 
 # --- seed RetroArch joypad autoconfig profiles (only what's missing) ---
@@ -132,9 +144,15 @@ fi
 # system_directory -> ~/ROMs/bios etc. RetroArch expands any missing keys itself on first run, so a
 # minimal seed is fine; if the user already has a config we leave it entirely alone.
 RA_CFG="${HOME}/.config/retroarch/retroarch.cfg"
+# refresh/swap-interval are per-device: the seed's authored values (120Hz, interval 2 =
+# present-every-2nd-vblank) are right ONLY for 120Hz panels; on a 60Hz panel interval 2 paces
+# at 30fps (RP5 2026-07-22). Substitute from POCKNIX_PANEL_REFRESH: 60Hz -> 60/1, 120Hz -> 120/2.
 if [ -f "${SHARE}/retroarch.cfg" ] && [ ! -f "${RA_CFG}" ]; then
   mkdir -p "${HOME}/.config/retroarch"
-  cp "${SHARE}/retroarch.cfg" "${RA_CFG}" 2>/dev/null || true
+  _si=$(( REFRESH / 60 )); [ "${_si}" -lt 1 ] && _si=1
+  sed -e "s/^video_refresh_rate = .*/video_refresh_rate = \"${REFRESH}.000000\"/" \
+      -e "s/^video_swap_interval = .*/video_swap_interval = \"${_si}\"/" \
+      "${SHARE}/retroarch.cfg" > "${RA_CFG}" 2>/dev/null || true
 fi
 
 exit 0

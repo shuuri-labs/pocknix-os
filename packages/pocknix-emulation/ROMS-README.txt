@@ -23,10 +23,11 @@ matching subfolder and they are picked up automatically the next time ES-DE star
    If a game won't boot, it's usually a missing or misnamed BIOS — the emulator's
    error message names the exact file it wants.
 
-3. NINTENDO SWITCH KEYS
-   Switch emulation needs your own prod.keys (and firmware). Put them in
-   ~/Emulation/BIOS/ or, if the emulator asks for a specific location, the folder
-   it names on first run.
+3. NINTENDO SWITCH KEYS + FIRMWARE
+   Switch emulation needs your own keys and firmware. Eden uses its own folders,
+   not BIOS/:
+     keys:     prod.keys + title.keys  ->  ~/.local/share/eden/keys/
+     firmware: the .nca files          ->  ~/.local/share/eden/nand/system/Contents/registered/
 
 4. GET IT INTO YOUR STEAM LIBRARY
    In ES-DE, press the Favorite button on any game to star it. Starred games are
