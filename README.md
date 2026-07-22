@@ -118,6 +118,7 @@ Supported systems:
 | Nintendo DS | RetroArch (melonDS) |
 | Nintendo 3DS | Azahar |
 | GameCube / Wii | Dolphin |
+| Nintendo Switch | Eden |
 | Sega Master System / Genesis / Game Gear / Sega CD | RetroArch (Genesis Plus GX) |
 | Sega Saturn | RetroArch (YabaSanshiro) |
 | Sega Dreamcast | RetroArch (Flycast) |
