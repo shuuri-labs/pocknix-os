@@ -1,10 +1,31 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/capability_map_v2.json
-# Capability map for the RP5's retroid-pocket-gamepad MCU (paddle-free,
-# user-confirmed). Ported from ROCKNIX's shared retroid_mcu map MINUS the
-# LeftPaddle1/RightPaddle1 entries (their map also serves Retroid boards that
-# have paddles). BTN_BACK -> QuickAccess (Steam QAM; ROCKNIX had KeyF1 for
-# their UI), BTN_MODE -> Guide. The Flip 2 used to share this map but has no
-# back button — it forks it as rpflip2-gamepad.yaml (Guide+A QAM chord).
+# Capability map for the Flip 2's retroid-pocket-gamepad MCU. Same MCU and
+# paddle-free layout as the RP5 (its DTS #includes the RP5's), but the Flip 2
+# has NO physical back button, so Steam's QAM has nowhere to live. This map is
+# the rp5-gamepad.yaml with a Guide+A chord grafted in as the QAM button
+# (Xbox-controller convention), resolved HERE in the translator so the deck
+# target still looks like a stock Steam Deck pad to Steam:
+#   * Guide+A       -> QuickAccess (chord; press Steam first, then A — the
+#                      chord table only matches buttons still held unclaimed)
+#   * Guide alone   -> Guide, emitted as a ~100ms tap ON RELEASE
+#                      (delayed_chord). Hold-Steam chords (shortcut overlay,
+#                      Steam+B force quit) do not exist on this MCU anyway:
+#                      the firmware only ever emits a fixed ~150ms BTN_MODE
+#                      pulse, never the real hold (RP5 capture 2026-07-22).
+#                      Kernel patch 0018 stretches that pulse to 400ms
+#                      (home_pulse_stretch_ms), which IS the chord window —
+#                      validated at 400ms on the RP5 via a uinput shim.
+#   * A alone       -> South, via a single-source chord entry: once BTN_SOUTH
+#                      participates in any chord, its plain mapping is
+#                      unreachable (translator dispatch returns after the
+#                      chord table), so South must be re-declared as a chord
+#                      and MUST be listed after the Guide+A entry — chord
+#                      candidates match in YAML order.
+# Semantics verified against the InputPlumber 0.75.2 source
+# (src/input/event/evdev/translator.rs); no upstream config exercises
+# delayed_chord yet, so treat as unproven until the Flip 2 device smoke.
+# BTN_BACK -> QuickAccess is kept from the RP5 map as an inert extra (the MCU
+# capability may still exist; no physical button emits it).
 # Schema version number
 version: 2
 
@@ -12,14 +33,16 @@ version: 2
 kind: CapabilityMap
 
 # Name for the device event map
-name: Retroid Pocket 5 MCU Mapping
+name: Retroid Pocket Flip 2 MCU Mapping
 
 # Unique identifier of the capability mapping
-id: retroid_rp5
+id: retroid_rpflip2
 
 # List of mapped events
 mapping:
   - name: Guide Button
+    mapping_type:
+      evdev: delayed_chord
     source_events:
       - evdev:
           event_type: KEY
@@ -29,7 +52,26 @@ mapping:
       gamepad:
         button: Guide
 
+  # Must precede the South entry: chord candidates are matched in YAML order.
+  - name: Quick Access Chord (Guide+A)
+    mapping_type:
+      evdev: chord
+    source_events:
+      - evdev:
+          event_type: KEY
+          event_code: BTN_MODE
+          value_type: button
+      - evdev:
+          event_type: KEY
+          event_code: BTN_SOUTH
+          value_type: button
+    target_event:
+      gamepad:
+        button: QuickAccess
+
   - name: South Button
+    mapping_type:
+      evdev: chord
     source_events:
       - evdev:
           event_type: KEY
@@ -89,9 +131,6 @@ mapping:
       gamepad:
         button: Select
 
-  # pocknix delta vs ROCKNIX's retroid_mcu: BTN_BACK is the QAM button, not F1.
-  # ROCKNIX maps it to KeyF1 for their own UI; on the deck target QuickAccess
-  # opens Steam's Quick Access Menu (same as the RP6 map's "..." button).
   - name: Quick Access Button
     source_events:
       - evdev:
