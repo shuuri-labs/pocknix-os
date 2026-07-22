@@ -149,6 +149,20 @@ tuning the handheld without leaving the couch.
 
 Settings can be global or set per game.
 
+## Known issues
+
+- **The Steam session can take a while to come up**, especially right after a Steam client
+  update. Be patient - it will get there.
+- **On Snapdragon 8 Gen 2 devices** (Retroid Pocket 6, AYN Odin 2 family), **charging during
+  sleep can freeze the device mid-sleep**. Prefer charging while the device is powered on, or
+  fully powered off.
+- **Not all pre-baked emulator configs have been validated yet.** So far **Eden** (Switch),
+  **ARMSX2** (PS2), and **RetroArch mGBA** (Game Boy Advance) are confirmed good; the rest
+  ship with sensible defaults but have not been checked on device. More are being worked
+  through, and community help is very welcome - if you dial in a config, please submit it.
+  Note that some emulators may also need CPU core pinning (`taskset`) to perform well; if
+  yours does, include the pinning in your submission.
+
 ## Building from source
 
 pocknix-os builds a full image (kernel included) from this repo. The build needs an
