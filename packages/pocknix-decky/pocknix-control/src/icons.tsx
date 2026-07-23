@@ -1,0 +1,56 @@
+import type { ReactNode } from "react";
+
+function Icon({ path }: { path: ReactNode }) {
+  return (
+    <svg
+      style={{ display: "block" }}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {path}
+    </svg>
+  );
+}
+
+export const tabIcons = {
+  Games: (
+    <Icon
+      path={
+        <>
+          <line x1="6" x2="10" y1="11" y2="11" />
+          <line x1="8" x2="8" y1="9" y2="13" />
+          <line x1="15" x2="15.01" y1="12" y2="12" />
+          <line x1="18" x2="18.01" y1="10" y2="10" />
+          <path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z" />
+        </>
+      }
+    />
+  ),
+  Power: (
+    <Icon
+      path={
+        <>
+          <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
+        </>
+      }
+    />
+  ),
+  Storage: (
+    <Icon
+      path={
+        <>
+          <line x1="22" x2="2" y1="12" y2="12" />
+          <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+          <line x1="6" x2="6.01" y1="16" y2="16" />
+          <line x1="10" x2="10.01" y1="16" y2="16" />
+        </>
+      }
+    />
+  ),
+};
