@@ -406,7 +406,8 @@
  * card detect, vdd=l9b, vdd-io=l8b). Replace the whole node: the
  * downstream binding is disjoint from the upstream one (msm-bus scaling +
  * dll-hsr-list instead of icc tags/dll-config, own OPPs, no xo clock).
- * Only the RP6 changes; the vendor common stays intact for other devices.
+ * The Odin 2 family opts in via qcs8550-ayn-odin2-sd.dtsi (same node);
+ * the vendor common stays intact for the remaining boards (Thor, AYANEO).
  */
 /delete-node/ &sdhc_2;
 

@@ -6,6 +6,7 @@
 /dts-v1/;
 
 #include "qcs8550-ayn-common.dtsi"
+#include "qcs8550-ayn-odin2-sd.dtsi"
 
 / {
 	model = "AYN Odin 2 Portal";

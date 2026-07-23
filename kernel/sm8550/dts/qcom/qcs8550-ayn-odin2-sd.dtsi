@@ -1,0 +1,103 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * microSD at UHS-I SDR104 via the downstream sdhci-msm driver
+ * ("qcom,sdhci-msm-v5-downstream", patches 0210-0211) for the Odin 2
+ * family. Opt-in include: added per board dts (odin2, odin2portal,
+ * odin2mini) AFTER qcs8550-ayn-common.dtsi; the Thor stays on the
+ * vendor node until tested.
+ *
+ * Same story as the RP6 (see qcs8550-retroidpocket-rp6.dts): the vendor
+ * sdhc_2 node caps the slot to legacy SD High-Speed at 37.5MHz because
+ * the upstream sdhci-msm has an SDR104 tuning/clock regression on
+ * sm8550. The downstream driver has the working DLL/HSR tuning path,
+ * ~13MB/s -> ~85MB/s (armbian build PR #9546, which was validated on
+ * the AYN Odin 2 itself; the node below is byte-identical to the RP6's
+ * since both boards share the qcs8550 SD wiring: pm8550_gpios 12 card
+ * detect, vdd=l9b, vdd-io=l8b). Replace the whole node: the downstream
+ * binding is disjoint from the upstream one (msm-bus scaling +
+ * dll-hsr-list instead of icc tags/dll-config, own OPPs, no xo clock).
+ */
+/delete-node/ &sdhc_2;
+
+&soc {
+	sdhc_2: sdhci@8804000 {
+		compatible = "qcom,sdhci-msm-v5-downstream";
+		reg = <0 0x08804000 0 0x1000>;
+		reg-names = "hc_mem";
+		interrupts = <GIC_SPI 207 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_SPI 223 IRQ_TYPE_LEVEL_HIGH 0>;
+		interrupt-names = "hc_irq", "pwr_irq";
+		bus-width = <4>;
+		no-sdio;
+		no-mmc;
+		qcom,restore-after-cx-collapse;
+		qcom,uses_level_shifter;
+		qcom,dll_lock_bist_fail_wa;
+		clocks = <&gcc GCC_SDCC2_AHB_CLK>,
+			 <&gcc GCC_SDCC2_APPS_CLK>;
+		clock-names = "iface", "core";
+
+		/*
+		 * DLL HSR settings. Note that the DLL_CONFIG_2 value is not
+		 * passed from the device tree, it is calculated in the driver.
+		 */
+		qcom,dll-hsr-list = <0x0007442C 0x0 0x10
+				     0x090106C0 0x80040868>;
+
+		iommus = <&apps_smmu 0x540 0x0>;
+		dma-coherent;
+		interconnects = <&aggre2_noc MASTER_SDCC_2 0 &mc_virt SLAVE_EBI1 0>,
+				<&gem_noc MASTER_APPSS_PROC 0 &config_noc SLAVE_SDCC_2 0>;
+		interconnect-names = "sdhc-ddr", "cpu-sdhc";
+
+		qcom,msm-bus,name = "sdhc2";
+		qcom,msm-bus,num-cases = <0x07>;
+		qcom,msm-bus,num-paths = <0x02>;
+		qcom,msm-bus,vectors-KBps = <0x00 0x00 0x00 0x00 0x416 0xc80 0x640 0x640 0xff50 0x3d090 0x186a0 0x208c8 0x1fe9e 0x3d090 0x208c8 0x208c8 0x3fd3e 0x3d090 0x249f0 0x208c8 0x3fd3e 0xc3500 0x493e0 0x493e0 0x146cc2 0x3e8000 0x146cc2 0x3e8000>;
+		qcom,bus-bw-vectors-bps = <0x00 0x61a80 0x17d7840 0x2faf080 0x5f5e100 0xbebc200 0xffffffff>;
+
+		operating-points-v2 = <&sdhc2_opp_table>;
+
+		vdd-supply = <&vreg_l9b_2p9>;
+		qcom,vdd-voltage-level = <0x2d0370 0x2d2a80>;
+		qcom,vdd-current-level = <0x00 0xc3500>;
+
+		vdd-io-supply = <&vreg_l8b_1p8>;
+		qcom,vdd-io-voltage-level = <0x1b7740 0x2d2a80>;
+		qcom,vdd-io-current-level = <0x00 0x15e0>;
+
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&sdc2_default &sdc2_card_det_n>;
+		pinctrl-1 = <&sdc2_sleep &sdc2_card_det_n>;
+
+		cd-gpios = <&pm8550_gpios 12 GPIO_ACTIVE_LOW>;
+		resets = <&gcc GCC_SDCC2_BCR>;
+		reset-names = "core_reset";
+
+		qos0 {
+			mask = <0xf0>;
+			vote = <0x2c>;
+		};
+
+		qos1 {
+			mask = <0x0f>;
+			vote = <0x2c>;
+		};
+
+		sdhc2_opp_table: opp-table {
+			compatible = "operating-points-v2";
+
+			opp-100000000 {
+				opp-hz = <0x00 0x5f5e100>;
+				opp-peak-kBps = <0x27100 0x186a0>;
+				opp-avg-kBps = <0xc350 0x00>;
+			};
+
+			opp-202000000 {
+				opp-hz = <0x00 0xc0a4680>;
+				opp-peak-kBps = <0x30d40 0x1d4c0>;
+				opp-avg-kBps = <0x19640 0x00>;
+			};
+		};
+	};
+};
