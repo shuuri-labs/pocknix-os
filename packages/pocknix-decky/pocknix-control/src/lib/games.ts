@@ -20,6 +20,30 @@ function isGame(appid: string, name: string): boolean {
   return !NON_GAME_NAME.test(name);
 }
 
+// Non-Steam shortcuts have no appmanifest, so the backend scan can't see them; Steam's
+// deckDesktopApps collection holds their appids (unsigned; force with >>> in case a build
+// hands out the signed-int32 form) and appStore resolves the names.
+export function nonSteamShortcuts(): GameRef[] {
+  try {
+    const ids = window.collectionStore?.deckDesktopApps?.apps;
+    if (!ids?.values) return [];
+    const shortcuts: GameRef[] = [];
+    for (const id of Array.from(ids.values() as Iterable<any>)) {
+      const appid = String(Number(id) >>> 0);
+      if (!appid || appid === "0") continue;
+      let name = "";
+      try {
+        name = window.appStore?.GetAppOverviewByAppID?.(Number(appid))?.display_name || "";
+      } catch (error) {
+      }
+      shortcuts.push({ appid, name: name || `App ${appid}`, nonSteam: true });
+    }
+    return shortcuts;
+  } catch (error) {
+    return [];
+  }
+}
+
 export function availableGames(config: Config): GameRef[] {
   const games = new Map<string, GameRef>();
   for (const game of config.installedGames || []) {
@@ -27,18 +51,28 @@ export function availableGames(config: Config): GameRef[] {
       games.set(String(game.appid), { appid: String(game.appid), name: game.name || `App ${game.appid}` });
     }
   }
-  // Games with saved tweaks stay listed even if the type lookup would hide them —
-  // existing per-game config must remain reachable.
-  for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
-    if (game && typeof game === "object") games.set(String(appid), { appid: String(appid), name: game.name || games.get(String(appid))?.name || `App ${appid}` });
+  for (const shortcut of nonSteamShortcuts()) {
+    games.set(shortcut.appid, shortcut);
   }
-  return Array.from(games.values()).sort((a, b) => gameDisplayName(a).localeCompare(gameDisplayName(b)));
+  // Games with saved tweaks stay listed even if the lookups above miss them —
+  // existing per-game config must remain reachable. Shortcut appids sit above 2^31.
+  for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
+    if (game && typeof game === "object" && !games.has(String(appid))) {
+      games.set(String(appid), { appid: String(appid), name: game.name || `App ${appid}`, nonSteam: Number(appid) >= 0x80000000 });
+    }
+  }
+  return Array.from(games.values()).sort(
+    (a, b) => (a.nonSteam ? 1 : 0) - (b.nonSteam ? 1 : 0) || gameDisplayName(a).localeCompare(gameDisplayName(b))
+  );
 }
 
 export function editTargetOptions(config: Config): DropdownChoice[] {
   return [
     { data: "", label: "Default" },
-    ...availableGames(config).map((game) => ({ data: game.appid, label: gameDisplayName(game) })),
+    ...availableGames(config).map((game) => ({
+      data: game.appid,
+      label: game.nonSteam ? `${gameDisplayName(game)} · non-Steam` : gameDisplayName(game),
+    })),
   ];
 }
 

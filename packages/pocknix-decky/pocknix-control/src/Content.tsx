@@ -9,6 +9,7 @@ import { styles } from "./styles";
 import { Games } from "./tabs/Games";
 import { Power } from "./tabs/Power";
 import { Storage } from "./tabs/Storage";
+import { Updater } from "./tabs/Updater";
 import type { Config } from "./types";
 
 export function Content() {
@@ -70,6 +71,7 @@ export function Content() {
           { id: "Games", title: tabIcons.Games, content: tabContent(<Games config={config} setConfig={setConfig} />) },
           { id: "Power", title: tabIcons.Power, content: tabContent(<Power config={config} setConfig={setConfig} reload={load} />) },
           { id: "Storage", title: tabIcons.Storage, content: tabContent(<Storage />) },
+          { id: "Updater", title: tabIcons.Updater, content: tabContent(<Updater />) },
         ]}
       />
     </div>

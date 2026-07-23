@@ -30,6 +30,9 @@ const setLavdMode = (mode) => call("set_lavd_mode", mode);
 const saveTweaks = (data) => call("save_tweaks", data);
 const detectSdcard = () => call("detect_sdcard");
 const formatSdcard = (label) => call("format_sdcard", label);
+const checkUpdates = () => call("check_updates");
+const startUpdate = () => call("start_update");
+const updateStatus = () => call("update_status");
 
 function useDebouncedSave(options) {
     const { config, field, snapshot, save, setConfig, onError, delay = 900 } = options;
@@ -82,6 +85,7 @@ function Icon({ path }) {
 const tabIcons = {
     Games: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("line", { x1: "6", x2: "10", y1: "11", y2: "11" }), SP_JSX.jsx("line", { x1: "8", x2: "8", y1: "9", y2: "13" }), SP_JSX.jsx("line", { x1: "15", x2: "15.01", y1: "12", y2: "12" }), SP_JSX.jsx("line", { x1: "18", x2: "18.01", y1: "10", y2: "10" }), SP_JSX.jsx("path", { d: "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z" })] }) })),
     Power: (SP_JSX.jsx(Icon, { path: SP_JSX.jsx(SP_JSX.Fragment, { children: SP_JSX.jsx("path", { d: "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" }) }) })),
+    Updater: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }), SP_JSX.jsx("polyline", { points: "7 10 12 15 17 10" }), SP_JSX.jsx("line", { x1: "12", x2: "12", y1: "15", y2: "3" })] }) })),
     Storage: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("line", { x1: "22", x2: "2", y1: "12", y2: "12" }), SP_JSX.jsx("path", { d: "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" }), SP_JSX.jsx("line", { x1: "6", x2: "6.01", y1: "16", y2: "16" }), SP_JSX.jsx("line", { x1: "10", x2: "10.01", y1: "16", y2: "16" })] }) })),
 };
 
@@ -104,6 +108,33 @@ function isGame(appid, name) {
     }
     return !NON_GAME_NAME.test(name);
 }
+// Non-Steam shortcuts have no appmanifest, so the backend scan can't see them; Steam's
+// deckDesktopApps collection holds their appids (unsigned; force with >>> in case a build
+// hands out the signed-int32 form) and appStore resolves the names.
+function nonSteamShortcuts() {
+    try {
+        const ids = window.collectionStore?.deckDesktopApps?.apps;
+        if (!ids?.values)
+            return [];
+        const shortcuts = [];
+        for (const id of Array.from(ids.values())) {
+            const appid = String(Number(id) >>> 0);
+            if (!appid || appid === "0")
+                continue;
+            let name = "";
+            try {
+                name = window.appStore?.GetAppOverviewByAppID?.(Number(appid))?.display_name || "";
+            }
+            catch (error) {
+            }
+            shortcuts.push({ appid, name: name || `App ${appid}`, nonSteam: true });
+        }
+        return shortcuts;
+    }
+    catch (error) {
+        return [];
+    }
+}
 function availableGames(config) {
     const games = new Map();
     for (const game of config.installedGames || []) {
@@ -111,18 +142,25 @@ function availableGames(config) {
             games.set(String(game.appid), { appid: String(game.appid), name: game.name || `App ${game.appid}` });
         }
     }
-    // Games with saved tweaks stay listed even if the type lookup would hide them —
-    // existing per-game config must remain reachable.
-    for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
-        if (game && typeof game === "object")
-            games.set(String(appid), { appid: String(appid), name: game.name || games.get(String(appid))?.name || `App ${appid}` });
+    for (const shortcut of nonSteamShortcuts()) {
+        games.set(shortcut.appid, shortcut);
     }
-    return Array.from(games.values()).sort((a, b) => gameDisplayName(a).localeCompare(gameDisplayName(b)));
+    // Games with saved tweaks stay listed even if the lookups above miss them —
+    // existing per-game config must remain reachable. Shortcut appids sit above 2^31.
+    for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
+        if (game && typeof game === "object" && !games.has(String(appid))) {
+            games.set(String(appid), { appid: String(appid), name: game.name || `App ${appid}`, nonSteam: Number(appid) >= 0x80000000 });
+        }
+    }
+    return Array.from(games.values()).sort((a, b) => (a.nonSteam ? 1 : 0) - (b.nonSteam ? 1 : 0) || gameDisplayName(a).localeCompare(gameDisplayName(b)));
 }
 function editTargetOptions(config) {
     return [
         { data: "", label: "Default" },
-        ...availableGames(config).map((game) => ({ data: game.appid, label: gameDisplayName(game) })),
+        ...availableGames(config).map((game) => ({
+            data: game.appid,
+            label: game.nonSteam ? `${gameDisplayName(game)} · non-Steam` : gameDisplayName(game),
+        })),
     ];
 }
 function currentGame() {
@@ -161,6 +199,13 @@ const styles = `
       }
       .pocknix-control-tabs .pocknix-control-tab-content {
         padding-bottom: 24px;
+      }
+      .pocknix-control-tabs .pocknix-log {
+        font-family: monospace;
+        font-size: 10px;
+        line-height: 14px;
+        word-break: break-all;
+        white-space: pre-wrap;
       }
       .pocknix-control-tabs .pocknix-note {
         box-sizing: border-box;
@@ -424,6 +469,80 @@ function Storage() {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "SD CARD", children: [SP_JSX.jsx(DFL.Field, { label: "Card", description: cardSummary(card) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Label", value: label, disabled: busy, onChange: (event) => setLabel(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16)) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: !card?.present || busy, onClick: confirmFormat, children: busy ? "Formatting…" : "Format SD Card" }) }), status ? SP_JSX.jsx(DFL.Field, { label: "", description: status }) : null] }));
 }
 
+const SHOWN_UPDATES = 8;
+function Updater() {
+    const [updates, setUpdates] = SP_REACT.useState(null);
+    const [checking, setChecking] = SP_REACT.useState(false);
+    const [status, setStatus] = SP_REACT.useState(null);
+    const [error, setError] = SP_REACT.useState("");
+    const busyRef = SP_REACT.useRef(false);
+    const running = !!status?.running;
+    busyRef.current = checking || running;
+    // Re-attach to an update that survived a QAM close (or a Steam restart).
+    SP_REACT.useEffect(() => {
+        let cancelled = false;
+        updateStatus()
+            .then((next) => {
+            if (!cancelled && (next.running || next.exitCode !== null))
+                setStatus(next);
+        })
+            .catch(() => { });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+    SP_REACT.useEffect(() => {
+        if (!running)
+            return;
+        const timer = window.setInterval(async () => {
+            try {
+                const next = await updateStatus();
+                setStatus(next);
+                if (!next.running && next.exitCode === 0)
+                    setUpdates([]);
+            }
+            catch (err) {
+                setError(String(err));
+            }
+        }, 2000);
+        return () => window.clearInterval(timer);
+    }, [running]);
+    const check = async () => {
+        if (busyRef.current)
+            return;
+        setChecking(true);
+        setError("");
+        try {
+            setUpdates(await checkUpdates());
+        }
+        catch (err) {
+            setError(String(err));
+        }
+        finally {
+            setChecking(false);
+        }
+    };
+    const start = async () => {
+        if (busyRef.current)
+            return;
+        setError("");
+        try {
+            setStatus(await startUpdate());
+        }
+        catch (err) {
+            setError(String(err));
+        }
+    };
+    const confirmStart = () => DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Install Updates", strDescription: "Downloads and installs all available system updates. Keep the device powered; a running game may stutter. Restart after it finishes.", strOKButtonText: "Install", onOK: start }));
+    const finished = !running && status?.exitCode !== null && status?.exitCode !== undefined;
+    const summary = updates === null
+        ? "Not checked yet"
+        : updates.length === 0
+            ? "System is up to date"
+            : `${updates.length} update${updates.length === 1 ? "" : "s"} available`;
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "SYSTEM UPDATES", children: [!running ? SP_JSX.jsx(DFL.Field, { label: "Status", description: summary }) : null, !running && updates && updates.length > 0 ? (SP_JSX.jsxs("div", { className: "pocknix-note", children: [updates.slice(0, SHOWN_UPDATES).map((update) => (SP_JSX.jsx("div", { children: `${update.name} ${update.current} → ${update.latest}` }, update.name))), updates.length > SHOWN_UPDATES ? SP_JSX.jsx("div", { children: `… and ${updates.length - SHOWN_UPDATES} more` }) : null] })) : null, SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: checking || running, onClick: check, children: checking ? "Checking…" : "Check for Updates" }) }), !running && updates && updates.length > 0 ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: confirmStart, children: "Install Updates" }) })) : null, running ? SP_JSX.jsx(DFL.Field, { label: "Updating\u2026", description: "Safe to close this menu. Do not power off." }) : null, finished ? (SP_JSX.jsx(DFL.Field, { label: status.exitCode === 0 ? "Update complete" : `Update failed (code ${status.exitCode})`, description: status.exitCode === 0 ? "Restart to finish applying updates." : "See the log below." })) : null, (running || (finished && status.exitCode !== 0)) && status?.log ? (SP_JSX.jsx("div", { className: "pocknix-note pocknix-log", children: status.log })) : null, error ? SP_JSX.jsx(DFL.Field, { label: "Error", description: error }) : null] }));
+}
+
 function Content() {
     const [tab, setTab] = SP_REACT.useState("Games");
     const [config, setConfig] = SP_REACT.useState(null);
@@ -480,6 +599,7 @@ function Content() {
                     { id: "Games", title: tabIcons.Games, content: tabContent(SP_JSX.jsx(Games, { config: config, setConfig: setConfig })) },
                     { id: "Power", title: tabIcons.Power, content: tabContent(SP_JSX.jsx(Power, { config: config, setConfig: setConfig, reload: load })) },
                     { id: "Storage", title: tabIcons.Storage, content: tabContent(SP_JSX.jsx(Storage, {})) },
+                    { id: "Updater", title: tabIcons.Updater, content: tabContent(SP_JSX.jsx(Updater, {})) },
                 ] })] }));
 }
 

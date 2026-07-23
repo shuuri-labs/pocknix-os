@@ -25,6 +25,7 @@ export interface FexProfile {
 export interface GameRef {
   appid: string;
   name: string;
+  nonSteam?: boolean;
 }
 
 export interface Config {
@@ -40,6 +41,18 @@ export interface Config {
 export interface DropdownChoice {
   data: string;
   label: string;
+}
+
+export interface UpdateInfo {
+  name: string;
+  current: string;
+  latest: string;
+}
+
+export interface UpdateStatus {
+  running: boolean;
+  log: string;
+  exitCode: number | null;
 }
 
 export interface SdcardInfo {
