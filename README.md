@@ -157,25 +157,20 @@ Supported systems:
 
 ## Pocknix Control
 
-**Pocknix Control** is a Decky plugin in the Steam session (open the Quick Access menu) for
-tuning the handheld without leaving the couch.
+**Pocknix Control** is a Decky plugin in the Steam session (open the Quick Access menu): a
+control panel for tuning the handheld and managing the system without leaving the couch.
+Four tabs:
 
-**Performance**
+- **Games**: per-game (or global) tweaks - **FEX Preset** trades x86 translation accuracy
+  for speed, **Audio Buffer** absorbs crackle in busy scenes. Also home to **Add Non-Steam
+  Game**: Steam's own "Add a Non-Steam Game" dialog does not work on pocknix-os (Steam is an
+  X11 app and Plasma Mobile cannot summon new windows for it), so Pocknix Control provides
+  the feature natively in game mode instead.
+- **Power**: fan curve (Quiet / Moderate / Performance) and CPU scheduler mode, applied live.
+- **Storage**: format a microSD card for Steam, Deck-compatible, straight from game mode.
+- **Updater**: check for and install system updates from the Quick Access menu.
 
-- **Fan Curve**: Quiet, Moderate, or Performance. Applies live, no restart.
-- **CPU Scheduler**: Autopilot (the `scx_lavd` default, adapts on the fly) or Performance.
-
-**Per-game tweaks** (apply on the next game launch)
-
-- **FEX Preset**: Default, Fast, or Compatible. Trades x86 translation accuracy for speed.
-  Try Fast for more FPS, Compatible if a game misbehaves.
-- **Audio Buffer**: Game default, 60, 90, or 120 ms. Raising the buffer absorbs crackle in
-  busy scenes (an FEX audio-mixer quirk) at the cost of a little extra audio latency. 120 ms
-  clears crackle and is inaudible in most games. Keep it low (or on Game default) for
-  timing-sensitive titles where audio latency matters, such as rhythm games, fighting games,
-  or anything where you play to the beat or need tight audio cues.
-
-Settings can be global or set per game.
+See the [Pocknix Control docs](docs/pocknix-control.md) for the full tour.
 
 ## Known issues
 
