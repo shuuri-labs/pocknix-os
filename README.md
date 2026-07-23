@@ -22,6 +22,10 @@ Picture) and a **Plasma Mobile desktop** session. The desktop uses **Plasma Mobi
 regular Plasma** on purpose: it is far more touch-friendly, with larger touch targets and
 gesture navigation that might be preferable on such small screens.
 
+> The default password for both the `root` and `deck` users is **pocknix**. If the device
+> locks in desktop mode, tap the little keyboard icon to turn the on-screen numpad into a
+> keyboard and type `pocknix` to log back in.
+
 **Android apps via Waydroid.** pocknix-os includes Waydroid, so you can run Android apps,
 including apps from the Google Play Store, right on the device. Download an APK and a handler
 opens it, installs it, and adds a shortcut to Plasma Mobile, so the app behaves just like a
