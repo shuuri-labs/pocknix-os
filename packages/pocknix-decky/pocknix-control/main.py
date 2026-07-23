@@ -4,6 +4,7 @@ from pocknix_control.config import build_config
 from pocknix_control.modes import set_fan_mode, set_lavd_mode
 from pocknix_control.sdcard import detect_sdcard, format_sdcard
 from pocknix_control.tweaks import save_tweaks
+from pocknix_control.updates import check_updates, start_update, update_status
 
 
 class Plugin:
@@ -28,3 +29,12 @@ class Plugin:
     async def save_tweaks(self, data):
         await asyncio.to_thread(save_tweaks, data)
         return await self.get_config()
+
+    async def check_updates(self):
+        return await asyncio.to_thread(check_updates)
+
+    async def start_update(self):
+        return await asyncio.to_thread(start_update)
+
+    async def update_status(self):
+        return await asyncio.to_thread(update_status)

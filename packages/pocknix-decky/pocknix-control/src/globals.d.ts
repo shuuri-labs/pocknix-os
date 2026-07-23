@@ -5,6 +5,7 @@ declare global {
     SteamClient?: any;
     appDetailsStore?: any;
     appStore?: any;
+    collectionStore?: any;
     Router?: any;
   }
 }

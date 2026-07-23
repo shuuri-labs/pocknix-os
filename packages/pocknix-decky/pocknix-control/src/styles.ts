@@ -19,6 +19,13 @@ export const styles = `
       .pocknix-control-tabs .pocknix-control-tab-content {
         padding-bottom: 24px;
       }
+      .pocknix-control-tabs .pocknix-log {
+        font-family: monospace;
+        font-size: 10px;
+        line-height: 14px;
+        word-break: break-all;
+        white-space: pre-wrap;
+      }
       .pocknix-control-tabs .pocknix-note {
         box-sizing: border-box;
         width: 100%;
