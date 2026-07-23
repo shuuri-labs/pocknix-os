@@ -55,8 +55,9 @@ ROCKNIX device dir named in `ROCKNIX_SOC`), a thin `packages/linux-pocknix-<soc>
 (copy an existing one; it only packages `make kernel` output — note the qcom-abl vs
 arm-efi difference in its /flash hook), a `config/tuning/<soc>.conf` (ROCKNIX's
 TARGET_CPU/FLAGS composed as -march/-mtune; FEX TUNE_CPU per their fex package.mk
-mapping), and — on arm-efi SoCs — a `packages/pocknix-bootloader-<soc>/` (GRUB payload
-+ grub.cfg, see pocknix-bootloader-sm8250). Each SoC gets its own pacman repo tree
+mapping), and a `packages/pocknix-bootloader-<soc>/` — on arm-efi SoCs the GRUB payload
++ grub.cfg (see pocknix-bootloader-sm8250); on qcom-abl SoCs the ROCKNIX ABL install
+kit copied to the SD boot FAT (see pocknix-bootloader-sm8550). Each SoC gets its own pacman repo tree
 (`build/localrepo/<soc>`, published at `POCKNIX_REPO_URL/<soc>`): the tuned packages
 (mesa, gamescope, mangohud, fex-emu) share pkgnames across SoCs with different
 binaries, so the repos must not mix.
@@ -66,6 +67,9 @@ binaries, so the repos must not mix.
 * `qcom-abl` (sm8550): the ROCKNIX ABL boots an Android boot image (`/KERNEL`,
   mkbootimg, cmdline baked in, all dtbs appended — ABL picks by board id). The BSP
   ships `kernel-cmdline`; the kernel package's hook rebuilds /flash/KERNEL on device.
+  The SD boot FAT also carries `rocknix_abl/` (pocknix-bootloader-<soc>): ROCKNIX's
+  first-install kit for flashing that ABL from rooted stock Android — inert at boot,
+  pocknix never flashes it itself.
 * `arm-efi` (sm8250): the ABL chainloads GRUB (`EFI/BOOT/bootaa64.efi`); `/KERNEL` is
   a RAW Image; the board dtb is a separate `/boot/grub/<board>.dtb`; the cmdline lives
   in grub.cfg (`packages/pocknix-bootloader-<soc>/grub.cfg` — build-packages.sh

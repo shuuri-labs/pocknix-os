@@ -4,13 +4,14 @@
 # installed devices (e.g. an internal-installed RP6) on their next pacman -Syu.
 pkgname=pocknix-device-sm8550
 pkgver=0.2.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix device metapackage: SM8550 family (Retroid Pocket 6, AYN Odin 2 family)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=('pocknix-bsp-sm8550'
          'linux-pocknix-sm8550'
+         'pocknix-bootloader-sm8550'
          'pocknix-steam'
          'pocknix-desktop'
          'pocknix-emulation'

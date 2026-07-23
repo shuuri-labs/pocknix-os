@@ -74,6 +74,19 @@ populate_arm_efi_boot() {
   cp "${KOUT}/dtbs/"*.dtb "${mnt}/boot/grub/"
 }
 
+# qcom-abl boot partition contents beyond /KERNEL: the ROCKNIX ABL install kit
+# (rocknix_abl/: signed ABL elf + the Android-side backup/flash/restore
+# scripts), copied to the FAT root exactly where ROCKNIX's images carry it —
+# stock Android mounts this FAT, so a factory device can be provisioned from
+# this SD alone (backup then flash from rooted Android; see the kit README).
+# Inert files at boot; shipped in the rootfs by pocknix-bootloader-${SOC}.
+populate_qcom_abl_boot() {
+  local mnt="$1" kit="${ROOTFS_DIR}/usr/share/pocknix/bootloader/rocknix_abl"
+  [ -f "${kit}/abl_signed-${SOC^^}.elf" ] \
+    || die "qcom-abl: ${kit#${ROOTFS_DIR}}/abl_signed-${SOC^^}.elf missing from the rootfs — is pocknix-bootloader-${SOC} built and installed? (make packages + make build)"
+  rsync -a "${kit}" "${mnt}/"
+}
+
 firstboot_config() {
   local root="$1"
   log "configuring first boot (root login, fstab, ssh, network, hostname)"
@@ -300,11 +313,15 @@ main() {
   mkfs.ext4 -F -q -L "${ROOT_LABEL}" "${LOOP}p2"
 
   MNT="$(mktemp -d)"
-  # boot partition: KERNEL (+ md5); arm-efi additionally GRUB + dtbs + abl payload
+  # boot partition: KERNEL (+ md5); arm-efi additionally GRUB + dtbs + abl
+  # payload; qcom-abl additionally the ROCKNIX ABL install kit
   mount "${LOOP}p1" "${MNT}"
   cp "${KERNEL_IMG}" "${MNT}/KERNEL"
   ( cd "${MNT}" && md5sum KERNEL > KERNEL.md5 )
-  [ "${BOOTLOADER}" = "arm-efi" ] && populate_arm_efi_boot "${MNT}"
+  case "${BOOTLOADER}" in
+    arm-efi)  populate_arm_efi_boot "${MNT}" ;;
+    qcom-abl) populate_qcom_abl_boot "${MNT}" ;;
+  esac
   sync; umount "${MNT}"
   # root partition: the rootfs
   mount "${LOOP}p2" "${MNT}"

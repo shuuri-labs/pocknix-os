@@ -70,8 +70,17 @@ decompress it (`zstd -d`, or let your flasher handle it), and flash it to a micr
 
 ### SM8550 (Retroid Pocket 6, AYN Odin 2 family)
 
-1. **Install the ROCKNIX ABL bootloader** (follow ROCKNIX's instructions). The stock ABL
-   cannot boot pocknix on these devices.
+The stock ABL cannot boot pocknix on these devices - the ROCKNIX ABL bootloader must be
+flashed once first. If your device already runs ROCKNIX, skip to step 2. Otherwise the
+flashed SD card carries ROCKNIX's install kit in its `rocknix_abl` folder (visible from
+Android when the card is inserted):
+
+1. **Flash the ROCKNIX ABL** (one-time, needs rooted Android). Copy the `rocknix_abl`
+   folder from the SD card to the root of Android's internal storage, then as root run
+   `backup_abl.sh` (saves your stock bootloader next to the scripts) followed by
+   `flash_abl.sh`. **Copy the `abl_a.img`/`abl_b.img` backups somewhere safe off the
+   device** - installing pocknix to internal storage later wipes Android's user data,
+   backups included. `restore_backup_abl.sh` returns the device to fully stock.
 2. **Boot into ABL.** Hold **Volume -** while powering on or rebooting. Set your device and
    boot mode there.
 3. **Insert the flashed microSD and boot.** pocknix-os comes up from the SD card.

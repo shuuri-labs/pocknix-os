@@ -1,0 +1,40 @@
+# rocknix_abl kit provenance
+
+abl_signed-SM8550.elf is NOT committed here — the PKGBUILD fetches it from the
+official ROCKNIX ABL release, pinned by tag + sha512:
+
+  release:  https://github.com/ROCKNIX/abl/releases/tag/v1.1.5
+  asset:    rocknix-abl-v1.1.5.tar.gz
+  tarball sha512: dffcefb9975880f1e54da3538bac0598b67761af662a4e7365e36c81ba109797
+                  ff44a5d23deea0a4999deae185f5bc24609e4c6037d68fc916ffeaaa6492234e
+  abl_signed-SM8550.elf sha256 (release's own sidecar, re-checked in prepare()):
+                  efa890e9000f462ac3f2d74ac2f40a22d82bb7f7645639296977dc638d00876b
+
+It is ROCKNIX's patched, test-key-signed build of the Qualcomm ABL (edk2
+LinuxLoader, BSD-3-Clause) for the SM8550 family — the bootloader that scans
+for the FAT labeled ROCKNIX and boots /KERNEL (an Android boot image, board
+dtb selected by board id). One elf serves every SM8550 board (RP6, AYN
+Odin 2 / Mini / Portal); ROCKNIX keys the artifact by SoC.
+
+The four kit files (README, flash_abl.sh.template, backup_abl.sh,
+restore_backup_abl.sh) are VERBATIM copies from the ROCKNIX distribution repo,
+packages/tools/rocknix-abl/sources/ (GPL-2.0 tree), as pinned by our `make
+sync` snapshot. The PKGBUILD's %DEVICE% -> SM8550 substitution in
+flash_abl.sh reproduces their package.mk. Vendored (4 tiny files, change
+rarely) rather than fetched or synced; diff them against the ROCKNIX tree
+when advancing the sync pin.
+
+Version coupling: the ABL version ROCKNIX pins for the SoC lives in their
+packages/tools/rocknix-abl/package.mk (PKG_VERSION). Ours (_ablver in the
+PKGBUILD) should track it — the ABL defines the boot contract the sm8550
+profile assumes (FAT label, /KERNEL boot image, board-id dtb select), so a
+mismatched pair is the thing to avoid. v1.1.5 = their pin AND the latest
+release as of 2026-07-23.
+
+The kit's job is FIRST INSTALL from stock Android: the user copies
+rocknix_abl/ off the SD's boot FAT to Android internal storage, runs
+backup_abl.sh (saves the stock abl_a/abl_b next to the scripts — tell users
+to copy those .img backups OFF the device; an install-to-internal later
+wipes userdata and the backup with it), then flash_abl.sh, both as root.
+restore_backup_abl.sh is the road back to a fully stock device. pocknix
+never flashes the ABL itself — no alpm hook, no updateabl equivalent.
