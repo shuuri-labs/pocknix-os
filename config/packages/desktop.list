@@ -27,6 +27,7 @@ kate                 # advanced text editor — ALSO provides /usr/bin/kwrite (n
 dolphin              # KDE file manager
 kcalc                # calculator
 ark                  # archive manager
+unrar                # .rar backend for ark (and CLI extraction)
 gwenview             # image viewer
 okular               # document / PDF viewer
 
