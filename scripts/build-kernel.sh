@@ -184,7 +184,7 @@ configure() {
   #    LAVD's frequency intelligence — and the handheld's thermal headroom — is lost. Still
   #    runtime-overridable (echo performance > .../cpufreq/policy*/scaling_governor) to A/B.
   #  - MMC_SDHCI_MSM_DOWNSTREAM: the Qualcomm downstream sdhci-msm driver (patches
-  #    0210-0212, from armbian PR #9546). The RP6 dts rebinds sdhc_2 (microSD) to it
+  #    0210-0212, from armbian PR #9546). The RP6 + Odin 2 family dts rebind sdhc_2 (microSD) to it
   #    ("qcom,sdhci-msm-v5-downstream") for UHS-I SDR104 (~85MB/s vs ~13MB/s): the
   #    upstream driver has an SDR104 tuning/clock regression on sm8550, which is why
   #    the vendor DTs cap the slot to legacy High-Speed. =y like MMC_SDHCI_MSM (which
