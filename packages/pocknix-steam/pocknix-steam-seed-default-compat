@@ -23,6 +23,13 @@ import sys
 TOOL_NAME = sys.argv[1] if len(sys.argv) > 1 else "proton-cachyos"
 CONFIG = pathlib.Path.home() / ".local/share/Steam/config/config.vdf"
 
+# GUARD: never seed a default that points at a tool that isn't installed — on an upgraded
+# older install the proton-cachyos package may not be present (it postdates some images),
+# and a mapping to a missing tool breaks every game without a per-game override. The
+# launcher retries every session start, so the default appears once the tool does.
+if not pathlib.Path("/usr/share/steam/compatibilitytools.d", TOOL_NAME).exists():
+    sys.exit(0)
+
 
 def find_block(lines, key, start, end):
     for index in range(start, end):
