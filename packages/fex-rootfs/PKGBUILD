@@ -20,8 +20,9 @@
 
 pkgname=fex-rootfs
 _rootfsdate=2026-01-08             # pinned dated image from FEX's rootfs CDN (immutable path)
+_mesaver=26.1.5-1                  # x86_64 turnip dropped INTO the image (see repack below)
 pkgver=${_rootfsdate//-/}          # 20260108
-pkgrel=2
+pkgrel=3
 pkgdesc="x86_64 ArchLinux RootFS for FEX (x86 game userland + native Turnip GPU passthrough)"
 arch=('aarch64')
 url="https://rootfs.fex-emu.gg/"
@@ -30,19 +31,51 @@ license=('custom')                 # a full Arch x86 userland — mixed upstream
 # (Turnip) Vulkan driver the FEX Vulkan host-thunk loads for GPU passthrough (we symlink the
 # system copy, see package()). fex-emu: the consumer.
 depends=('fex-emu' 'squashfuse' 'vulkan-freedreno')
+makedepends=('squashfs-tools')
 options=('!strip' '!debug')
 
+# MESA OVERLAY (pkgrel 3): the CDN image bundles x86 turnip Mesa 25.3.3-git, which reports
+# storageBuffer8BitAccess=false under FEX — DXVK 3.x hard-requires it ("No adapters found",
+# hit with proton-cachyos x86). Upstream has published no newer ArchLinux image (2026-01-08 is
+# still latest), so we repack the sqsh with Arch x86_64 vulkan-freedreno 26.1.5 + its two deps
+# the image lacks (libdisplay-info, xcb-util-keysyms; rootfs glibc 2.42 covers the rest).
+# Validated on-device 2026-07-24: Mesa 26.1.5-arch1.1, feature true, KH runs on DXVK 3.0.2.
+# ONLY the libs are overlaid (not the pkgs' icd jsons — the image's freedreno_icd.*.json
+# already point at /usr/lib/libvulkan_freedreno.so; adding the unsuffixed json would
+# double-enumerate the driver).
+#
 # FEX verifies rootfs images with xxh3_64 (its own check at fetch), NOT sha256 — and the dated URL
 # path is immutable. So SKIP makepkg's hash for now; pin a real sha256 after the first VM download
 # (TODO, same discipline as the Proton sha512 pin in piece 4).
-source=("ArchLinux-${_rootfsdate}.sqsh::https://rootfs.fex-emu.gg/ArchLinux/${_rootfsdate}/ArchLinux.sqsh")
-noextract=("ArchLinux-${_rootfsdate}.sqsh")   # the runtime image — ship as-is, never unpack
-sha256sums=('SKIP')
+source=("ArchLinux-${_rootfsdate}.sqsh::https://rootfs.fex-emu.gg/ArchLinux/${_rootfsdate}/ArchLinux.sqsh"
+        "vulkan-freedreno-${_mesaver}-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/v/vulkan-freedreno/vulkan-freedreno-1%3A${_mesaver}-x86_64.pkg.tar.zst"
+        "libdisplay-info-0.3.0-1-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/l/libdisplay-info/libdisplay-info-0.3.0-1-x86_64.pkg.tar.zst"
+        "xcb-util-keysyms-0.4.1-5-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/x/xcb-util-keysyms/xcb-util-keysyms-0.4.1-5-x86_64.pkg.tar.zst")
+noextract=("ArchLinux-${_rootfsdate}.sqsh"
+           "vulkan-freedreno-${_mesaver}-x86_64.pkg.tar.zst"
+           "libdisplay-info-0.3.0-1-x86_64.pkg.tar.zst"
+           "xcb-util-keysyms-0.4.1-5-x86_64.pkg.tar.zst")
+sha256sums=('SKIP'
+            '7ed72c2c6b92c5bbca4199b7b3026bd3f42adf70805c43196dbfcead1e73665a'
+            '07ab1479ec5e70aea174e2d0e340bd9364b507ed74f2df3bfd51b3c6f40e5787'
+            '312213911881c0742e2a825432feac761e863945b74bb3a6daca97a99778d35e')
 
 package() {
+  # Repack under fakeroot so the image's stored ownerships survive the round-trip. Match the
+  # original's compression (zstd, 128K blocks — checked via unsquashfs -s).
+  unsquashfs -q -d "${srcdir}/rootfs" "${srcdir}/ArchLinux-${_rootfsdate}.sqsh"
+  tar --zstd -xf "${srcdir}/vulkan-freedreno-${_mesaver}-x86_64.pkg.tar.zst" \
+    -C "${srcdir}/rootfs" usr/lib/libvulkan_freedreno.so
+  tar --zstd --wildcards -xf "${srcdir}/libdisplay-info-0.3.0-1-x86_64.pkg.tar.zst" \
+    -C "${srcdir}/rootfs" 'usr/lib/libdisplay-info.so*'
+  tar --zstd --wildcards -xf "${srcdir}/xcb-util-keysyms-0.4.1-5-x86_64.pkg.tar.zst" \
+    -C "${srcdir}/rootfs" 'usr/lib/libxcb-keysyms.so*'
+  mksquashfs "${srcdir}/rootfs" "${srcdir}/ArchLinux-repacked.sqsh" \
+    -comp zstd -b 131072 -no-progress -quiet
+
   # Ship the rootfs where FEX looks (Config.json RootFS="ArchLinux.sqsh" resolves under here, the
   # same /usr/share/fex-emu/RootFS dir fex-emu's package() pre-creates — armada's default.erofs model).
-  install -Dm0644 "${srcdir}/ArchLinux-${_rootfsdate}.sqsh" \
+  install -Dm0644 "${srcdir}/ArchLinux-repacked.sqsh" \
     "${pkgdir}/usr/share/fex-emu/RootFS/ArchLinux.sqsh"
 
   # Native GPU passthrough: the Vulkan HOST thunk must reach the real Adreno driver. ROCKNIX
