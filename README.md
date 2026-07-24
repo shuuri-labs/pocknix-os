@@ -94,9 +94,12 @@ UEFI GRUB. You only need to switch its boot mode away from Android:
 
 ## How to update
 
-Updates ship through the pocknix pacman repo - kernel included, no reflashing. Two ways to
-get them:
+Updates ship through the pocknix pacman repo - kernel included, no reflashing. Three ways
+to get them:
 
+- **Pocknix Control (recommended)**: open the Quick Access Menu in game mode, go to the
+  **Pocknix Control** plugin's **Updater** tab, and tap **Update** - checks for and
+  applies updates without leaving game mode.
 - **Pocknix Updater**: switch to desktop mode and launch the **Pocknix Updater** shortcut.
 - **pacman**: run `sudo pacman -Syu` in a terminal, like any Arch system.
 
