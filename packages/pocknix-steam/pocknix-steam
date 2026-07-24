@@ -73,6 +73,13 @@ if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhe
   pkill -u "${uid}" -KILL -f steamwebhelper 2>/dev/null || true
 fi
 
+# Default compat tool: seed the GLOBAL "run other titles with" mapping to the bundled ARM
+# proton-cachyos, so users who never open Settings get the fast ARM path instead of an x86
+# Proton (functional since the binfmt/SLR work, but fully-emulated Wine = subpar perf).
+# Seed-once (respects a user's own choice); must run while Steam is NOT running, which the
+# stale-client sweep above just guaranteed. See pocknix-steam-seed-default-compat.
+/usr/bin/pocknix-steam-seed-default-compat proton-cachyos || true
+
 # ES-DE + ES-DE favorites into the Steam library: pocknix-steam-sync (pocknix-emulation) writes
 # shortcuts.vdf DIRECTLY — no Steam ROM Manager (its Electron CLI deadlocked on every display
 # backend on this device; retired 2026-07-05). Right moment: Steam is guaranteed down (it rewrites

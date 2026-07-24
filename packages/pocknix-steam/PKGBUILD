@@ -4,7 +4,7 @@
 # Steam is experimental (Valve publicbeta linuxarm64).
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=32
+pkgrel=33
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -44,8 +44,9 @@ source=('pocknix-steam-install' 'pocknix-steam' 'steam' 'steam.desktop'
         'steam-256.png' 'steam-512.png' 'registry.vdf'
         'proton-toolmanifest.vdf' 'proton-compatibilitytool.vdf'
         'pocknix-proton-prep' 'pocknix-proton-prep.service'
+        'pocknix-steam-seed-default-compat'
         'pocknix-proton' 'pocknix-proton-wrapper' 'fex-profiles.json')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP')
 
 package() {
@@ -74,6 +75,7 @@ package() {
   # start; the user service (--watch) re-applies when Proton is downloaded/updated. Enabled globally
   # in build-sd-image.sh. See pocknix-proton-prep for the full rationale.
   install -Dm755 "${srcdir}/pocknix-proton-prep"           "${pkgdir}/usr/bin/pocknix-proton-prep"
+  install -Dm755 "${srcdir}/pocknix-steam-seed-default-compat" "${pkgdir}/usr/bin/pocknix-steam-seed-default-compat"
   install -Dm644 "${srcdir}/pocknix-proton-prep.service"   "${pkgdir}/usr/lib/systemd/user/pocknix-proton-prep.service"
   # Per-game FEX profiles (Pocknix Control plugin writes /etc/pocknix/game-tweaks.json; the
   # wrapper applies the chosen profile via FEX_APP_CONFIG at game launch). The pocknix-proton

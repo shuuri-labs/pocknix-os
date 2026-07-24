@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+# pocknix-steam-seed-default-compat — make ARM Proton the OOTB default compat tool.
+#
+# WHY: with x86 Proton now functional (binfmt on + SLR), a user who never opens Settings
+# gets whatever Steam's server manifest defaults to for Windows titles — potentially an
+# x86 Proton with fully-emulated Wine, i.e. silently subpar performance. Seeding the
+# GLOBAL CompatToolMapping entry (appid "0" = Settings -> Compatibility -> "Run other
+# titles with:") to the bundled proton-cachyos (ARM64) gives every game the fast path by
+# default; per-game overrides (e.g. picking an x86 Proton for a compat-problem title)
+# still win over the global entry.
+#
+# SEED-ONCE: if a "0" mapping already exists — ours from a previous boot, or a value the
+# user deliberately chose — leave it alone. We set the default, we never enforce it.
+#
+# WHEN: must run while Steam is NOT running (the client rewrites config.vdf from memory
+# on exit); the pocknix-steam launcher calls this after the stale-client sweep, right
+# before starting the client. On true first boot config.vdf doesn't exist yet — we write
+# armada's minimal skeleton (this is armada's set-steam-default-compat.py block editor,
+# with the force-overwrite swapped for seed-once).
+import pathlib
+import sys
+
+TOOL_NAME = sys.argv[1] if len(sys.argv) > 1 else "proton-cachyos"
+CONFIG = pathlib.Path.home() / ".local/share/Steam/config/config.vdf"
+
+
+def find_block(lines, key, start, end):
+    for index in range(start, end):
+        if lines[index].strip() != f'"{key}"':
+            continue
+        if index + 1 >= end or lines[index + 1].strip() != "{":
+            continue
+        depth = 0
+        for cursor in range(index + 1, end):
+            depth += lines[cursor].count("{")
+            depth -= lines[cursor].count("}")
+            if depth == 0:
+                return index, cursor
+    return None
+
+
+def require_block(lines, key, start, end):
+    block = find_block(lines, key, start, end)
+    if block is None:
+        raise SystemExit(f"pocknix-steam-seed-default-compat: missing config block: {key}")
+    return block
+
+
+def main():
+    if not CONFIG.exists():
+        CONFIG.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG.write_text(
+            '"InstallConfigStore"\n{\n'
+            '\t"Software"\n\t{\n'
+            '\t\t"Valve"\n\t\t{\n'
+            '\t\t\t"Steam"\n\t\t\t{\n'
+            "\t\t\t}\n\t\t}\n\t}\n}\n"
+        )
+
+    lines = CONFIG.read_text().splitlines(keepends=True)
+
+    _, root_end = require_block(lines, "InstallConfigStore", 0, len(lines))
+    software_start, software_end = require_block(lines, "Software", 0, root_end)
+    valve_start, valve_end = require_block(lines, "Valve", software_start, software_end)
+    steam_start, steam_end = require_block(lines, "Steam", valve_start, valve_end)
+
+    entry = [
+        '\t\t\t\t\t"0"\n',
+        "\t\t\t\t\t{\n",
+        f'\t\t\t\t\t\t"name"\t\t"{TOOL_NAME}"\n',
+        '\t\t\t\t\t\t"config"\t\t""\n',
+        '\t\t\t\t\t\t"priority"\t\t"250"\n',
+        "\t\t\t\t\t}\n",
+    ]
+
+    mapping = find_block(lines, "CompatToolMapping", steam_start, steam_end)
+    if mapping is None:
+        lines[steam_end:steam_end] = [
+            '\t\t\t\t"CompatToolMapping"\n',
+            "\t\t\t\t{\n",
+            *entry,
+            "\t\t\t\t}\n",
+        ]
+    elif find_block(lines, "0", mapping[0], mapping[1]) is None:
+        lines[mapping[0] + 2:mapping[0] + 2] = entry
+    else:
+        return  # seed-once: a global default already exists (ours or the user's) — keep it
+
+    CONFIG.write_text("".join(lines))
+    print(f"[pocknix-steam] seeded default compat tool: {TOOL_NAME}")
+
+
+if __name__ == "__main__":
+    main()
