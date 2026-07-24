@@ -26,7 +26,7 @@ pkgbase=mesa
 pkgname=(mesa vulkan-freedreno)
 epoch=2
 pkgver=26.1.5
-pkgrel=1
+pkgrel=2
 pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (26.1.5)"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
@@ -42,17 +42,23 @@ makedepends=(
 )
 # upstream considers LTO broken until explicit notice (Arch mesa does the same)
 options=(!lto)
-# 0001 = upstream mesa 179e744f7577 ("c11/threads: fix build on c23", Cc: mesa-stable) —
-# newer glibc (ALARM's 2.43) declares once_flag/call_once in stdlib.h per C2y, which
-# collides with mesa's bundled src/c11 pthread shim ("conflicting types for 'call_once'").
-# 25.1.5 predates the fix (ROCKNIX builds it against an older glibc, so they never hit it).
-source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz")
+# 0001 (pkgrel 2) = ir3: don't lower bindless UBOs whose OFFSET is non-const (from armada-
+# packages mesa/patches/0003; not upstream). get_ubo_info() treated a bindless UBO as
+# lowerable when only the descriptor source was const, ignoring the offset — miscompiles
+# show as rendering artifacts under bindless-heavy D3D translation (DXVK 3.x; seen as the
+# KH 1.5+2.5 visual bugs on x86 Proton). ir3 is the shader compiler for BOTH turnip and
+# freedreno GL, hence both split packages carry it. The same patch goes into the x86 turnip
+# overlaid into fex-rootfs — keep them in sync.
+source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz"
+        '0001-ir3-disable-bindless-ubo-const-lowering.patch')
 # sha256 computed from the upstream archive.mesa3d.org tarball
-sha256sums=('79e421c7ce18cd9e790b8375920325779f10798630bf30e0b22f1a21c8617122')
+sha256sums=('79e421c7ce18cd9e790b8375920325779f10798630bf30e0b22f1a21c8617122'
+            '1fa4a8e418a1822d91d5128c108434681f6d3765c0d056ffaee79b7fe4a9ff62')
 
 prepare() {
   cd "mesa-${pkgver}"
   # (the 25.1.5-era c11-threads C23 patch is upstream in 26.x — dropped)
+  patch -Np1 -i "${srcdir}/0001-ir3-disable-bindless-ubo-const-lowering.patch"
   # Include the package release in the version string so Chromium/CEF (steamwebhelper!)
   # invalidates its GPU cache across our rebuilds — same trick as Arch's mesa.
   echo "${pkgver}-pocknix${epoch}.${pkgrel}" > VERSION
