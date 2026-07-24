@@ -1,0 +1,15 @@
+# Re-assert the FEX binfmt on/off choice after any transaction touching binfmt.d.
+# systemd's own 30-systemd-binfmt hook re-registers handlers ENABLED on e.g. a fex-emu
+# upgrade; without this, a user's "off" choice silently leaks to "on" until reboot.
+# 90- prefix: PostTransaction hooks run in filename order, so we run after systemd's.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/lib/binfmt.d/*
+
+[Action]
+Description = Applying pocknix FEX binfmt policy...
+When = PostTransaction
+Exec = /usr/local/bin/pocknix-fex-binfmt apply

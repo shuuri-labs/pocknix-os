@@ -23,11 +23,11 @@
     "MonoHacks": "1"
   },
   "ThunksDB": {
-    "Vulkan": 1,
-    "GL": 1,
-    "EGL": 1,
-    "drm": 1,
-    "WaylandClient": 1,
-    "asound": 1
+    "Vulkan": 0,
+    "GL": 0,
+    "EGL": 0,
+    "drm": 0,
+    "WaylandClient": 0,
+    "asound": 0
   }
 }

@@ -21,7 +21,7 @@
 pkgname=fex-emu
 _commit=1cc4b93e7a71c883ec021b71359f136394dc1f3c
 pkgver=2607.20260702.1cc4b93e
-pkgrel=1
+pkgrel=2
 pkgdesc="Fast usermode x86/x86-64 emulator for AArch64, built with host+guest thunks"
 arch=('aarch64')
 url="https://github.com/FEX-Emu/FEX"
@@ -160,5 +160,18 @@ package() {
 
   # Base global config (RootFS name + thunk wiring filled in by the pocknix-fex piece;
   # this is a sane default so a bare FEXInterpreter smoke-test works post-install).
+  #
+  # ThunksDB is ALL ZERO (pkgrel 2, 2026-07-24) — deliberate:
+  #  - On the host, NO thunk ever engages on our Arch rootfs (the @PREFIX_LIB@ overlay
+  #    path mismatch; A/B-verified for Vulkan AND GL: emulated turnip / FD740 renderer,
+  #    zero LoadLib lines). So zeroing changes nothing for pocknix-play/Decky/host x86.
+  #  - Inside Steam Linux Runtime containers (x86 Proton) the overlay DID apply to
+  #    pressure-vessel's graphics capture, copying guest thunk STUBS into the container
+  #    as libvulkan/libwayland — guest loads them from unbless-able paths and FEX
+  #    segfaults ("NoExec instruction in entry block"). Zeroing makes the capture read
+  #    real bytes, so x86 Proton works with NO per-game launch options.
+  #  - ARM Proton is untouched either way: its bundled arm64ec FEX has no Linux-lib
+  #    thunks, and its per-game config flows via FEX_APP_CONFIG (env), not this file.
+  # Thunk libs still ship; re-enable per-app via FEX_APP_CONFIG if a use case appears.
   install -Dm0644 "${srcdir}/Config.json" "${pkgdir}/usr/share/fex-emu/Config.json"
 }

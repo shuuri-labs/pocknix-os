@@ -26,7 +26,7 @@ pkgbase=mesa
 pkgname=(mesa vulkan-freedreno)
 epoch=2
 pkgver=26.1.5
-pkgrel=1
+pkgrel=3
 pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (26.1.5)"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
@@ -42,10 +42,11 @@ makedepends=(
 )
 # upstream considers LTO broken until explicit notice (Arch mesa does the same)
 options=(!lto)
-# 0001 = upstream mesa 179e744f7577 ("c11/threads: fix build on c23", Cc: mesa-stable) —
-# newer glibc (ALARM's 2.43) declares once_flag/call_once in stdlib.h per C2y, which
-# collides with mesa's bundled src/c11 pthread shim ("conflicting types for 'call_once'").
-# 25.1.5 predates the fix (ROCKNIX builds it against an older glibc, so they never hit it).
+# NO source patches (pkgrel 3): the armada ir3 bindless-UBO patch (pkgrel 2 only) was
+# trialed against the KH 1.5+2.5 x86-Proton rendering bugs and demonstrably changed
+# nothing, so it was dropped to keep host AND fex-rootfs x86 turnip on identical stock
+# 26.1.5 source (see pocknix-notes x86-proton plan; the patch + x86 build recipe live in
+# git history / notes tools/ if a bindless miscompile ever actually surfaces).
 source=("https://archive.mesa3d.org/mesa-${pkgver}.tar.xz")
 # sha256 computed from the upstream archive.mesa3d.org tarball
 sha256sums=('79e421c7ce18cd9e790b8375920325779f10798630bf30e0b22f1a21c8617122')
