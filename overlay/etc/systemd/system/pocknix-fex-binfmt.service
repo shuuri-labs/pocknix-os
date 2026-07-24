@@ -1,0 +1,19 @@
+# Apply the persisted FEX x86 binfmt choice at boot (default ON — see pocknix-fex-binfmt).
+#
+# Replaces pocknix-fex-binfmt-off.service (default-off era). Runs after systemd-binfmt
+# registers the FEX handlers and re-asserts /var/lib/pocknix/fex-binfmt onto /proc (root
+# only — the deck session can't write binfmt_misc). The matching pacman hook
+# (90-pocknix-fex-binfmt.hook) re-applies after package transactions that touch
+# binfmt.d, so an opt-out survives fex-emu upgrades without waiting for a reboot.
+[Unit]
+Description=pocknix: apply FEX x86 binfmt policy (default on)
+After=systemd-binfmt.service
+Wants=systemd-binfmt.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/pocknix-fex-binfmt apply
+
+[Install]
+WantedBy=multi-user.target

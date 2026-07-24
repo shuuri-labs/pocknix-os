@@ -144,7 +144,7 @@ EOF
   # the volume-rocker handler (Steam shows the OSD but doesn't change volume on KEY_VOLUME*) +
   # gamescope-rt (RRs the compositor from root — the deck session has no rtprio grant, the
   # SteamOS model; see limits.d/60-pocknix-gaming.conf. Replaces the old rt-demote watcher).
-  chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt-off.service \
+  chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt.service \
         pocknix-volumed.service pocknix-gamescope-rt.service pocknix-powerd.service 2>/dev/null || true
   # Decky Loader (QAM plugins, incl. Pocknix Control): seed deck's ~/homebrew at boot, then run
   # the loader under FEX in its private-binfmt namespace (see packages/pocknix-decky).

@@ -54,10 +54,10 @@ echo steamdeck_publicbeta > "${STEAM}/package/beta"
 # filled in / re-fixed by pocknix-proton-prep.service --watch the moment Proton is downloaded or
 # updated, so a mid-session download becomes usable immediately. See pocknix-proton-prep.
 /usr/bin/pocknix-proton-prep
-# (binfmt) The FEX x86 binfmt handlers are disabled at BOOT by pocknix-fex-binfmt-off.service — done
-# there, as root, because the non-root 'deck' session can't write /proc/sys/fs/binfmt_misc. Leaving
-# binfmt on breaks Steam's Proton compat-tool setup (x86 game content goes Wine->FEX directly, not via
-# Linux binfmt). See overlay/etc/systemd/system/pocknix-fex-binfmt-off.service.
+# (binfmt) The FEX x86 binfmt handlers are ON by default (pocknix-fex-binfmt.service applies the
+# persisted choice at boot, as root — the deck session can't write /proc/sys/fs/binfmt_misc).
+# Binfmt-on is what makes x86 Proton + Steam Linux Runtime work OOTB; hardware-validated harmless
+# for ARM Proton on both SoCs (2026-07-24). `pocknix-fex-binfmt off` opts out.
 
 # Self-heal a session SWITCH: steamos-session-select SIGTERMs gamescope to go to Plasma, but the
 # Steam client re-parents and keeps running (with its single-instance lock). On the way back the new
