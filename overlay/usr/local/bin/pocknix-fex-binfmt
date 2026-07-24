@@ -1,0 +1,48 @@
+#!/bin/sh
+# pocknix-fex-binfmt — get/set the global FEX x86 binfmt handlers (on|off).
+#
+# Pocknix ships with the handlers DISABLED (see pocknix-fex-binfmt-off.service): ARM64
+# Proton doesn't need them (x86 game code goes Wine->FEX directly), and binfmt-on broke
+# the compat-tool setup when last tested. "on" is the x86-Proton/SLR path: x86_64 ELFs
+# (pressure-vessel, x86 Proton, native x86 Linux games) exec transparently through FEX.
+#
+# The choice persists across reboots in /var/lib/pocknix/fex-binfmt (absent = off, the
+# shipped default) and is applied LIVE: systemd-binfmt registers the handlers at boot and
+# they stay registered either way — on/off only flips their enable bit, so no reboot and
+# no Steam restart is needed for the exec behavior itself (Steam still reads compat-tool
+# registrations only at client startup).
+#
+#   pocknix-fex-binfmt        # print the current LIVE state
+#   pocknix-fex-binfmt on     # enable + persist (root)
+#   pocknix-fex-binfmt off    # disable + persist (root)
+MODE_FILE=/var/lib/pocknix/fex-binfmt
+
+live_state() {
+  head -1 /proc/sys/fs/binfmt_misc/FEX-x86_64 2>/dev/null | grep -q enabled && echo on || echo off
+}
+
+case "${1:-}" in
+  "")
+    live_state
+    ;;
+  on|off)
+    v=0; [ "${1}" = on ] && v=1
+    for h in FEX-x86_64 FEX-x86; do
+      echo "${v}" > "/proc/sys/fs/binfmt_misc/${h}" 2>/dev/null
+    done
+    if [ "$(live_state)" != "${1}" ]; then
+      echo "pocknix-fex-binfmt: cannot flip /proc/sys/fs/binfmt_misc/FEX-* (run as root; handlers registered?)" >&2
+      exit 1
+    fi
+    mkdir -p "$(dirname "${MODE_FILE}")" 2>/dev/null
+    if ! printf '%s\n' "${1}" > "${MODE_FILE}" 2>/dev/null; then
+      echo "pocknix-fex-binfmt: cannot write ${MODE_FILE} (run as root)" >&2
+      exit 1
+    fi
+    echo "fex binfmt: ${1}"
+    ;;
+  *)
+    echo "usage: pocknix-fex-binfmt [on|off]" >&2
+    exit 2
+    ;;
+esac
