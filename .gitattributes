@@ -1,0 +1,9 @@
+# Force LF line endings on shell scripts so they stay runnable after being
+# checked out on Windows and copied (scp/git) onto the device. A CRLF shebang
+# (/bin/sh\r) makes systemd fail with status 203/EXEC ("No such file or
+# directory"). Scripts land in /usr/local/bin (overlay) and /usr/bin
+# (packages/pocknix-bsp-common) and are invoked directly by systemd units, so
+# both locations need protecting regardless of filename extension.
+*.sh        text eol=lf
+overlay/**  text eol=lf
+packages/pocknix-bsp-common/* text eol=lf
