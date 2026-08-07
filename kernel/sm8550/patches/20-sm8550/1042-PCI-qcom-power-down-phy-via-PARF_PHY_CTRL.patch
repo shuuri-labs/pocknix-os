@@ -1,0 +1,143 @@
+From: Krishna Chaitanya Chundru <krishna.chundru@oss.qualcomm.com>
+Date: Wed, 29 Apr 2026 12:12:25 +0530
+Subject: [PATCH] PCI: qcom: Power down PHY via PARF_PHY_CTRL before disabling rails/clocks
+
+Some Qcom PCIe controller variants bring the PHY out of test power-down
+(PHY_TEST_PWR_DOWN) during init. When the link is later transitioned
+towards D3cold and the driver disables PCIe clocks and/or regulators
+without explicitly re-asserting PHY_TEST_PWR_DOWN, the PHY can remain
+partially powered, leading to avoidable power leakage.
+
+Update the init-path comments to reflect that PARF_PHY_CTRL is used to
+power the PHY on. Also, for controller revisions that enable PHY power
+in init (2.3.2, 2.3.3, 2.4.0, 2.7.0 and 2.9.0), explicitly power the PHY
+down via PARF_PHY_CTRL in the deinit path before disabling clocks or
+regulators.
+
+This ensures the PHY is put into a defined low-power state prior to
+removing its supplies, preventing leakage when entering D3cold.
+
+Signed-off-by: Krishna Chaitanya Chundru <krishna.chundru@oss.qualcomm.com>
+
+[Thorch backport: mainline "PCI: qcom: Add D3cold support" v5 series, patch 3/5.
+ Needed so the Qualcomm PCIe host can use the D3cold suspend path on Linux 7.1.2.
+ Ref: https://lore.kernel.org/all/20260429-d3cold-v5-3-89e9735b9df6@oss.qualcomm.com/ ]
+---
+ drivers/pci/controller/dwc/pcie-qcom.c | 38 +++++++++++++++++++++++++++++++---
+ 1 file changed, 35 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/pci/controller/dwc/pcie-qcom.c b/drivers/pci/controller/dwc/pcie-qcom.c
+index 085300c1d1ec..9dd808e85409 100644
+--- a/drivers/pci/controller/dwc/pcie-qcom.c
++++ b/drivers/pci/controller/dwc/pcie-qcom.c
+@@ -532,7 +532,7 @@ static int qcom_pcie_post_init_2_1_0(struct qcom_pcie *pcie)
+ 	u32 val;
+ 	int ret;
+ 
+-	/* enable PCIe clocks and resets */
++	/* Force PHY out of lowest power state */
+ 	val = readl(pcie->parf + PARF_PHY_CTRL);
+ 	val &= ~PHY_TEST_PWR_DOWN;
+ 	writel(val, pcie->parf + PARF_PHY_CTRL);
+@@ -699,6 +699,12 @@ static int qcom_pcie_get_resources_2_3_2(struct qcom_pcie *pcie)
+ static void qcom_pcie_deinit_2_3_2(struct qcom_pcie *pcie)
+ {
+ 	struct qcom_pcie_resources_2_3_2 *res = &pcie->res.v2_3_2;
++	u32 val;
++
++	/* Force PHY to lowest power state*/
++	val = readl(pcie->parf + PARF_PHY_CTRL);
++	val |= PHY_TEST_PWR_DOWN;
++	writel(val, pcie->parf + PARF_PHY_CTRL);
+ 
+ 	clk_bulk_disable_unprepare(res->num_clks, res->clks);
+ 	regulator_bulk_disable(ARRAY_SIZE(res->supplies), res->supplies);
+@@ -731,7 +737,7 @@ static int qcom_pcie_post_init_2_3_2(struct qcom_pcie *pcie)
+ {
+ 	u32 val;
+ 
+-	/* enable PCIe clocks and resets */
++	/* Force PHY out of lowest power state */
+ 	val = readl(pcie->parf + PARF_PHY_CTRL);
+ 	val &= ~PHY_TEST_PWR_DOWN;
+ 	writel(val, pcie->parf + PARF_PHY_CTRL);
+@@ -795,6 +801,12 @@ static int qcom_pcie_get_resources_2_4_0(struct qcom_pcie *pcie)
+ static void qcom_pcie_deinit_2_4_0(struct qcom_pcie *pcie)
+ {
+ 	struct qcom_pcie_resources_2_4_0 *res = &pcie->res.v2_4_0;
++	u32 val;
++
++	/* Force PHY to lowest power state*/
++	val = readl(pcie->parf + PARF_PHY_CTRL);
++	val |= PHY_TEST_PWR_DOWN;
++	writel(val, pcie->parf + PARF_PHY_CTRL);
+ 
+ 	reset_control_bulk_assert(res->num_resets, res->resets);
+ 	clk_bulk_disable_unprepare(res->num_clks, res->clks);
+@@ -863,6 +875,12 @@ static int qcom_pcie_get_resources_2_3_3(struct qcom_pcie *pcie)
+ static void qcom_pcie_deinit_2_3_3(struct qcom_pcie *pcie)
+ {
+ 	struct qcom_pcie_resources_2_3_3 *res = &pcie->res.v2_3_3;
++	u32 val;
++
++	/* Force PHY to lowest power state */
++	val = readl(pcie->parf + PARF_PHY_CTRL);
++	val |= PHY_TEST_PWR_DOWN;
++	writel(val, pcie->parf + PARF_PHY_CTRL);
+ 
+ 	clk_bulk_disable_unprepare(res->num_clks, res->clks);
+ }
+@@ -918,6 +936,7 @@ static int qcom_pcie_post_init_2_3_3(struct qcom_pcie *pcie)
+ 	u16 offset = dw_pcie_find_capability(pci, PCI_CAP_ID_EXP);
+ 	u32 val;
+ 
++	/* Force PHY out of lowest power state */
+ 	val = readl(pcie->parf + PARF_PHY_CTRL);
+ 	val &= ~PHY_TEST_PWR_DOWN;
+ 	writel(val, pcie->parf + PARF_PHY_CTRL);
+@@ -1013,7 +1032,7 @@ static int qcom_pcie_init_2_7_0(struct qcom_pcie *pcie)
+ 	/* configure PCIe to RC mode */
+ 	writel(DEVICE_TYPE_RC, pcie->parf + PARF_DEVICE_TYPE);
+ 
+-	/* enable PCIe clocks and resets */
++	/* Force PHY out of lowest power state */
+ 	val = readl(pcie->parf + PARF_PHY_CTRL);
+ 	val &= ~PHY_TEST_PWR_DOWN;
+ 	writel(val, pcie->parf + PARF_PHY_CTRL);
+@@ -1084,6 +1103,12 @@ static void qcom_pcie_host_post_init_2_7_0(struct qcom_pcie *pcie)
+ static void qcom_pcie_deinit_2_7_0(struct qcom_pcie *pcie)
+ {
+ 	struct qcom_pcie_resources_2_7_0 *res = &pcie->res.v2_7_0;
++	u32 val;
++
++	/* Force PHY to lowest power state */
++	val = readl(pcie->parf + PARF_PHY_CTRL);
++	val |= PHY_TEST_PWR_DOWN;
++	writel(val, pcie->parf + PARF_PHY_CTRL);
+ 
+ 	clk_bulk_disable_unprepare(res->num_clks, res->clks);
+ 
+@@ -1188,6 +1213,12 @@ static int qcom_pcie_get_resources_2_9_0(struct qcom_pcie *pcie)
+ static void qcom_pcie_deinit_2_9_0(struct qcom_pcie *pcie)
+ {
+ 	struct qcom_pcie_resources_2_9_0 *res = &pcie->res.v2_9_0;
++	u32 val;
++
++	/* Force PHY to lowest power state */
++	val = readl(pcie->parf + PARF_PHY_CTRL);
++	val |= PHY_TEST_PWR_DOWN;
++	writel(val, pcie->parf + PARF_PHY_CTRL);
+ 
+ 	clk_bulk_disable_unprepare(res->num_clks, res->clks);
+ }
+@@ -1228,6 +1259,7 @@ static int qcom_pcie_post_init_2_9_0(struct qcom_pcie *pcie)
+ 	u32 val;
+ 	int i;
+ 
++	/* Force PHY out of lowest power state */
+ 	val = readl(pcie->parf + PARF_PHY_CTRL);
+ 	val &= ~PHY_TEST_PWR_DOWN;
+ 	writel(val, pcie->parf + PARF_PHY_CTRL);
+
+-- 
+2.34.1
