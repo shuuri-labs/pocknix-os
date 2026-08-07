@@ -1,0 +1,11 @@
+#!/bin/sh
+# Enable cpu0 idle state1 (silver rail power collapse) for the suspend
+# window only: s2idle sleeps via cpuidle, so the boot-time state1 disable
+# (30-pocknix-cpuidle.conf, GMU workaround) would also block APSS cluster
+# sleep. The post hook restores the saved setting on resume.
+d=/sys/devices/system/cpu/cpu0/cpuidle/state1/disable
+[ -w "$d" ] || exit 0
+mkdir -p /run/pocknix
+cat "$d" > /run/pocknix/cpuidle-state1
+echo 0 > "$d" 2>/dev/null || true
+exit 0

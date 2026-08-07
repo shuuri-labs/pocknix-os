@@ -1,0 +1,13 @@
+#!/bin/sh
+# Restore the pre-suspend cpu0 state1 setting saved by the pre hook
+# (normally 1 = disabled, the awake-time GMU workaround).
+d=/sys/devices/system/cpu/cpu0/cpuidle/state1/disable
+s=/run/pocknix/cpuidle-state1
+[ -w "$d" ] || exit 0
+if [ -f "$s" ]; then
+  cat "$s" > "$d" 2>/dev/null || true
+  rm -f "$s"
+else
+  echo 1 > "$d" 2>/dev/null || true
+fi
+exit 0
