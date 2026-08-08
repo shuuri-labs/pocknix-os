@@ -25,12 +25,6 @@ def side_colour(data):
         return ring_colour(data)
     if sm == "static":
         side = data["side"]
-        # sideLinked does NOT mean "left side = right side" (unlike ring `linked` which
-        # means L-ring = R-ring). It means "the side strips mirror the ring's left colour"
-        # — so the `side` colour store is ignored until the user unlinks them.
-        if data.get("sideLinked", True):
-            left = data["left"]
-            return (_colour.rgb(left), left["brightness"])
         return (_colour.rgb(side), side["brightness"])
     if sm == "battery":
         capacity = _sensors.read_capacity()

@@ -71,7 +71,6 @@ BASE_DEFAULTS = {
     "linked": True,
     "mode": "static",
     "sideMode": "match",
-    "sideLinked": True,
     "modeBrightness": 255,
     "sideBrightness": 255,
     "left": {"r": 0, "g": 200, "b": 255, "brightness": 180},
@@ -117,13 +116,15 @@ def sanitize(data, modes):
     clean["sideBrightness"] = _colour.clamp_byte(data.get("sideBrightness", defaults["sideBrightness"]))
     mode = data.get("mode", defaults["mode"])
     clean["mode"] = mode if mode in keys else defaults["mode"]
-    # sideMode, with migration from the legacy sides: bool toggle.
+    # sideMode, with migration from the legacy sides: bool toggle and from the removed
+    # sideLinked: if sideMode is "static" but sideLinked was True, migrate to "match".
     if "sideMode" in data:
         sm = data["sideMode"]
+        if sm == "static" and data.get("sideLinked", False):
+            sm = "match"
         clean["sideMode"] = sm if sm in SIDE_MODES else defaults["sideMode"]
     elif "sides" in data:
         clean["sideMode"] = "match" if bool(data["sides"]) else "off"
-    clean["sideLinked"] = bool(data.get("sideLinked", defaults["sideLinked"]))
     for key in ("left", "right", "side"):
         _read_side(data, clean, key, defaults)
     for mode in modes:

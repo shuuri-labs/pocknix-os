@@ -1,7 +1,7 @@
 import { PanelSection, PanelSectionRow, SliderField, ToggleField } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useRef, useState } from "react";
-import { setBootPulse, setLed, setLedEnabled, setLedLinked, setLedMode, setLedModeBrightness, setLedSide, setLedSideBrightness, setLedSideLinked, setLedSideMode, setLedTempRate, setLedTempThresholds } from "../backend";
+import { setBootPulse, setLed, setLedEnabled, setLedLinked, setLedMode, setLedModeBrightness, setLedSide, setLedSideBrightness, setLedSideMode, setLedTempRate, setLedTempThresholds } from "../backend";
 import { ColorControls } from "../components/ColorControls";
 import { SelectEdit } from "../components/widgets";
 import { hsvToRgb, rgbToHsv } from "../lib/rgb";
@@ -181,46 +181,14 @@ export function Lighting({ config, setConfig, reload }: {
                   .catch(() => reload())
               }
             />
-            {led.sideMode === "static" && (
-              <PanelSectionRow>
-                <ToggleField
-                  label="Link to Rings"
-                  description="Match the side static color to the stick color."
-                  checked={led.sideLinked}
-                  disabled={!led.enabled}
-                  onChange={(value) =>
-                    setLedSideLinked(value)
-                      .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
-                      .catch(() => reload())
-                  }
-                />
-              </PanelSectionRow>
-            )}
             {led.enabled && (led.sideMode === "battery" || led.sideMode === "temperature") && (
               <SideBrightness config={config} setConfig={setConfig} reload={reload} />
             )}
           </PanelSection>
 
           {led.enabled && led.sideMode === "static" && (
-            <PanelSection title={led.sideLinked ? "SIDE (FOLLOW RINGS)" : "SIDE LIGHTS"}>
-              {led.sideLinked ? (
-                <PanelSectionRow>
-                  <SliderField
-                    label="Brightness"
-                    value={Math.round((led.side.brightness / 255) * 100)}
-                    min={0}
-                    max={100}
-                    step={1}
-                    showValue
-                    validValues="range"
-                    valueSuffix="%"
-                    bottomSeparator="thick"
-                    onChange={(percent: number) => commitSide(leftHsv, Math.round((percent / 100) * 255))}
-                  />
-                </PanelSectionRow>
-              ) : (
-                <ColorControls zone="side" hsv={sideHsvVal} brightness={led.side.brightness} onCommit={commitSide} />
-              )}
+            <PanelSection title="SIDE LIGHTS">
+              <ColorControls zone="side" hsv={sideHsvVal} brightness={led.side.brightness} onCommit={commitSide} />
             </PanelSection>
           )}
         </>

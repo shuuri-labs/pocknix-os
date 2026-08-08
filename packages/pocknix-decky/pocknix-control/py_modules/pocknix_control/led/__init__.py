@@ -156,13 +156,6 @@ def set_led_side(r, g, b, brightness):
         return _commit(data)
 
 
-def set_led_side_linked(linked):
-    with _state.LOCK:
-        data = _state.load(MODES)
-        data["sideLinked"] = bool(linked)
-        return _commit(data, fade=True)
-
-
 def set_led_mode_brightness(brightness):
     with _state.LOCK:
         data = _state.load(MODES)

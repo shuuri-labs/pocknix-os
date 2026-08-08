@@ -20,7 +20,6 @@ export const setLedMode = (mode: LedMode) => call<[LedMode], LedConfig>("set_led
 export const setLedSideMode = (sideMode: LedSideMode) => call<[LedSideMode], LedConfig>("set_led_side_mode", sideMode);
 export const setLedSide = (r: number, g: number, b: number, brightness: number) =>
   call<[number, number, number, number], LedConfig>("set_led_side", r, g, b, brightness);
-export const setLedSideLinked = (linked: boolean) => call<[boolean], LedConfig>("set_led_side_linked", linked);
 export const setLedModeBrightness = (brightness: number) => call<[number], LedConfig>("set_led_mode_brightness", brightness);
 export const setLedSideBrightness = (brightness: number) => call<[number], LedConfig>("set_led_side_brightness", brightness);
 export const setLedTempThresholds = (lo: number, hi: number) => call<[number, number], LedConfig>("set_led_temp_thresholds", lo, hi);

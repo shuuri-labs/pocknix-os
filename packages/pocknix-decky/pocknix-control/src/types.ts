@@ -135,8 +135,6 @@ export interface LedConfig {
   mode: LedMode;
   /** Independent mode for the side strips (Odin 2). "match" mirrors the ring mode. */
   sideMode: LedSideMode;
-  /** Side-static link toggle: mirror the ring static colour instead of the side store. */
-  sideLinked: boolean;
   /** Brightness for the ring rainbow/battery/temperature modes (no per-side value). */
   modeBrightness: number;
   /** Brightness for the side battery/temperature modes. */

@@ -2,7 +2,7 @@ import asyncio
 
 from pocknix_control.config import build_config
 from pocknix_control.configio import apply_config, config_dir, export_config, read_config
-from pocknix_control.led import init_leds, set_boot_pulse, set_led, set_led_enabled, set_led_linked, set_led_mode, set_led_mode_brightness, set_led_side, set_led_side_linked, set_led_side_mode, set_led_side_brightness, set_led_temp_rate, set_led_temp_thresholds
+from pocknix_control.led import init_leds, set_boot_pulse, set_led, set_led_enabled, set_led_linked, set_led_mode, set_led_mode_brightness, set_led_side, set_led_side_mode, set_led_side_brightness, set_led_temp_rate, set_led_temp_thresholds
 from pocknix_control.modes import set_fan_mode, set_lavd_mode
 from pocknix_control.sdcard import detect_sdcard, format_sdcard
 from pocknix_control.snapshots import reboot_system, snapshot_status, start_rollback
@@ -64,9 +64,6 @@ class Plugin:
 
     async def set_led_side(self, r, g, b, brightness):
         return await asyncio.to_thread(set_led_side, r, g, b, brightness)
-
-    async def set_led_side_linked(self, linked):
-        return await asyncio.to_thread(set_led_side_linked, linked)
 
     async def set_led_side_brightness(self, brightness):
         return await asyncio.to_thread(set_led_side_brightness, brightness)
