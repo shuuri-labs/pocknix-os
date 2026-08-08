@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import type { Config, ConfigExportResult, ConfigImportResult, ConfigPreview, LedConfig, LedSideKey, SdcardInfo, SnapshotStatus, Tweaks, UpdateInfo, UpdateStatus } from "./types";
+import type { Config, ConfigExportResult, ConfigImportResult, ConfigPreview, LedConfig, LedMode, LedSideKey, LedSideMode, SdcardInfo, SnapshotStatus, Tweaks, UpdateInfo, UpdateStatus } from "./types";
 
 export const getConfig = () => call<[], Config>("get_config");
 export const setFanMode = (mode: string) => call<[string], Config>("set_fan_mode", mode);
@@ -15,8 +15,16 @@ export const setLed = (side: LedSideKey, r: number, g: number, b: number, bright
   call<[LedSideKey, number, number, number, number], LedConfig>("set_led", side, r, g, b, brightness);
 export const setLedLinked = (linked: boolean) => call<[boolean], LedConfig>("set_led_linked", linked);
 export const setLedEnabled = (enabled: boolean) => call<[boolean], LedConfig>("set_led_enabled", enabled);
-export const setLedSides = (sides: boolean) => call<[boolean], LedConfig>("set_led_sides", sides);
 export const setBootPulse = (enabled: boolean) => call<[boolean], LedConfig>("set_boot_pulse", enabled);
+export const setLedMode = (mode: LedMode) => call<[LedMode], LedConfig>("set_led_mode", mode);
+export const setLedSideMode = (sideMode: LedSideMode) => call<[LedSideMode], LedConfig>("set_led_side_mode", sideMode);
+export const setLedSide = (r: number, g: number, b: number, brightness: number) =>
+  call<[number, number, number, number], LedConfig>("set_led_side", r, g, b, brightness);
+export const setLedSideLinked = (linked: boolean) => call<[boolean], LedConfig>("set_led_side_linked", linked);
+export const setLedModeBrightness = (brightness: number) => call<[number], LedConfig>("set_led_mode_brightness", brightness);
+export const setLedSideBrightness = (brightness: number) => call<[number], LedConfig>("set_led_side_brightness", brightness);
+export const setLedTempThresholds = (lo: number, hi: number) => call<[number, number], LedConfig>("set_led_temp_thresholds", lo, hi);
+export const setLedTempRate = (rate: "slow" | "normal" | "fast") => call<["slow" | "normal" | "fast"], LedConfig>("set_led_temp_rate", rate);
 export const detectSdcard = () => call<[], SdcardInfo>("detect_sdcard");
 export const formatSdcard = (label: string) => call<[string], SdcardInfo>("format_sdcard", label);
 export const checkUpdates = () => call<[], UpdateInfo[]>("check_updates");

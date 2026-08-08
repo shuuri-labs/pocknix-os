@@ -120,14 +120,33 @@ export interface LedSide {
 }
 
 export type LedSideKey = "left" | "right" | "both";
+export type LedMode = "static" | "rainbow" | "battery" | "temperature";
+export type LedSideMode = "off" | "match" | "static" | "battery" | "temperature";
 
 export interface LedConfig {
   available: boolean;
   sidesAvailable: boolean;
+  rainbowAvailable: boolean;
+  batteryAvailable: boolean;
+  tempAvailable: boolean;
   enabled: boolean;
   linked: boolean;
-  sides: boolean;
   bootPulse: boolean;
+  mode: LedMode;
+  /** Independent mode for the side strips (Odin 2). "match" mirrors the ring mode. */
+  sideMode: LedSideMode;
+  /** Side-static link toggle: mirror the ring static colour instead of the side store. */
+  sideLinked: boolean;
+  /** Brightness for the ring rainbow/battery/temperature modes (no per-side value). */
+  modeBrightness: number;
+  /** Brightness for the side battery/temperature modes. */
+  sideBrightness: number;
+  /** Temperature-mode colour window (°C): blue at/below min, red at/above max. */
+  tempMin: number;
+  tempMax: number;
+  /** Temperature-mode poll rate: how often the monitor reads thermal zones. */
+  tempRate: "slow" | "normal" | "fast";
   left: LedSide;
   right: LedSide;
+  side: LedSide;
 }
