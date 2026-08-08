@@ -274,12 +274,46 @@ function TempThresholds({ config, setConfig, reload }: {
   reload: () => void;
 }) {
   const led = config.led;
-  // The two sliders commit together: dragging min up can't cross max, and vice versa.
-  // Each commits the pair, clamped on the backend by _sanitize.
-  const apply = (lo: number, hi: number) =>
+  // Local state for instant slider response; commit is debounced. The cross-constraint
+  // (min < max) is enforced by the backend _sanitize, but locally we clamp the bounds
+  // so dragging one slider doesn't yank the other's range mid-drag.
+  const [localMin, setLocalMin] = useState(led.tempMin);
+  const [localMax, setLocalMax] = useState(led.tempMax);
+  useEffect(() => { setLocalMin(led.tempMin); }, [led.tempMin]);
+  useEffect(() => { setLocalMax(led.tempMax); }, [led.tempMax]);
+
+  const pending = useRef<{ lo: number; hi: number } | null>(null);
+  const applyRef = useRef<(lo: number, hi: number) => void>(() => {});
+  applyRef.current = (lo: number, hi: number) =>
     setLedTempThresholds(lo, hi)
       .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
       .catch(() => reload());
+  useEffect(() => {
+    if (pending.current === null) return;
+    const snapshot = pending.current;
+    const timer = window.setTimeout(() => {
+      pending.current = null;
+      applyRef.current(snapshot.lo, snapshot.hi);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [localMin, localMax]);
+  useEffect(() => () => {
+    if (pending.current !== null) {
+      applyRef.current(pending.current.lo, pending.current.hi);
+    }
+  }, []);
+
+  const setMin = (v: number) => {
+    const clamped = Math.min(v, localMax - 1);
+    setLocalMin(clamped);
+    pending.current = { lo: clamped, hi: localMax };
+  };
+  const setMax = (v: number) => {
+    const clamped = Math.max(v, localMin + 1);
+    setLocalMax(clamped);
+    pending.current = { lo: localMin, hi: clamped };
+  };
+
   return (
     <PanelSection title="TEMPERATURE">
       <SelectEdit
@@ -295,29 +329,29 @@ function TempThresholds({ config, setConfig, reload }: {
       <PanelSectionRow>
         <SliderField
           label="Min (Blue)"
-          value={led.tempMin}
+          value={localMin}
           min={0}
-          max={led.tempMax - 1}
+          max={localMax - 1}
           step={1}
           showValue
           validValues="range"
           valueSuffix="°C"
           bottomSeparator="thick"
-          onChange={(v: number) => apply(v, led.tempMax)}
+          onChange={setMin}
         />
       </PanelSectionRow>
       <PanelSectionRow>
         <SliderField
           label="Max (Red)"
-          value={led.tempMax}
-          min={led.tempMin + 1}
+          value={localMax}
+          min={localMin + 1}
           max={100}
           step={1}
           showValue
           validValues="range"
           valueSuffix="°C"
           bottomSeparator="thick"
-          onChange={(v: number) => apply(led.tempMin, v)}
+          onChange={setMax}
         />
       </PanelSectionRow>
     </PanelSection>

@@ -838,14 +838,46 @@ const TEMP_RATE_OPTIONS = [
 ];
 function TempThresholds({ config, setConfig, reload }) {
     const led = config.led;
-    // The two sliders commit together: dragging min up can't cross max, and vice versa.
-    // Each commits the pair, clamped on the backend by _sanitize.
-    const apply = (lo, hi) => setLedTempThresholds(lo, hi)
+    // Local state for instant slider response; commit is debounced. The cross-constraint
+    // (min < max) is enforced by the backend _sanitize, but locally we clamp the bounds
+    // so dragging one slider doesn't yank the other's range mid-drag.
+    const [localMin, setLocalMin] = SP_REACT.useState(led.tempMin);
+    const [localMax, setLocalMax] = SP_REACT.useState(led.tempMax);
+    SP_REACT.useEffect(() => { setLocalMin(led.tempMin); }, [led.tempMin]);
+    SP_REACT.useEffect(() => { setLocalMax(led.tempMax); }, [led.tempMax]);
+    const pending = SP_REACT.useRef(null);
+    const applyRef = SP_REACT.useRef(() => { });
+    applyRef.current = (lo, hi) => setLedTempThresholds(lo, hi)
         .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
         .catch(() => reload());
+    SP_REACT.useEffect(() => {
+        if (pending.current === null)
+            return;
+        const snapshot = pending.current;
+        const timer = window.setTimeout(() => {
+            pending.current = null;
+            applyRef.current(snapshot.lo, snapshot.hi);
+        }, 350);
+        return () => window.clearTimeout(timer);
+    }, [localMin, localMax]);
+    SP_REACT.useEffect(() => () => {
+        if (pending.current !== null) {
+            applyRef.current(pending.current.lo, pending.current.hi);
+        }
+    }, []);
+    const setMin = (v) => {
+        const clamped = Math.min(v, localMax - 1);
+        setLocalMin(clamped);
+        pending.current = { lo: clamped, hi: localMax };
+    };
+    const setMax = (v) => {
+        const clamped = Math.max(v, localMin + 1);
+        setLocalMax(clamped);
+        pending.current = { lo: localMin, hi: clamped };
+    };
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "TEMPERATURE", children: [SP_JSX.jsx(SelectEdit, { label: "Update Rate", value: led.tempRate, options: TEMP_RATE_OPTIONS, onChange: (rate) => setLedTempRate(rate)
                     .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
-                    .catch(() => reload()) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Min (Blue)", value: led.tempMin, min: 0, max: led.tempMax - 1, step: 1, showValue: true, validValues: "range", valueSuffix: "\u00B0C", bottomSeparator: "thick", onChange: (v) => apply(v, led.tempMax) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Max (Red)", value: led.tempMax, min: led.tempMin + 1, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "\u00B0C", bottomSeparator: "thick", onChange: (v) => apply(led.tempMin, v) }) })] }));
+                    .catch(() => reload()) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Min (Blue)", value: localMin, min: 0, max: localMax - 1, step: 1, showValue: true, validValues: "range", valueSuffix: "\u00B0C", bottomSeparator: "thick", onChange: setMin }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Max (Red)", value: localMax, min: localMin + 1, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "\u00B0C", bottomSeparator: "thick", onChange: setMax }) })] }));
 }
 
 function cardSummary(card) {
