@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Gamepad Calibration
+Comment=Calibrate the built-in sticks and triggers (deadzone, range, centre)
+Exec=/usr/bin/pocknix-gamepad-calibration
+TryExec=/usr/bin/pocknix-gamepad-calibration
+Icon=input-gaming
+Terminal=false
+Categories=System;Settings;HardwareSettings;
+Keywords=gamepad;joystick;stick;trigger;calibration;deadzone;drift;

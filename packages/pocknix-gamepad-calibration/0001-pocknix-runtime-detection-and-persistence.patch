@@ -1,0 +1,192 @@
+Adapt GPcal to pocknix: discover the hardware at runtime, persist the result.
+
+Upstream targets one board (RP5): it hardcodes /sys/module/retroid, the evdev
+name "Retroid Pocket Gamepad" and the trigger axis codes that driver uses, and
+it saves a bash script into ~/.config/autostart for the CFW to source at boot.
+pocknix ships one package for every board, and nothing here would run that
+script, so detection moves into Klib/Pocknix.py and Save writes the conf that
+pocknix-gamepad-calibration.service replays.
+
+diff -Naur a/gpcal/gamedata/GPcal.py b/gpcal/gamedata/GPcal.py
+--- a/gpcal/gamedata/GPcal.py	2025-09-05 17:43:11
++++ b/gpcal/gamedata/GPcal.py	2026-08-08 13:13:36
+@@ -9,6 +9,7 @@
+ import datetime
+ from pathlib import Path
+ from Klib.PyxUI import *
++from Klib.Pocknix import CONFIG_PATH, DISPLAY_SCALE
+ 
+ CALIBRATE_DETECTION_PERCENT=10  
+ AXIS_MAX_PERCENT=95             # correction after calc (error margin)
+@@ -21,11 +22,11 @@
+ FPS=60
+ CALIBRATION_DETECTION_FPS = FPS//2    # 0.5s : minimum time to maintain a stick / trigger in a position
+ 
+-TITLE="Kdog GPcal for RP 5/Mini"
++TITLE="Kdog GPcal for pocknix"
+ 
+ class GPCalibrate:
+     def __init__(self):
+-        pyxel.init(320, 240, title=TITLE,fps=FPS, quit_key=pyxel.KEY_ESCAPE, display_scale=1)
++        pyxel.init(320, 240, title=TITLE,fps=FPS, quit_key=pyxel.KEY_ESCAPE, display_scale=DISPLAY_SCALE)
+ 
+         pyxel.load("assets/gpcal.pyxres")
+         
+@@ -138,17 +139,20 @@
+         self.draw_control_hint(14,225)
+         
+     def save_calibration(self):
+-        savepath = Path.home() / ".config" / "autostart"
+-        savepath.mkdir(parents=True,exist_ok=True)
+-        savepath = savepath / "GPcal.sh"
+-        self.ui_gamepad.calibration.save_configuration(savepath)
+-        savepath.chmod(0o777)
+-        self.ui_textbox_info.settext(f"Calibration data saved to")
+-        self.ui_textbox_info.settext(f"{savepath}")
++        # pocknix: persist to a conf a systemd unit replays at boot, so the
++        # calibration also applies in gaming mode. Upstream wrote a bash script
++        # into ~/.config/autostart, which nothing on pocknix would run.
++        CONFIG_PATH.parent.mkdir(parents=True,exist_ok=True)
++        self.ui_gamepad.calibration.save_configuration(CONFIG_PATH)
++        CONFIG_PATH.chmod(0o644)
++        self.ui_textbox_info.settext(f"Calibration saved, it is restored")
++        self.ui_textbox_info.settext(f"on every boot")
+         self.ui_textbox_info.settext("Where to sail now captain ?")
+ 
+     def reset_calibration(self):
++        # Dropping the conf too is the escape hatch from a bad calibration.
+         self.ui_gamepad.calibration.reset_all()
++        CONFIG_PATH.unlink(missing_ok=True)
+         self.ui_textbox_info.settext("Calibration data reset to default")
+         self.ui_textbox_info.settext("Where to sail now captain ?")
+ 
+diff -Naur a/gpcal/gamedata/Klib/PyxUI.py b/gpcal/gamedata/Klib/PyxUI.py
+--- a/gpcal/gamedata/Klib/PyxUI.py	2025-09-05 17:43:11
++++ b/gpcal/gamedata/Klib/PyxUI.py	2026-08-08 13:13:36
+@@ -11,11 +11,8 @@
+ import math
+ 
+ from Klib.RPocket import RPCalibration, Axis
++from Klib.Pocknix import ABS_Z, ABS_RZ, find_gamepad
+ 
+-INPUT_SEARCH_PATH="/sys/class/input"
+-INPUT_DEV_DIR="/dev/input"
+-GAMEPAD_NAME="Retroid Pocket Gamepad"
+-
+ class UIObject:
+     def __init__(self,x=0,y=0,w=320,h=240):
+         self.x = x
+@@ -380,6 +377,7 @@
+         self.add_uiobject(self.textbox_sdl_view)
+ 
+         self.event_path = None
++        self.trigger_codes = (ABS_Z, ABS_RZ)
+         self.find_event_path()
+ 
+         self.event_format = 'llHHi'
+@@ -388,17 +386,11 @@
+         if self.event_path != None:
+             self.eventpipe = os.open(self.event_path, os.O_RDONLY | os.O_NONBLOCK)
+     
+-    def find_event_path(self, gp_name=GAMEPAD_NAME):
+-        try:
+-            search_path = Path(INPUT_SEARCH_PATH)
+-            for sys_event_dir in search_path.glob("event*"):
+-                with open(sys_event_dir / "device" / "name", "r") as event_name_file:
+-                    if event_name_file.readline().strip() == gp_name:
+-                        sys_event_dir.stem
+-                        self.event_path=Path(INPUT_DEV_DIR) / sys_event_dir.stem
+-                        break
+-        except:
+-            self.event_path = None
++    def find_event_path(self):
++        # pocknix: match the pad by its driver rather than by a hardcoded evdev
++        # name (sm8550 boards report "AYN Odin2 Gamepad"), and take the trigger
++        # axis codes from what that driver actually advertises.
++        self.event_path, self.trigger_codes = find_gamepad()
+     
+     def reset_measurements_all(self):
+         self.stickleft.reset_measurements()
+@@ -432,10 +424,10 @@
+                 elif type == 3 and code == 4:
+                     self.stickright.axis_y.update_value(value)
+ 
+-                elif type == 3 and  code == 20:
++                elif type == 3 and  code == self.trigger_codes[0]:
+                     self.gauge_triggerleft.axis.update_value(value)
+ 
+-                elif type == 3 and code == 21:
++                elif type == 3 and code == self.trigger_codes[1]:
+                     self.gauge_triggerright.axis.update_value(value)
+ 
+             except OSError as e:
+diff -Naur a/gpcal/gamedata/Klib/RPocket.py b/gpcal/gamedata/Klib/RPocket.py
+--- a/gpcal/gamedata/Klib/RPocket.py	2025-09-05 17:43:11
++++ b/gpcal/gamedata/Klib/RPocket.py	2026-08-08 13:13:58
+@@ -9,6 +9,8 @@
+ from pathlib import Path
+ import sys
+ 
++from Klib.Pocknix import find_parameters_dir
++
+ # Default value used when calibration is reset
+ # DEFAULT_AXIS_MAX : this one is not critical as it only
+ # impacts the SDL layer (truncate the value) and it will be
+@@ -23,7 +25,9 @@
+ # the calibration procedure.
+ DEFAULT_TRIGGER_MAX=0x755
+ 
+-PARAMETERS_DIR_PATH="/sys/module/retroid/parameters"
++# pocknix: the calibrating driver differs per SoC (rsinput / retroid / mangmi),
++# so the parameter dir is discovered instead of hardcoded to the RP5's.
++PARAMETERS_DIR_PATH = find_parameters_dir() or "/sys/module/retroid/parameters"
+ 
+ class Axis:
+     def __init__(self,calibration,pname="leftx",name="Left X", orientation="h"):
+@@ -192,9 +196,9 @@
+ 
+     def save_configuration(self, savefile):
+         
+-        savefile.write(f"echo {self.antideadzone} > {self.parameters_dir}/{self.name}_antideadzone\n")
+-        savefile.write(f"echo {self.deadzone} > {self.parameters_dir}/{self.name}_deadzone\n")
+-        savefile.write(f"echo {self.max} > {self.parameters_dir}/{self.name}_max\n")
++        savefile.write(f"{self.name}_antideadzone={self.antideadzone}\n")
++        savefile.write(f"{self.name}_deadzone={self.deadzone}\n")
++        savefile.write(f"{self.name}_max={self.max}\n")
+     
+     def write_parameters(self):
+         
+@@ -255,8 +259,8 @@
+     
+     def save_configuration(self, savefile):
+         super().save_configuration(savefile)
+-        savefile.write(f"echo {self.center} > {self.parameters_dir}/{self.name}_center\n")
+-        savefile.write(f"echo {self.min} > {self.parameters_dir}/{self.name}_min\n")
++        savefile.write(f"{self.name}_center={self.center}\n")
++        savefile.write(f"{self.name}_min={self.min}\n")
+     
+     def write_parameters(self):
+         super().write_parameters()
+@@ -349,19 +353,16 @@
+ 
+     def save_configuration(self, savepath):
+         with open(savepath,"w") as savefile:
+-            savefile.write("#!/usr/bin/env bash\n")
+-            savefile.write("#\n")
+-            savefile.write("# Retroid Pocket 5/Mini gamepad calibration\n")
++            savefile.write("# pocknix gamepad calibration\n")
+             savefile.write("# Made with the Kdog GPcal tool\n")
+-            savefile.write("# SPDX-License-Identifier: MIT\n")
+-            savefile.write("#\n")
++            savefile.write("# Replayed at boot by pocknix-gamepad-calibration.service.\n")
++            savefile.write("# Delete this file to go back to the driver defaults.\n")
+             self.axis_leftx.save_configuration(savefile)
+             self.axis_lefty.save_configuration(savefile)
+             self.axis_rightx.save_configuration(savefile)
+             self.axis_righty.save_configuration(savefile)
+             self.trigger_left.save_configuration(savefile)
+             self.trigger_right.save_configuration(savefile)
+-            savefile.write(f"echo 1 > {self.parameters_dir}/update_params\n")
+ 
+     def write_parameters(self):
+         self.axis_leftx.write_parameters()

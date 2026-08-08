@@ -4,7 +4,7 @@
 # turns an ALARM base into pocknix for any sm8250 board (Retroid Pocket 5).
 pkgname=pocknix-device-sm8250
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc="pocknix device metapackage: SM8250 family (RP5, RP Flip 2)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -20,7 +20,10 @@ depends=('pocknix-bsp-sm8250'
          'pocknix-decky'
          'pocknix-turnip-arm'
          'pocknix-turnip-x86'
-         'pocknix-sdcard-automount')
+         'pocknix-sdcard-automount'
+         # sm8250-only: the raw trigger view reads retroid/mangmi ABS_HAT2X/Y, dead on
+         # rsinput. A dep edge, not a list entry: -Syu never installs a new package name.
+         'pocknix-gamepad-calibration')
 # Exactly one device metapackage per install (wrong-device guard, same pattern
 # as the BSPs).
 provides=('pocknix-device')
