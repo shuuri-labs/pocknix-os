@@ -36,6 +36,7 @@ const setLed = (side, r, g, b, brightness) => call("set_led", side, r, g, b, bri
 const setLedLinked = (linked) => call("set_led_linked", linked);
 const setLedEnabled = (enabled) => call("set_led_enabled", enabled);
 const setLedSides = (sides) => call("set_led_sides", sides);
+const setBootPulse = (enabled) => call("set_boot_pulse", enabled);
 const detectSdcard = () => call("detect_sdcard");
 const formatSdcard = (label) => call("format_sdcard", label);
 const checkUpdates = () => call("check_updates");
@@ -741,6 +742,8 @@ function Lighting({ config, setConfig, reload }) {
     const commitRight = (hsv, brightness) => commit("right", hsv, brightness, setConfig, reload);
     const commitBoth = (hsv, brightness) => commit("both", hsv, brightness, setConfig, reload);
     return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "STICK LIGHTS", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Enable", checked: led.enabled, onChange: (value) => setLedEnabled(value)
+                                .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+                                .catch(() => reload()) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Boot Pulse", description: "Pulse the sticks white on boot while Steam loads, then switch to your colors.", checked: led.bootPulse, disabled: !led.enabled, onChange: (value) => setBootPulse(value)
                                 .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
                                 .catch(() => reload()) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Link Left & Right", description: "Match both sticks to the same color.", checked: led.linked, disabled: !led.enabled, onChange: (value) => setLedLinked(value)
                                 .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))

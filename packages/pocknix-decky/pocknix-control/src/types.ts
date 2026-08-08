@@ -127,6 +127,7 @@ export interface LedConfig {
   enabled: boolean;
   linked: boolean;
   sides: boolean;
+  bootPulse: boolean;
   left: LedSide;
   right: LedSide;
 }
