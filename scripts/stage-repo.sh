@@ -13,13 +13,20 @@
 # Usage:  make stage DEVICE=<target> PKG="pocknix-steam ..."   (as USER, no sudo)
 #   - PKG names are ARTIFACT names: a split PKGBUILD's siblings are staged
 #     individually (PKG="mesa vulkan-freedreno").
+#   - DROP="<name>" retires a live package; the delta gate accepts only named
+#     drops as deletions. Needed because pacman honors replaces= only for names
+#     absent from every sync db — a package left live blocks its own migration.
 #   - re-run freely: the mirror refresh is incremental (seconds after the first
 #     run) and every run starts over from live, so a failed/abandoned staging
 #     can never leak into the next one.
 
 source "$(dirname "$0")/lib.sh"
 need_tool rclone
-[ "$#" -gt 0 ] || die "no packages named — usage: make stage PKG=\"<artifact-name> ...\""
+read -ra DROPS <<< "${POCKNIX_STAGE_DROP:-}"
+[ "$#" -gt 0 ] || [ "${#DROPS[@]}" -gt 0 ] || die "no packages named — usage: make stage PKG=\"<artifact-name> ...\" [DROP=\"<name> ...\"]"
+for d in "${DROPS[@]-}"; do
+  for name in "$@"; do [ "${d}" = "${name}" ] && die "${d}: named in both PKG and DROP"; done
+done
 [ -n "${POCKNIX_REPO_RCLONE_REMOTE}" ] || die "POCKNIX_REPO_RCLONE_REMOTE unset — no live repo to stage from"
 [ "$(id -u)" -ne 0 ] || die "run as the publish user, not root (rclone + gpg config live in the user account)"
 
@@ -70,6 +77,17 @@ for name in "$@"; do
   log "staged: $(basename "${found[0]}")"
 done
 
+for d in "${DROPS[@]-}"; do
+  [ -n "${d}" ] || continue
+  hit=0
+  for f in "${STAGE_DIR}/${d}"-[0-9]*.pkg.tar.* "${STAGE_DIR}/${d}"-*:*.pkg.tar.*; do
+    [ "$(pkgbase "$f")" = "${d}" ] || continue
+    rm -f "$f"; hit=1
+  done
+  [ "${hit}" -eq 1 ] || die "${d}: nothing to drop — no such package in the live repo"
+  log "dropped: ${d}"
+done
+
 # --- delta gate: staging must differ from live by EXACTLY the named packages ---
 staged_list="$(list_pkgs "${STAGE_DIR}")"
 adds="$(comm -13 <(printf '%s' "${live_list}") <(printf '%s' "${staged_list}"))"
@@ -80,6 +98,8 @@ while IFS= read -r f; do
   [ -n "$f" ] || continue
   wanted=0
   for name in "$@"; do [ "$(pkgbase "$f")" = "${name}" ] && wanted=1; done
+  # a dropped name is a legitimate DELETION only — it can never appear as an add
+  case "${dels}" in *"$f"*) for d in "${DROPS[@]-}"; do [ "$(pkgbase "$f")" = "${d}" ] && wanted=1; done ;; esac
   [ "${wanted}" -eq 1 ] || bad="${bad} ${f}"
 done <<< "${adds}
 ${dels}"

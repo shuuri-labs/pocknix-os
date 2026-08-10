@@ -109,3 +109,45 @@ maybe_install_qemu() {
   [ -f "${QEMU_AARCH64_STATIC}" ] || die "cross-building on $(uname -m) needs ${QEMU_AARCH64_STATIC} (install qemu-user-static + binfmt)"
   install -Dm755 "${QEMU_AARCH64_STATIC}" "${root}${QEMU_AARCH64_STATIC}"
 }
+
+# --- pinned ALARM base ------------------------------------------------------
+# Fetch + verify the ALARM base tarball into CACHE_DIR. One implementation for
+# bootstrap.sh (rootfs) and build-packages.sh (build chroot): the chroot used
+# to download with no sha check at all, so the two bases could diverge.
+fetch_alarm_tarball() {
+  local tarball="${CACHE_DIR}/${ALARM_TARBALL}"
+  mkdir -p "${CACHE_DIR}"
+  if [ ! -f "${tarball}" ]; then
+    log "downloading ALARM rootfs: ${POCKNIX_ALARM_TARBALL_URL}"
+    curl -fL --retry 3 -o "${tarball}" "${POCKNIX_ALARM_TARBALL_URL}"
+  else
+    log "using cached ALARM rootfs: ${tarball}"
+  fi
+  if [ -n "${POCKNIX_ALARM_SHA256}" ]; then
+    echo "${POCKNIX_ALARM_SHA256}  ${tarball}" | sha256sum -c - >/dev/null \
+      || die "ALARM tarball sha256 mismatch — refusing to build"
+    ok "ALARM tarball checksum verified"
+  else
+    warn "POCKNIX_ALARM_SHA256 is unset — build is NOT reproducible (pin it for releases)"
+  fi
+}
+
+# Render the base pacman.conf: with a pinned snapshot, the only package source
+# is the frozen [pocknix-base] repo (ALARM's per-package .sig files are kept in
+# the snapshot, so package SigLevel stays Required; the repo-add DB is unsigned,
+# which DatabaseOptional permits). Without a pin: live ALARM, as before. Shared
+# by the rootfs and the build chroot so both always install from the SAME base.
+render_base_pacman_conf() {
+  local out="$1"
+  if [ -n "${POCKNIX_BASE_SNAPSHOT}" ]; then
+    # keep the template's [options] block, replace every repo with the snapshot
+    sed '/^\[core\]$/,$d' "${CONFIG_DIR}/pacman.conf.in" > "${out}"
+    cat >> "${out}" <<EOF
+[pocknix-base]
+SigLevel = Required DatabaseOptional
+Server = ${POCKNIX_BASE_URL}
+EOF
+  else
+    cp -f "${CONFIG_DIR}/pacman.conf.in" "${out}"
+  fi
+}

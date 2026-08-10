@@ -364,6 +364,11 @@ main() {
 
   log "copying rootfs -> root partition (takes a bit)"
   rsync -aHAX --numeric-ids "${ROOTFS_DIR}/" "${MNT}/"
+  # Ship no sync dbs: the build ones hold the LOCALREPO's UNSIGNED pocknix.db, and a
+  # device whose first -Sy finds the live db "not newer" keeps those bytes while
+  # fetching the live .sig -> "signature is invalid" on first update (bit a fresh
+  # locked image). Deleted from the IMAGE only; ROOTFS_DIR keeps them for make snapshot.
+  rm -f "${MNT}/var/lib/pacman/sync/"*.db "${MNT}/var/lib/pacman/sync/"*.db.sig
   firstboot_config "${MNT}"
   # Ownership gate: nothing outside /home should be owned by the host build user (uid/gid 1000 =
   # 'alarm' in the rootfs). A stray host-owned path here means a host->rootfs copy leaked ownership
