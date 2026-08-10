@@ -8,7 +8,7 @@
 # pattern as the SD-format helper). Branches on where we're booted from:
 #   SD boot, nothing installed   -> guided install: Android-size picker -> confirm -> busy -> poweroff
 #   SD boot, pocknix installed   -> reinstall / re-enable internal boot / remove & restore Android
-#   internal boot                -> removal stage 1 (--disable-boot); finish from the SD with this app
+#   internal boot                -> instructions for the ROCKNIX ABL menu (Vol- boot)
 set -euo pipefail
 
 TITLE="Pocknix Installer"
@@ -128,14 +128,10 @@ manage_flow() {
 }
 
 internal_boot_flow() {
-  # Booted from the internal install: the disk under / can't be repartitioned, so the only action
-  # here is removal stage 1 (drop the internal boot FAT — safe while running; root is untouched).
-  kdialog --title "$TITLE" --yes-label "Disable internal boot" --no-label "Cancel" --warningyesno \
-    "<b>Pocknix is running from internal storage.</b><br/><br/>To remove it and give the storage back to Android:<br/>1. <b>Disable internal boot</b> (nothing else is touched, and it can be re-enabled later).<br/>2. Power off and insert the Pocknix SD card.<br/>3. Boot the SD and open ${TITLE} again to finish." \
-    || exit 0
-  run_busy "Disabling internal boot…" "$UNINSTALL_CLI" --disable-boot --yes \
-    || gui_die "Could not disable internal boot (details in ${LOG})."
-  offer_poweroff "<b>Internal boot disabled.</b><br/><br/>Power off, then boot the Pocknix SD card and open ${TITLE} again to finish the removal (or to re-enable internal boot)."
+  # Booted from the internal install: the disk under / can't be repartitioned from
+  # here. The supported flow (both SoCs ship the ROCKNIX ABL) is the bootloader
+  # menu, so this is instructions only.
+  offer_poweroff "<b>Pocknix is running from internal storage.</b><br/><br/>Power off, then boot holding <b>Volume&nbsp;-</b> to open the ROCKNIX boot menu:<br/><br/><b>Force external boot</b> — start from the SD card instead.<br/><b>Nuke CFW</b> — remove Pocknix from internal storage and give Android its full partition size back."
 }
 
 # --- main ---

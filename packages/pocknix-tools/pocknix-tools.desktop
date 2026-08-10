@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pocknix Tools
+Comment=Snapshot rollback and system maintenance
+Exec=/usr/bin/pocknix-tools
+TryExec=/usr/bin/pocknix-tools
+Icon=preferences-system
+Terminal=false
+Categories=System;
+Keywords=rollback;snapshot;restore;undo;rolling;maintenance;

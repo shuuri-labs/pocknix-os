@@ -1,0 +1,126 @@
+#!/bin/bash
+# pocknix-tools — Plasma front-end for system maintenance (kdialog): snapshot
+# rollback for the running system AND for the internal install when booted from
+# SD, the locked/rolling base mode switch, and the internal-storage installer.
+# Every privileged step goes through pkexec; the rules ship with the package that
+# owns each binary (pocknix-snapshots, pocknix-base).
+set -euo pipefail
+
+TITLE="Pocknix Tools"
+command -v kdialog >/dev/null 2>&1 || { echo "kdialog not installed" >&2; exit 1; }
+
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+
+gui_err() { kdialog --title "$TITLE" --error "$1" || true; }
+
+base_mode() {
+  if grep -q '^\[pocknix-base\]' /etc/pacman.conf 2>/dev/null; then echo locked
+  elif grep -q '^\[core\]' /etc/pacman.conf 2>/dev/null; then echo rolling
+  else echo unknown; fi
+}
+
+# Internal-rollback item is offered only when we are NOT booted from the internal
+# root and a pocknix root partition exists there (deep checks stay in the CLI).
+internal_candidate() {
+  local disk="${POCKNIX_INTERNAL_DISK:-/dev/sda}" lbl="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}" part
+  part="$(lsblk -rpno NAME,PARTLABEL "${disk}" 2>/dev/null | awk -v l="${lbl}" '$2==l{print $1}' | head -1)"
+  [ -n "${part}" ] || return 1
+  [ "$(findmnt -no SOURCE / | sed 's/\[.*//')" != "${part}" ]
+}
+
+# kdialog --menu from the CLI's snapshot table; newest preselected. $1: "" | --internal
+pick_snapshot() {
+  local flag="$1" rows args=() id
+  rows="$(pkexec /usr/bin/pocknix-rollback ${flag} --list 2>/dev/null | tail -n +2)" || rows=""
+  [ -n "${rows}" ] || { gui_err "No snapshots found${flag:+ on the internal install}.\n\nSnapshots are taken automatically before every update."; return 1; }
+  # menu labels render proportionally: separators, not column alignment
+  while IFS=$'\t' read -r id label; do args+=("${id}" "${label}"); done \
+    < <(printf '%s\n' "${rows}" | sort -r | awk '{
+      t=""; for (i=6; i<=NF; i++) t=t $i " "
+      printf "%s\t%s · %s %s · %s%s\n", $1, $1, $2, $3, t, ($5=="yes" ? "· incl. kernel" : "")
+    }')
+  kdialog --title "$TITLE" --default "${args[0]}" \
+    --menu "Roll back${flag:+ the INTERNAL install} to the state saved before an update.\nNewest first. /home (games, saves) is never touched." \
+    "${args[@]}"
+}
+
+do_rollback() {  # $1: "" | --internal
+  local flag="$1" id out rc=0
+  id="$(pick_snapshot "${flag}")" || return 0
+  [ -n "${id}" ] || return 0
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Roll back${flag:+ the INTERNAL install} to snapshot ${id}?\n\nEverything that update changed is undone, including the kernel if it was part of it.\n/home (games, saves) and logs are kept.\n\n$( [ -n "${flag}" ] && echo 'Takes effect the next time the device boots from internal storage.' || echo 'The device should reboot right after.' )" \
+    || return 0
+  out="$(pkexec /usr/bin/pocknix-rollback ${flag} --to "${id}" --yes 2>&1)" || rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    gui_err "Rollback failed — nothing was changed:\n\n$(printf '%s' "${out}" | tail -4)"
+    return 0
+  fi
+  if [ -n "${flag}" ]; then
+    kdialog --title "$TITLE" --msgbox "Internal install rolled back to snapshot ${id}.\nIt boots into that state next time you start from internal storage."
+  else
+    kdialog --title "$TITLE" --yes-label "Reboot now" --no-label "Later" \
+      --yesno "Rolled back to snapshot ${id}.\nA reboot completes it." && systemctl reboot
+  fi
+}
+
+# The mode switch keeps its terminal UX on purpose: pocknix-base itself demands a
+# typed ROLL and streams the full pacman run — a GUI busy-bar would hide both.
+konsole_run() { konsole -e /bin/bash -c "pkexec $1; echo; read -rp 'Press Enter to close... '"; }
+
+do_mode() {
+  case "$(base_mode)" in
+    locked)
+      kdialog --title "$TITLE" --warningcontinuecancel \
+        "Rolling mode is NOT recommended.\n\nIt switches this device from the tested Pocknix package base to live Arch Linux ARM. Any upstream update can then break the Steam session, graphics, or boot until the next Pocknix release.\n\nIt exists for people who want to manage packages with pacman themselves, and it is unsupported.\n\nContinue to the final confirmation in a terminal?" \
+        || return 0
+      konsole_run "/usr/bin/pocknix-base rolling" ;;
+    rolling)
+      kdialog --title "$TITLE" --warningcontinuecancel \
+        "Return this device to the supported locked base?\n\nEvery base package converges back to the Pocknix snapshot (downgrades included). Software installed while rolling may block this — the terminal names it if so." \
+        || return 0
+      konsole_run "/usr/bin/pocknix-base locked" ;;
+    *) gui_err "Cannot tell the current mode from /etc/pacman.conf." ;;
+  esac
+}
+
+# kdialog rich text cannot do real tables: <table> markup gets mangled, tags
+# inside a <pre> desync the parse, and inline text right before a <pre> is glued
+# to it and elided — so the CLI's printf columns inside one plain <pre> ARE the
+# table, with the heading inside it and nothing inline before it.
+do_status() {
+  local list
+  list="$(pkexec /usr/bin/pocknix-rollback --list 2>/dev/null)" || list=""
+  list="$(printf 'Snapshots (newest first)\n\n'; printf '%s\n' "${list}" | head -1; printf '%s\n' "${list}" | tail -n +2 | sort -r)"
+  # status stays proportional (wraps, all packages visible) but rich text eats
+  # newlines and the wide pre defeats word-wrap: explicit <br>s + pre-folding.
+  # Escape first — the converge-blocked hint contains a literal <name>.
+  local status
+  status="$(pocknix-base status 2>&1 \
+    | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' \
+    | sed 's/^\([A-Za-z][^:]*\):/<b>\1<\/b>:/' \
+    | fold -s -w 96 | sed 's/$/<br>/')"
+  kdialog --title "$TITLE" --msgbox "<html>${status}<pre>${list}</pre></html>"
+}
+
+while :; do
+  mode="$(base_mode)"
+  items=(rollback "Roll back the last update...")
+  internal_candidate && items+=(rollback-internal "Roll back the INTERNAL install...")
+  case "${mode}" in
+    locked)  items+=(mode "Switch to rolling mode (not recommended)...") ;;
+    rolling) items+=(mode "Return to locked mode (recommended)...") ;;
+  esac
+  items+=(installer "Install or remove internal Pocknix...")
+  items+=(status "Show system status")
+  choice="$(kdialog --title "$TITLE" --menu "Pocknix maintenance tools\nMode: ${mode^^}" "${items[@]}")" || exit 0
+  case "${choice}" in
+    rollback)          do_rollback "" ;;
+    rollback-internal) do_rollback --internal ;;
+    mode)              do_mode ;;
+    installer)         /usr/bin/pocknix-installer-gui || true ;;
+    status)            do_status ;;
+    *) exit 0 ;;
+  esac
+done
