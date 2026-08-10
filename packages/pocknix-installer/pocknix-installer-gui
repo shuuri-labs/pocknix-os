@@ -131,7 +131,7 @@ internal_boot_flow() {
   # Booted from the internal install: the disk under / can't be repartitioned, so the only action
   # here is removal stage 1 (drop the internal boot FAT — safe while running; root is untouched).
   kdialog --title "$TITLE" --yes-label "Disable internal boot" --no-label "Cancel" --warningyesno \
-    "<b>Pocknix is running from internal storage.</b><br/><br/>To remove it and give the storage back to Android:<br/>1. <b>Disable internal boot</b> (nothing else is touched, and it can be re-enabled later).<br/>2. Power off and insert the Pocknix SD card.<br/>3. Boot the SD and open ${TITLE} again to finish.<br/><br/>Without the SD card the device boots Android after this step." \
+    "<b>Pocknix is running from internal storage.</b><br/><br/>To remove it and give the storage back to Android:<br/>1. <b>Disable internal boot</b> (nothing else is touched, and it can be re-enabled later).<br/>2. Power off and insert the Pocknix SD card.<br/>3. Boot the SD and open ${TITLE} again to finish." \
     || exit 0
   run_busy "Disabling internal boot…" "$UNINSTALL_CLI" --disable-boot --yes \
     || gui_die "Could not disable internal boot (details in ${LOG})."
