@@ -1,7 +1,5 @@
-# pocknix-base — the base-mode tooling for locked devices: the locked<->rolling
-# switch and the desktop updater. Locked devices install only from [pocknix] +
-# [pocknix-base]; software beyond that comes from Flatpak (Discover) or, for
-# people who want pacman itself, bleeding-edge rolling mode.
+# pocknix-base — base-mode tooling for locked devices: the locked<->rolling
+# switch and the desktop updater.
 pkgname=pocknix-base
 pkgver=0.2.0
 pkgrel=1
@@ -24,9 +22,8 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-base" "${pkgdir}/usr/bin/pocknix-base"
-  # Desktop updater, adopted from the image overlay so it can evolve via -Syu.
-  # New path on purpose: packaging the old /usr/local path would file-conflict
-  # with the unowned overlay copy on existing devices; the scriptlet prunes it.
+  # /usr/bin on purpose: the old /usr/local path would file-conflict with the
+  # unowned overlay copy on existing devices; the scriptlet prunes that copy
   install -Dm755 "${srcdir}/pocknix-update" "${pkgdir}/usr/bin/pocknix-update"
   install -Dm644 "${srcdir}/pocknix-update.desktop" \
     "${pkgdir}/usr/share/applications/pocknix-update.desktop"

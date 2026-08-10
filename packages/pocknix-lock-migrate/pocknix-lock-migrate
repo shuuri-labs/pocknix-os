@@ -1,21 +1,12 @@
 #!/usr/bin/env bash
-# pocknix-lock-migrate — convert a rolling pocknix device to the locked base.
-# No reflash needed. Also the engine behind `pocknix-base locked`.
+# pocknix-lock-migrate — convert a rolling pocknix device to the locked base,
+# no reflash. Also the engine behind `pocknix-base locked`.
 #
-# prepare  — runs from this package's post_install, INSIDE the delivering -Syu
-#            (that transaction keeps running on its already-parsed rolling
-#            conf): rewrite pacman.conf (live ALARM stanzas out, [pocknix-base]
-#            in below [pocknix]) and arm the converge marker.
-# converge — NM-dispatched once the link is genuinely up: pacman -Syuu snaps
-#            every base package to exactly the snapshot (downgrades allowed —
-#            rolling devices may be AHEAD of it; the pocknix-snapshots btrfs
-#            hooks wrap the transaction), then records which installed packages
-#            no locked repo carries (they keep working but stop updating).
-#
-# Fresh locked images run prepare during their own build and exit at the
-# already-locked check, so shipping this in the core set is a no-op for them.
-# The base repo URL is stable across snapshots, so a bumped base needs no
-# repoint here: a plain -Syu picks up new base packages like any other.
+# Two phases because pacman.conf cannot be swapped inside the transaction that
+# resolves against it: prepare (post_install, inside the delivering -Syu)
+# rewrites the repos and arms a marker; converge (NM-dispatched on a real
+# link-up) runs -Syuu — downgrades ALLOWED, rolling devices may be AHEAD of
+# the snapshot. Fresh locked images hit the already-locked check and no-op.
 
 set -euo pipefail
 
@@ -27,14 +18,11 @@ FOREIGN="${STATE}/foreign-packages"
 BASE_URL="@POCKNIX_BASE_URL@"   # stamped by the PKGBUILD from the build's pin
 
 prepare() {
-  # Only ever touch a BOOTED device. An unpinned image build installs this
-  # package into a chroot whose conf is still live-ALARM, where rewriting it
-  # would strip the repos the rest of the build resolves against (and ship an
-  # image locked to a base it wasn't built from). No systemd = not a device.
+  # no systemd = image-build chroot, not a device: rewriting the conf there
+  # strips the repos the rest of the build resolves against
   [ -d /run/systemd/system ] || exit 0
   grep -q '^\[pocknix-base\]' "${CONF}" && exit 0   # already locked
-  # Deliberate bleeding-edge opt-in (pocknix-base rolling): the flag is visible
-  # admin intent — never auto-relock these devices on package upgrades.
+  # the rolling flag is deliberate admin intent — never auto-relock over it
   [ -e /etc/pocknix/rolling-mode ] && exit 0
   install -d "${STATE}"
   awk 'BEGIN{drop=0}
@@ -54,11 +42,8 @@ EOF
 
 converge() {
   [ -f "${MARKER}" ] || exit 0
-  # -Syuu: the extra u allows DOWNGRADES, so a rolling base that drifted ahead
-  # of the snapshot converges down to exactly the snapshot. An installed package
-  # with a VERSIONED dep on a downgraded lib makes pacman refuse the whole
-  # transaction (correct — nothing breaks), naming it; without a recorded state
-  # that reads as a silent stall retried on every reconnect.
+  # a versioned dep on a downgraded lib makes pacman refuse the transaction
+  # (correctly); record the blocker or the retry-on-reconnect looks like a stall
   local out rc=0
   out="$(pacman -Syuu --noconfirm 2>&1)" || rc=$?
   printf '%s\n' "${out}"
@@ -71,9 +56,7 @@ converge() {
     exit 1
   fi
   rm -f "${BLOCKED}"
-  # Report-only: installed but carried by neither locked repo (hand-installs,
-  # rolling-era leftovers). They keep working against the frozen base but get no
-  # updates; recorded so support and the QAM can show what went quiet.
+  # report-only: packages no locked repo carries keep working but stop updating
   LC_ALL=C comm -23 <(pacman -Qq | LC_ALL=C sort) \
                     <(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u) > "${FOREIGN}"
   if [ -s "${FOREIGN}" ]; then

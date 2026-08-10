@@ -20,8 +20,6 @@
 /.claude/
 /CLAUDE.md
 
-# personal working-conventions doc — not part of the project
-/conventions.md
 
 # macOS / editor cruft
 .DS_Store

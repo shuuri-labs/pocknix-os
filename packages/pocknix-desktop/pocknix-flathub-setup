@@ -1,18 +1,14 @@
 #!/bin/bash
-# pocknix-flathub-setup — register the Flathub remote (system-wide) and seed the
-# apps we deliberately ship as flatpaks instead of frozen-base packages. Run by
-# pocknix-flathub.service on every real link-up (NM dispatcher), so a failed or
-# offline attempt heals on the next connect; both steps are cheap no-ops once done.
+# pocknix-flathub-setup — register the Flathub remote and seed the apps shipped
+# as flatpaks instead of frozen-base packages (browser CVEs can't wait for a
+# pocknix release). NM-dispatched on every real link-up, so failed or offline
+# attempts heal on the next connect; every step is an idempotent no-op once done.
 set -e
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-# Firefox rides Flathub, NOT [pocknix-base]: a browser pinned to a months-old
-# snapshot freezes CVEs where they hurt most, and flatpak updates roll
-# independently of pocknix releases. `flatpak info` is a local check.
 flatpak info org.mozilla.firefox >/dev/null 2>&1 \
   || flatpak install --system --noninteractive flathub org.mozilla.firefox
-# Installs that predate the flatpak move still carry the pacman firefox, which no
-# repo updates anymore (frozen CVEs). Retire it only once the flatpak is present;
-# a pacman db lock (concurrent update) just retries on the next link-up.
+# pre-flatpak installs: retire the pacman firefox ONLY once the flatpak is present
+# (never leave a device browserless); a pacman db lock just retries next link-up
 if flatpak info org.mozilla.firefox >/dev/null 2>&1 && pacman -Qq firefox >/dev/null 2>&1; then
   pacman -Rns --noconfirm firefox || true
 fi

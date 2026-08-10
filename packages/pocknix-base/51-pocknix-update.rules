@@ -1,12 +1,7 @@
-// pocknix-update (the "Pocknix Updater" entry) pkexec's itself as root to run a
-// fixed `pacman -Syu`, nothing else. Authorize that one program for wheel with no
-// prompt, same trust as the overlay's 50-pocknix-deck.rules.
-//
-// Shipped by the PACKAGE, not the image overlay: the updater moved from
-// /usr/local/bin to /usr/bin, and devices that get that move via -Syu must get
-// its authorization the same way (an overlay-only fix would need a reflash).
-// pocknix-base is included for the Pocknix Tools mode switch; the script itself
-// still demands a typed ROLL before anything happens.
+// wheel may pkexec these two fixed-purpose CLIs without a prompt (same trust as
+// 50-pocknix-deck.rules). Shipped by the PACKAGE so a device gaining the
+// /usr/bin binaries via -Syu gains the authorization the same way.
+// pocknix-base still demands its typed ROLL before anything happens.
 polkit.addRule(function(action, subject) {
     if (!subject.isInGroup("wheel")) { return; }
     if (action.id == "org.freedesktop.policykit.exec" &&

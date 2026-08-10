@@ -5,21 +5,12 @@
 #   pocknix-base rolling    unlock: track live ALARM (typed confirmation)
 #   pocknix-base locked     return to the locked base (full converge)
 #
-# LOCKED (default, supported): only [pocknix] + [pocknix-base], the frozen ALARM
-# snapshot. Extra software comes from Flatpak (Discover); the base moves only
-# when a pocknix release moves it, so our binaries and their libraries always
-# match. ROLLING (opt-in, unsupported): live ALARM, all of pacman, and the
-# standing risk that an ALARM library update breaks the pocknix stack before we
-# rebuild against it.
-#
-# rolling: drops [pocknix-base], adds the live ALARM repos below [pocknix],
-# writes the /etc/pocknix/rolling-mode flag (visible admin intent — it stops
-# pocknix-lock-migrate auto-relocking the device on later upgrades), then runs a
-# full -Syu immediately so the device is a COHERENT rolling system, never the
-# half-frozen partial-upgrade state the lock exists to prevent.
-# locked: removes the flag and reuses pocknix-lock-migrate (prepare+converge),
-# the same path that migrates rolling fleet installs — so re-locking doubles as
-# the repair tool for a broken rolling experiment.
+# rolling appends the live repos BELOW [pocknix] (name resolution keeps our
+# packages winning) and runs a full -Syu in the same breath — never leave the
+# half-frozen partial-upgrade state the lock exists to prevent. The
+# rolling-mode flag is visible admin intent: it stops pocknix-lock-migrate
+# auto-relocking the device. locked reuses the migrator, so re-locking doubles
+# as the repair tool for a broken rolling experiment.
 
 set -euo pipefail
 
@@ -35,16 +26,11 @@ mode() {
   else echo unknown; fi
 }
 
-# The base snapshot id is the pocknix-base-lock package's version: it ships the
-# lockfile and updates in lockstep with the base, so pacman itself is the source
-# of truth (the repo URL is stable now and no longer carries the id).
+# the snapshot id IS the pocknix-base-lock pkgver (the stable repo url carries none)
 snapshot_id() { pacman -Q pocknix-base-lock 2>/dev/null | awk '{print $2}' | cut -d- -f1; }
 
-# Installed but carried by neither locked repo: hand-installed (pacman -U, an
-# AUR build, a rolling-era install). Locked -Syu never touches these — they keep
-# working against the frozen base but receive no updates. Empty when the repo
-# listing is: images ship no sync dbs, and an unsynced device would otherwise
-# report EVERY installed package as foreign.
+# installed but in neither locked repo (hand-installs; they keep working, never
+# update). Guard: an unsynced device (fresh image, no dbs) would list EVERYTHING.
 foreign() {
   local repo
   repo="$(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u)"

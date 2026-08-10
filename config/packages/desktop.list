@@ -32,10 +32,7 @@ gwenview             # image viewer
 okular               # document / PDF viewer
 
 # --- browsers ---
-# firefox is deliberately NOT here: a browser frozen into the base snapshot is the
-# worst place to pin CVEs for months. It ships as a Flathub flatpak instead, seeded
-# by pocknix-flathub-setup on the first online boot, so it rolls security updates
-# independently of pocknix releases.
+# firefox: deliberately absent — pocknix-flathub-setup ships it as a Flathub flatpak
 angelfish            # Plasma Mobile's touch-first web browser
 
 # --- Plasma Mobile gear (touch-first apps) ---
