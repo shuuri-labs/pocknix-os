@@ -6,7 +6,7 @@
 # points no-op when / is not btrfs (build chroot, pre-snapshot ext4 installs).
 pkgname=pocknix-snapshots
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix pre-update btrfs snapshots and rollback (subvolume set-default)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

@@ -6,7 +6,7 @@
 # steamos-update + armada-update, so when real OTA is built later it's a drop-in body swap.
 pkgname=pocknix-steamos-shim
 pkgver=0.1.0
-pkgrel=5
+pkgrel=6
 pkgdesc="SteamOS update/branch/timezone/format helper stubs for the Steam Deck UI on a non-SteamOS base (until real OTA)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

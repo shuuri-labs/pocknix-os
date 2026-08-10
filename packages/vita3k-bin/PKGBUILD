@@ -10,8 +10,8 @@
 # Vita content installs INTO the emulator (fw + .pkg/NoNpDrm via the GUI) rather than launching
 # loose files; ES-DE's psvita flow passes a title-id shortcut. Treat as the most manual of the set.
 pkgname=vita3k-bin
-pkgver=0.2026.07.05
-pkgrel=2
+pkgver=0.2026.08.10
+pkgrel=1
 pkgdesc="Vita3K — PS Vita emulator, native aarch64 AppImage (vendored, rolling upstream)"
 arch=('aarch64')
 url="https://vita3k.org"
@@ -20,7 +20,11 @@ depends=('fuse2')
 options=('!strip')
 source=("Vita3K-${pkgver}.AppImage::https://github.com/Vita3K/Vita3K/releases/download/continuous/Vita3K-aarch64.AppImage"
         'pocknix-vita3k.desktop')
-sha256sums=('SKIP' 'SKIP')
+# Upstream's "continuous" tag MOVES: this sha pins the exact validated build, so
+# a clean rebuild after upstream republishes fails loudly instead of silently
+# shipping different bytes under the same pkgver — bump pkgver + sha together.
+sha256sums=('48a33c33086fcd00a037b58e0a98e1129b8322b007361c9b2ece9d039e32e195'
+            'SKIP')
 noextract=("Vita3K-${pkgver}.AppImage")
 
 prepare() {

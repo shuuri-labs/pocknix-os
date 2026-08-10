@@ -9,7 +9,7 @@
 # repo). Needs PS3 firmware (PS3UPDAT.PUP) installed via the GUI once — see ROMS-README.
 pkgname=rpcs3-bin
 pkgver=0.0.42.19699
-pkgrel=1
+pkgrel=2
 pkgdesc="RPCS3 — PS3 emulator, official aarch64 AppImage (vendored)"
 arch=('aarch64')
 url="https://rpcs3.net"

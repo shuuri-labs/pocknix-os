@@ -16,7 +16,7 @@
 # dtbs to /flash (pocknix-update-boot) instead of rebuilding a bootimg.
 pkgname=linux-pocknix-sm8250
 pkgver=7.1.5
-pkgrel=1
+pkgrel=2
 pkgdesc="SM8250 kernel (stock ${pkgver} + ROCKNIX patch stack, SoC board dtbs) — packaged from 'make kernel' output"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"
