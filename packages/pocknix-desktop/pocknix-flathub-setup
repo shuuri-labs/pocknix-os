@@ -10,3 +10,9 @@ flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.f
 # independently of pocknix releases. `flatpak info` is a local check.
 flatpak info org.mozilla.firefox >/dev/null 2>&1 \
   || flatpak install --system --noninteractive flathub org.mozilla.firefox
+# Installs that predate the flatpak move still carry the pacman firefox, which no
+# repo updates anymore (frozen CVEs). Retire it only once the flatpak is present;
+# a pacman db lock (concurrent update) just retries on the next link-up.
+if flatpak info org.mozilla.firefox >/dev/null 2>&1 && pacman -Qq firefox >/dev/null 2>&1; then
+  pacman -Rns --noconfirm firefox || true
+fi
