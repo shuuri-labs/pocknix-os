@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# pocknix-base — show or switch the device's package base.
+#
+#   pocknix-base            what mode/snapshot this device is on
+#   pocknix-base rolling    unlock: track live ALARM (typed confirmation)
+#   pocknix-base locked     return to the locked base (full converge)
+#
+# LOCKED (default, supported): only [pocknix] + [pocknix-base], the frozen ALARM
+# snapshot. Extra software comes from Flatpak (Discover); the base moves only
+# when a pocknix release moves it, so our binaries and their libraries always
+# match. ROLLING (opt-in, unsupported): live ALARM, all of pacman, and the
+# standing risk that an ALARM library update breaks the pocknix stack before we
+# rebuild against it.
+#
+# rolling: drops [pocknix-base], adds the live ALARM repos below [pocknix],
+# writes the /etc/pocknix/rolling-mode flag (visible admin intent — it stops
+# pocknix-lock-migrate auto-relocking the device on later upgrades), then runs a
+# full -Syu immediately so the device is a COHERENT rolling system, never the
+# half-frozen partial-upgrade state the lock exists to prevent.
+# locked: removes the flag and reuses pocknix-lock-migrate (prepare+converge),
+# the same path that migrates rolling fleet installs — so re-locking doubles as
+# the repair tool for a broken rolling experiment.
+
+set -euo pipefail
+
+CONF=/etc/pacman.conf
+FLAG=/etc/pocknix/rolling-mode
+MIGRATE=/usr/lib/pocknix/pocknix-lock-migrate
+
+die() { printf 'pocknix-base: %s\n' "$*" >&2; exit 1; }
+
+mode() {
+  if grep -q '^\[pocknix-base\]' "${CONF}"; then echo locked
+  elif grep -q '^\[core\]' "${CONF}"; then echo rolling
+  else echo unknown; fi
+}
+
+# The base snapshot id is the pocknix-base-lock package's version: it ships the
+# lockfile and updates in lockstep with the base, so pacman itself is the source
+# of truth (the repo URL is stable now and no longer carries the id).
+snapshot_id() { pacman -Q pocknix-base-lock 2>/dev/null | awk '{print $2}' | cut -d- -f1; }
+
+# Installed but carried by neither locked repo: hand-installed (pacman -U, an
+# AUR build, a rolling-era install). Locked -Syu never touches these — they keep
+# working against the frozen base but receive no updates. Empty when the repo
+# listing is: images ship no sync dbs, and an unsynced device would otherwise
+# report EVERY installed package as foreign.
+foreign() {
+  local repo
+  repo="$(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u)"
+  [ -n "${repo}" ] || return 0
+  LC_ALL=C comm -23 <(pacman -Qq | LC_ALL=C sort) <(printf '%s\n' "${repo}")
+}
+
+status() {
+  local m n
+  m="$(mode)"
+  case "${m}" in
+    locked)  echo "mode          : LOCKED (supported)"
+             echo "base snapshot : $(snapshot_id || true)" ;;
+    rolling) echo "mode          : ROLLING (bleeding edge, unsupported)"
+             echo "                'sudo pocknix-base locked' returns to the supported base" ;;
+    unknown) echo "mode          : UNKNOWN (neither [pocknix-base] nor [core] in ${CONF})" ;;
+  esac
+  echo "repos         : $(grep -o '^\[[^]]*\]' "${CONF}" | tr -d '[]' | grep -v '^options$' | paste -sd' ' -)"
+  if [ -f /var/lib/pocknix/lock-converge-blocked ]; then
+    echo "base update   : BLOCKED by $(paste -sd' ' /var/lib/pocknix/lock-converge-blocked)"
+    echo "                remove it (pacman -Rs <name>) then: pocknix-base locked"
+  elif [ -f /var/lib/pocknix/lock-migrate-pending ]; then
+    echo "base update   : pending (runs on the next connect; systemctl start pocknix-lock-converge)"
+  fi
+  n="$(foreign | grep -c . || true)"
+  if [ "${m}" = locked ] && [ "${n}" != 0 ]; then
+    echo "not from pocknix (${n}): $(foreign | paste -sd' ' -)"
+    echo "                these keep working but do not update on a locked device"
+  fi
+}
+
+case "${1:-status}" in
+  status) status ;;
+
+  rolling)
+    [ "$(id -u)" -eq 0 ] || die "must run as root (sudo pocknix-base rolling)"
+    [ "$(mode)" = locked ] || die "device is not in locked mode (current: $(mode))"
+    cat <<'EOF'
+
+  BLEEDING-EDGE MODE tracks live Arch Linux ARM.
+
+  Pocknix's own stack (gamescope, mesa, the Steam session) is built against
+  the FROZEN base. Once rolling, any ALARM update can break it without
+  warning until the next pocknix release — up to and including a black
+  screen on boot.
+
+  This mode is UNSUPPORTED: bugs must be reproduced on a locked device.
+
+  Seatbelts that remain: every update is still btrfs-snapshot-wrapped
+  (pocknix-rollback undoes the last one), and 'sudo pocknix-base locked'
+  returns fully to the supported state at any time.
+
+EOF
+    read -rp "  Type ROLL to continue: " a
+    [ "${a}" = "ROLL" ] || { echo "cancelled."; exit 0; }
+    # both conf generators emit the section as header/SigLevel/Server, so the
+    # range delete is stable
+    sed -i '/^\[pocknix-base\]$/,/^Server = /d' "${CONF}"
+    cat >> "${CONF}" <<'EOF'
+
+# BLEEDING-EDGE: live Arch Linux ARM (pocknix-base rolling). [pocknix] stays
+# first so pocknix's own packages keep winning name resolution.
+[core]
+Include = /etc/pacman.d/mirrorlist
+[extra]
+Include = /etc/pacman.d/mirrorlist
+[alarm]
+Include = /etc/pacman.d/mirrorlist
+[aur]
+Include = /etc/pacman.d/mirrorlist
+EOF
+    install -d /etc/pocknix
+    echo "bleeding-edge rolling mode, chosen $(date -u +%F). 'pocknix-base locked' returns." > "${FLAG}"
+    echo
+    echo "==> switching to a coherent rolling state (full pacman -Syu)..."
+    pacman -Syu --noconfirm
+    echo
+    echo "Device is now ROLLING. pocknix-rollback undoes the last update;"
+    echo "'sudo pocknix-base locked' returns to the supported locked base."
+    ;;
+
+  locked)
+    [ "$(id -u)" -eq 0 ] || die "must run as root (sudo pocknix-base locked)"
+    [ "$(mode)" = rolling ] || die "device is not in rolling mode (current: $(mode))"
+    [ -x "${MIGRATE}" ] || die "${MIGRATE} missing (pocknix-lock-migrate not installed?)"
+    echo "Returning to the locked base: every base package converges (down) to the"
+    echo "snapshot. Software installed while rolling may block this if it pins newer"
+    echo "libraries — the converge names it and this command can be re-run after"
+    echo "removing it. Anything that survives but was built against newer libraries"
+    echo "may need removal too (the btrfs snapshot from unlock still covers a full"
+    echo "pocknix-rollback)."
+    echo
+    rm -f "${FLAG}"
+    "${MIGRATE}" prepare
+    "${MIGRATE}" converge
+    ;;
+
+  *) die "usage: pocknix-base [status|rolling|locked]" ;;
+esac

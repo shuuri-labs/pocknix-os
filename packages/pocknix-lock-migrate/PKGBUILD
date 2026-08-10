@@ -1,0 +1,35 @@
+# pocknix-lock-migrate — converter: rolling device -> locked base, and the
+# engine behind `pocknix-base locked`. The base repo URL is stamped at build
+# time (POCKNIX_BASE_URL, injected by build-packages.sh); it is stable across
+# snapshots, so bumped bases need no repoint on devices.
+pkgname=pocknix-lock-migrate
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="One-shot migration of a rolling pocknix device onto the locked base snapshot"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('MIT')
+depends=('pacman' 'networkmanager' 'pocknix-base')
+install=pocknix-lock-migrate.install
+source=('pocknix-lock-migrate'
+        'pocknix-lock-converge.service'
+        'pocknix-lock-converge-dispatcher')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+prepare() {
+  [ -n "${POCKNIX_BASE_URL:-}" ] \
+    || { echo "POCKNIX_BASE_URL is unset — the migrator needs the base repo URL" >&2; exit 1; }
+  sed "s|@POCKNIX_BASE_URL@|${POCKNIX_BASE_URL}|" "${srcdir}/pocknix-lock-migrate" \
+    > "${srcdir}/pocknix-lock-migrate.stamped"
+  grep -q '@POCKNIX_BASE_URL@' "${srcdir}/pocknix-lock-migrate.stamped" \
+    && { echo "placeholder stamping failed" >&2; exit 1; } || true
+}
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-lock-migrate.stamped" \
+    "${pkgdir}/usr/lib/pocknix/pocknix-lock-migrate"
+  install -Dm644 "${srcdir}/pocknix-lock-converge.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-lock-converge.service"
+  install -Dm755 "${srcdir}/pocknix-lock-converge-dispatcher" \
+    "${pkgdir}/etc/NetworkManager/dispatcher.d/52-pocknix-lock-converge"
+}

@@ -1,0 +1,12 @@
+#!/bin/sh
+# NM dispatcher hook -> finish lock migration once the link is really up. Same
+# event filtering as 50-pocknix-flathub (see its header). $1 = iface, $2 = action.
+[ "$1" = lo ] && exit 0
+
+case "$2" in
+  up|vpn-up) ;;
+  connectivity-change) [ "${CONNECTIVITY_STATE}" = "FULL" ] || exit 0 ;;
+  *) exit 0 ;;
+esac
+
+exec systemctl start --no-block pocknix-lock-converge.service

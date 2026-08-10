@@ -1,0 +1,7 @@
+post_install() {
+  /usr/lib/pocknix/pocknix-lock-migrate prepare
+}
+
+post_upgrade() {
+  post_install
+}

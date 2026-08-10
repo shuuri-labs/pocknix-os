@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# pocknix-lock-migrate — convert a rolling pocknix device to the locked base.
+# No reflash needed. Also the engine behind `pocknix-base locked`.
+#
+# prepare  — runs from this package's post_install, INSIDE the delivering -Syu
+#            (that transaction keeps running on its already-parsed rolling
+#            conf): rewrite pacman.conf (live ALARM stanzas out, [pocknix-base]
+#            in below [pocknix]) and arm the converge marker.
+# converge — NM-dispatched once the link is genuinely up: pacman -Syuu snaps
+#            every base package to exactly the snapshot (downgrades allowed —
+#            rolling devices may be AHEAD of it; the pocknix-snapshots btrfs
+#            hooks wrap the transaction), then records which installed packages
+#            no locked repo carries (they keep working but stop updating).
+#
+# Fresh locked images run prepare during their own build and exit at the
+# already-locked check, so shipping this in the core set is a no-op for them.
+# The base repo URL is stable across snapshots, so a bumped base needs no
+# repoint here: a plain -Syu picks up new base packages like any other.
+
+set -euo pipefail
+
+CONF=/etc/pacman.conf
+STATE=/var/lib/pocknix
+MARKER="${STATE}/lock-migrate-pending"
+BLOCKED="${STATE}/lock-converge-blocked"
+FOREIGN="${STATE}/foreign-packages"
+BASE_URL="@POCKNIX_BASE_URL@"   # stamped by the PKGBUILD from the build's pin
+
+prepare() {
+  # Only ever touch a BOOTED device. An unpinned image build installs this
+  # package into a chroot whose conf is still live-ALARM, where rewriting it
+  # would strip the repos the rest of the build resolves against (and ship an
+  # image locked to a base it wasn't built from). No systemd = not a device.
+  [ -d /run/systemd/system ] || exit 0
+  grep -q '^\[pocknix-base\]' "${CONF}" && exit 0   # already locked
+  # Deliberate bleeding-edge opt-in (pocknix-base rolling): the flag is visible
+  # admin intent — never auto-relock these devices on package upgrades.
+  [ -e /etc/pocknix/rolling-mode ] && exit 0
+  install -d "${STATE}"
+  awk 'BEGIN{drop=0}
+       /^\[/{drop = ($0=="[core]" || $0=="[extra]" || $0=="[alarm]" || $0=="[aur]")}
+       !drop' "${CONF}" > "${CONF}.pocknix-migrate" && cat "${CONF}.pocknix-migrate" > "${CONF}"
+  rm -f "${CONF}.pocknix-migrate"
+  cat >> "${CONF}" <<EOF
+
+[pocknix-base]
+SigLevel = Required DatabaseOptional
+Server = ${BASE_URL}
+EOF
+  touch "${MARKER}"
+  echo "pocknix: device is now LOCKED to the pocknix base."
+  echo "pocknix: base convergence runs automatically on the next connect/boot."
+}
+
+converge() {
+  [ -f "${MARKER}" ] || exit 0
+  # -Syuu: the extra u allows DOWNGRADES, so a rolling base that drifted ahead
+  # of the snapshot converges down to exactly the snapshot. An installed package
+  # with a VERSIONED dep on a downgraded lib makes pacman refuse the whole
+  # transaction (correct — nothing breaks), naming it; without a recorded state
+  # that reads as a silent stall retried on every reconnect.
+  local out rc=0
+  out="$(pacman -Syuu --noconfirm 2>&1)" || rc=$?
+  printf '%s\n' "${out}"
+  if [ "${rc}" -ne 0 ]; then
+    printf '%s\n' "${out}" | sed -n 's/.*required by \([^ ]*\).*/\1/p' | sort -u > "${BLOCKED}"
+    [ -s "${BLOCKED}" ] || rm -f "${BLOCKED}"
+    echo "pocknix: convergence refused — an installed package pins a library newer" >&2
+    echo "than the base snapshot (see 'required by <name>' above). Remove it with" >&2
+    echo "'pacman -Rs <name>', then re-run 'systemctl start pocknix-lock-converge'." >&2
+    exit 1
+  fi
+  rm -f "${BLOCKED}"
+  # Report-only: installed but carried by neither locked repo (hand-installs,
+  # rolling-era leftovers). They keep working against the frozen base but get no
+  # updates; recorded so support and the QAM can show what went quiet.
+  LC_ALL=C comm -23 <(pacman -Qq | LC_ALL=C sort) \
+                    <(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u) > "${FOREIGN}"
+  if [ -s "${FOREIGN}" ]; then
+    echo "pocknix: these packages are not from pocknix and will no longer update:"
+    sed 's/^/  /' "${FOREIGN}"
+    echo "pocknix: reinstall desktop apps from Discover (Flatpak), or run"
+    echo "pocknix: 'sudo pocknix-base rolling' to keep managing packages yourself."
+  fi
+  rm -f "${MARKER}"
+  echo "pocknix: lock migration complete."
+}
+
+case "${1:-}" in
+  prepare)  prepare ;;
+  converge) converge ;;
+  *) echo "usage: pocknix-lock-migrate prepare|converge" >&2; exit 1 ;;
+esac

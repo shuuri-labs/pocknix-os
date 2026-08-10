@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .system import run_cmd
 
-# The QAM updater mirrors /usr/local/bin/pocknix-update (a plain pacman -Syu) but runs it as
+# The QAM updater mirrors pocknix-update, the desktop updater (a plain pacman -Syu) but runs it as
 # a detached transient unit through PID 1: the loader (and Steam itself) can die mid-update
 # without killing the pacman transaction, and the QAM re-attaches to the log on reopen.
 UNIT = "pocknix-qam-update"
