@@ -32,7 +32,10 @@ gwenview             # image viewer
 okular               # document / PDF viewer
 
 # --- browsers ---
-firefox              # Firefox
+# firefox is deliberately NOT here: a browser frozen into the base snapshot is the
+# worst place to pin CVEs for months. It ships as a Flathub flatpak instead, seeded
+# by pocknix-flathub-setup on the first online boot, so it rolls security updates
+# independently of pocknix releases.
 angelfish            # Plasma Mobile's touch-first web browser
 
 # --- Plasma Mobile gear (touch-first apps) ---
@@ -58,7 +61,7 @@ discover             # plasma-discover — KDE app store with the Flatpak backen
 bluedevil            # Plasma Bluetooth applet/KCM (talks to bluez)
 
 # --- Pocknix Installer (install-to-internal GUI) ---
-# pocknix-installer-gui (overlay) is a kdialog front-end for pocknix-install/uninstall-internal,
+# pocknix-installer-gui (pocknix-installer pkg) fronts the overlay's install/uninstall-internal CLIs,
 # launched from the "Pocknix Installer" app entry. kdialog's deps are all in the Plasma stack above.
 kdialog              # the dialogs (confirm / size picker / busy bar)
 qt6-tools            # qdbus6 — drives the kdialog progress dialog (indeterminate + close). Already
