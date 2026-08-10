@@ -14,5 +14,6 @@ User guides for pocknix-os. New here? Start with the [project README](../README.
 
 ## For developers
 
-See "Building from source" in the [project README](../README.md). Maintainer
-procedures and infrastructure notes live in the maintainer's private notes repo.
+See "Building from source" in the [project README](../README.md) and
+[CONTRIBUTING.md](../CONTRIBUTING.md) for how to build, test, and submit a change.
+Maintainer procedures and infrastructure notes live in the maintainer's private notes repo.

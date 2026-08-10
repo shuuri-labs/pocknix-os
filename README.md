@@ -267,6 +267,13 @@ sudo make sd-image  # flashable SD image -> build/image/<soc>/
 `make help` lists every target. Kernel enablement is committed under `kernel/`; only stock
 Linux source and firmware are fetched at build time.
 
+## Contributing
+
+Contributions are welcome, and emulator configs, testing on devices I do not own, and docs
+fixes are especially useful. [CONTRIBUTING.md](CONTRIBUTING.md) covers where changes go, how
+to build and test just the part you touched, what your testing should cover, and what a PR
+needs to include (notably: steps I can follow to re-test it on my own device).
+
 ## Thanks and references
 
 pocknix-os stands on the work of others:
