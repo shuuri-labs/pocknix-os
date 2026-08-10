@@ -21,6 +21,8 @@
 #                      chord table), so South must be re-declared as a chord
 #                      and MUST be listed after the Guide+A entry — chord
 #                      candidates match in YAML order.
+# Retroid's Nintendo face-button legends map to Steam's A/B/X/Y positions:
+# BTN_EAST=A, BTN_SOUTH=B, BTN_NORTH=X, BTN_WEST=Y.
 # Semantics verified against the InputPlumber 0.75.2 source
 # (src/input/event/evdev/translator.rs); no upstream config exercises
 # delayed_chord yet, so treat as unproven until the Flip 2 device smoke.
@@ -79,7 +81,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: South
+        button: East
 
   - name: West Button
     source_events:
@@ -89,7 +91,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: West
+        button: North
 
   - name: North Button
     source_events:
@@ -99,7 +101,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: North
+        button: West
 
   - name: East Button
     source_events:
@@ -109,7 +111,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: East
+        button: South
 
   - name: Start Button
     source_events:
