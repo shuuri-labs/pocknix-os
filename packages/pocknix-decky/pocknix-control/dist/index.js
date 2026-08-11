@@ -35,7 +35,14 @@ const applyConfig = (path, sourceAppid, targetAppid, targetName) => call("apply_
 const setLed = (side, r, g, b, brightness) => call("set_led", side, r, g, b, brightness);
 const setLedLinked = (linked) => call("set_led_linked", linked);
 const setLedEnabled = (enabled) => call("set_led_enabled", enabled);
-const setLedSides = (sides) => call("set_led_sides", sides);
+const setBootPulse = (enabled) => call("set_boot_pulse", enabled);
+const setLedMode = (mode) => call("set_led_mode", mode);
+const setLedSideMode = (sideMode) => call("set_led_side_mode", sideMode);
+const setLedSide = (r, g, b, brightness) => call("set_led_side", r, g, b, brightness);
+const setLedModeBrightness = (brightness) => call("set_led_mode_brightness", brightness);
+const setLedSideBrightness = (brightness) => call("set_led_side_brightness", brightness);
+const setLedTempThresholds = (lo, hi) => call("set_led_temp_thresholds", lo, hi);
+const setLedTempRate = (rate) => call("set_led_temp_rate", rate);
 const detectSdcard = () => call("detect_sdcard");
 const formatSdcard = (label) => call("format_sdcard", label);
 const checkUpdates = () => call("check_updates");
@@ -610,8 +617,8 @@ function Library() {
 // a ref so the unmount flush always sees the latest edit, not a stale first-render one.
 const COMMIT_DELAY = 350;
 // Hardware brightness is 0-255; the slider shows percent so it reads like the other two.
-const briToPercent = (bri) => Math.round((bri / 255) * 100);
-const percentToBri = (percent) => Math.round((percent / 100) * 255);
+const briToPercent$1 = (bri) => Math.round((bri / 255) * 100);
+const percentToBri$1 = (percent) => Math.round((percent / 100) * 255);
 function ColorControls({ zone, hsv, brightness, onCommit }) {
     const [hue, saturation] = hsv;
     const [localH, setLocalH] = SP_REACT.useState(hsv[0]);
@@ -654,7 +661,7 @@ function ColorControls({ zone, hsv, brightness, onCommit }) {
     const setHue = (h) => schedule(h, localS, localBri);
     const setSaturation = (s) => schedule(localH, s, localBri);
     const setBrightness = (b) => schedule(localH, localS, b);
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Hue", value: localH, min: 0, max: 359, step: 1, showValue: true, validValues: "range", valueSuffix: "\u00B0", bottomSeparator: "thick", className: `pocknix-led-${zone}-h`, onChange: setHue }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Saturation", value: localS, min: 0, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "%", bottomSeparator: "thick", className: `pocknix-led-${zone}-s`, onChange: setSaturation }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Brightness", value: briToPercent(localBri), min: 0, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "%", bottomSeparator: "thick", className: `pocknix-led-${zone}-v`, onChange: (percent) => setBrightness(percentToBri(percent)) }) }), SP_JSX.jsx("style", { children: `
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Hue", value: localH, min: 0, max: 359, step: 1, showValue: true, validValues: "range", valueSuffix: "\u00B0", bottomSeparator: "thick", className: `pocknix-led-${zone}-h`, onChange: setHue }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Saturation", value: localS, min: 0, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "%", bottomSeparator: "thick", className: `pocknix-led-${zone}-s`, onChange: setSaturation }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Brightness", value: briToPercent$1(localBri), min: 0, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "%", bottomSeparator: "thick", className: `pocknix-led-${zone}-v`, onChange: (percent) => setBrightness(percentToBri$1(percent)) }) }), SP_JSX.jsx("style", { children: `
         .pocknix-led-${zone}-h .${DFL.gamepadSliderClasses.SliderTrack} {
           background: linear-gradient(to right,
             hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
@@ -733,20 +740,144 @@ function commit(side, hsv, brightness, setConfig, reload) {
 function sideHsv(side) {
     return rgbToHsv(side.r, side.g, side.b);
 }
+const MODE_OPTIONS = [
+    { data: "static", label: "Static" },
+    { data: "rainbow", label: "Rainbow" },
+    { data: "battery", label: "Battery" },
+    { data: "temperature", label: "Temperature" },
+];
+const SIDE_MODE_OPTIONS = [
+    { data: "off", label: "Off" },
+    { data: "match", label: "Match Rings" },
+    { data: "static", label: "Static" },
+    { data: "battery", label: "Battery" },
+    { data: "temperature", label: "Temperature" },
+];
+// Debounced single-value slider: commits a byte value after the drag settles, with an
+// unmount flush so an edit still in the debounce window isn't lost when the QAM closes.
+function useDebouncedByte(value, commitFn) {
+    const [local, setLocal] = SP_REACT.useState(value);
+    const pending = SP_REACT.useRef(null);
+    const commitRef = SP_REACT.useRef(commitFn);
+    commitRef.current = commitFn;
+    SP_REACT.useEffect(() => { if (pending.current === null)
+        setLocal(value); }, [value]);
+    SP_REACT.useEffect(() => {
+        if (pending.current === null)
+            return;
+        const snapshot = pending.current;
+        const timer = window.setTimeout(() => {
+            pending.current = null;
+            commitRef.current(snapshot);
+        }, 350);
+        return () => window.clearTimeout(timer);
+    }, [local]);
+    SP_REACT.useEffect(() => () => {
+        if (pending.current !== null) {
+            const snapshot = pending.current;
+            commitRef.current(snapshot);
+        }
+    }, []);
+    return [local, (v) => { setLocal(v); pending.current = v; }];
+}
 function Lighting({ config, setConfig, reload }) {
     const led = config.led;
     const leftHsv = sideHsv(led.left);
     const rightHsv = sideHsv(led.right);
+    const sideHsvVal = sideHsv(led.side);
     const commitLeft = (hsv, brightness) => commit("left", hsv, brightness, setConfig, reload);
     const commitRight = (hsv, brightness) => commit("right", hsv, brightness, setConfig, reload);
     const commitBoth = (hsv, brightness) => commit("both", hsv, brightness, setConfig, reload);
+    const commitSide = (hsv, brightness) => {
+        const [r, g, b] = hsvToRgb(hsv[0], hsv[1], 100);
+        setLedSide(r, g, b, brightness)
+            .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+            .catch(() => reload());
+    };
+    const modeOptions = MODE_OPTIONS.filter((o) => o.data === "static"
+        || (o.data === "rainbow" && led.rainbowAvailable)
+        || (o.data === "battery" && led.batteryAvailable)
+        || (o.data === "temperature" && led.tempAvailable));
+    const sideModeOptions = SIDE_MODE_OPTIONS.filter((o) => o.data === "off" || o.data === "match" || o.data === "static"
+        || (o.data === "battery" && led.batteryAvailable)
+        || (o.data === "temperature" && led.tempAvailable));
     return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "STICK LIGHTS", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Enable", checked: led.enabled, onChange: (value) => setLedEnabled(value)
                                 .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
-                                .catch(() => reload()) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Link Left & Right", description: "Match both sticks to the same color.", checked: led.linked, disabled: !led.enabled, onChange: (value) => setLedLinked(value)
+                                .catch(() => reload()) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Boot Pulse", description: "Pulse the sticks white on boot while Steam loads, then switch to your colors.", checked: led.bootPulse, disabled: !led.enabled, onChange: (value) => setBootPulse(value)
                                 .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
-                                .catch(() => reload()) }) }), led.sidesAvailable && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Side Lights", description: "Match the side lighting to the sticks.", checked: led.sides, disabled: !led.enabled, onChange: (value) => setLedSides(value)
+                                .catch(() => reload()) }) }), SP_JSX.jsx(SelectEdit, { label: "Mode", value: led.mode, options: modeOptions, onChange: (mode) => setLedMode(mode)
+                            .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+                            .catch(() => reload()) }), led.mode === "static" && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Link Left & Right", description: "Match both sticks to the same color.", checked: led.linked, disabled: !led.enabled, onChange: (value) => setLedLinked(value)
                                 .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
-                                .catch(() => reload()) }) }))] }), led.enabled && (led.linked ? (SP_JSX.jsx(DFL.PanelSection, { title: "BOTH STICKS", children: SP_JSX.jsx(ColorControls, { zone: "both", hsv: leftHsv, brightness: led.left.brightness, onCommit: commitBoth }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "LEFT STICK", children: SP_JSX.jsx(ColorControls, { zone: "left", hsv: leftHsv, brightness: led.left.brightness, onCommit: commitLeft }) }), SP_JSX.jsx(DFL.PanelSection, { title: "RIGHT STICK", children: SP_JSX.jsx(ColorControls, { zone: "right", hsv: rightHsv, brightness: led.right.brightness, onCommit: commitRight }) })] })))] }));
+                                .catch(() => reload()) }) })), led.enabled && (led.mode === "rainbow" || led.mode === "battery" || led.mode === "temperature") && (SP_JSX.jsx(ModeBrightness, { config: config, setConfig: setConfig, reload: reload }))] }), led.enabled && led.mode === "static" && (led.linked ? (SP_JSX.jsx(DFL.PanelSection, { title: "BOTH STICKS", children: SP_JSX.jsx(ColorControls, { zone: "both", hsv: leftHsv, brightness: led.left.brightness, onCommit: commitBoth }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "LEFT STICK", children: SP_JSX.jsx(ColorControls, { zone: "left", hsv: leftHsv, brightness: led.left.brightness, onCommit: commitLeft }) }), SP_JSX.jsx(DFL.PanelSection, { title: "RIGHT STICK", children: SP_JSX.jsx(ColorControls, { zone: "right", hsv: rightHsv, brightness: led.right.brightness, onCommit: commitRight }) })] }))), led.sidesAvailable && (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "SIDE LIGHTS", children: [SP_JSX.jsx(SelectEdit, { label: "Mode", value: led.sideMode, options: sideModeOptions, onChange: (mode) => setLedSideMode(mode)
+                                    .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+                                    .catch(() => reload()) }), led.enabled && (led.sideMode === "battery" || led.sideMode === "temperature") && (SP_JSX.jsx(SideBrightness, { config: config, setConfig: setConfig, reload: reload }))] }), led.enabled && led.sideMode === "static" && (SP_JSX.jsx(DFL.PanelSection, { title: "SIDE LIGHTS", children: SP_JSX.jsx(ColorControls, { zone: "side", hsv: sideHsvVal, brightness: led.side.brightness, onCommit: commitSide }) }))] })), led.enabled && (led.mode === "temperature" || led.sideMode === "temperature") && (SP_JSX.jsx(TempThresholds, { config: config, setConfig: setConfig, reload: reload }))] }));
+}
+const briToPercent = (bri) => Math.round((bri / 255) * 100);
+const percentToBri = (percent) => Math.round((percent / 100) * 255);
+function ModeBrightness({ config, setConfig, reload }) {
+    const led = config.led;
+    const apply = (v) => setLedModeBrightness(v)
+        .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+        .catch(() => reload());
+    const [local, setLocal] = useDebouncedByte(led.modeBrightness, apply);
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Brightness", value: briToPercent(local), min: 0, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "%", bottomSeparator: "thick", onChange: (percent) => setLocal(percentToBri(percent)) }) }));
+}
+function SideBrightness({ config, setConfig, reload }) {
+    const led = config.led;
+    const apply = (v) => setLedSideBrightness(v)
+        .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+        .catch(() => reload());
+    const [local, setLocal] = useDebouncedByte(led.sideBrightness, apply);
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Side Brightness", value: briToPercent(local), min: 0, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "%", bottomSeparator: "thick", onChange: (percent) => setLocal(percentToBri(percent)) }) }));
+}
+const TEMP_RATE_OPTIONS = [
+    { data: "slow", label: "Slow (5s)" },
+    { data: "normal", label: "Normal (3s)" },
+    { data: "fast", label: "Fast (1s)" },
+];
+function TempThresholds({ config, setConfig, reload }) {
+    const led = config.led;
+    // Local state for instant slider response; commit is debounced. The cross-constraint
+    // (min < max) is enforced by the backend _sanitize, but locally we clamp the bounds
+    // so dragging one slider doesn't yank the other's range mid-drag.
+    const [localMin, setLocalMin] = SP_REACT.useState(led.tempMin);
+    const [localMax, setLocalMax] = SP_REACT.useState(led.tempMax);
+    SP_REACT.useEffect(() => { setLocalMin(led.tempMin); }, [led.tempMin]);
+    SP_REACT.useEffect(() => { setLocalMax(led.tempMax); }, [led.tempMax]);
+    const pending = SP_REACT.useRef(null);
+    const applyRef = SP_REACT.useRef(() => { });
+    applyRef.current = (lo, hi) => setLedTempThresholds(lo, hi)
+        .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+        .catch(() => reload());
+    SP_REACT.useEffect(() => {
+        if (pending.current === null)
+            return;
+        const snapshot = pending.current;
+        const timer = window.setTimeout(() => {
+            pending.current = null;
+            applyRef.current(snapshot.lo, snapshot.hi);
+        }, 350);
+        return () => window.clearTimeout(timer);
+    }, [localMin, localMax]);
+    SP_REACT.useEffect(() => () => {
+        if (pending.current !== null) {
+            applyRef.current(pending.current.lo, pending.current.hi);
+        }
+    }, []);
+    const setMin = (v) => {
+        const clamped = Math.min(v, localMax - 1);
+        setLocalMin(clamped);
+        pending.current = { lo: clamped, hi: localMax };
+    };
+    const setMax = (v) => {
+        const clamped = Math.max(v, localMin + 1);
+        setLocalMax(clamped);
+        pending.current = { lo: localMin, hi: clamped };
+    };
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "TEMPERATURE", children: [SP_JSX.jsx(SelectEdit, { label: "Update Rate", value: led.tempRate, options: TEMP_RATE_OPTIONS, onChange: (rate) => setLedTempRate(rate)
+                    .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+                    .catch(() => reload()) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Min (Blue)", value: localMin, min: 0, max: localMax - 1, step: 1, showValue: true, validValues: "range", valueSuffix: "\u00B0C", bottomSeparator: "thick", onChange: setMin }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { label: "Max (Red)", value: localMax, min: localMin + 1, max: 100, step: 1, showValue: true, validValues: "range", valueSuffix: "\u00B0C", bottomSeparator: "thick", onChange: setMax }) })] }));
 }
 
 function cardSummary(card) {
