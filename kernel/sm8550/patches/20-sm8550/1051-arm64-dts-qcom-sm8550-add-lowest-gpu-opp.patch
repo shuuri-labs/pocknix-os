@@ -1,0 +1,32 @@
+From: Thorch contributors
+Subject: [PATCH] arm64: dts: qcom: sm8550: add lowest GPU OPP
+
+The AYN Thor Android device tree exposes 124.8 MHz as the lowest A740
+operating point.  It uses the same LOW_SVS_D2 rail level and minimum DDR
+bandwidth vote as the 220 MHz operating point.  Add that characterized level
+to the mainline SM8550 GPU OPP table so the GMU DCVS table matches the vendor
+frequency range.
+
+The GMU adds its separate zero-frequency/off entry when it constructs the HFI
+performance table; this node is the lowest running frequency, not the off
+state.
+---
+ arch/arm64/boot/dts/qcom/sm8550.dtsi | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8550.dtsi b/arch/arm64/boot/dts/qcom/sm8550.dtsi
+--- a/arch/arm64/boot/dts/qcom/sm8550.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8550.dtsi
+@@ -2569,6 +2569,12 @@ gpu_opp_table: opp-table {
+ 					opp-peak-kBps = <2136718>;
+ 					qcom,opp-acd-level = <0xc02f5ffd>;
+ 				};
++
++				opp-124800000 {
++					opp-hz = /bits/ 64 <124800000>;
++					opp-level = <RPMH_REGULATOR_LEVEL_LOW_SVS_D2>;
++					opp-peak-kBps = <2136718>;
++				};
+ 			};
+ 		};
+

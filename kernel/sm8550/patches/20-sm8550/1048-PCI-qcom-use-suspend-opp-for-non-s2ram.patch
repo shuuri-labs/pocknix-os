@@ -1,0 +1,93 @@
+From: Luke Johnson <jaewun@me.com>
+Date: Fri, 3 Jul 2026 00:00:00 +1200
+Subject: [PATCH] PCI: qcom: retain the suspend OPP during s2idle
+
+On SM8550/QCS8550, disabling the PCIe OPP before s2idle removes the
+OPP-derived MC0/SH0 (DDR/LLCC) sleep bandwidth votes.  When APSS enters
+cluster_sleep_1 (PSCI 0x4100c344), AOP-owned sleep is reached and RTC
+wake fires, but firmware does not return to Linux.  Reproduced on AYN
+Thor and Retroid Pocket 6 with different AOP builds.  cluster_sleep_0
+wakes guard-free; CX floors, CX_AO, cx_mol, DDR MOL and fixed DDR
+frequency do not guard it.  Setting the suspend (floor) OPP instead of
+dropping to NULL preserves the MC0/SH0 sleep bandwidth and fixes
+resume.  Falls back to the previous behaviour (NULL) when no
+opp-suspend is marked.
+
+On OPP-scaled platforms (use_pm_opp) the probe path skips ICC
+initialisation entirely (icc_mem/icc_cpu stay NULL), so the OPP's
+opp-peak-kBps values are the only source of the memory-path (MC0/DDR
+and SH0/LLCC BCM) bandwidth votes, including their RPMh sleep-set
+contribution.  qcom_pcie_suspend_noirq() drops the OPP to NULL at both
+the d3cold branch and the non-S2RAM else branch, zeroing that sleep
+contract.
+
+Add qcom_pcie_set_suspend_opp(), which programs the OPP marked with the
+generic "opp-suspend" devicetree property (looked up via
+dev_pm_opp_get_suspend_opp_freq()) as the suspend floor, and call it
+from both former dev_pm_opp_set_opp(dev, NULL) sites.  Platforms that
+do not mark a suspend OPP keep the current behaviour unchanged.
+
+The helper is used in both paths that previously dropped the OPP: D3cold
+and the non-S2RAM fallback. PM_SUSPEND_MEM keeps its existing behavior.
+
+The resume path needs no change: qcom_pcie_resume_noirq() already
+re-derives the link OPP from the retrained link speed/width and sets it
+via qcom_pcie_icc_opp_update().
+---
+--- a/drivers/pci/controller/dwc/pcie-qcom.c
++++ b/drivers/pci/controller/dwc/pcie-qcom.c
+@@ -2119,6 +2119,36 @@
+ 	return ret;
+ }
+ 
++/*
++ * On platforms where the PCIe controller scales via OPP (use_pm_opp),
++ * the OPP's opp-peak-kBps values carry the only memory-path (DDR/LLCC)
++ * interconnect votes, including their RPMh sleep-set contribution.
++ * Instead of unconditionally dropping the OPP on suspend, honour an OPP
++ * marked with the generic "opp-suspend" property as the suspend floor so
++ * the sleep-set bandwidth votes survive the platform sleep state.  Fall
++ * back to dropping the OPP entirely when no suspend OPP is marked.
++ */
++static int qcom_pcie_set_suspend_opp(struct qcom_pcie *pcie)
++{
++	struct device *dev = pcie->pci->dev;
++	struct dev_pm_opp *opp;
++	unsigned long freq;
++	int ret;
++
++	freq = dev_pm_opp_get_suspend_opp_freq(dev);
++	if (!freq)
++		return dev_pm_opp_set_opp(dev, NULL);
++
++	opp = dev_pm_opp_find_freq_exact(dev, freq, true);
++	if (IS_ERR(opp))
++		return PTR_ERR(opp);
++
++	ret = dev_pm_opp_set_opp(dev, opp);
++	dev_pm_opp_put(opp);
++
++	return ret;
++}
++
+ static int qcom_pcie_suspend_noirq(struct device *dev)
+ {
+ 	struct qcom_pcie *pcie;
+@@ -2142,7 +2172,7 @@
+ 			dev_err(dev, "Failed to disable CPU-PCIe interconnect path: %d\n", ret);
+ 
+ 		if (pcie->use_pm_opp)
+-			dev_pm_opp_set_opp(pcie->pci->dev, NULL);
++			qcom_pcie_set_suspend_opp(pcie);
+ 	} else {
+ 		/*
+ 		 * Set minimum bandwidth required to keep data path functional during
+@@ -2171,7 +2201,7 @@
+ 					ret);
+ 
+ 			if (pcie->use_pm_opp)
+-				dev_pm_opp_set_opp(pcie->pci->dev, NULL);
++				qcom_pcie_set_suspend_opp(pcie);
+ 		}
+ 	}
+ 	return ret;

@@ -211,8 +211,13 @@ configure() {
   #    rollback). Both synced base configs already ship =y, but there is no initramfs, so
   #    a future `make sync` flipping it to =m/off would ship an image that cannot mount
   #    its own root — pin it and assert below.
+  #  - PM_DEBUG + PM_SLEEP_DEBUG: /sys/power/pm_wakeup_irq (which irq woke us) and
+  #    /sys/power/pm_test (staged suspend entry that auto-resumes per stage) for
+  #    suspend triage on a device with no serial console.
   "${KSRC}/scripts/config" --file "${KSRC}/.config" \
     --module QCOM_Q6V5_PAS \
+    --enable PM_DEBUG \
+    --enable PM_SLEEP_DEBUG \
     --enable UNICODE \
     --enable BTRFS_FS \
     --enable MMC_SDHCI_MSM_DOWNSTREAM \

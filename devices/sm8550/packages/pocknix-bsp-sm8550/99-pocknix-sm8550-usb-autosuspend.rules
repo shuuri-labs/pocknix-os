@@ -1,0 +1,4 @@
+# The primary SM8550 DWC3 controller otherwise remains runtime-active and
+# holds its 1 GB/s USB-to-DDR interconnect vote while idle. Runtime PM honours
+# attached-device activity, so only an idle controller is autosuspended.
+ACTION=="add", SUBSYSTEM=="platform", KERNEL=="a600000.usb", ATTR{power/control}="auto"

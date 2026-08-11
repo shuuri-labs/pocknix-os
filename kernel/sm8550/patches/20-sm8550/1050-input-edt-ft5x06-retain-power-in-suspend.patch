@@ -1,0 +1,69 @@
+From: jaewun <jaewun@users.noreply.github.com>
+Subject: [PATCH] input: edt-ft5x06: allow retaining controller power in suspend
+
+Thor's lower FT5452 touchscreen cannot safely take the driver's normal
+reset/regulator poweroff path during deep suspend. Marking the node as
+`wakeup-source` avoids that path because edt-ft5x06 returns early when
+`device_may_wakeup()` is true, but it also causes I2C core to install and arm
+the primary touch IRQ as a system wake IRQ.
+
+That solves the poweroff/reset half of the problem while creating a second
+failure mode: stray bottom-touch wake attribution during repeated deep short
+probes. Add a small opt-in property that only retains the controller state
+through suspend/resume. Boards can use it when the controller must remain
+powered, but should not wake the SoC.
+---
+--- a/Documentation/devicetree/bindings/input/touchscreen/edt-ft5x06.yaml
++++ b/Documentation/devicetree/bindings/input/touchscreen/edt-ft5x06.yaml
+@@ -60,6 +60,12 @@ properties:
+ 
+   wakeup-source: true
+ 
++  edt,retain-power-in-suspend:
++    type: boolean
++    description:
++      Keep the controller powered and skip suspend/resume power sequencing,
++      without marking the interrupt as a system wake source.
++
+   vcc-supply: true
+   iovcc-supply: true
+ 
+--- a/drivers/input/touchscreen/edt-ft5x06.c
++++ b/drivers/input/touchscreen/edt-ft5x06.c
+@@ -142,6 +142,7 @@ struct edt_ft5x06_ts_data {
+ 	unsigned int crc_errors;
+ 	unsigned int header_errors;
+ 	bool no_regmap_bulk_read;
++	bool retain_power_in_suspend;
+ };
+ 
+ struct edt_i2c_chip_data {
+@@ -1274,6 +1275,10 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
+ 
+ 	tsdata->no_regmap_bulk_read =
+ 		device_property_read_bool(&client->dev, "no-regmap-bulk-read");
++	tsdata->retain_power_in_suspend =
++		device_property_read_bool(&client->dev,
++					  "edt,retain-power-in-suspend");
++
+ 	/*
+ 	 * Check which sleep modes we can support. Power-off requires the
+ 	 * reset-pin to ensure correct power-down/power-up behaviour. Start with
+@@ -1416,7 +1424,7 @@ static int edt_ft5x06_ts_suspend(struct device *dev)
+ 	struct gpio_desc *reset_gpio = tsdata->reset_gpio;
+ 	int ret;
+ 
+-	if (device_may_wakeup(dev))
++	if (device_may_wakeup(dev) || tsdata->retain_power_in_suspend)
+ 		return 0;
+ 
+ 	if (tsdata->suspend_mode == EDT_PMODE_NOT_SUPPORTED)
+@@ -1458,7 +1466,7 @@ static int edt_ft5x06_ts_resume(struct device *dev)
+ 	struct edt_ft5x06_ts_data *tsdata = i2c_get_clientdata(client);
+ 	int ret = 0;
+ 
+-	if (device_may_wakeup(dev))
++	if (device_may_wakeup(dev) || tsdata->retain_power_in_suspend)
+ 		return 0;
+ 
+ 	if (tsdata->suspend_mode == EDT_PMODE_NOT_SUPPORTED)

@@ -1,0 +1,114 @@
+From: Luke Johnson <jaewun@me.com>
+Date: Fri, 3 Jul 2026 00:00:00 +1200
+Subject: [PATCH] arm64: dts: qcom: sm8550: add PCIe suspend-only DDR/LLCC floor OPP
+
+On SM8550/QCS8550 the PCIe controllers scale via OPP (use_pm_opp), so
+the probe path skips ICC init (icc_mem/icc_cpu stay NULL) and the OPP
+table's opp-peak-kBps values are the only source of the MC0 (DDR) and
+SH0 (LLCC) memory-path bandwidth votes, including their RPMh sleep-set
+contribution.  Paired with the pcie-qcom change that selects the
+generic suspend OPP instead of dropping the OPP to NULL on non-S2RAM
+suspend, this retains a nonzero DDR/LLCC sleep floor across s2idle:
+zeroing those sleep-set votes removes the memory-path contract the AOP
+needs to bring the SoC back out of cluster_sleep_1 (PSCI 0x4100c344),
+and the firmware never returns on resume.
+
+Add a dedicated suspend-only OPP (opp-1-1) to both PCIe OPP tables
+rather than marking one of the active OPPs opp-suspend.  This matters:
+qcom_pcie_icc_opp_update() selects the active OPP by an exact
+(freq = link_speed_mbps * width * 1000, level = link_speed) key, so
+marking (and lowering) the real 2.5 GT/s x1 OPP would also cap a live
+Gen1 x1 / downtrained link to the tiny suspend bandwidth.  opp-hz = 1
+is a synthetic key that is deliberately not a real speed*width product,
+so the active-link exact match never selects it; the active OPP table
+is left completely unchanged.  dev_pm_opp_get_suspend_opp_freq() still
+returns it (it carries opp-suspend) so it is used only at suspend.
+
+opp-hz = 1 is safe as a suspend key: the PCIe link is in d3cold at
+suspend so link bandwidth is moot, and opp-hz has no functional clock
+effect here -- the only clock bound to the OPP table (gcc_pcie_N_aux)
+is a branch off a single-entry (19.2 MHz) RCG, so clk_set_rate() rounds
+any requested rate to 19.2 MHz and cannot fail.  That last point also
+guarantees the scaling-down suspend path does not error out before the
+opp-peak-kBps bandwidth vote is applied.
+
+opp-peak-kBps = 5000 (5 MB/s) is the DDR/LLCC wake-contract floor; it is
+~500x below the 2.5 GT/s x1 active OPP's 250 MB/s and lets DDR settle to
+its lowest tier during suspend.
+
+Measured on Retroid Pocket 6 (charge-counter, RTC-timed s2idle, back to
+back at ~3.7-4.0 V): V-OPP baseline (no suspend floor OPP) 151 mA;
++ USB runtime-PM shed 107 mA; + this 5 MB/s suspend floor ~54 mA
+(~210 mW) -- less than half the prior ~113 mA baseline.  Reliability:
+13/13 s2idle suspend/resume cycles woke cleanly (12x 90 s spaced + 1x
+20 min), suspend_stats success incrementing, boot_id unchanged, zero
+resets. The earlier 250 MB/s wake floor was also reproduced on AYN Thor;
+the 5 MB/s floor remains board-validation-sensitive because it deliberately
+minimizes wake margin.
+
+pcie0 is the WiFi link (ath12k, trains Gen2 x2 -> opp-5000000); pcie1 is
+active on the AYANEO Pocket family (Renesas uPD720201 USB3 host).
+
+Depends on the pcie-qcom "use suspend OPP instead of dropping OPP"
+change (0220); without it dev_pm_opp_set_opp(dev, NULL) still runs and
+this OPP is never selected at suspend.
+---
+ arch/arm64/boot/dts/qcom/sm8550.dtsi | 40 ++++++++++++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8550.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8550.dtsi
+@@ -2424,6 +2424,26 @@
+ 					opp-level = <1>;
+ 				};
+
++				/*
++				 * Suspend-only DDR/LLCC bandwidth floor.  On use_pm_opp
++				 * PCIe (ICC handled via OPP) the OPP's opp-peak-kBps is
++				 * the only source of the MC0(DDR)/SH0(LLCC) sleep-set
++				 * votes; pcie-qcom votes this opp-suspend OPP (not NULL)
++				 * at suspend so a nonzero floor survives cluster_sleep_1.
++				 * opp-hz=1 is a synthetic key (not a real speed*width
++				 * product) so qcom_pcie_icc_opp_update()'s exact
++				 * (freq,level) match never selects it for an active link;
++				 * the link is d3cold at suspend so opp-hz has no clock
++				 * effect (the aux RCG rounds any rate to 19.2 MHz).
++				 */
++				opp-1-1 {
++					opp-hz = /bits/ 64 <1>;
++					required-opps = <&rpmhpd_opp_low_svs>;
++					opp-peak-kBps = <5000 1>;
++					opp-level = <1>;
++					opp-suspend;
++				};
++
+ 				/* 2.5 GT/s x2 */
+ 				opp-5000000-1 {
+ 					opp-hz = /bits/ 64 <5000000>;
+@@ -2603,6 +2623,26 @@
+ 					opp-level = <1>;
+ 				};
+
++				/*
++				 * Suspend-only DDR/LLCC bandwidth floor.  On use_pm_opp
++				 * PCIe (ICC handled via OPP) the OPP's opp-peak-kBps is
++				 * the only source of the MC0(DDR)/SH0(LLCC) sleep-set
++				 * votes; pcie-qcom votes this opp-suspend OPP (not NULL)
++				 * at suspend so a nonzero floor survives cluster_sleep_1.
++				 * opp-hz=1 is a synthetic key (not a real speed*width
++				 * product) so qcom_pcie_icc_opp_update()'s exact
++				 * (freq,level) match never selects it for an active link;
++				 * the link is d3cold at suspend so opp-hz has no clock
++				 * effect (the aux RCG rounds any rate to 19.2 MHz).
++				 */
++				opp-1-1 {
++					opp-hz = /bits/ 64 <1>;
++					required-opps = <&rpmhpd_opp_low_svs>;
++					opp-peak-kBps = <5000 1>;
++					opp-level = <1>;
++					opp-suspend;
++				};
++
+ 				/* 2.5 GT/s x2 */
+ 				opp-5000000-1 {
+ 					opp-hz = /bits/ 64 <5000000>;

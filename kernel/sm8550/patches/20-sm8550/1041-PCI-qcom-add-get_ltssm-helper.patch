@@ -1,0 +1,126 @@
+From: Krishna Chaitanya Chundru <krishna.chundru@oss.qualcomm.com>
+Date: Wed, 29 Apr 2026 12:12:24 +0530
+Subject: [PATCH] PCI: qcom: Add .get_ltssm() helper
+
+For older targets like sc7280, we see reading DBI after sending PME
+turn off message is causing NOC error.
+
+To avoid unsafe DBI accesses, introduce qcom_pcie_get_ltssm() to retrieve
+the LTSSM state. For newer platforms, the LTSSM state is read from the
+PARF_LTSSM register, while older platforms continue to retrieve it from
+ELBI_SYS_STTS.
+
+This helper is used in place of direct DBI-based link state checks in
+the D3cold path after sending PME turn-off message, ensuring the LTSSM
+state can be queried safely even after DBI access is no longer valid.
+
+Signed-off-by: Krishna Chaitanya Chundru <krishna.chundru@oss.qualcomm.com>
+
+[Thorch backport: mainline "PCI: qcom: Add D3cold support" v5 series, patch 2/5.
+ Needed so the Qualcomm PCIe host can use the D3cold suspend path on Linux 7.1.2.
+ Ref: https://lore.kernel.org/all/20260429-d3cold-v5-2-89e9735b9df6@oss.qualcomm.com/ ]
+---
+ drivers/pci/controller/dwc/pcie-qcom.c | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/drivers/pci/controller/dwc/pcie-qcom.c b/drivers/pci/controller/dwc/pcie-qcom.c
+index af6bf5cce65b..085300c1d1ec 100644
+--- a/drivers/pci/controller/dwc/pcie-qcom.c
++++ b/drivers/pci/controller/dwc/pcie-qcom.c
+@@ -71,6 +71,7 @@
+ 
+ /* ELBI registers */
+ #define ELBI_SYS_CTRL				0x04
++#define ELBI_SYS_STTS				0x08
+ 
+ /* DBI registers */
+ #define AXI_MSTR_RESP_COMP_CTRL0		0x818
+@@ -131,6 +132,7 @@
+ 
+ /* PARF_LTSSM register fields */
+ #define LTSSM_EN				BIT(8)
++#define PARF_LTSSM_STATE_MASK			GENMASK(5, 0)
+ 
+ /* PARF_NO_SNOOP_OVERRIDE register fields */
+ #define WR_NO_SNOOP_OVERRIDE_EN			BIT(1)
+@@ -145,6 +147,9 @@
+ /* ELBI_SYS_CTRL register fields */
+ #define ELBI_SYS_CTRL_LT_ENABLE			BIT(0)
+ 
++/* ELBI_SYS_STTS register fields */
++#define ELBI_SYS_STTS_LTSSM_STATE_MASK		GENMASK(17, 12)
++
+ /* AXI_MSTR_RESP_COMP_CTRL0 register fields */
+ #define CFG_REMOTE_RD_REQ_BRIDGE_SIZE_2K	0x4
+ #define CFG_REMOTE_RD_REQ_BRIDGE_SIZE_4K	0x5
+@@ -245,6 +250,7 @@ struct qcom_pcie_ops {
+ 	void (*deinit)(struct qcom_pcie *pcie);
+ 	void (*ltssm_enable)(struct qcom_pcie *pcie);
+ 	int (*config_sid)(struct qcom_pcie *pcie);
++	enum dw_pcie_ltssm (*get_ltssm)(struct qcom_pcie *pcie);
+ };
+ 
+  /**
+@@ -428,6 +434,15 @@ static void qcom_pcie_2_1_0_ltssm_enable(struct qcom_pcie *pcie)
+ 	writel(val, pci->elbi_base + ELBI_SYS_CTRL);
+ }
+ 
++static enum dw_pcie_ltssm qcom_pcie_2_1_0_get_ltssm(struct qcom_pcie *pcie)
++{
++	struct dw_pcie *pci = pcie->pci;
++	u32 val;
++
++	val = readl(pci->elbi_base + ELBI_SYS_STTS);
++	return (enum dw_pcie_ltssm)FIELD_GET(ELBI_SYS_STTS_LTSSM_STATE_MASK, val);
++}
++
+ static int qcom_pcie_get_resources_2_1_0(struct qcom_pcie *pcie)
+ {
+ 	struct qcom_pcie_resources_2_1_0 *res = &pcie->res.v2_1_0;
+@@ -1260,6 +1275,19 @@ static bool qcom_pcie_link_up(struct dw_pcie *pci)
+ 	return val & PCI_EXP_LNKSTA_DLLLA;
+ }
+ 
++static enum dw_pcie_ltssm qcom_pcie_get_ltssm(struct dw_pcie *pci)
++{
++	struct qcom_pcie *pcie = to_qcom_pcie(pci);
++	u32 val;
++
++	if (pcie->cfg->ops->get_ltssm)
++		return pcie->cfg->ops->get_ltssm(pcie);
++
++	val = readl(pcie->parf + PARF_LTSSM);
++
++	return (enum dw_pcie_ltssm)FIELD_GET(PARF_LTSSM_STATE_MASK, val);
++}
++
+ static void qcom_pcie_phy_power_off(struct qcom_pcie *pcie)
+ {
+ 	struct qcom_pcie_port *port;
+@@ -1385,6 +1413,7 @@ static const struct qcom_pcie_ops ops_2_1_0 = {
+ 	.post_init = qcom_pcie_post_init_2_1_0,
+ 	.deinit = qcom_pcie_deinit_2_1_0,
+ 	.ltssm_enable = qcom_pcie_2_1_0_ltssm_enable,
++	.get_ltssm = qcom_pcie_2_1_0_get_ltssm,
+ };
+ 
+ /* Qcom IP rev.: 1.0.0	Synopsys IP rev.: 4.11a */
+@@ -1394,6 +1423,7 @@ static const struct qcom_pcie_ops ops_1_0_0 = {
+ 	.post_init = qcom_pcie_post_init_1_0_0,
+ 	.deinit = qcom_pcie_deinit_1_0_0,
+ 	.ltssm_enable = qcom_pcie_2_1_0_ltssm_enable,
++	.get_ltssm = qcom_pcie_2_1_0_get_ltssm,
+ };
+ 
+ /* Qcom IP rev.: 2.3.2	Synopsys IP rev.: 4.21a */
+@@ -1512,6 +1542,7 @@ static const struct qcom_pcie_cfg cfg_fw_managed = {
+ static const struct dw_pcie_ops dw_pcie_ops = {
+ 	.link_up = qcom_pcie_link_up,
+ 	.start_link = qcom_pcie_start_link,
++	.get_ltssm = qcom_pcie_get_ltssm,
+ };
+ 
+ static int qcom_pcie_icc_init(struct qcom_pcie *pcie)
+
+-- 
+2.34.1

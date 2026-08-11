@@ -1,0 +1,114 @@
+From: Krishna Chaitanya Chundru <krishna.chundru@oss.qualcomm.com>
+Date: Wed, 29 Apr 2026 12:12:26 +0530
+Subject: [PATCH] PCI: dwc: Use common D3cold eligibility helper in suspend path
+
+Previously, the driver skipped putting the link into L2/device state in
+D3cold whenever L1 ASPM was enabled, since some devices (e.g. NVMe) expect
+low resume latency and may not tolerate deeper power states. However, such
+devices typically remain in D0 and are already covered by the new helper's
+requirement that all endpoints be in D3hot before the devices under host
+bridge may enter D3cold.
+
+So, replace the local L1/L1SS-based check in dw_pcie_suspend_noirq() with
+the shared pci_host_common_d3cold_possible() helper to decide whether the
+devices under host bridge can safely transition to D3cold.
+
+In addition, propagate PME-from-D3cold capability information from the
+helper and record it in skip_pwrctrl_off. Some devices (e.g. M.2 cards
+without auxiliary power) may lose PME detection when main power is
+removed, even if they advertise PME-from-D3cold support. This allows
+controller power-off to be skipped when required to preserve wakeup
+functionality.
+
+Update the suspended flag in dw_pcie_resume_noirq() only after the PCIe
+link resumes successfully, to avoid marking the controller active when
+link resume fails.
+
+Signed-off-by: Krishna Chaitanya Chundru <krishna.chundru@oss.qualcomm.com>
+
+[Thorch backport: mainline "PCI: qcom: Add D3cold support" v5 series, patch 4/5.
+ Needed so the Qualcomm PCIe host can use the D3cold suspend path on Linux 7.1.2.
+ Ref: https://lore.kernel.org/all/20260429-d3cold-v5-4-89e9735b9df6@oss.qualcomm.com/ ]
+---
+ drivers/pci/controller/dwc/pcie-designware-host.c | 15 +++++++--------
+ drivers/pci/controller/dwc/pcie-designware.h      |  1 +
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/pci/controller/dwc/pcie-designware-host.c b/drivers/pci/controller/dwc/pcie-designware-host.c
+index c9517a348836..9e409a1909e6 100644
+--- a/drivers/pci/controller/dwc/pcie-designware-host.c
++++ b/drivers/pci/controller/dwc/pcie-designware-host.c
+@@ -16,9 +16,11 @@
+ #include <linux/msi.h>
+ #include <linux/of_address.h>
+ #include <linux/of_pci.h>
++#include <linux/pci.h>
+ #include <linux/pci_regs.h>
+ #include <linux/platform_device.h>
+ 
++#include "../pci-host-common.h"
+ #include "../../pci.h"
+ #include "pcie-designware.h"
+ 
+@@ -1218,18 +1220,14 @@ static int dw_pcie_pme_turn_off(struct dw_pcie *pci)
+ 
+ int dw_pcie_suspend_noirq(struct dw_pcie *pci)
+ {
+-	u8 offset = dw_pcie_find_capability(pci, PCI_CAP_ID_EXP);
++	bool pme_capable = false;
+ 	int ret = 0;
+ 	u32 val;
+ 
+ 	if (!dw_pcie_link_up(pci))
+ 		goto stop_link;
+ 
+-	/*
+-	 * If L1SS is supported, then do not put the link into L2 as some
+-	 * devices such as NVMe expect low resume latency.
+-	 */
+-	if (dw_pcie_readw_dbi(pci, offset + PCI_EXP_LNKCTL) & PCI_EXP_LNKCTL_ASPM_L1)
++	if (!pci_host_common_d3cold_possible(pci->pp.bridge, &pme_capable))
+ 		return 0;
+ 
+ 	if (pci->pp.ops->pme_turn_off) {
+@@ -1273,6 +1271,7 @@ int dw_pcie_suspend_noirq(struct dw_pcie *pci)
+ 	udelay(1);
+ 
+ stop_link:
++	pci->pp.skip_pwrctrl_off = pme_capable;
+ 	dw_pcie_stop_link(pci);
+ 	if (pci->pp.ops->deinit)
+ 		pci->pp.ops->deinit(&pci->pp);
+@@ -1290,8 +1289,6 @@ int dw_pcie_resume_noirq(struct dw_pcie *pci)
+ 	if (!pci->suspended)
+ 		return 0;
+ 
+-	pci->suspended = false;
+-
+ 	if (pci->pp.ops->init) {
+ 		ret = pci->pp.ops->init(&pci->pp);
+ 		if (ret) {
+@@ -1313,6 +1310,8 @@ int dw_pcie_resume_noirq(struct dw_pcie *pci)
+ 	if (pci->pp.ops->post_init)
+ 		pci->pp.ops->post_init(&pci->pp);
+ 
++	pci->suspended = false;
++
+ 	return 0;
+ 
+ err_stop_link:
+diff --git a/drivers/pci/controller/dwc/pcie-designware.h b/drivers/pci/controller/dwc/pcie-designware.h
+index 3e69ef60165b..e759c5c7257e 100644
+--- a/drivers/pci/controller/dwc/pcie-designware.h
++++ b/drivers/pci/controller/dwc/pcie-designware.h
+@@ -450,6 +450,7 @@ struct dw_pcie_rp {
+ 	bool			ecam_enabled;
+ 	bool			native_ecam;
+ 	bool                    skip_l23_ready;
++	bool			skip_pwrctrl_off;
+ };
+ 
+ struct dw_pcie_ep_ops {
+
+-- 
+2.34.1
