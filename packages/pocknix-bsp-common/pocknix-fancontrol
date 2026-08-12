@@ -3,17 +3,29 @@
 # Ported from ROCKNIX hardware/quirks/platforms/SM8550/bin/fancontrol (+ 005-thermal_path /
 # 020-fan_control). Without this nothing takes PWM control of the fan, so it never spins and the
 # device cooks. Discovers the hwmon PWM fan + the CPU/GPU thermal zones, then drives pwm1 from a
-# temp->speed table every few seconds. Runs as root (writes /sys).
+# temp->speed table every few seconds (with hysteresis near thresholds so the fan doesn't
+# oscillate when temp hovers on a boundary). Runs as root (writes /sys).
 #
 # Curve selection: /var/lib/pocknix/fan-mode (quiet|moderate|performance), re-read every tick so
 # the Pocknix Control plugin / pocknix-fan-mode switch curves live with a bare file write — no
 # service restart. Curves = ROCKNIX's of the same names ("performance" = their "aggressive").
 # Default quiet — ROCKNIX's SHIPPED default (rocknix system.cfg: cooling.profile=quiet). We
 # previously baked "moderate" (fan from 55°C, every step 5-10°C earlier) — obnoxiously loud.
+# quiet is now a custom early-quiet curve measured on an SM8550 blower (PWM→RPM sweep on
+# hwmon40): the motor starts at PWM=20 (~950 RPM) and stays barely audible through PWM=50
+# (~1935 RPM), so it ramps in from 50°C at that floor instead of the old 0→51 jump at 60°C.
+# Gentle steps (50/70/80/90/102/153/255) keep the whistle band (PWM 80+, ~2900 RPM) above 70°C.
 set -u
 
 MODE_FILE=/var/lib/pocknix/fan-mode
 GAME_MODE_FILE=/run/pocknix/game-mode
+
+# Hysteresis in millidegC (5000 = 5C). On cooldown the fan keeps its current (higher) step
+# until temp falls HYST below the threshold that step was chosen at; on warmup it reacts at
+# the exact threshold. Symmetric behavior, biased toward cooling — safer than the reverse.
+# Wide enough to absorb the idle-vs-active thermal gap near the floor (e.g. Steam menu at
+# ~50-51C otherwise cycles start/stop every tick); tune down if a step holds too long.
+HYST=5000
 
 # Fan PWM (hwmon pwm1) — ROCKNIX 020-fan_control.
 FAN_PWM="$(ls /sys/class/hwmon/hwmon*/pwm1 2>/dev/null | head -1)"
@@ -30,15 +42,20 @@ for z in /sys/devices/virtual/thermal/thermal_zone*/; do
 done
 [ -n "${SENSORS}" ] || { echo "pocknix-fancontrol: no cpu/gpu thermal zones, exiting"; exit 0; }
 
-# PWM (0-255) vs temperature (millidegC) tables, highest first. Same speed steps for every
-# mode (ROCKNIX's); only the temperature thresholds shift.
-SPEEDS="255 204 153 119 102 77 51 0"
+# Curve = "temp:pwm" pairs, hottest threshold first (threshold in millidegC, pwm 0-255). The
+# loop walks the list and applies the pwm of the first threshold the current temp exceeds.
+# moderate/performance keep ROCKNIX's steps; quiet is the custom early-quiet curve above.
+CURVE_QUIET="88000:255 82000:153 78000:102 74000:90 70000:80 65000:70 50000:50 0:0"
+CURVE_MODERATE="85000:255 80000:204 75000:153 70000:119 65000:102 60000:77 55000:51 0:0"
+CURVE_PERFORMANCE="80000:255 75000:204 70000:153 65000:119 60000:102 55000:77 50000:51 0:0"
 
 # Per-game override: "<pid> <fan> <lavd>" written by pocknix-proton-wrapper. The pid IS the
 # game session (the wrapper execs into Proton), so a dead pid means no override — the pick
 # reverts on any kind of game exit with no cleanup step. "-" = that field not overridden.
 effective_mode() {
-  if read -r pid fan _ < "${GAME_MODE_FILE}" 2>/dev/null; then
+  # 2>/dev/null BEFORE the < so the open failure (no file in idle) is suppressed too —
+  # < file 2>/dev/null doesn't, since the < redirect is evaluated before stderr is muted.
+  if read -r pid fan _ 2>/dev/null < "${GAME_MODE_FILE}"; then
     if [ -n "${pid}" ] && [ "${fan}" != "-" ] && [ -d "/proc/${pid}" ]; then
       printf '%s\n' "${fan}"
       return
@@ -47,11 +64,11 @@ effective_mode() {
   cat "${MODE_FILE}" 2>/dev/null
 }
 
-curve_temps() {
+curve_pairs() {
   case "$(effective_mode)" in
-    performance) echo "80000 75000 70000 65000 60000 55000 50000 0" ;;  # ROCKNIX "aggressive"
-    moderate)    echo "85000 80000 75000 70000 65000 60000 55000 0" ;;
-    *)           echo "95000 85000 80000 75000 70000 65000 60000 0" ;;  # quiet (default)
+    performance) echo "${CURVE_PERFORMANCE}" ;;
+    moderate)    echo "${CURVE_MODERATE}" ;;
+    *)           echo "${CURVE_QUIET}" ;;
   esac
 }
 
@@ -60,17 +77,31 @@ curve_temps() {
 trap '[ -e "${FAN_EN}" ] && echo 0 > "${FAN_EN}" 2>/dev/null; exit 0' INT TERM
 
 LAST=""
+LAST_TH=0        # threshold the current step was chosen at; cooldown needs TEMP < TH - HYST.
+LAST_MODE=""     # effective_mode at the current step; a mode change bypasses hysteresis so a
+                 # per-game override ending (e.g. performance -> quiet) doesn't hold a high PWM.
 while :; do
-  TEMPS="$(curve_temps)"
+  MODE="$(effective_mode)"
+  PAIRS="$(curve_pairs)"
   TEMP="$(awk '{s+=$1;n++} END{printf "%d", (n? s/n : 0)}' ${SENSORS} 2>/dev/null)"
-  i=1; SPEED=0
-  for th in ${TEMPS}; do
-    if [ "${TEMP}" -gt "${th}" ]; then SPEED="$(echo ${SPEEDS} | cut -d' ' -f${i})"; break; fi
-    i=$((i+1))
+  SPEED=0; TH=0
+  for pair in ${PAIRS}; do
+    th="${pair%%:*}"
+    if [ "${TEMP}" -gt "${th}" ]; then SPEED="${pair#*:}"; TH="${th}"; break; fi
   done
+  # Hysteresis: only honor a cooldown (SPEED < LAST) once temp has fallen HYST below the
+  # threshold LAST was picked at — but only if the mode hasn't changed since. A mode switch
+  # (warm or cool) always applies fresh, so e.g. dropping a per-game performance override
+  # immediately lowers the fan instead of holding the high step until cooldown completes.
+  if [ "${MODE}" = "${LAST_MODE}" ] && [ "${SPEED}" -lt "${LAST}" ] && [ "${TEMP}" -ge $((LAST_TH - HYST)) ]; then
+    SPEED="${LAST}"
+    TH="${LAST_TH}"
+  fi
   if [ "${SPEED}" != "${LAST}" ]; then
     echo "${SPEED}" > "${FAN_PWM}" 2>/dev/null
     LAST="${SPEED}"
+    LAST_TH="${TH}"
   fi
+  LAST_MODE="${MODE}"
   sleep 3
 done
