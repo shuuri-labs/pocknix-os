@@ -53,8 +53,16 @@ setup_chroot() {
     # is frozen at its creation date and LAGS devices (a user's -Syu gets a new
     # soname our binaries were never linked against). Pinned base: no-op.
     chroot_mount "${BROOT}"
-    chroot "${BROOT}" pacman -Syu --noconfirm \
-      || die "chroot base upgrade failed — refusing to build against a stale base (network down? re-run when reachable)"
+    # A PINNED base is frozen, so a chroot already stamped with that pin cannot be stale
+    # and a failed -Syu just means offline. On live/unpinned bases the drift is real, and
+    # building against a chroot that missed it is exactly what this guard exists to stop.
+    if ! chroot "${BROOT}" pacman -Syu --noconfirm; then
+      if [ -n "${POCKNIX_BASE_SNAPSHOT}" ] && [ "${have_base}" = "${want_base}" ]; then
+        warn "chroot -Syu failed, but the base is pinned to ${want_base} and the chroot already matches it — continuing (frozen base cannot have moved)"
+      else
+        die "chroot base upgrade failed — refusing to build against a stale base (network down? re-run when reachable)"
+      fi
+    fi
     chroot_umount "${BROOT}"
   else
     fetch_alarm_tarball
