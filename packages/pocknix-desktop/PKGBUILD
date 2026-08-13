@@ -20,7 +20,7 @@
 # docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=12
+pkgrel=13
 pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -31,7 +31,10 @@ license=('GPL2')
 # depends here — listing plasma-mobile/kscreen would drag the entire KDE/Qt stack into the BUILD
 # chroot at makepkg time for no reason. The launcher + rotate scripts `command -v`-guard their
 # callees (startplasmamobile, kscreen-doctor) and fail gracefully if the stack is absent.
-depends=('bash')
+# pocknix-tools is the exception: pacman never installs a NEW package name without a dep edge,
+# and this package is on every fielded device, so it is what delivers the maintenance app (which
+# owns the rollback entry point pocknix-snapshots dropped) to the existing fleet on -Syu.
+depends=('bash' 'pocknix-tools')
 install='pocknix-desktop.install'
 source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'
         'pocknix-desktop-remove-taskpanel' 'pocknix-desktop-remove-taskpanel.desktop'
