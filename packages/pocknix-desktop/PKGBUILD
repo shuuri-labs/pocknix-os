@@ -20,7 +20,7 @@
 # docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=13
+pkgrel=14
 pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -41,9 +41,10 @@ source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.deskt
         'steamos-session-select' 'return-to-gamemode.desktop'
         'pocknix-flathub-setup' 'pocknix-flathub.service' 'pocknix-flathub-dispatcher'
         'ksplashrc' 'pocknix-x11.conf'
-        'powerdevilrc' 'kscreenlockerrc')
+        'powerdevilrc' 'kscreenlockerrc'
+        'pocknix-fontcache-prune' '99-pocknix-fontcache.hook')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
@@ -80,4 +81,7 @@ package() {
   # in desktop mode). kwin expects the dir to exist; the minimal ALARM base ships no xorg-server
   # to provide it. See pocknix-x11.conf.
   install -Dm644 "${srcdir}/pocknix-x11.conf"         "${pkgdir}/usr/lib/tmpfiles.d/pocknix-x11.conf"
+  install -Dm755 "${srcdir}/pocknix-fontcache-prune" "${pkgdir}/usr/bin/pocknix-fontcache-prune"
+  install -Dm644 "${srcdir}/99-pocknix-fontcache.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/99-pocknix-fontcache.hook"
 }

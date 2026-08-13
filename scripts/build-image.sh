@@ -36,6 +36,16 @@ Server = file:///localrepo
 EOF
 }
 
+# fontconfig installs and caches long before any pocknix package, so the package's own prune can
+# leave an image dirty: re-prune after the last transaction.
+prune_fontconfig_compat_links() {
+  local root="$1"
+  [ -d "${root}/var/cache/fontconfig" ] || return 0
+  local n
+  n="$(find "${root}/var/cache/fontconfig" -maxdepth 1 -type l -name '*.cache-*' -print -delete 2>/dev/null | wc -l | tr -d ' ')"
+  log "pruned ${n} stale-version fontconfig cache links"
+}
+
 # Install the local [pocknix] packages into the rootfs: the shared core set
 # (config/packages/pocknix-core.list), the emulation set (pocknix-emulation.list),
 # the SoC kernel (${KERNEL_PKG}), then the device metapackage
@@ -338,6 +348,7 @@ main() {
   #    inside install_local_packages from build/kernel/out — run `make kernel` first.
   install_firmware "${ROOTFS_DIR}"
   install_local_packages "${ROOTFS_DIR}"
+  prune_fontconfig_compat_links "${ROOTFS_DIR}"
 
   # Build stamp for support: which base snapshot this image shipped with, and
   # when. Separate file: /etc/os-release is owned by the filesystem package.

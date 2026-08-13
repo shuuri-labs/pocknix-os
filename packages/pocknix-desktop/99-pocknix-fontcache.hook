@@ -1,0 +1,19 @@
+# fontconfig's scriptlet (fc-cache -rs) recreates what pocknix-fontcache-prune deletes.
+# 99- sorts before stock fontconfig.hook: safe, that one runs -s, which does not recreate the links.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = fontconfig
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/share/fonts/*
+
+[Action]
+Description = pocknix: pruning stale-version fontconfig cache links...
+When = PostTransaction
+Exec = /usr/bin/pocknix-fontcache-prune
