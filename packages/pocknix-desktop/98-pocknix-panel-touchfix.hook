@@ -1,0 +1,12 @@
+# A plasma-mobile install/upgrade restores the stock views/Panel.qml, dropping the input-region
+# watcher pocknix-panel-touchfix injects. Re-apply it after every transaction that touches it.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = plasma-mobile
+
+[Action]
+Description = pocknix: restoring the status-bar touch-through fix...
+When = PostTransaction
+Exec = /usr/bin/pocknix-panel-touchfix

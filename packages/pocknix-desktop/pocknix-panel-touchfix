@@ -1,0 +1,99 @@
+#!/bin/bash
+# pocknix-panel-touchfix — patch the shell package's on-disk views/Panel.qml (the containment
+# owning the status bar is compiled into a .so) so the auto-hidden bar stops swallowing touches.
+# Both writers of the panel's input region must be driven, and the containment re-grabs 18 of
+# its 24px after every state change. Full forensics: pocknix-notes/dev/desktop.md.
+
+set -u
+
+QML=/usr/share/plasma/shells/org.kde.plasma.mobileshell/contents/views/Panel.qml
+MARK=pocknixPanelHidden
+
+[ -f "$QML" ] || exit 0
+grep -q "$MARK" "$QML" && exit 0
+
+tmpdir=$(mktemp -d) || exit 0
+trap 'rm -rf "$tmpdir"' EXIT
+
+cat > "$tmpdir/import" <<'QMLEOF'
+import org.kde.plasma.private.mobileshell.state as PocknixShellState
+import org.kde.plasma.private.mobileshell as PocknixShell
+QMLEOF
+
+cat > "$tmpdir/block" <<'QMLEOF'
+    // pocknix-panel-touchfix: thin the hidden status bar's input region to a swipe strip.
+    readonly property bool pocknixPanelHidden: PocknixShellState.ShellDBusClient.panelState === "hidden"
+    readonly property int pocknixHiddenThickness: 4
+    property int pocknixMaskRev: 0
+    onWidthChanged: pocknixMaskRev++
+    onPocknixPanelHiddenChanged: {
+        pocknixMaskRev++;
+        if (!pocknixPanelHidden && panel) {
+            PocknixShell.ShellUtil.setInputRegion(panel, Qt.rect(0, 0, 0, 0));
+        }
+    }
+
+    // FrameSvgItem.mask neither notifies nor fills in before the item is sized, hence
+    // pocknixMaskRev; the stock mask items stay empty (the panel sets backgroundHints NoBackground).
+    KSvg.FrameSvgItem {
+        id: pocknixHiddenMaskItem
+        visible: false
+        imagePath: "widgets/panel-background"
+        width: root.width
+        height: root.pocknixHiddenThickness
+        onWidthChanged: root.pocknixMaskRev++
+    }
+
+    Timer {
+        running: root.pocknixPanelHidden
+        repeat: true
+        interval: 1000
+        triggeredOnStart: true
+        // The containment re-asserts its own 18px region after every state change.
+        onTriggered: {
+            if (panel) {
+                PocknixShell.ShellUtil.setInputRegion(panel, Qt.rect(0, 0, panel.width, root.pocknixHiddenThickness));
+            }
+        }
+    }
+QMLEOF
+
+cat > "$tmpdir/mask" <<'QMLEOF'
+    property var panelMask: {
+        root.pocknixMaskRev;
+        if (root.pocknixPanelHidden && pocknixHiddenMaskItem.width > 0) {
+            return pocknixHiddenMaskItem.mask;
+        }
+        return POCKNIX_STOCK_EXPR;
+    }
+QMLEOF
+
+# Bail without touching the file if any anchor moved upstream (awk exits 1).
+if awk -v impfile="$tmpdir/import" -v blkfile="$tmpdir/block" -v maskfile="$tmpdir/mask" '
+    !imported && /^import org\.kde\.plasma\.plasmoid/ {
+        print; print "";
+        while ((getline l < impfile) > 0) print l;
+        imported = 1; next
+    }
+    !injected && /^[[:space:]]*id: root[[:space:]]*$/ {
+        print; print "";
+        while ((getline l < blkfile) > 0) print l;
+        injected = 1; next
+    }
+    !masked && /^[[:space:]]*property var panelMask:/ {
+        expr = $0; sub(/^[[:space:]]*property var panelMask:[[:space:]]*/, "", expr);
+        while ((getline l < maskfile) > 0) {
+            sub(/POCKNIX_STOCK_EXPR/, expr, l);
+            print l;
+        }
+        masked = 1; next
+    }
+    { print }
+    END { exit (imported && injected && masked) ? 0 : 1 }
+  ' "$QML" > "$tmpdir/Panel.qml"; then
+  cat "$tmpdir/Panel.qml" > "$QML"
+else
+  echo "pocknix-panel-touchfix: Panel.qml anchors not found, left unpatched" >&2
+fi
+
+exit 0

@@ -20,7 +20,7 @@
 # docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=14
+pkgrel=15
 pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -42,9 +42,10 @@ source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.deskt
         'pocknix-flathub-setup' 'pocknix-flathub.service' 'pocknix-flathub-dispatcher'
         'ksplashrc' 'pocknix-x11.conf'
         'powerdevilrc' 'kscreenlockerrc'
-        'pocknix-fontcache-prune' '99-pocknix-fontcache.hook')
+        'pocknix-fontcache-prune' '99-pocknix-fontcache.hook'
+        'pocknix-panel-touchfix' '98-pocknix-panel-touchfix.hook')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
@@ -84,4 +85,8 @@ package() {
   install -Dm755 "${srcdir}/pocknix-fontcache-prune" "${pkgdir}/usr/bin/pocknix-fontcache-prune"
   install -Dm644 "${srcdir}/99-pocknix-fontcache.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/99-pocknix-fontcache.hook"
+  # Touch-through fix for the auto-hidden status bar (rationale in the script header).
+  install -Dm755 "${srcdir}/pocknix-panel-touchfix" "${pkgdir}/usr/bin/pocknix-panel-touchfix"
+  install -Dm644 "${srcdir}/98-pocknix-panel-touchfix.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/98-pocknix-panel-touchfix.hook"
 }
