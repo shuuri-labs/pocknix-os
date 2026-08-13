@@ -1,52 +1,41 @@
 # pocknix-bootloader-sm8550 — the ROCKNIX ABL install kit for SM8550 boards.
 #
-# SM8550 boot contract (qcom-abl): XBL -> ABL -> /KERNEL (Android boot image)
-# off the FAT labeled ROCKNIX. The FACTORY ABL only boots Android — the ROCKNIX
-# ABL must be flashed to the internal abl_a/abl_b partitions ONCE before any SD
-# can boot. This package ships ROCKNIX's own install kit (the rocknix_abl/
-# folder their release images carry): the signed ABL elf plus the Android-side
-# backup/flash/restore scripts, so a stock-Android device can be provisioned
-# straight from a pocknix SD with no ROCKNIX install first. build-sd-image.sh
-# copies the folder to the SD boot FAT root — the exact layout and flow ROCKNIX
-# documents (see the kit's README). (Contrast sm8250, arm-efi, where the
-# factory ABL chainloads UEFI GRUB and no ABL flash is needed.)
-#
-# Contents and provenance:
-#   abl_signed-SM8550.elf   OFFICIAL ROCKNIX RELEASE ARTIFACT, fetched from
-#                           github.com/ROCKNIX/abl by pinned tag + sha512 and
-#                           re-verified against the release's own .sha256
-#                           sidecar in prepare(). One elf covers the whole
-#                           SM8550 family (RP6 + Odin 2 family) — ROCKNIX keys
-#                           it by SoC, not board. See README.provenance.
-#   README, flash_abl.sh(.template), backup_abl.sh, restore_backup_abl.sh
-#                           vendored VERBATIM from the ROCKNIX distribution
-#                           repo (packages/tools/rocknix-abl/sources); the
-#                           %DEVICE% substitution in flash_abl.sh mirrors
-#                           their package.mk exactly.
-#
-# Nothing here flashes anything at build or install time — the kit is inert
-# files the user runs by hand from rooted stock Android (per the kit README).
-# pocknix deliberately ships NO auto-flash hook (ROCKNIX's updateabl rewrites
-# internal abl_a/abl_b on every OS update; we don't).
+# Boot contract (qcom-abl): XBL -> ABL -> /KERNEL (Android boot image) off the
+# FAT labeled ROCKNIX. The FACTORY ABL only boots Android, so the ROCKNIX ABL
+# must be flashed to abl_a/abl_b ONCE before any SD can boot — contrast sm8250,
+# arm-efi, where the factory ABL chainloads UEFI GRUB and no flash is needed.
+# The kit (elf + Android-side scripts) lets a stock-Android device provision
+# straight from a pocknix SD; build-sd-image.sh copies it to the SD boot FAT
+# root, the exact layout ROCKNIX documents. One elf covers the whole SM8550
+# family — ROCKNIX keys it by SoC, not board. Provenance, hashes and vendoring
+# rules: README.provenance.
+# Nothing here flashes at build or install time: first provisioning runs the
+# kit by hand from rooted Android, afterwards pocknix-update-abl does it from
+# the running system. Both are deliberate user actions — no auto-flash hook,
+# unlike ROCKNIX's updateabl.
 #
 # Version bump: set _ablver to the new release tag (watch ROCKNIX's pin in
 # their packages/tools/rocknix-abl/package.mk during `make sync` review — the
 # ABL and the boot contract above must stay matched), reset pkgrel=1, refresh
 # the tarball sha512.
 pkgname=pocknix-bootloader-sm8550
-_ablver=1.1.6
+_ablver=1.1.7
 pkgver=${_ablver}
-pkgrel=2
+pkgrel=3
 pkgdesc="SM8550 qcom-abl boot payload: ROCKNIX ABL install kit (rocknix_abl)"
 arch=('aarch64')
+# !strip: a stripped bootloader is an unbootable one.
+options=('!strip')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('BSD-3-Clause')   # Qualcomm ABL (edk2 LinuxLoader); kit scripts GPL-2.0
 source=("https://github.com/ROCKNIX/abl/releases/download/v${_ablver}/rocknix-abl-v${_ablver}.tar.gz"
         'README'
         'flash_abl.sh.template'
         'backup_abl.sh'
-        'restore_backup_abl.sh')
-sha512sums=('42f5fd2e261edfd9ffd7b9d262191ae0c50c2419f6768999b075fd745b3e9f8a9901f1fc62534106f78e10a04cc12acbc85916972ce7febea064d062044a38a9'
+        'restore_backup_abl.sh'
+        '95-pocknix-abl-kit.hook')
+sha512sums=('fa1d213bec97661942b8083be1f2eb6b65cc200b4f3f76dd84261ba92a01ac9261ed6834350f2f647a5ed82fcabadf5011b9ba6769f471abeaf06210ae9221c1'
+            'SKIP'
             'SKIP'
             'SKIP'
             'SKIP'
@@ -57,6 +46,8 @@ prepare() {
   ( cd "rocknix-abl-v${_ablver}" && sha256sum -c "abl_signed-SM8550.elf.sha256" )
   # ROCKNIX package.mk substitution: the flash script names the SoC's elf.
   sed 's/%DEVICE%/SM8550/g' flash_abl.sh.template > flash_abl.sh
+  # the elf carries no version of its own
+  echo "${_ablver}" > version
 }
 
 package() {
@@ -67,4 +58,9 @@ package() {
   install -Dm755 flash_abl.sh           "${kit}/flash_abl.sh"
   install -Dm755 backup_abl.sh          "${kit}/backup_abl.sh"
   install -Dm755 restore_backup_abl.sh  "${kit}/restore_backup_abl.sh"
+  install -Dm644 version                "${kit}/version"
+
+  # pacman never touches /flash, so a hook re-copies the kit there on upgrade.
+  install -Dm644 "${srcdir}/95-pocknix-abl-kit.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/95-pocknix-abl-kit.hook"
 }

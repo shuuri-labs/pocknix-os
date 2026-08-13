@@ -1,0 +1,205 @@
+#!/bin/bash
+# pocknix-update-abl — flash the ROCKNIX ABL onto abl_a/abl_b from the running
+# system. User-run only, never a hook: a -Syu that rewrites the bootloader is
+# the one failure here needing a PC to recover. SoC-agnostic — the elf name
+# comes from whichever kit pocknix-bootloader-<soc> installed.
+set -euo pipefail
+
+KIT="${POCKNIX_ABL_KIT:-/usr/share/pocknix/bootloader/rocknix_abl}"
+BACKUP_DIR="${POCKNIX_ABL_BACKUP_DIR:-/flash/rocknix_abl}"
+MIN_BATTERY=30
+
+ASSUME_YES=0; STATUS_ONLY=0
+for a in "$@"; do
+  case "$a" in
+    -y|--yes)   ASSUME_YES=1 ;;
+    --status)   STATUS_ONLY=1 ;;
+    -h|--help)  sed -n '2,5p' "$0"; exit 0 ;;
+    *) echo "unknown option: $a" >&2; exit 2 ;;
+  esac
+done
+
+die()  { echo "[abl] ERROR: $*" >&2; exit 1; }
+say()  { [ "$STATUS_ONLY" = 1 ] || echo "[abl] $*"; }
+
+ELF="$(ls "${KIT}"/abl_signed-*.elf 2>/dev/null | head -1 || true)"
+if [ -z "${ELF}" ] || [ ! -f "${ELF}" ]; then
+  [ "$STATUS_ONLY" = 1 ] && { echo "state=nokit"; exit 0; }
+  die "no ABL kit installed (${KIT}) — pocknix-bootloader-<soc> provides it."
+fi
+SOC="$(basename "${ELF}" .elf)"; SOC="${SOC#abl_signed-}"
+SHIPPED_VER="$(cat "${KIT}/version" 2>/dev/null || echo unknown)"
+
+# Retroid sm8250 units ship a bad primary GPT header, so the kernel hides abl_a
+# entirely. Repairable, and common, so it is a step here and not a dead end.
+GPT_HELPER="${POCKNIX_GPT_HELPER:-/usr/lib/pocknix/pocknix-gpt-abl}"
+GPT_DEV=""
+
+resolve_slots() {
+  ABL_A="$(blkid -t PARTLABEL=abl_a -o device 2>/dev/null | head -1 || true)"
+  ABL_B="$(blkid -t PARTLABEL=abl_b -o device 2>/dev/null | head -1 || true)"
+  [ -b "${ABL_A:-}" ] && [ -b "${ABL_B:-}" ]
+}
+
+if ! resolve_slots; then
+  gpt_state=absent
+  if [ -x "${GPT_HELPER}" ]; then
+    gpt_scan="$("${GPT_HELPER}" scan 2>/dev/null || true)"
+    gpt_state="$(printf '%s\n' "${gpt_scan}" | sed -n 's/^state=//p')"
+    GPT_DEV="$(printf '%s\n' "${gpt_scan}" | sed -n 's/^device=//p')"
+  fi
+  if [ "${gpt_state}" != repairable ]; then
+    [ "$STATUS_ONLY" = 1 ] && { echo "state=nopart"; exit 0; }
+    die "abl_a/abl_b partitions not found — is this an internal-storage device?"
+  fi
+  if [ "$STATUS_ONLY" = 1 ]; then
+    cat <<STATUS
+state=gptrepair
+soc=${SOC}
+shipped_version=${SHIPPED_VER}
+gpt_device=${GPT_DEV}
+STATUS
+    exit 0
+  fi
+  say "The bootloader partitions exist but this device's partition table is"
+  say "damaged (bad primary GPT header on ${GPT_DEV}), so Linux cannot see them."
+  say "Repairing rebuilds ONLY that header, from this disk's own valid backup"
+  say "copy. Partition contents are not touched and the original is kept."
+  if [ "$ASSUME_YES" != 1 ]; then
+    read -rp "Type 'REPAIR' to fix the partition table: " ans || die "no input"
+    [ "${ans}" = "REPAIR" ] || die "aborted."
+  fi
+  "${GPT_HELPER}" repair "${GPT_DEV}" || die "partition table repair failed — nothing else was changed."
+  partprobe "${GPT_DEV}" 2>/dev/null || blockdev --rereadpt "${GPT_DEV}" 2>/dev/null || true
+  udevadm settle 2>/dev/null || sleep 1
+  resolve_slots || die "partitions still not visible after repair — reboot and re-run."
+  say "partition table repaired; slots are now visible"
+fi
+
+ELF_SIZE="$(stat -c%s "${ELF}")"
+# dd would overrun a slot smaller than the elf without complaining.
+for dev in "${ABL_A}" "${ABL_B}"; do
+  psize="$(blockdev --getsize64 "${dev}")"
+  [ "${ELF_SIZE}" -le "${psize}" ] \
+    || die "${ELF} (${ELF_SIZE} B) does not fit ${dev} (${psize} B) — refusing to write."
+done
+
+slot_sum() { dd if="$1" bs=1M iflag=count_bytes count="${ELF_SIZE}" status=none | sha256sum | awk '{print $1}'; }
+SUM_ELF="$(sha256sum "${ELF}" | awk '{print $1}')"
+SUM_A="$(slot_sum "${ABL_A}")"
+SUM_B="$(slot_sum "${ABL_B}")"
+
+# "differs", not "outdated": a non-matching slot may be an older ROCKNIX ABL or
+# the untouched factory one, and nothing here can tell which.
+if [ "${SUM_A}" = "${SUM_ELF}" ] && [ "${SUM_B}" = "${SUM_ELF}" ]; then STATE=uptodate
+elif [ "${SUM_A}" = "${SUM_B}" ];                                  then STATE=differs
+else                                                                    STATE=mixed
+fi
+
+if [ "$STATUS_ONLY" = 1 ]; then
+  cat <<STATUS
+state=${STATE}
+soc=${SOC}
+shipped_version=${SHIPPED_VER}
+shipped_sum=${SUM_ELF:0:7}
+current_a=${SUM_A:0:7}
+current_b=${SUM_B:0:7}
+STATUS
+  exit 0
+fi
+
+say "SoC ${SOC}, slots ${ABL_A} + ${ABL_B}"
+say "current abl_a ${SUM_A:0:7}, abl_b ${SUM_B:0:7}, shipped ${SUM_ELF:0:7} (v${SHIPPED_VER})"
+if [ "${STATE}" = uptodate ]; then say "already up to date — nothing to do."; exit 0; fi
+if [ "${STATE}" = mixed ]; then say "WARNING: the two slots differ from each other; both will be overwritten."; fi
+
+# Power loss between the two writes leaves no bootable slot; recovery is EDL.
+on_ac=0; battery=""
+for ps in /sys/class/power_supply/*; do
+  [ -r "${ps}/type" ] || continue
+  case "$(cat "${ps}/type")" in
+    Mains|USB|USB_PD|USB_PD_DRP) [ "$(cat "${ps}/online" 2>/dev/null || echo 0)" = 1 ] && on_ac=1 || true ;;
+    Battery) battery="$(cat "${ps}/capacity" 2>/dev/null || true)" ;;
+  esac
+done
+if [ "${on_ac}" != 1 ] && [ -n "${battery}" ] && [ "${battery}" -lt "${MIN_BATTERY}" ]; then
+  die "battery ${battery}% and not charging — plug in or charge to ${MIN_BATTERY}% first."
+fi
+
+if [ "$ASSUME_YES" != 1 ]; then
+  cat <<WARN
+
+  This rewrites the bootloader on internal storage (both slots).
+  If it is interrupted the device will not boot and needs a PC to recover.
+  Keep it plugged in and do not power off until it finishes.
+
+WARN
+  read -rp "Type 'FLASH' to proceed: " ans || die "no input"
+  [ "${ans}" = "FLASH" ] || die "aborted."
+fi
+
+# Never overwritten: on an Android-provisioned device these are the STOCK ABL.
+# Kit filenames so restore_backup_abl.sh finds them; whole partition, not
+# ELF_SIZE — a larger factory ABL would otherwise restore truncated.
+BACKED_UP=0
+# mountpoint, not -d: /flash is a nofail fstab mount, so the directory exists
+# either way and backups would land shadowed on the root fs.
+if mountpoint -q "$(dirname "${BACKUP_DIR}")"; then
+  mkdir -p "${BACKUP_DIR}"
+  for slot in a b; do
+    dev="ABL_${slot^^}"; img="${BACKUP_DIR}/abl_${slot}.img"
+    if [ -f "${img}" ]; then
+      say "keeping existing backup ${img} (not overwritten)"
+    else
+      say "backing up abl_${slot} -> ${img}"
+      dd if="${!dev}" of="${img}" bs=1M conv=fsync status=none
+    fi
+  done
+  BACKED_UP=1
+else
+  say "WARNING: ${BACKUP_DIR} unavailable (boot partition not mounted?) — flashing without a backup."
+fi
+
+# The /flash copy does not survive an uninstall (it removes every partition
+# after userdata), so an off-device copy is the only lasting one.
+SD_COPY=""
+if [ "${BACKED_UP}" = 1 ]; then
+  for m in /run/media/*/*; do
+    [ -d "${m}" ] && [ -w "${m}" ] || continue
+    if mkdir -p "${m}/pocknix-abl-backup" 2>/dev/null \
+       && cp -f "${BACKUP_DIR}"/abl_a.img "${BACKUP_DIR}"/abl_b.img \
+                "${m}/pocknix-abl-backup/" 2>/dev/null; then
+      sync; SD_COPY="${m}/pocknix-abl-backup"
+      say "copied the backup to ${SD_COPY} (survives an uninstall)"
+      break
+    fi
+  done
+fi
+
+# Verify each slot before touching the next: one bad write must not take both.
+flash_slot() {
+  local dev="$1" name="$2" sum
+  say "writing ${name} (${dev}) ..."
+  dd if="${ELF}" of="${dev}" bs=1M conv=fsync,notrunc status=none
+  sync
+  sum="$(slot_sum "${dev}")"
+  [ "${sum}" = "${SUM_ELF}" ] || die "${name} verify FAILED (${sum:0:7} != ${SUM_ELF:0:7}). Do NOT power off; re-run this command."
+  say "${name} verified ${sum:0:7}"
+}
+
+flash_slot "${ABL_A}" abl_a
+flash_slot "${ABL_B}" abl_b
+sync
+
+say "ABL is now v${SHIPPED_VER}. Reboot to run it."
+if [ -z "${SD_COPY}" ]; then
+  cat <<BACKUP
+
+  Copy the backup of your ORIGINAL bootloader off this device now:
+      ${BACKUP_DIR}/abl_a.img
+      ${BACKUP_DIR}/abl_b.img
+  Uninstalling pocknix deletes the partition they live on, and they are the
+  only way back to a stock bootloader.
+
+BACKUP
+fi

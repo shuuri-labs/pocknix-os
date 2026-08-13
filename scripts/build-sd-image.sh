@@ -66,8 +66,19 @@ ensure_kernel_in_rootfs() {
   fi
 }
 
+# The ABL install kit at the FAT root, where ROCKNIX's images carry it: stock
+# Android mounts this FAT, so a factory device can be provisioned from the SD
+# alone. Inert at boot. Both boot styles carry it - qcom-abl has no other way
+# in, arm-efi needs it for boards whose factory ABL lacks usable UEFI.
+copy_abl_kit() {
+  local mnt="$1" kit="${ROOTFS_DIR}/usr/share/pocknix/bootloader/rocknix_abl"
+  [ -f "${kit}/abl_signed-${SOC^^}.elf" ] \
+    || die "${kit#${ROOTFS_DIR}}/abl_signed-${SOC^^}.elf missing from the rootfs — is pocknix-bootloader-${SOC} built and installed? (make packages + make build)"
+  rsync -a "${kit}" "${mnt}/"
+}
+
 # arm-efi boot partition contents beyond /KERNEL: GRUB + grub.cfg/grubenv +
-# every board dtb + the ROCKNIX ABL payload. All of it except the dtbs is
+# every board dtb + the ROCKNIX ABL kit. All of it except the dtbs is
 # shipped in the rootfs by pocknix-bootloader-${SOC} (single source of truth:
 # its alpm hook refreshes /flash from the same tree on upgrades); the dtbs come
 # from the kernel build (grub.cfg references /boot/grub/<board>.dtb).
@@ -79,20 +90,10 @@ populate_arm_efi_boot() {
     || die "arm-efi: ${bl#${ROOTFS_DIR}}/boot/grub/grub.cfg missing from the rootfs"
   rsync -a "${bl}/EFI" "${bl}/boot" "${mnt}/"
   cp "${KOUT}/dtbs/"*.dtb "${mnt}/boot/grub/"
+  copy_abl_kit "${mnt}"
 }
 
-# qcom-abl boot partition contents beyond /KERNEL: the ROCKNIX ABL install kit
-# (rocknix_abl/: signed ABL elf + the Android-side backup/flash/restore
-# scripts), copied to the FAT root exactly where ROCKNIX's images carry it —
-# stock Android mounts this FAT, so a factory device can be provisioned from
-# this SD alone (backup then flash from rooted Android; see the kit README).
-# Inert files at boot; shipped in the rootfs by pocknix-bootloader-${SOC}.
-populate_qcom_abl_boot() {
-  local mnt="$1" kit="${ROOTFS_DIR}/usr/share/pocknix/bootloader/rocknix_abl"
-  [ -f "${kit}/abl_signed-${SOC^^}.elf" ] \
-    || die "qcom-abl: ${kit#${ROOTFS_DIR}}/abl_signed-${SOC^^}.elf missing from the rootfs — is pocknix-bootloader-${SOC} built and installed? (make packages + make build)"
-  rsync -a "${kit}" "${mnt}/"
-}
+populate_qcom_abl_boot() { copy_abl_kit "$1"; }
 
 firstboot_config() {
   local root="$1"
@@ -331,8 +332,8 @@ main() {
   mkfs.btrfs -f -q -L "${ROOT_LABEL}" "${LOOP}p2"   # defaults: DUP metadata (SD cards eat metadata), 16K nodes
 
   MNT="$(mktemp -d)"
-  # boot partition: KERNEL (+ md5); arm-efi additionally GRUB + dtbs + abl
-  # payload; qcom-abl additionally the ROCKNIX ABL install kit
+  # boot partition: KERNEL (+ md5) plus the ROCKNIX ABL kit on both styles;
+  # arm-efi additionally GRUB + grubenv + the board dtbs
   mount "${LOOP}p1" "${MNT}"
   cp "${KERNEL_IMG}" "${MNT}/KERNEL"
   ( cd "${MNT}" && md5sum KERNEL > KERNEL.md5 )

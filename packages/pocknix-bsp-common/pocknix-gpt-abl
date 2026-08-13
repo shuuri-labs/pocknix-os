@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+"""pocknix-gpt-abl - find the ABL slots when the kernel will not enumerate them.
+
+Retroid sm8250 units ship a primary GPT header whose CRC does not match its
+contents. Linux checks that CRC first and discards the whole table, so abl_a
+never appears. Only the 92-byte header is wrong: the entry array is intact in
+both copies and the backup header is valid, which is what makes rebuilding the
+primary from the backup contained enough to do.
+
+  scan            ok / repairable / absent for the disk holding abl_a
+  repair <dev>    rebuild that disk's primary header from its backup
+"""
+import glob
+import os
+import struct
+import sys
+import zlib
+
+HDR = 92
+SIG = b"EFI PART"
+# Fields primary and backup must AGREE on; the other four are positional.
+SHARED = [
+    ("signature", 0, 8, None), ("revision", 8, 4, "<I"), ("header_size", 12, 4, "<I"),
+    ("first_usable", 40, 8, "<Q"), ("last_usable", 48, 8, "<Q"),
+    ("disk_guid", 56, 16, None), ("num_entries", 80, 4, "<I"),
+    ("entry_size", 84, 4, "<I"), ("entries_crc", 88, 4, "<I"),
+]
+
+
+def sector_size(dev):
+    name = os.path.basename(dev)
+    try:
+        with open("/sys/block/%s/queue/logical_block_size" % name) as f:
+            return int(f.read().strip())
+    except OSError:
+        return 512
+
+
+def header_crc(buf):
+    size = struct.unpack_from("<I", buf, 12)[0]
+    if not HDR <= size <= 512:
+        return None
+    return zlib.crc32(buf[:16] + b"\0" * 4 + buf[20:size]) & 0xFFFFFFFF
+
+
+def read_at(fh, off, n):
+    fh.seek(off)
+    return fh.read(n)
+
+
+def parse_names(fh, hdr, ss):
+    pel, npe, pes = struct.unpack_from("<QII", hdr, 72)
+    if not (0 < npe <= 1024 and 0 < pes <= 1024):
+        return None, None
+    ents = read_at(fh, pel * ss, npe * pes)
+    if len(ents) < npe * pes:
+        return None, None
+    names = []
+    for i in range(npe):
+        e = ents[i * pes:(i + 1) * pes]
+        if e[:16] == b"\0" * 16:
+            continue
+        names.append(e[56:128].decode("utf-16-le", "replace").rstrip("\x00"))
+    return names, ents[:npe * pes]
+
+
+def entries_ok(fh, hdr, ss):
+    """Do the bytes at this header's OWN array location match its entries_crc?"""
+    pel, npe, pes = struct.unpack_from("<QII", hdr, 72)
+    if not (0 < npe <= 1024 and 0 < pes <= 1024):
+        return False
+    ents = read_at(fh, pel * ss, npe * pes)
+    if len(ents) < npe * pes:
+        return False
+    return zlib.crc32(ents) & 0xFFFFFFFF == struct.unpack_from("<I", hdr, 88)[0]
+
+
+def inspect(dev):
+    """None if this disk has no GPT naming abl_a."""
+    ss = sector_size(dev)
+    try:
+        fh = open(dev, "rb")
+    except OSError:
+        return None
+    with fh:
+        pri = read_at(fh, ss, HDR)
+        if len(pri) < HDR or pri[:8] != SIG:
+            return None
+        # every offset here assumes the 92-byte revision-1 header
+        if struct.unpack_from("<I", pri, 12)[0] != HDR:
+            return None
+        names, ents = parse_names(fh, pri, ss)
+        if not names or "abl_a" not in names:
+            return None
+        try:
+            fh.seek(0, os.SEEK_END)
+            total = fh.tell() // ss
+        except OSError:
+            return None
+        bak = read_at(fh, (total - 1) * ss, HDR)
+        stored = struct.unpack_from("<I", pri, 16)[0]
+        calc = header_crc(pri)
+        bak_ok = (len(bak) >= HDR and bak[:8] == SIG
+                  and header_crc(bak) == struct.unpack_from("<I", bak, 16)[0])
+        bak_ents_ok = False
+        if bak_ok:
+            _, bents = parse_names(fh, bak, ss)
+            bak_ents_ok = (bents is not None
+                           and zlib.crc32(bents) & 0xFFFFFFFF
+                           == struct.unpack_from("<I", bak, 88)[0])
+        return {
+            "dev": dev, "ss": ss, "total": total, "pri": pri, "bak": bak,
+            "pri_ok": stored == calc, "bak_ok": bak_ok, "bak_ents_ok": bak_ents_ok,
+            "pri_ents_ok": entries_ok(fh, pri, ss),
+            "pri_entries_lba": struct.unpack_from("<Q", pri, 72)[0],
+            "enumerated": bool(glob.glob(dev + "?*")),
+        }
+
+
+def agree(pri, bak):
+    """All shared fields identical -> the backup describes THIS table."""
+    for _name, off, size, code in SHARED:
+        a = pri[off:off + size] if code is None else struct.unpack_from(code, pri, off)
+        b = bak[off:off + size] if code is None else struct.unpack_from(code, bak, off)
+        if a != b:
+            return False
+    return True
+
+
+# Qualcomm UFS is sdX, eMMC boards mmcblkN. Explicit devices keep this testable.
+CANDIDATES = ("/dev/sd[a-z]", "/dev/mmcblk[0-9]", "/dev/nvme[0-9]n[0-9]")
+
+
+def find(devs=None):
+    if not devs:
+        devs = []
+        for pat in CANDIDATES:
+            devs += glob.glob(pat)
+    for dev in sorted(devs):
+        info = inspect(dev)
+        if info:
+            return info
+    return None
+
+
+def cmd_scan(devs=None):
+    info = find(devs)
+    if not info:
+        print("state=absent")
+        return 0
+    if info["pri_ok"] and info["enumerated"]:
+        state = "ok"
+    elif (not info["pri_ok"] and info["bak_ok"] and info["bak_ents_ok"]
+          and info["pri_ents_ok"] and agree(info["pri"], info["bak"])):
+        state = "repairable"
+    else:
+        # not a CRC fault, so repairing would fix nothing
+        state = "unknown"
+    print("state=%s" % state)
+    print("device=%s" % info["dev"])
+    print("sector_size=%d" % info["ss"])
+    return 0
+
+
+def cmd_repair(dev):
+    info = inspect(dev)
+    if not info:
+        sys.stderr.write("no GPT naming abl_a on %s\n" % dev)
+        return 1
+    if info["pri_ok"]:
+        print("primary header already valid - nothing to do")
+        return 0
+    if not (info["bak_ok"] and info["bak_ents_ok"]):
+        sys.stderr.write("backup GPT is not usable as a source - refusing\n")
+        return 1
+    # Only the header is rebuilt, so the primary's own entry array must already
+    # be intact - otherwise the new header would point at bytes that do not
+    # match the entries_crc it carries, and the kernel keeps rejecting it.
+    if not info["pri_ents_ok"]:
+        sys.stderr.write("primary entry array does not match its CRC - refusing "
+                         "(this tool rebuilds the header only)\n")
+        return 1
+    if not agree(info["pri"], info["bak"]):
+        sys.stderr.write("primary and backup disagree beyond the positional "
+                         "fields - refusing (this is not the known defect)\n")
+        return 1
+
+    ss, total = info["ss"], info["total"]
+    new = bytearray(info["bak"][:HDR])
+    struct.pack_into("<Q", new, 24, 1)                 # my_lba
+    struct.pack_into("<Q", new, 32, total - 1)         # alternate_lba
+    struct.pack_into("<Q", new, 72, info["pri_entries_lba"])
+    struct.pack_into("<I", new, 16, 0)
+    struct.pack_into("<I", new, 16, header_crc(bytes(new)))
+    sector = bytes(new) + b"\0" * (ss - HDR)           # spec: reserved must be zero
+
+    bdir = "/var/lib/pocknix/gpt-backup"
+    os.makedirs(bdir, exist_ok=True)
+    keep = os.path.join(bdir, "%s-lba1.bin" % os.path.basename(dev))
+    if not os.path.exists(keep):                       # never clobber the original
+        with open(keep, "wb") as f:
+            f.write(read_at(open(dev, "rb"), ss, ss))
+        print("saved the original header to %s" % keep)
+
+    with open(dev, "r+b") as f:
+        f.seek(ss)
+        f.write(sector)
+        f.flush()
+        os.fsync(f.fileno())
+
+    # re-open and re-parse: the header must be valid AND still describe the
+    # array it points at, which recomputing our own CRC alone would not show
+    check = inspect(dev)
+    if not check or not check["pri_ok"] or not check["pri_ents_ok"]:
+        sys.stderr.write("readback still invalid - restore with:\n"
+                         "  dd if=%s of=%s bs=%d seek=1 count=1 conv=fsync\n"
+                         % (keep, dev, ss))
+        return 1
+    print("primary GPT header repaired on %s" % dev)
+    return 0
+
+
+def main(argv):
+    if len(argv) >= 2 and argv[1] == "scan":
+        return cmd_scan(argv[2:])
+    if len(argv) >= 3 and argv[1] == "repair":
+        return cmd_repair(argv[2])
+    sys.stderr.write("usage: pocknix-gpt-abl scan | repair <device>\n")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -5,8 +5,8 @@
 # devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=6
-pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons"
+pkgrel=9
+pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
@@ -23,9 +23,11 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         '90-pocknix-backlight.rules' '60-pocknix-controllers.rules'
         '10-pocknix-wheel'
         'pocknix-fancontrol' 'pocknix-fan-mode' 'pocknix-lavd-mode'
-        'pocknix-fancontrol.service' 'pocknix-lavd.service' 'pocknix-game-mode.conf')
+        'pocknix-fancontrol.service' 'pocknix-lavd.service' 'pocknix-game-mode.conf'
+        'pocknix-update-abl' '52-pocknix-abl.rules' 'pocknix-gpt-abl'
+        'pocknix-refresh-abl-kit')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -84,4 +86,15 @@ package() {
     "${pkgdir}/usr/lib/systemd/system/pocknix-lavd.service"
   install -Dm644 "${srcdir}/pocknix-game-mode.conf" \
     "${pkgdir}/usr/lib/tmpfiles.d/pocknix-game-mode.conf"
+
+  # Device-neutral (reads the SoC from the installed kit), so it lives here
+  # rather than duplicated in both bootloader packages.
+  install -Dm755 "${srcdir}/pocknix-update-abl" "${pkgdir}/usr/bin/pocknix-update-abl"
+  # Not in PATH: it writes a partition table, and has exactly one caller.
+  install -Dm755 "${srcdir}/pocknix-gpt-abl" "${pkgdir}/usr/lib/pocknix/pocknix-gpt-abl"
+  # the hook lives in each bootloader package; the script is device-neutral so
+  # it lives here (rationale in its own header)
+  install -Dm755 "${srcdir}/pocknix-refresh-abl-kit" "${pkgdir}/usr/bin/pocknix-refresh-abl-kit"
+  install -Dm644 "${srcdir}/52-pocknix-abl.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/52-pocknix-abl.rules"
 }

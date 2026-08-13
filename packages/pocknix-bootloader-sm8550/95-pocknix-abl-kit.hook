@@ -1,0 +1,13 @@
+# Refresh the ABL kit on /flash so provisioning another device from this card
+# uses the ABL this system ships. Copies FILES; does not flash the bootloader
+# (ROCKNIX's update.sh calls updateabl here, we deliberately do not).
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/pocknix/bootloader/rocknix_abl/*
+
+[Action]
+Description = pocknix: refreshing the ABL install kit on /flash (no bootloader is written)...
+When = PostTransaction
+Exec = /usr/bin/pocknix-refresh-abl-kit
