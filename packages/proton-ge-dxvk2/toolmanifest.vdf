@@ -1,6 +1,4 @@
-// proton-ge: replaces the tarball manifest. Drops require_tool_appid — the SLR container
-// it names cannot be downloaded, and the failure is SILENT (Steam runs another Proton).
-// commandline goes via /pocknix-proton so per-game FEX profiles apply.
+// Drops require_tool_appid (host-direct); rationale in pocknix-steam/proton-toolmanifest.vdf.
 "manifest"
 {
   "version" "2"

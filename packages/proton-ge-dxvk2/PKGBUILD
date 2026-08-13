@@ -9,11 +9,11 @@
 # Valve's dlls run under GE's wine (same Proton lineage) but CRASH under cachy's —
 # mind the lineage rule if either donor ever changes.
 pkgname=proton-ge-dxvk2
-_srctag=GE-Proton11-3
+_srctag=GE-Proton11-5
 _ver=${_srctag#GE-Proton}
 _major=${_ver%%-*}
 pkgver=${_ver//-/.}
-pkgrel=2
+pkgrel=1
 pkgdesc="GE-Proton (ARM64) with DXVK pinned to 2.7 for GPUs without 8-bit storage (a6xx)"
 arch=('aarch64')
 url="https://github.com/GloriousEggroll/proton-ge-custom"
@@ -29,7 +29,7 @@ source=("https://github.com/GloriousEggroll/proton-ge-custom/releases/download/$
         'compatibilitytool.vdf.in'
         'toolmanifest.vdf'
         'pocknix-proton')
-sha512sums=('703fe0f1722e55300f14f425e5985bc903669ee29b9647cfdb8120cb5b361efc8b26bb68cd601daeb612ae2d5c5e615065d375650e6da84f82e8c14fcae48c90'
+sha512sums=('fa3048f55a70e4090a38e23d4182bcf4100c6cfbdb1a9b1b21aa01dfd2ba68ef6cc70f00242171c0f836d1e4753dfca146453baba6042f2d61ebef47d4f3cd84'
             '0360fd5c00c16381be4380ea3f7b1f4c4afe6721fef483ad092bfd538bc57b2b4a869a17c084fbc2a795fc99c9dba10cf1a0258910fbb83afbe1a0257cf24962'
             'SKIP'
             'SKIP'
