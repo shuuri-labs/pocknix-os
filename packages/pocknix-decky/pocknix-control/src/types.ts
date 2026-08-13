@@ -41,7 +41,7 @@ export interface Config {
   lavdMode: string;
   tweaks: Tweaks;
   fexProfiles: Record<string, FexProfile>;
-  /** Turnip payload choices, one per series (data "25.2"; label may carry "(ARM only)"). */
+  /** Turnip payload choices, one per series (data "25.2"). ARM Proton only. */
   mesaVersions?: DropdownChoice[];
   installedGames: InstalledGame[];
   led: LedConfig;
@@ -105,6 +105,7 @@ export interface ConfigImportResult {
 
 export interface SdcardInfo {
   present: boolean;
+  bootDisk?: boolean;
   device?: string;
   sizeBytes?: number;
   fstype?: string;

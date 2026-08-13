@@ -1,0 +1,12 @@
+[Unit]
+Description=pocknix: converge a freshly locked device onto the base snapshot
+# Started by the NM dispatcher hook (52-pocknix-lock-converge) once the link is
+# genuinely up (network-online fires before wlan0 has DNS). The marker only
+# exists between lock migration and successful convergence.
+ConditionPathExists=/var/lib/pocknix/lock-migrate-pending
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/pocknix/pocknix-lock-migrate converge
+
+# No [Install]: only the dispatcher starts this, never a boot transaction.

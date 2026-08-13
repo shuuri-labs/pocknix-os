@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# pocknix-lock-migrate — convert a rolling pocknix device to the locked base,
+# no reflash. Also the engine behind `pocknix-base locked`.
+#
+# Two phases because pacman.conf cannot be swapped inside the transaction that
+# resolves against it: prepare (post_install, inside the delivering -Syu)
+# rewrites the repos and arms a marker; converge (NM-dispatched on a real
+# link-up) runs -Syuu — downgrades ALLOWED, rolling devices may be AHEAD of
+# the snapshot. Fresh locked images hit the already-locked check and no-op.
+
+set -euo pipefail
+
+CONF=/etc/pacman.conf
+STATE=/var/lib/pocknix
+MARKER="${STATE}/lock-migrate-pending"
+BLOCKED="${STATE}/lock-converge-blocked"
+FOREIGN="${STATE}/foreign-packages"
+BASE_URL="@POCKNIX_BASE_URL@"   # stamped by the PKGBUILD from the build's pin
+
+prepare() {
+  # no systemd = image-build chroot, not a device: rewriting the conf there
+  # strips the repos the rest of the build resolves against
+  [ -d /run/systemd/system ] || exit 0
+  grep -q '^\[pocknix-base\]' "${CONF}" && exit 0   # already locked
+  # the rolling flag is deliberate admin intent — never auto-relock over it
+  [ -e /etc/pocknix/rolling-mode ] && exit 0
+  install -d "${STATE}"
+  awk 'BEGIN{drop=0}
+       /^\[/{drop = ($0=="[core]" || $0=="[extra]" || $0=="[alarm]" || $0=="[aur]")}
+       !drop' "${CONF}" > "${CONF}.pocknix-migrate" && cat "${CONF}.pocknix-migrate" > "${CONF}"
+  rm -f "${CONF}.pocknix-migrate"
+  cat >> "${CONF}" <<EOF
+
+[pocknix-base]
+SigLevel = Required DatabaseOptional
+Server = ${BASE_URL}
+EOF
+  touch "${MARKER}"
+  echo "pocknix: device is now LOCKED to the pocknix base."
+  echo "pocknix: base convergence runs automatically on the next connect/boot."
+}
+
+converge() {
+  [ -f "${MARKER}" ] || exit 0
+  # a versioned dep on a downgraded lib makes pacman refuse the transaction
+  # (correctly); record the blocker or the retry-on-reconnect looks like a stall
+  local out rc=0
+  out="$(pacman -Syuu --noconfirm 2>&1)" || rc=$?
+  printf '%s\n' "${out}"
+  if [ "${rc}" -ne 0 ]; then
+    # Foreign compat splits (ALARM's mbedtls3) own the very files the base downgrade
+    # restores, and the downgrade orphans them: -Rdd exactly those and retry once,
+    # the same transaction restores the sonames. Repo-owned conflicts stay fatal.
+    local owners
+    owners="$(printf '%s\n' "${out}" \
+      | sed -n 's/.*exists in filesystem (owned by \([^)]*\)).*/\1/p' | LC_ALL=C sort -u \
+      | LC_ALL=C comm -23 - <(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u))"
+    if [ -n "${owners}" ]; then
+      echo "pocknix: removing foreign packages superseded by the base:" ${owners}
+      # shellcheck disable=SC2086
+      pacman -Rdd --noconfirm ${owners} && { rc=0
+        out="$(pacman -Syuu --noconfirm 2>&1)" || rc=$?
+        printf '%s\n' "${out}"; }
+    fi
+  fi
+  if [ "${rc}" -ne 0 ]; then
+    printf '%s\n' "${out}" | sed -n 's/.*required by \([^ ]*\).*/\1/p' | sort -u > "${BLOCKED}"
+    [ -s "${BLOCKED}" ] || rm -f "${BLOCKED}"
+    echo "pocknix: convergence refused — an installed package pins a library newer" >&2
+    echo "than the base snapshot (see 'required by <name>' above). Remove it with" >&2
+    echo "'pacman -Rs <name>', then re-run 'systemctl start pocknix-lock-converge'." >&2
+    exit 1
+  fi
+  rm -f "${BLOCKED}"
+  # report-only: packages no locked repo carries keep working but stop updating
+  LC_ALL=C comm -23 <(pacman -Qq | LC_ALL=C sort) \
+                    <(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u) > "${FOREIGN}"
+  if [ -s "${FOREIGN}" ]; then
+    echo "pocknix: these packages are not from pocknix and will no longer update:"
+    sed 's/^/  /' "${FOREIGN}"
+    echo "pocknix: reinstall desktop apps from Discover (Flatpak), or run"
+    echo "pocknix: 'sudo pocknix-base rolling' to keep managing packages yourself."
+  fi
+  rm -f "${MARKER}"
+  echo "pocknix: lock migration complete."
+}
+
+case "${1:-}" in
+  prepare)  prepare ;;
+  converge) converge ;;
+  *) echo "usage: pocknix-lock-migrate prepare|converge" >&2; exit 1 ;;
+esac

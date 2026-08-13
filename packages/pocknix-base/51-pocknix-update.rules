@@ -1,0 +1,12 @@
+// wheel may pkexec these two fixed-purpose CLIs without a prompt (same trust as
+// 50-pocknix-deck.rules). Shipped by the PACKAGE so a device gaining the
+// /usr/bin binaries via -Syu gains the authorization the same way.
+// pocknix-base still demands its typed ROLL before anything happens.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        (action.lookup("program") == "/usr/bin/pocknix-update" ||
+         action.lookup("program") == "/usr/bin/pocknix-base")) {
+        return polkit.Result.YES;
+    }
+});

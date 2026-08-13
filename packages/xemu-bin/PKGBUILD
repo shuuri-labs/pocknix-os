@@ -5,7 +5,7 @@
 # run; keep them in ~/ROMs/bios (see ROMS-README).
 pkgname=xemu-bin
 pkgver=0.8.136
-pkgrel=2
+pkgrel=3
 pkgdesc="xemu — original Xbox emulator, official aarch64 AppImage (vendored)"
 arch=('aarch64')
 url="https://xemu.app"
@@ -14,7 +14,8 @@ depends=('fuse2')
 options=('!strip')
 source=("xemu-${pkgver}.AppImage::https://github.com/xemu-project/xemu/releases/download/v${pkgver}/xemu-${pkgver}-aarch64.AppImage"
         'pocknix-xemu.desktop')
-sha256sums=('SKIP' 'SKIP')
+sha256sums=('8d2598bab0680ddd36c2d15ecccb70523e29adb852cd75e35bc5943dc0eb4816'
+            'SKIP')
 noextract=("xemu-${pkgver}.AppImage")
 
 prepare() {

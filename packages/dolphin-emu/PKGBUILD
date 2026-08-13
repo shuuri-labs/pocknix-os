@@ -10,7 +10,7 @@
 # HEAVY BUILD (~Qt6, ~30-60 min in the VM) — same league as gamescope/mesa.
 pkgname=dolphin-emu
 pkgver=2606
-pkgrel=1
+pkgrel=2
 pkgdesc="GameCube / Wii emulator (native aarch64 build)"
 arch=('aarch64')
 url="https://dolphin-emu.org"

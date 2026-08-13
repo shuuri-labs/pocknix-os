@@ -10,11 +10,12 @@
 # the emulator *-bin packages. Custom find rules in ~/ES-DE/custom_systems (seeded by
 # pocknix-roms-init) still apply on top of the AppImage's bundled config.
 #
-# The GitLab asset URL is a pinned package_files id (opaque but immutable) — from the v3.4.1
-# release's "ES-DE_aarch64.AppImage" link. Bump: check the release page for the new id.
+# The package_files id is NOT immutable — upstream re-uploaded this asset once and
+# the old id 404ed; the sha256 pins the exact vendored bytes. On a 404, take the new
+# id from the release page's "ES-DE_aarch64.AppImage" link and bump sha + pkgrel.
 pkgname=es-de
 pkgver=3.4.1
-pkgrel=2
+pkgrel=3
 pkgdesc="ES-DE frontend for browsing and launching games (official aarch64 AppImage)"
 arch=('aarch64')
 url="https://es-de.org"
@@ -23,10 +24,10 @@ provides=('emulationstation-de')
 conflicts=('emulationstation-de')
 depends=('fuse2')
 options=('!strip')
-source=("ES-DE-${pkgver}.AppImage::https://gitlab.com/es-de/emulationstation-de/-/package_files/288156935/download"
+source=("ES-DE-${pkgver}.AppImage::https://gitlab.com/es-de/emulationstation-de/-/package_files/326321114/download"
         'es-de-wrapper'
         'es-de.desktop')
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+sha256sums=('b84eababe6d6388223cf8b1658bb237bc0125362acaae70e1ece55397c1eb414' 'SKIP' 'SKIP')
 noextract=("ES-DE-${pkgver}.AppImage")
 
 package() {

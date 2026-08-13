@@ -31,10 +31,6 @@ unrar                # .rar backend for ark (and CLI extraction)
 gwenview             # image viewer
 okular               # document / PDF viewer
 
-# --- browsers ---
-firefox              # Firefox
-angelfish            # Plasma Mobile's touch-first web browser
-
 # --- Plasma Mobile gear (touch-first apps) ---
 koko                 # image gallery
 kclock               # clock / alarms / timers
@@ -58,7 +54,7 @@ discover             # plasma-discover — KDE app store with the Flatpak backen
 bluedevil            # Plasma Bluetooth applet/KCM (talks to bluez)
 
 # --- Pocknix Installer (install-to-internal GUI) ---
-# pocknix-installer-gui (overlay) is a kdialog front-end for pocknix-install/uninstall-internal,
+# pocknix-installer-gui (pocknix-installer pkg) fronts the overlay's install/uninstall-internal CLIs,
 # launched from the "Pocknix Installer" app entry. kdialog's deps are all in the Plasma stack above.
 kdialog              # the dialogs (confirm / size picker / busy bar)
 qt6-tools            # qdbus6 — drives the kdialog progress dialog (indeterminate + close). Already

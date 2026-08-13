@@ -1,4 +1,0 @@
-#!/bin/sh
-# pocknix-proton — compat-tool entrypoint, proton-ge-x86 copy. Ships in-package because the
-# tool dir is root-owned, out of reach of the user-level pocknix-proton-prep.
-exec /usr/lib/pocknix/pocknix-proton-wrapper "$(dirname "$0")/proton" "$@"

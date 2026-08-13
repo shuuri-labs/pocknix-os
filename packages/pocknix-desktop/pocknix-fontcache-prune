@@ -1,0 +1,9 @@
+#!/bin/sh
+# Flatpak bind-mounts the host /var/cache/fontconfig into every sandbox, and fc-cache -rs leaves
+# symlinks faking OLDER cache versions: a runtime on an older fontconfig mmaps one and segfaults.
+set -u
+
+[ -d /var/cache/fontconfig ] || exit 0
+find /var/cache/fontconfig -maxdepth 1 -type l -name '*.cache-*' -delete 2>/dev/null
+
+exit 0

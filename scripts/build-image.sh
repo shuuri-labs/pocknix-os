@@ -18,8 +18,8 @@ LOCAL_REPO_DIR="${LOCALREPO_DIR}"   # per-SoC: build/localrepo/${SOC} (set in li
 
 render_pacman_conf() {
   local out="$1"
-  log "rendering pacman.conf (ALARM base)"
-  cp -f "${CONFIG_DIR}/pacman.conf.in" "${out}"
+  log "rendering pacman.conf (base: ${POCKNIX_BASE_SNAPSHOT:-live ALARM})"
+  render_base_pacman_conf "${out}"
 }
 
 # The local repo lives on the host; we bind-mount it to /localrepo inside the rootfs
@@ -34,6 +34,16 @@ append_local_repo() {
 SigLevel = Never
 Server = file:///localrepo
 EOF
+}
+
+# fontconfig installs and caches long before any pocknix package, so the package's own prune can
+# leave an image dirty: re-prune after the last transaction.
+prune_fontconfig_compat_links() {
+  local root="$1"
+  [ -d "${root}/var/cache/fontconfig" ] || return 0
+  local n
+  n="$(find "${root}/var/cache/fontconfig" -maxdepth 1 -type l -name '*.cache-*' -print -delete 2>/dev/null | wc -l | tr -d ' ')"
+  log "pruned ${n} stale-version fontconfig cache links"
 }
 
 # Install the local [pocknix] packages into the rootfs: the shared core set
@@ -135,6 +145,9 @@ install_local_packages() {
   log "device OK: $(chroot "${root}" pacman -Q "${DEVICE_META_PKG}" 2>/dev/null || echo "${DEVICE}")"
   umount "${root}/localrepo"
   rmdir "${root}/localrepo" 2>/dev/null || true
+  # NB the build-time sync dbs must NOT be dropped here: make snapshot harvests
+  # its name->filename/sha mapping from this rootfs's dbs. build-sd-image.sh
+  # deletes them from the IMAGE copy instead (they must not ship: see there).
   # Drop the build-only [pocknix] stanza (its file:///localrepo bind mount doesn't exist on
   # the device). With POCKNIX_REPO_URL set, re-add a stanza pointing at the PUBLISHED repo
   # (see docs/pacman-repo.md), inserted ABOVE [core]: `pacman -S <name>` picks the FIRST
@@ -146,7 +159,12 @@ install_local_packages() {
   # binaries, so the trees must not mix — see pocknix-notes dev/pacman-repo.md).
   if [ -n "${POCKNIX_REPO_URL}" ]; then
     log "shipping [pocknix] repo stanza -> ${POCKNIX_REPO_URL}/${SOC} (SigLevel ${POCKNIX_REPO_SIGLEVEL})"
-    sed -i "0,/^\[core\]/s||[pocknix]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}/${SOC}\n\n[core]|" \
+    # anchor = the first base repo: [core] on a live-ALARM conf, [pocknix-base]
+    # on a pinned one (which has no [core] at all — the old sed silently
+    # no-opped there and the image shipped with NO [pocknix] stanza)
+    local anchor="core"
+    grep -q '^\[pocknix-base\]' "${root}/etc/pacman.conf" && anchor="pocknix-base"
+    sed -i "0,/^\[${anchor}\]/s||[pocknix]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}/${SOC}\n\n[${anchor}]|" \
       "${root}/etc/pacman.conf"
     # Trust the repo key out of the box: bake the exported public key + lsign it, so a
     # fresh image can `pacman -Syu` without a manual pacman-key dance.
@@ -221,7 +239,9 @@ install_firmware() {
     # linux-firmware-qcom packages already put in the rootfs.
     log "no ${SOC} firmware overlay (expected: all blobs come from ALARM linux-firmware packages)"
   else
-    warn "ROCKNIX firmware overlay not at ${FW_SRC} — run 'make sync' (wifi/audio firmware will be missing)"
+    # Fatal, not a warn: this shipped an image with dead wifi/audio/battery once
+    # (fresh worktree, gitignored vendor/ absent) and the warn scrolled past.
+    die "ROCKNIX firmware overlay not at ${FW_SRC} — run 'make sync' (or copy vendor/ from a synced checkout). Without it wifi, audio and battery reporting are dead on ${SOC}."
   fi
 }
 
@@ -328,6 +348,14 @@ main() {
   #    inside install_local_packages from build/kernel/out — run `make kernel` first.
   install_firmware "${ROOTFS_DIR}"
   install_local_packages "${ROOTFS_DIR}"
+  prune_fontconfig_compat_links "${ROOTFS_DIR}"
+
+  # Build stamp for support: which base snapshot this image shipped with, and
+  # when. Separate file: /etc/os-release is owned by the filesystem package.
+  # (A running device's CURRENT base is pocknix-base-lock's version, which
+  # tracks updates; this records where the image started.)
+  printf 'POCKNIX_BASE_SNAPSHOT=%s\nPOCKNIX_IMAGE_BUILD=%s\n' \
+    "${POCKNIX_BASE_SNAPSHOT:-live}" "$(date -u +%Y-%m-%d)" > "${ROOTFS_DIR}/etc/pocknix-release"
 
   # 5. bake the native ARM Steam client into a re-seedable seed (offline first boot)
   bootstrap_steam_seed "${ROOTFS_DIR}"

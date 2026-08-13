@@ -6,7 +6,7 @@
 # points no-op when / is not btrfs (build chroot, pre-snapshot ext4 installs).
 pkgname=pocknix-snapshots
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix pre-update btrfs snapshots and rollback (subvolume set-default)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -19,10 +19,10 @@ backup=('etc/pocknix/snapshots.conf')
 source=('05-pocknix-snapshot.hook' '99-pocknix-snapshot-post.hook'
         'snapshot-lib.sh'
         'pocknix-snapshot-pre' 'pocknix-snapshot-post'
-        'pocknix-snapshots' 'pocknix-rollback' 'pocknix-rollback.desktop'
+        'pocknix-snapshots' 'pocknix-rollback'
         'pocknix-rollback-repair' 'pocknix-rollback-repair.service'
         'snapshots.conf' '50-pocknix-snapshots.rules')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm644 "${srcdir}/05-pocknix-snapshot.hook" \
@@ -40,9 +40,8 @@ package() {
 
   install -Dm644 "${srcdir}/snapshots.conf" "${pkgdir}/etc/pocknix/snapshots.conf"
 
-  # desktop-mode entry point (survives Steam/Decky breakage; CLI refuses politely on ext4)
-  install -Dm644 "${srcdir}/pocknix-rollback.desktop" \
-    "${pkgdir}/usr/share/applications/pocknix-rollback.desktop"
+  # desktop entry point moved to pocknix-tools (removing it here uninstalls the
+  # old standalone shortcut on upgrade)
 
   # passwordless pkexec for wheel (desktop/ssh path; the QAM backend is already root)
   install -Dm644 "${srcdir}/50-pocknix-snapshots.rules" \

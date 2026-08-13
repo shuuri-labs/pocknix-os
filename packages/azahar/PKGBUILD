@@ -13,7 +13,7 @@
 # stays absent from ES-DE until fixed) — build-image treats it as optional (see build-image.sh).
 pkgname=azahar
 pkgver=2125.1.3
-pkgrel=2
+pkgrel=3
 pkgdesc="Azahar — 3DS emulator (Citra successor), native aarch64 build"
 arch=('aarch64')
 url="https://github.com/azahar-emu/azahar"

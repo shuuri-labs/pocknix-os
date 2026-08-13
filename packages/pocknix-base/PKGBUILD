@@ -1,0 +1,33 @@
+# pocknix-base — base-mode tooling for locked devices: the locked<->rolling
+# switch and the desktop updater.
+pkgname=pocknix-base
+pkgver=0.2.0
+pkgrel=2
+pkgdesc="Locked/rolling base mode switch and desktop updater for pocknix"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('MIT')
+# base-lock rides along so `pocknix-base status` can always name the snapshot
+depends=('pacman' 'pocknix-base-lock')
+# supersedes the guarded-extras installer (dropped: Flatpak covers desktop apps,
+# rolling mode covers pacman users, and its lifecycle was most of the edge cases)
+replaces=('pocknix-install')
+conflicts=('pocknix-install')
+install=pocknix-base.install
+source=('pocknix-base'
+        'pocknix-update'
+        'pocknix-update.desktop'
+        '51-pocknix-update.rules')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-base" "${pkgdir}/usr/bin/pocknix-base"
+  # /usr/bin on purpose: the old /usr/local path would file-conflict with the
+  # unowned overlay copy on existing devices; the scriptlet prunes that copy
+  install -Dm755 "${srcdir}/pocknix-update" "${pkgdir}/usr/bin/pocknix-update"
+  install -Dm644 "${srcdir}/pocknix-update.desktop" \
+    "${pkgdir}/usr/share/applications/pocknix-update.desktop"
+  # the pkexec authorization must travel WITH the binary it authorizes
+  install -Dm644 "${srcdir}/51-pocknix-update.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/51-pocknix-update.rules"
+}

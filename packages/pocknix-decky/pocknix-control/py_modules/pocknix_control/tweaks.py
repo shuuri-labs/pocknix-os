@@ -15,12 +15,9 @@ TURNIP_DIRS = {"arm": Path("/usr/share/pocknix/vk-arm"), "x86": Path("/usr/share
 
 
 def mesa_versions():
-    # One dropdown entry per mesa series ("25.2"); the wrapper resolves the series to the
-    # installed point release of whichever arch matches the game's Proton flavor, so a single
-    # pick serves ARM and x86 Proton alike. A series present on only one side is marked
-    # "(ARM only)"/"(x86 only)" — picking it for the other flavor is skipped at launch.
+    # ARM payloads only: an x86 Proton's graphics come from the FEX rootfs, so a host pin never lands.
     series = {}
-    for arch, base in TURNIP_DIRS.items():
+    for arch, base in [("arm", TURNIP_DIRS["arm"])]:
         try:
             versions = [p.name for p in base.iterdir() if (p / "icd.json").is_file()]
         except OSError:
@@ -38,8 +35,6 @@ def mesa_versions():
         # "git" marks an unreleased main snapshot, so a devel payload can't read as a
         # shipped release (the series key alone would show a bare "26.3").
         label = key + (" RC" if entry["rc"] else "") + (" git" if entry["devel"] else "")
-        if entry["archs"] != {"arm", "x86"}:
-            label += f" ({'ARM' if 'arm' in entry['archs'] else 'x86'} only)"
         choices.append({"data": key, "label": label})
     return sorted(choices, key=lambda c: tuple(int(x) for x in c["data"].split(".")))
 

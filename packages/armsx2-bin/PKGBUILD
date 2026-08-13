@@ -23,7 +23,7 @@ _nightly=20260805
 _gitsha=dd5b6616eb
 # Base tracks upstream's stable line; the nightly date is what orders our bumps.
 pkgver=2.6.6.nightly${_nightly}
-pkgrel=1
+pkgrel=2
 pkgdesc="ARMSX2 — PS2 emulator, native-ARM64 PCSX2 fork (vendored AppImage, official nightly)"
 arch=('aarch64')
 url="https://github.com/ARMSX2/ARMSX2"

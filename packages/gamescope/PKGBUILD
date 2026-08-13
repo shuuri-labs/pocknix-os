@@ -19,7 +19,7 @@
 pkgname=gamescope
 epoch=1
 pkgver=3.16.0.rocknix.20260802.6644cc9
-pkgrel=1
+pkgrel=2
 _commit=6644cc9a07d8ba937003deae8bd7c28a490d0c64
 # Grant CAP_SYS_NICE to the installed binary (realtime scheduling) — see gamescope.install.
 install=gamescope.install

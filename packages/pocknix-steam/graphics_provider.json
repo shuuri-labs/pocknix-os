@@ -1,0 +1,5 @@
+{
+  "graphics_provider_v0": {
+    "architectures": ["x86_64-linux-gnu", "i386-linux-gnu"]
+  }
+}

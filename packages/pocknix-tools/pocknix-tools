@@ -1,0 +1,188 @@
+#!/bin/bash
+# pocknix-tools — kdialog front-end for the maintenance CLIs. Every privileged
+# step goes through pkexec; the polkit rules ship with the package that owns
+# each binary (pocknix-snapshots, pocknix-base, pocknix-bsp-common).
+set -euo pipefail
+
+TITLE="Pocknix Tools"
+command -v kdialog >/dev/null 2>&1 || { echo "kdialog not installed" >&2; exit 1; }
+
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+
+gui_err() { kdialog --title "$TITLE" --error "$1" || true; }
+
+base_mode() {
+  if grep -q '^\[pocknix-base\]' /etc/pacman.conf 2>/dev/null; then echo locked
+  elif grep -q '^\[core\]' /etc/pacman.conf 2>/dev/null; then echo rolling
+  else echo unknown; fi
+}
+
+# shallow gate for the menu item only — the deep checks stay in the CLI
+internal_candidate() {
+  local disk="${POCKNIX_INTERNAL_DISK:-/dev/sda}" lbl="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}" part
+  part="$(lsblk -rpno NAME,PARTLABEL "${disk}" 2>/dev/null | awk -v l="${lbl}" '$2==l{print $1}' | head -1)"
+  [ -n "${part}" ] || return 1
+  [ "$(findmnt -no SOURCE / | sed 's/\[.*//')" != "${part}" ]
+}
+
+abl_status() { pkexec /usr/bin/pocknix-update-abl --status 2>/dev/null || true; }
+
+abl_item_label() {
+  local st="$1" state ver
+  state="$(printf '%s\n' "${st}" | sed -n 's/^state=//p')"
+  ver="$(printf '%s\n' "${st}" | sed -n 's/^shipped_version=//p')"
+  case "${state}" in
+    differs|mixed)  echo "Bootloader: install or update to ${ver}..." ;;
+    uptodate)       echo "Bootloader is up to date (${ver})" ;;
+    gptrepair)      echo "Bootloader: repair partition table, then install ${ver}..." ;;
+    *)              return 1 ;;
+  esac
+}
+
+# the CLI keeps its own typed FLASH/REPAIR confirmation; never wire this into a hook
+do_abl() {
+  local st state ver
+  st="$(abl_status)"
+  state="$(printf '%s\n' "${st}" | sed -n 's/^state=//p')"
+  ver="$(printf '%s\n' "${st}" | sed -n 's/^shipped_version=//p')"
+  if [ "${state}" = uptodate ]; then
+    kdialog --title "$TITLE" --msgbox "The bootloader already matches the version this Pocknix ships.\n\nNothing to do." || true
+    return 0
+  fi
+  if [ "${state}" = gptrepair ]; then
+    kdialog --title "$TITLE" --warningcontinuecancel \
+      "This device's partition table is damaged and must be repaired before the bootloader can be installed.\n\nMany Retroid units ship this way. Only a single 4 KB header is rewritten, from this disk's own backup copy; no partition contents are touched and the original is kept.\n\nAfterwards the bootloader (ABL) ${ver} is installed, which rewrites both bootloader slots.\n\nKeep the device plugged in. You will confirm each step in a terminal." \
+      || return 0
+    konsole_run "/usr/bin/pocknix-update-abl"
+    return 0
+  fi
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Replace the device bootloader (ABL) with the ROCKNIX ${ver} build Pocknix ships?\n\nThis rewrites both bootloader slots on internal storage. If it is interrupted the device will not boot and needs a PC to recover.\n\nKeep it plugged in. The current bootloader is backed up to the boot partition first, and each slot is verified after writing.\n\nYou will be asked to type FLASH in a terminal to confirm." \
+    || return 0
+  konsole_run "/usr/bin/pocknix-update-abl"
+}
+
+pick_snapshot() {  # $1: "" | --internal; newest preselected
+  local flag="$1" rows args=() id
+  rows="$(pkexec /usr/bin/pocknix-rollback ${flag} --list 2>/dev/null | tail -n +2)" || rows=""
+  [ -n "${rows}" ] || { gui_err "No snapshots found${flag:+ on the internal install}.\n\nSnapshots are taken automatically before every update."; return 1; }
+  # menu labels render proportionally: separators, not column alignment
+  while IFS=$'\t' read -r id label; do args+=("${id}" "${label}"); done \
+    < <(printf '%s\n' "${rows}" | sort -r | awk '{
+      t=""; for (i=6; i<=NF; i++) t=t $i " "
+      printf "%s\t%s · %s %s · %s%s\n", $1, $1, $2, $3, t, ($5=="yes" ? "· incl. kernel" : "")
+    }')
+  kdialog --title "$TITLE" --default "${args[0]}" \
+    --menu "Roll back${flag:+ the INTERNAL install} to the state saved before an update.\nNewest first. /home (games, saves) is never touched." \
+    "${args[@]}"
+}
+
+do_rollback() {  # $1: "" | --internal
+  local flag="$1" id out rc=0
+  id="$(pick_snapshot "${flag}")" || return 0
+  [ -n "${id}" ] || return 0
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Roll back${flag:+ the INTERNAL install} to snapshot ${id}?\n\nEverything that update changed is undone, including the kernel if it was part of it.\n/home (games, saves) and logs are kept.\n\n$( [ -n "${flag}" ] && echo 'Takes effect the next time the device boots from internal storage.' || echo 'The device should reboot right after.' )" \
+    || return 0
+  out="$(pkexec /usr/bin/pocknix-rollback ${flag} --to "${id}" --yes 2>&1)" || rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    gui_err "Rollback failed — nothing was changed:\n\n$(printf '%s' "${out}" | tail -4)"
+    return 0
+  fi
+  # set -euo pipefail: "Later" and a dismissed msgbox are answers, not failures —
+  # unguarded they would take the whole app down on a successful rollback.
+  if [ -n "${flag}" ]; then
+    kdialog --title "$TITLE" --msgbox "Internal install rolled back to snapshot ${id}.\nIt boots into that state next time you start from internal storage." || true
+  elif kdialog --title "$TITLE" --yes-label "Reboot now" --no-label "Later" \
+         --yesno "Rolled back to snapshot ${id}.\nA reboot completes it."; then
+    systemctl reboot
+  fi
+}
+
+ssh_state() { pocknix-ssh status 2>/dev/null | sed -n 's/^state=//p'; }
+
+ssh_addrs() { ip -4 -o addr show scope global 2>/dev/null | awk '{split($4,a,"/"); printf "%s ", a[1]}'; }
+
+do_ssh() {
+  local out rc=0 addrs
+  if [ "$(ssh_state)" = on ]; then
+    out="$(pkexec /usr/bin/pocknix-ssh off 2>&1)" || rc=$?
+    [ "${rc}" -eq 0 ] || { gui_err "Could not turn remote access off:\n\n$(printf '%s' "${out}" | tail -3)"; return 0; }
+    kdialog --title "$TITLE" --msgbox "Remote access is off. The device no longer accepts SSH logins." || true
+    return 0
+  fi
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Allow SSH logins to this device?\n\nAnyone on the same network can then log in with an account password, and Pocknix ships a well-known default one. If you have not changed it, do that first: open Konsole and run passwd (then sudo passwd root).\n\nIt stays on, across reboots, until you turn it off here." \
+    || return 0
+  out="$(pkexec /usr/bin/pocknix-ssh on 2>&1)" || rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    gui_err "Could not turn remote access on:\n\n$(printf '%s' "${out}" | tail -3)"
+    return 0
+  fi
+  addrs="$(ssh_addrs)"
+  kdialog --title "$TITLE" --msgbox "Remote access is on.\n\nLog in as $(id -un)${addrs:+ at ${addrs% }}.\nIt stays on until you turn it off here." || true
+}
+
+# terminal on purpose: pocknix-base demands a typed ROLL and streams the pacman run
+konsole_run() { konsole -e /bin/bash -c "pkexec $1; echo; read -rp 'Press Enter to close... '"; }
+
+do_mode() {
+  case "$(base_mode)" in
+    locked)
+      kdialog --title "$TITLE" --warningcontinuecancel \
+        "Rolling mode is NOT recommended.\n\nIt switches this device from the tested Pocknix package base to live Arch Linux ARM. Any upstream update can then break the Steam session, graphics, or boot until the next Pocknix release.\n\nIt exists for people who want to manage packages with pacman themselves, and it is unsupported.\n\nContinue to the final confirmation in a terminal?" \
+        || return 0
+      konsole_run "/usr/bin/pocknix-base rolling" ;;
+    rolling)
+      kdialog --title "$TITLE" --warningcontinuecancel \
+        "Return this device to the supported locked base?\n\nEvery base package converges back to the Pocknix snapshot (downgrades included). Software installed while rolling may block this — the terminal names it if so." \
+        || return 0
+      konsole_run "/usr/bin/pocknix-base locked" ;;
+    *) gui_err "Cannot tell the current mode from /etc/pacman.conf." ;;
+  esac
+}
+
+# kdialog rich text mangles <table>, desyncs on tags inside a <pre>, and glues
+# inline text preceding a <pre> — so the CLI's printf columns inside one plain
+# <pre> ARE the table, heading included, with nothing inline before it.
+do_status() {
+  local list
+  list="$(pkexec /usr/bin/pocknix-rollback --list 2>/dev/null)" || list=""
+  list="$(printf 'Snapshots (newest first)\n\n'; printf '%s\n' "${list}" | head -1; printf '%s\n' "${list}" | tail -n +2 | sort -r)"
+  # status stays proportional (wraps, all packages visible) but rich text eats
+  # newlines and the wide pre defeats word-wrap: explicit <br>s + pre-folding.
+  # Escape first — the converge-blocked hint contains a literal <name>.
+  local status
+  status="$(pocknix-base status 2>&1 \
+    | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' \
+    | sed 's/^\([A-Za-z][^:]*\):/<b>\1<\/b>:/' \
+    | fold -s -w 96 | sed 's/$/<br>/')"
+  kdialog --title "$TITLE" --msgbox "<html>${status}<pre>${list}</pre></html>" || true
+}
+
+while :; do
+  mode="$(base_mode)"
+  items=(rollback "Roll back the last update...")
+  internal_candidate && items+=(rollback-internal "Roll back the INTERNAL install...")
+  case "${mode}" in
+    locked)  items+=(mode "Switch to rolling mode (not recommended)...") ;;
+    rolling) items+=(mode "Return to locked mode (recommended)...") ;;
+  esac
+  items+=(installer "Install or remove internal Pocknix...")
+  abl_label="$(abl_item_label "$(abl_status)")" && items+=(abl "${abl_label}")
+  if [ "$(ssh_state)" = on ]; then items+=(ssh "Remote access (SSH) is ON - turn it off")
+  else items+=(ssh "Remote access (SSH) is off - turn it on..."); fi
+  items+=(status "Show system status")
+  choice="$(kdialog --title "$TITLE" --menu "Pocknix maintenance tools\nMode: ${mode^^}" "${items[@]}")" || exit 0
+  case "${choice}" in
+    rollback)          do_rollback "" ;;
+    rollback-internal) do_rollback --internal ;;
+    mode)              do_mode ;;
+    installer)         /usr/bin/pocknix-installer-gui || true ;;
+    abl)               do_abl ;;
+    ssh)               do_ssh ;;
+    status)            do_status ;;
+    *) exit 0 ;;
+  esac
+done

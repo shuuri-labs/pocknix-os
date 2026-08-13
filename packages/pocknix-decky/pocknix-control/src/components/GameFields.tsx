@@ -130,7 +130,7 @@ export function TweakFields({ config, appid, values, patch }: {
       />
       <SelectEdit label="FEX Preset" value={fexValue} options={fexOptions} onChange={(id) => patch({ fexProfile: id })} />
       <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patch({ audioLatency: id })} />
-      <SelectEdit label="Mesa Version" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
+      <SelectEdit label="Mesa Version (ARM Proton only)" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
       <EnvVarsButton value={String(values.envVars ?? "")} onSave={(next) => patch({ envVars: next })} />
     </>
   );

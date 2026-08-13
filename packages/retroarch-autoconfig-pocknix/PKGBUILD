@@ -15,7 +15,7 @@
 # profiles keep working alongside ours.
 pkgname=retroarch-autoconfig-pocknix
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="libretro joypad autoconfig profiles (udev) — controller bindings for RetroArch"
 arch=('any')
 url="https://github.com/libretro/retroarch-joypad-autoconfig"

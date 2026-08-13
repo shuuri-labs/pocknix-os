@@ -12,7 +12,7 @@
 # The prepare() seds match ROCKNIX's pre_configure_target fixes.
 pkgname=cemu
 pkgver=2.6.rocknix.6f6c129
-pkgrel=1
+pkgrel=2
 _commit=6f6c1299e29fa6e1062ae283a035b4ef787cc397   # = ROCKNIX cemu-sa PKG_VERSION
 pkgdesc="Cemu — Wii U emulator (native aarch64 build with the ARM64 recompiler)"
 arch=('aarch64')

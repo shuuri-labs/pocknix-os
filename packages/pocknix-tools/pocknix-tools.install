@@ -1,0 +1,15 @@
+# Migration from the image-overlay era: prune the unowned overlay copies of the
+# installer GUI so the packaged /usr/bin one isn't shadowed by /usr/local/bin on
+# pre-package devices. No-op on fresh images.
+_prune_overlay_tools() {
+  rm -f /usr/local/bin/pocknix-installer-gui \
+        /usr/share/applications/pocknix-installer.desktop
+}
+
+post_install() {
+  _prune_overlay_tools
+}
+
+post_upgrade() {
+  _prune_overlay_tools
+}

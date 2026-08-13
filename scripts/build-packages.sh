@@ -27,23 +27,57 @@ cleanup() { chroot_umount "${BROOT}" 2>/dev/null || true
 trap cleanup EXIT
 
 setup_chroot() {
+  # Base fingerprint: the chroot is built FROM a base (pinned snapshot id, or
+  # "live" ALARM) and must be recreated when the pin changes — an old-base chroot
+  # stamps binaries with sonames the new base no longer has.
+  local want_base="${POCKNIX_BASE_SNAPSHOT:-live}" have_base
+  have_base="$(cat "${BROOT}/.base-snapshot" 2>/dev/null || true)"
+  if [ -x "${BROOT}/usr/bin/makepkg" ]; then
+    # adopt pre-stamp chroots as live-based (the -Syu below converges them)
+    if [ -z "${have_base}" ] && [ -z "${POCKNIX_BASE_SNAPSHOT}" ]; then
+      printf 'live\n' > "${BROOT}/.base-snapshot"; have_base=live
+    fi
+    if [ "${have_base}" != "${want_base}" ]; then
+      log "build chroot base is '${have_base:-unknown}', want '${want_base}' — recreating"
+      rm -rf "${BROOT}"
+    fi
+  fi
+
   if [ -x "${BROOT}/usr/bin/makepkg" ]; then
     log "reusing build chroot: ${BROOT}"
+    # Re-render drops the [pocknix] stanza; it is re-appended below, AFTER the
+    # -Syu — its file:///localrepo isn't bind-mounted until main(), and pacman
+    # dies on a configured repo with no DB.
+    render_base_pacman_conf "${BROOT}/etc/pacman.conf"
+    # Converge the reused chroot to the configured base. Without this the chroot
+    # is frozen at its creation date and LAGS devices (a user's -Syu gets a new
+    # soname our binaries were never linked against). Pinned base: no-op.
+    chroot_mount "${BROOT}"
+    # A PINNED base is frozen, so a chroot already stamped with that pin cannot be stale
+    # and a failed -Syu just means offline. On live/unpinned bases the drift is real, and
+    # building against a chroot that missed it is exactly what this guard exists to stop.
+    if ! chroot "${BROOT}" pacman -Syu --noconfirm; then
+      if [ -n "${POCKNIX_BASE_SNAPSHOT}" ] && [ "${have_base}" = "${want_base}" ]; then
+        warn "chroot -Syu failed, but the base is pinned to ${want_base} and the chroot already matches it — continuing (frozen base cannot have moved)"
+      else
+        die "chroot base upgrade failed — refusing to build against a stale base (network down? re-run when reachable)"
+      fi
+    fi
+    chroot_umount "${BROOT}"
   else
-    mkdir -p "${CACHE_DIR}"
-    [ -f "${TARBALL}" ] || { log "downloading ALARM tarball for build chroot"; \
-      curl -fL --retry 3 -o "${TARBALL}" "${ALARM_MIRROR}/${ALARM_TARBALL}"; }
+    fetch_alarm_tarball
     log "creating build chroot -> ${BROOT} (one-time; ~1.5 GB with base-devel)"
     rm -rf "${BROOT}"; mkdir -p "${BROOT}"
     if have bsdtar; then bsdtar -xpf "${TARBALL}" -C "${BROOT}"
     else tar -xpf "${TARBALL}" -C "${BROOT}" --numeric-owner; fi
     maybe_install_qemu "${BROOT}"
-    cp -f "${CONFIG_DIR}/pacman.conf.in" "${BROOT}/etc/pacman.conf"   # ALARM-only base
+    render_base_pacman_conf "${BROOT}/etc/pacman.conf"
     chroot_mount "${BROOT}"
     chroot "${BROOT}" pacman-key --init
     chroot "${BROOT}" pacman-key --populate archlinuxarm
     chroot "${BROOT}" pacman -Syu --noconfirm --needed base-devel sudo
     chroot_umount "${BROOT}"
+    printf '%s\n' "${want_base}" > "${BROOT}/.base-snapshot"
   fi
 
   # Idempotent: ensure the 'builder' user, sudo, and passwordless sudoers exist — this
@@ -134,6 +168,18 @@ build_one() {
     fi
     cp -a "${kout}" "${BROOT}/build/${name}/staged"
   ;; esac
+  # pocknix-firmware-<soc> is thin too: it packages vendor overlay blobs listed in
+  # its ./paths. Staged here because the gitignored vendor/ tree exists only on the
+  # build host, never inside the chroot.
+  case "${name}" in pocknix-firmware-*)
+    local fwsrc="${POCKNIX_ROOT}/vendor/rocknix-${name#pocknix-firmware-}/filesystem/usr/lib/kernel-overlays/base/lib/firmware"
+    local fwp
+    while IFS= read -r fwp; do
+      [ -n "${fwp}" ] || continue
+      [ -f "${fwsrc}/${fwp}" ] || die "${name}: ${fwp} missing from ${fwsrc} — vendor overlay incomplete (make sync?)"
+      install -Dm644 "${fwsrc}/${fwp}" "${BROOT}/build/${name}/staged/${fwp}"
+    done < "${pkgdir}/paths"
+  ;; esac
   # Drift guard: a device BSP's committed kernel-cmdline must byte-match its own device
   # profile's KERNEL_CMDLINE (the boot image is built from the profile; the BSP file feeds
   # the on-device /flash/KERNEL rebuild — they must agree). The device is derived from the
@@ -188,7 +234,9 @@ Update one to match the other."
   # (falling back to their sm8550 strings when unset, e.g. standalone makepkg).
   local mkflags="-s" tune_env
   case "${pkgdir}" in */devices/*/packages/*) mkflags="-d" ;; esac
-  tune_env="POCKNIX_SOC=$(printf %q "${SOC}") POCKNIX_TUNE_CFLAGS=$(printf %q "${POCKNIX_TUNE_CFLAGS}") POCKNIX_FEX_TUNE_CPU=$(printf %q "${POCKNIX_FEX_TUNE_CPU}")"
+  # POCKNIX_BASE_*: pocknix-lock-migrate stamps the target snapshot URL into its
+  # script at build time, so snapshot bumps re-target the migrator on rebuild.
+  tune_env="POCKNIX_SOC=$(printf %q "${SOC}") POCKNIX_TUNE_CFLAGS=$(printf %q "${POCKNIX_TUNE_CFLAGS}") POCKNIX_FEX_TUNE_CPU=$(printf %q "${POCKNIX_FEX_TUNE_CPU}") POCKNIX_BASE_URL=$(printf %q "${POCKNIX_BASE_URL}") POCKNIX_BASE_SNAPSHOT=$(printf %q "${POCKNIX_BASE_SNAPSHOT}")"
   if ! chroot "${BROOT}" runuser -u builder -- \
       bash -lc "cd /build/${name} && LC_ALL=C SRCDEST=/build/srccache ${tune_env} makepkg ${mkflags} -f --noconfirm --nocheck --skippgpcheck"; then
     warn "makepkg failed for ${name} — keeping any previous build in ${LOCALREPO##*/}"

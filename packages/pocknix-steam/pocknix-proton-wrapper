@@ -35,8 +35,16 @@ FAN_MODES = ("quiet", "moderate", "performance")
 LAVD_MODES = ("autopilot", "performance", "balanced", "powersave")
 
 
+def is_arm_slr(real_proton):
+    # An SLR chain hides the Proton behind the entry point; the runtime dir name carries the arch.
+    p = pathlib.Path(real_proton)
+    return p.name == "_v2-entry-point" and p.resolve().parent.name.endswith("-arm64")
+
+
 def is_arm_proton(real_proton):
     # ARM Proton dists (arm64ec wine) ship native arm64 builtins; x86 dists don't.
+    if is_arm_slr(real_proton):
+        return True
     return (pathlib.Path(real_proton).resolve().parent / "files/lib/wine/aarch64-windows").is_dir()
 
 
@@ -178,9 +186,9 @@ def apply_mesa_version(settings, real_proton):
         print(f"pocknix-proton: no {base.name} turnip payload for mesa {version}, using default driver", file=sys.stderr)
         return
     picked = max(candidates, key=lambda v: tuple(int(x) for x in re.findall(r"[0-9]+", v)))
-    if pathlib.Path(real_proton).name == "_v2-entry-point":
-        # SteamLinuxRuntime chain: only rootfs-embedded versions survive the container's
-        # graphics capture; anything else must NOT be pinned (see CONTAINER_VK_LIST note).
+    if pathlib.Path(real_proton).name == "_v2-entry-point" and flavor == "x86":
+        # x86 SLR captures graphics from the FEX rootfs, so only image-embedded versions survive.
+        # An arm64 container captures the real host, where our payloads already live.
         try:
             embedded = set(CONTAINER_VK_LIST.read_text().split())
         except OSError:
@@ -264,7 +272,9 @@ def main():
     try:
         contract = load_fex_contract()
         settings = merged_settings(load_tweaks(contract["defaults"]), game_id)
-        write_fex_config(settings, game_id, contract["profiles"])
+        # Valve's FEX configures itself before we exist; only ARM Proton still reads FEX_APP_CONFIG.
+        if is_arm_proton(real_proton):
+            write_fex_config(settings, game_id, contract["profiles"])
     except Exception as exc:
         print(f"pocknix-proton: failed to write FEX config: {exc}", file=sys.stderr)
     try:

@@ -1,0 +1,14 @@
+[Unit]
+Description=pocknix: present the FEX x86 rootfs at the path Steam's FEX compat tool expects
+Documentation=https://github.com/shuuri-labs/pocknix-os
+ConditionPathExists=/usr/share/fex-emu/RootFS/ArchLinux.sqsh
+Before=graphical.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/pocknix/pocknix-guestos-mount start
+ExecStop=/usr/lib/pocknix/pocknix-guestos-mount stop
+
+[Install]
+WantedBy=multi-user.target

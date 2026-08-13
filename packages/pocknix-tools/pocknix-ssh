@@ -1,0 +1,40 @@
+#!/bin/bash
+# pocknix-ssh — turn the SSH server on/off. status is unprivileged (the menu polls
+# it on every draw); on/off need root and come in via pkexec (53-pocknix-ssh.rules).
+set -euo pipefail
+
+# sshd.socket can pull the daemon in on its own, so both units move together
+UNITS=(sshd.service sshd.socket)
+
+is_on() {
+  local u
+  for u in "${UNITS[@]}"; do
+    [ "$(systemctl is-enabled "${u}" 2>/dev/null || true)" = enabled ] && return 0
+    systemctl is-active --quiet "${u}" && return 0
+  done
+  return 1
+}
+
+need_root() { [ "$(id -u)" -eq 0 ] || { echo "pocknix-ssh: must run as root" >&2; exit 1; }; }
+
+case "${1:-status}" in
+  status)
+    is_on && echo "state=on" || echo "state=off"
+    echo "active=$(systemctl is-active sshd.service 2>/dev/null || true)"
+    ;;
+  on)
+    need_root
+    systemctl enable --now sshd.service >/dev/null
+    echo "state=on"
+    ;;
+  off)
+    need_root
+    systemctl disable --now sshd.socket >/dev/null 2>&1 || true
+    systemctl disable --now sshd.service >/dev/null
+    echo "state=off"
+    ;;
+  *)
+    echo "usage: pocknix-ssh {status|on|off}" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,24 @@
+#!/bin/bash
+# pocknix-refresh-abl-kit — copy the ABL kit from the package tree onto /flash.
+#
+# DOES NOT FLASH. Refreshes inert files only; the bootloader is written solely
+# by pocknix-update-abl. Do not grow this into ROCKNIX's updateabl.
+# Needed because pacman owns nothing on /flash, so that copy would otherwise
+# stay at the image's version - and users provision a SECOND device from it.
+set -euo pipefail
+
+FLASH="${FLASH:-/flash}"
+KIT=/usr/share/pocknix/bootloader/rocknix_abl
+
+[ -d "${KIT}" ] || { echo "pocknix-refresh-abl-kit: no ${KIT} — nothing to do"; exit 0; }
+# build-sd-image.sh populates the FAT itself; /flash is not a mount there.
+mountpoint -q "${FLASH}" || { echo "pocknix-refresh-abl-kit: ${FLASH} not mounted — skipping (build chroot?)"; exit 0; }
+
+mount -o remount,rw "${FLASH}" 2>/dev/null || true
+mkdir -p "${FLASH}/rocknix_abl"
+# Copy, never mirror: the stock-ABL backups live in this same directory and
+# an rsync --delete would destroy them.
+cp -f "${KIT}"/* "${FLASH}/rocknix_abl/"
+sync
+
+echo "pocknix-refresh-abl-kit: refreshed ${FLASH}/rocknix_abl (v$(cat "${KIT}/version" 2>/dev/null || echo unknown); backups kept)"

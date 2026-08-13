@@ -9,7 +9,7 @@ SCRIPTS := scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync bootstrap build kernel packages sd-image stage publish publish-image install check du trim clean distclean
+.PHONY: help sync bootstrap build kernel packages sd-image snapshot stage publish publish-image install check du trim clean distclean
 
 help: ## Show this help
 	@echo "pocknix-os build targets:"
@@ -34,8 +34,11 @@ packages: ## Build local pocknix-* packages -> build/localrepo (root); skips up-
 sd-image: ## Build a flashable SD boot-test image (needs build + kernel) (root, Linux)
 	@$(SCRIPTS)/build-sd-image.sh
 
-stage: ## Mirror the LIVE repo into build/stage + swap in PKG="a b" (publish source; user, no sudo)
-	@$(SCRIPTS)/stage-repo.sh $(PKG)
+snapshot: ## Freeze the ALARM base a fresh build used -> [pocknix-base] on R2 + lockfile + pins (user, no sudo)
+	@$(SCRIPTS)/snapshot-base.sh
+
+stage: ## Mirror the LIVE repo into build/stage + swap in PKG="a b" (publish source; user, no sudo). DROP="x" removes a live package
+	@POCKNIX_STAGE_DROP="$(DROP)" $(SCRIPTS)/stage-repo.sh $(PKG)
 
 publish: ## Sign + publish the staged repo (run 'make stage' first; user, no sudo)
 	@$(SCRIPTS)/publish-repo.sh $(PUBLISH_ARGS)

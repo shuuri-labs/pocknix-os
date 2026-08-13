@@ -4,7 +4,7 @@
 # predates modern compiler strictness).
 pkgname=gtk2
 pkgver=2.24.33
-pkgrel=1
+pkgrel=2
 pkgdesc="GTK+ 2 GUI toolkit (built for ARM; required by Steam's native client UI)"
 arch=('aarch64')
 url="https://www.gtk.org/"

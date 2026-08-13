@@ -8,9 +8,14 @@
 # package-list Y/n prompt stays interactive as the review step.
 set -euo pipefail
 
-SELF=/usr/local/bin/pocknix-update
+SELF=/usr/bin/pocknix-update
 
 if [ "$(id -u)" = 0 ]; then
+  if ! grep -q '^\[pocknix-base\]' /etc/pacman.conf && [ -e /etc/pocknix/rolling-mode ]; then
+    echo "bleeding-edge rolling mode: this is a live ALARM upgrade. pocknix-rollback"
+    echo "undoes it; 'sudo pocknix-base locked' returns to the supported base."
+    echo
+  fi
   exec pacman -Syu
 fi
 

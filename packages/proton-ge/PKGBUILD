@@ -1,7 +1,7 @@
 # proton-ge — GE-Proton ARM64 build as a system compat tool.
 # Constant tool dir + internal name, so a bump swaps files under existing per-game selections.
 pkgname=proton-ge
-_srctag=GE-Proton11-3
+_srctag=GE-Proton11-5
 _ver=${_srctag#GE-Proton}
 _major=${_ver%%-*}
 pkgver=${_ver//-/.}
@@ -16,7 +16,7 @@ source=("https://github.com/GloriousEggroll/proton-ge-custom/releases/download/$
         'compatibilitytool.vdf.in'
         'toolmanifest.vdf'
         'pocknix-proton')
-sha512sums=('703fe0f1722e55300f14f425e5985bc903669ee29b9647cfdb8120cb5b361efc8b26bb68cd601daeb612ae2d5c5e615065d375650e6da84f82e8c14fcae48c90'
+sha512sums=('fa3048f55a70e4090a38e23d4182bcf4100c6cfbdb1a9b1b21aa01dfd2ba68ef6cc70f00242171c0f836d1e4753dfca146453baba6042f2d61ebef47d4f3cd84'
             'SKIP'
             'SKIP'
             'SKIP')
@@ -35,8 +35,7 @@ package() {
   mkdir -p "${pkgdir}/${tooldir}"
   cp -a "${dist}/." "${pkgdir}/${tooldir}/"
 
-  # Ours over upstream's: constant internal name, and no require_tool_appid (GE's asks for
-  # SLR 4.0 Arm64 / appid 4185400, which Steam cannot download on a fresh install).
+  # Ours over upstream's: constant internal name, and no require_tool_appid (host-direct).
   install -Dm644 "${srcdir}/compatibilitytool.vdf" "${pkgdir}/${tooldir}/compatibilitytool.vdf"
   install -Dm644 "${srcdir}/toolmanifest.vdf"      "${pkgdir}/${tooldir}/toolmanifest.vdf"
   install -Dm755 "${srcdir}/pocknix-proton"        "${pkgdir}/${tooldir}/pocknix-proton"

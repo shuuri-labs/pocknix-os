@@ -65,6 +65,10 @@ rtkit               # RT broker: PipeWire/WirePlumber get bounded realtime via r
                     #   limits.d/60-pocknix-gaming.conf) so module-rt's direct path fails -> rtkit.
 alsa-utils          # aplay/amixer/alsaucm/speaker-test — card inspection + UCM testing
 alsa-ucm-conf       # ALSA Use Case Manager configs (card routing); RP6 UCM may need adding
+swh-plugins         # LADSPA limiter, a hard depends= of pocknix-bsp-sm8250. Listed in the SHARED
+                    #   base though only sm8250 needs it: `make snapshot` harvests the runtime
+                    #   closure from the one build/rootfs (whichever SoC built last), so a
+                    #   per-SoC dep goes missing. Base-listed = installed by every build.
 
 # --- handheld input / quirks deps ---
 # inputplumber config is shipped by pocknix-bsp (Phase 2); the daemon itself:

@@ -1,0 +1,30 @@
+#!/bin/bash
+# Present our FEX rootfs at /usr/share/guestos/fex-mesa, the path Steam's FEX compat tool hardcodes.
+# It returns that path even when nothing is mounted there, so a missing tree surfaces only at game
+# launch as "Invalid or Unsupported elf file". graphics_provider.json must sit INSIDE the tree.
+set -u
+
+SQSH=/usr/share/fex-emu/RootFS/ArchLinux.sqsh
+RUN=/run/pocknix/guestos
+TARGET=/usr/share/guestos/fex-mesa
+MANIFEST=/usr/share/pocknix-steam/graphics_provider.json
+
+case "${1:-start}" in
+  start)
+    [ -f "${SQSH}" ] || { echo "pocknix-guestos: ${SQSH} missing, nothing to mount" >&2; exit 0; }
+    mkdir -p "${RUN}/lower" "${TARGET}"
+    mountpoint -q "${RUN}/lower" || mount -t squashfs -o ro,loop "${SQSH}" "${RUN}/lower" || exit 1
+    # upper+work must share a filesystem; tmpfs keeps the manifest off disk and out of snapshots.
+    mountpoint -q "${RUN}/rw" || { mkdir -p "${RUN}/rw"; mount -t tmpfs -o size=1M tmpfs "${RUN}/rw" || exit 1; }
+    mkdir -p "${RUN}/rw/upper" "${RUN}/rw/work"
+    install -Dm644 "${MANIFEST}" "${RUN}/rw/upper/graphics_provider.json" || exit 1
+    mountpoint -q "${TARGET}" || mount -t overlay overlay \
+      -o "lowerdir=${RUN}/lower,upperdir=${RUN}/rw/upper,workdir=${RUN}/rw/work" "${TARGET}" || exit 1
+    ;;
+  stop)
+    mountpoint -q "${TARGET}" && umount "${TARGET}"
+    mountpoint -q "${RUN}/rw" && umount "${RUN}/rw"
+    mountpoint -q "${RUN}/lower" && umount "${RUN}/lower"
+    ;;
+esac
+exit 0

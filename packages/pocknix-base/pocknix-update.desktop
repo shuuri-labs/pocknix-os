@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pocknix Updater
+Comment=Download and install Pocknix system updates, then your extra packages
+Exec=konsole -e /usr/bin/pocknix-update
+TryExec=/usr/bin/pocknix-update
+Icon=system-software-update
+Terminal=false
+Categories=System;
+Keywords=update;upgrade;pacman;extras;

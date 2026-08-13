@@ -12,7 +12,7 @@
 # unqualified `pacman -S name` picks the FIRST repo with the name, and [pocknix] is last.)
 pkgname=wxwidgets-pocknix
 pkgver=3.3.2
-pkgrel=1
+pkgrel=2
 pkgdesc="wxWidgets 3.3 (gtk3, lean: no webview/media) — required by cemu, ALARM only has 3.2"
 arch=('aarch64')
 url="https://wxwidgets.org"

@@ -1,5 +1,22 @@
 #!/bin/bash
-# pocknix-flathub-setup — register the Flathub remote (system-wide) so Discover / `flatpak install`
-# can fetch apps. Run once on the first online boot by pocknix-flathub.service. Idempotent:
-# `--if-not-exists` is a no-op (no network) once the remote is present, so later boots cost nothing.
-exec flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+# pocknix-flathub-setup — register the Flathub remote and seed the apps shipped
+# as flatpaks instead of frozen-base packages (browser CVEs can't wait for a
+# pocknix release). NM-dispatched on every real link-up, so failed or offline
+# attempts heal on the next connect; every step is an idempotent no-op once done.
+set -e
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak info org.mozilla.firefox >/dev/null 2>&1 \
+  || flatpak install --system --noninteractive flathub org.mozilla.firefox
+# pre-flatpak installs: retire the pacman browsers ONLY once the flatpak is present
+# (never leave a device browserless). Failing hard is what makes the retry real: with
+# RemainAfterExit=yes a swallowed error leaves the unit active(exited), so the dispatcher's
+# `systemctl start` becomes a no-op and a db-locked removal would wait for a reboot.
+if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
+  stale="$(pacman -Qq firefox angelfish 2>/dev/null || true)"
+  if [ -n "${stale}" ]; then
+    pacman -Rns --noconfirm ${stale} || {
+      echo "pocknix-flathub-setup: removing the pacman browsers (${stale//$'\n'/ }) failed (db locked?) — retrying on the next link-up" >&2
+      exit 1
+    }
+  fi
+fi

@@ -3,11 +3,13 @@
 # menu (the sm8550 ABL has none): make a writable snapshot of the chosen read-only
 # snapshot at the btrfs toplevel, point the filesystem's DEFAULT subvolume at it
 # (the single atomic commit — cmdline/fstab name no subvol, so next boot lands there),
-# regenerate /flash boot files from the target tree when its kernel differs, reboot.
+# regenerate the boot files from the target tree when its kernel differs, reboot.
 # /home, /var/log, /.snapshots and the pacman cache are separate subvols: untouched.
 #
 #   pocknix-rollback [--to <id>] [--yes]     roll back (default: newest snapshot)
-#   pocknix-rollback --list | --status       delegate to pocknix-snapshots
+#   pocknix-rollback --internal [...]        same, against the INTERNAL install while
+#                                            booted from something else (SD card)
+#   pocknix-rollback --list | --status       snapshot table / status (both modes)
 set -euo pipefail
 
 . /usr/lib/pocknix/snapshot-lib.sh
@@ -15,58 +17,113 @@ set -euo pipefail
 FLASH=/flash
 RUN=/run/pocknix
 TOP="${RUN}/rollback-top"
+INT_FLASH="${RUN}/rollback-flash"
 
 die() { echo "pocknix-rollback: $*" >&2; exit 1; }
 
-target="" assume_yes=""
+target="" assume_yes="" internal="" action=rollback
 while [ $# -gt 0 ]; do
   case "$1" in
-    --to)     target="${2:?--to needs a snapshot id}"; shift 2 ;;
-    --yes)    assume_yes=1; shift ;;
-    --list)   exec pocknix-snapshots list ;;
-    --status) exec pocknix-snapshots status ;;
-    *) die "unknown argument '$1' (usage: pocknix-rollback [--to <id>] [--yes] [--list] [--status])" ;;
+    --to)       target="${2:?--to needs a snapshot id}"; shift 2 ;;
+    --yes)      assume_yes=1; shift ;;
+    --internal) internal=1; shift ;;
+    --list)     action=list; shift ;;
+    --status)   action=status; shift ;;
+    *) die "unknown argument '$1' (usage: pocknix-rollback [--internal] [--to <id>] [--yes] [--list] [--status])" ;;
   esac
 done
 
+# --list/--status on the running system stay delegated (no root needed there)
+if [ -z "${internal}" ]; then
+  case "${action}" in
+    list)   exec pocknix-snapshots list ;;
+    status) exec pocknix-snapshots status ;;
+  esac
+fi
+
 [ "$(id -u)" = 0 ] || die "needs root (or pkexec pocknix-rollback)"
-pocknix_snap_supported || die "root is not btrfs — snapshots unsupported on this install (reflash to migrate)"
-mountpoint -q "${FLASH}" || die "${FLASH} not mounted — cannot guarantee kernel/rootfs coherence"
 
-# default target: the newest snapshot
-if [ -z "${target}" ]; then
-  target="$(ls "${SNAP_DIR}" | grep -E '^[0-9]{4}$' | sort -n | tail -1 || true)"
-  [ -n "${target}" ] || die "no snapshots exist yet (they are created before each update)"
-fi
-src="${SNAP_DIR}/${target}/snapshot"
-[ -d "${src}" ] || die "snapshot '${target}' not found (pocknix-rollback --list)"
-[ "$(btrfs property get -ts "${src}" ro 2>/dev/null)" = "ro=true" ] || die "snapshot '${target}' is not read-only — refusing"
-
-if [ -f "${SNAP_DIR}/${target}/info.json" ] && [ -z "${assume_yes}" ]; then
-  created="$(jq -r '.created' "${SNAP_DIR}/${target}/info.json")"
-  created="$(date -d "${created}" +"%d-%m-%Y %H:%M" 2>/dev/null || echo "${created}")"
-  echo "Rolling back to snapshot ${target}:"
-  jq -r --arg created "${created}" \
-    '"  created : \($created)\n  undoes  : \(.targets_head | join(" "))\(if .targets_count > 8 then " (+\(.targets_count - 8) more)" else "" end)\n  kernel  : \(if .kernel_in_transaction then "was updated in that transaction (boot files will be restored)" else "unchanged" end)"' \
-    "${SNAP_DIR}/${target}/info.json"
-  echo "  kept    : /home (games/saves), /var/log, snapshots"
-  read -rp "Proceed? [y/N]: " a
-  case "${a}" in y|Y) ;; *) echo "Cancelled."; exit 0 ;; esac
-fi
-
-# single rollback at a time (mkdir is the atomic lock; ensure the tmpfs parent
-# exists first or a fresh boot misreads ENOENT as lock contention)
+# mktemp-free fixed mountpoints under /run + a mkdir lock: single instance
 mkdir -p "${RUN}"
 mkdir "${RUN}/rollback.lock" 2>/dev/null || die "another rollback is already running"
 cleanup() {
+  umount "${INT_FLASH}" 2>/dev/null || true
   umount "${TOP}" 2>/dev/null || true
-  rmdir "${TOP}" 2>/dev/null || true
+  rmdir "${INT_FLASH}" "${TOP}" 2>/dev/null || true
   rmdir "${RUN}/rollback.lock" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-mkdir -p "${TOP}"
-mount -o subvolid=5 "$(snap_root_dev)" "${TOP}"
+if [ -n "${internal}" ]; then
+  # Resolve the internal install from the board contract (same keys the installer
+  # uses); refuse when we ARE the internal install — that's the plain path.
+  [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+  [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+  disk="${POCKNIX_INTERNAL_DISK:-/dev/sda}"
+  rootlbl="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}"
+  bootlbl="${POCKNIX_BOOT_GPT_NAME:-ROCKNIX}"
+  int_root="$(lsblk -rpno NAME,PARTLABEL "${disk}" 2>/dev/null | awk -v l="${rootlbl}" '$2==l{print $1}' | head -1)"
+  int_boot="$(lsblk -rpno NAME,PARTLABEL "${disk}" 2>/dev/null | awk -v l="${bootlbl}" '$2==l{print $1}' | head -1)"
+  [ -n "${int_root}" ] || die "no internal pocknix root (PARTLABEL=${rootlbl}) on ${disk}"
+  [ -n "${int_boot}" ] || die "no internal boot partition (PARTLABEL=${bootlbl}) on ${disk}"
+  [ "$(snap_root_dev)" != "${int_root}" ] || die "this IS the internal install — run without --internal"
+
+  mkdir -p "${TOP}" "${INT_FLASH}"
+  mount -o subvolid=5 "${int_root}" "${TOP}" || die "cannot mount internal root ${int_root}"
+  SNAPS="${TOP}/@snapshots"
+  [ -d "${SNAPS}" ] || die "internal install has no snapshots (pre-btrfs install?)"
+  mount "${int_boot}" "${INT_FLASH}" || die "cannot mount internal boot ${int_boot}"
+  FLASH="${INT_FLASH}"
+  # kernel-diff reference = what the internal install would boot TODAY
+  cur_default="$(btrfs subvolume get-default "${TOP}" | sed -n 's/.* path //p')"
+  KERNEL_REF="${TOP}/${cur_default}/boot/Image"
+else
+  pocknix_snap_supported || die "root is not btrfs — snapshots unsupported on this install (reflash to migrate)"
+  mountpoint -q "${FLASH}" || die "${FLASH} not mounted — cannot guarantee kernel/rootfs coherence"
+  mkdir -p "${TOP}"
+  mount -o subvolid=5 "$(snap_root_dev)" "${TOP}"
+  SNAPS="${SNAP_DIR}"
+  KERNEL_REF=/boot/Image
+fi
+
+list_snaps() {  # table over ${SNAPS} (matches pocknix-snapshots list)
+  printf '%-6s %-17s %-4s %-8s %s\n' "ID" "CREATED" "OK" "KERNEL" "TARGETS"
+  local info
+  for info in "${SNAPS}"/[0-9][0-9][0-9][0-9]/info.json; do
+    [ -f "${info}" ] || continue
+    while IFS=$'\t' read -r id created ok kern targets; do
+      printf '%-6s %-17s %-4s %-8s %s\n' "${id}" "$(date -d "${created}" +"%d-%m-%Y %H:%M" 2>/dev/null || echo "${created}")" "${ok}" "${kern}" "${targets}"
+    done < <(jq -r '[.id, .created, (if .transaction_ok then "yes" else "no" end),
+            (if .kernel_in_transaction then "yes" else "-" end),
+            ((.targets_head | join(" ")) + (if .targets_count > 8 then " (+\(.targets_count - 8) more)" else "" end))]
+           | @tsv' "${info}")
+  done
+}
+
+case "${action}" in
+  list)   list_snaps; exit 0 ;;
+  status) echo "internal default: $(btrfs subvolume get-default "${TOP}" | sed -n 's/.* path //p')"; list_snaps; exit 0 ;;
+esac
+
+if [ -z "${target}" ]; then
+  target="$(ls "${SNAPS}" | grep -E '^[0-9]{4}$' | sort -n | tail -1 || true)"
+  [ -n "${target}" ] || die "no snapshots exist yet (they are created before each update)"
+fi
+src="${SNAPS}/${target}/snapshot"
+[ -d "${src}" ] || die "snapshot '${target}' not found (pocknix-rollback ${internal:+--internal }--list)"
+[ "$(btrfs property get -ts "${src}" ro 2>/dev/null)" = "ro=true" ] || die "snapshot '${target}' is not read-only — refusing"
+
+if [ -f "${SNAPS}/${target}/info.json" ] && [ -z "${assume_yes}" ]; then
+  created="$(jq -r '.created' "${SNAPS}/${target}/info.json")"
+  created="$(date -d "${created}" +"%d-%m-%Y %H:%M" 2>/dev/null || echo "${created}")"
+  echo "Rolling back${internal:+ the INTERNAL install} to snapshot ${target}:"
+  jq -r --arg created "${created}" \
+    '"  created : \($created)\n  undoes  : \(.targets_head | join(" "))\(if .targets_count > 8 then " (+\(.targets_count - 8) more)" else "" end)\n  kernel  : \(if .kernel_in_transaction then "was updated in that transaction (boot files will be restored)" else "unchanged" end)"' \
+    "${SNAPS}/${target}/info.json"
+  echo "  kept    : /home (games/saves), /var/log, snapshots"
+  read -rp "Proceed? [y/N]: " a
+  case "${a}" in y|Y) ;; *) echo "Cancelled."; exit 0 ;; esac
+fi
 
 ts="$(date -u +%Y%m%d-%H%M%S)"
 new="@rb-${ts}"
@@ -79,24 +136,22 @@ rm -f "${TOP}/${new}/var/lib/pacman/db.lck"
 # marker inside the new root: the booted system (QAM) can say "this was rolled back";
 # also the ConditionPathExists gate for pocknix-rollback-repair.service.
 mkdir -p "${TOP}/${new}/var/lib/pocknix"
-jq -n --arg from "${target}" --arg prev "$(snap_default_subvol)" --arg ts "$(date -u +%FT%TZ)" \
+jq -n --arg from "${target}" --arg prev "$(btrfs subvolume get-default "${TOP}" | sed -n 's/.* path //p')" --arg ts "$(date -u +%FT%TZ)" \
   '{schema:1, from_snapshot:$from, previous_default:$prev, ts:$ts}' \
   > "${TOP}/${new}/var/lib/pocknix/rollback-info.json"
 
-# Kernel coherence: the snapshot restores /usr/lib/modules, but the kernel lives on
-# the FAT (/flash), outside btrfs. If the target's kernel differs from the running
-# one, STAGE regenerated boot files from the target tree (KERNEL.new etc.) now —
-# any failure aborts here, before anything is committed. cmp is the ground truth
-# (covers rolling back across several kernel bumps, unlike the single-transaction
-# metadata flag).
+# The kernel lives on the FAT boot partition, outside btrfs: when the target's
+# kernel differs from the reference, STAGE regenerated boot files (*.new) from
+# the target tree now — any failure aborts before anything is committed. cmp is
+# ground truth: it covers rollbacks across several kernel bumps, the flag can't.
 staged=""
-if ! cmp -s /boot/Image "${TOP}/${new}/boot/Image"; then
+if ! cmp -s "${KERNEL_REF}" "${TOP}/${new}/boot/Image"; then
   regen=""
   command -v pocknix-build-bootimg >/dev/null 2>&1 && regen=pocknix-build-bootimg   # qcom-abl (sm8550)
   [ -z "${regen}" ] && command -v pocknix-update-boot >/dev/null 2>&1 && regen=pocknix-update-boot  # arm-efi (sm8250)
   [ -n "${regen}" ] || die "kernel differs but no boot-deploy script found (linux-pocknix not installed?)"
   echo "pocknix-rollback: target kernel differs — staging boot files from the snapshot (${regen})"
-  SRCROOT="${TOP}/${new}" OUT_SUFFIX=".new" "${regen}" \
+  FLASH="${FLASH}" SRCROOT="${TOP}/${new}" OUT_SUFFIX=".new" "${regen}" \
     || die "boot-file staging failed — NOTHING was committed, system unchanged"
   [ -f "${FLASH}/KERNEL.new" ] || die "staging produced no ${FLASH}/KERNEL.new — aborting before commit"
   staged=1
@@ -104,10 +159,10 @@ fi
 
 # THE COMMIT: a single atomic btrfs transaction. Crash before this line: nothing
 # changed (stray @rb-* pruned later). Crash after: the new root boots.
-btrfs subvolume set-default "$(btrfs inspect-internal rootid "${TOP}/${new}")" /
+btrfs subvolume set-default "$(btrfs inspect-internal rootid "${TOP}/${new}")" "${TOP}"
 
-# activate staged boot files (crash in this window leaves *.new for
-# pocknix-rollback-repair.service to finish on the next boot)
+# activate staged boot files (crash in this window leaves *.new for the target
+# system's pocknix-rollback-repair.service to finish on its next boot)
 if [ -n "${staged}" ]; then
   mount -o remount,rw "${FLASH}" 2>/dev/null || true
   shopt -s nullglob
@@ -117,6 +172,12 @@ if [ -n "${staged}" ]; then
   sync
 fi
 
-pocknix-snapshots prune --quiet || true
-sync
-echo "pocknix-rollback: default root is now ${new} (from snapshot ${target}) — REBOOT to complete"
+if [ -n "${internal}" ]; then
+  sync
+  echo "pocknix-rollback: internal install's default root is now ${new} (from snapshot ${target})"
+  echo "pocknix-rollback: takes effect the next time the device boots from internal storage"
+else
+  pocknix-snapshots prune --quiet || true
+  sync
+  echo "pocknix-rollback: default root is now ${new} (from snapshot ${target}) — REBOOT to complete"
+fi

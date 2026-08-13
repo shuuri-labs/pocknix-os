@@ -1,0 +1,19 @@
+# Two migrations, both rm -f (no-ops on fresh images):
+#  - the updater used to ship UNPACKAGED in /usr/local (image overlay), which
+#    wins PATH over the packaged /usr/bin copy and would shadow it forever;
+#  - pocknix-install (guarded extras installer) is gone; its state files would
+#    otherwise linger and confuse support.
+_prune_superseded() {
+  rm -f /usr/local/bin/pocknix-update \
+        /usr/share/applications/pocknix-updater.desktop \
+        /var/lib/pocknix/extra-packages \
+        /var/lib/pocknix/extra-packages.snapshot
+}
+
+post_install() {
+  _prune_superseded
+}
+
+post_upgrade() {
+  _prune_superseded
+}

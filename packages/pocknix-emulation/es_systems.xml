@@ -10,6 +10,9 @@
   is ARMSX2, see the PCSX2 note in es_find_rules.xml). Command drives the es-armsx2 big-core pin
   wrapper with pocknix-play's verified ARMSX2 flags.
 
+  psx: no bundled PS1 command names a core we ship except pcsx_rearmed, and ES-DE's
+  "DuckStation" is the standalone (no arm64 build) — ours is the libretro core it never names.
+
   gc/wii: bundled default is the RetroArch dolphin core, also not shipped (pocknix default =
   standalone Dolphin, same commands as bundled "Dolphin (Standalone)" alternative — promoted to
   the default here).
@@ -34,6 +37,17 @@
         <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
         <platform>wii</platform>
         <theme>wii</theme>
+    </system>
+    <system>
+        <name>psx</name>
+        <fullname>Sony PlayStation</fullname>
+        <path>%ROMPATH%/psx</path>
+        <extension>.bin .BIN .cbn .CBN .ccd .CCD .chd .CHD .cue .CUE .ecm .ECM .exe .EXE .img .IMG .iso .ISO .m3u .M3U .mdf .MDF .mds .MDS .minipsf .MINIPSF .pbp .PBP .psexe .PSEXE .psf .PSF .toc .TOC .z .Z .znx .ZNX .7z .7Z .zip .ZIP</extension>
+        <command label="DuckStation">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/duckstation_libretro.so %ROM%</command>
+        <command label="PCSX ReARMed">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>psx</platform>
+        <theme>psx</theme>
     </system>
     <system>
         <name>ps2</name>

@@ -1,4 +1,4 @@
-# bootaa64.efi provenance
+# bootaa64.efi + rocknix_abl provenance
 
 Vendored ROCKNIX GRUB binary, extracted verbatim from the FAT partition
 (EFI/BOOT/bootaa64.efi) of the official release image:
@@ -18,10 +18,10 @@ grub-mkimage -O arm64-efi -p /boot/grub with ROCKNIX's module list (their
 package.mk makeinstall_target), plus their patches if the autodetect cfg
 commands are wanted.
 
-Note: the RP5's factory ABL already provides the UEFI environment that
-chainloads this bootaa64.efi, so pocknix does not flash a ROCKNIX ABL on
-sm8250 (unlike sm8550's qcom-abl path). "tests against the same ABL" above
-refers to ROCKNIX validating this GRUB binary against that factory ABL.
+Note: the RP5's and Flip 2's factory ABL already provides the UEFI environment
+that chainloads this bootaa64.efi. "tests against the same ABL" above refers to
+ROCKNIX validating this GRUB binary against that factory ABL. Nothing on sm8250
+flashes an ABL automatically — see the kit section below.
 
 grubenv is the pristine environment block from the same image. grubenv on
 /flash is user state (saved menu choice) — never overwritten on upgrade.
@@ -31,3 +31,30 @@ grub.cfg.rocknix-reference is the GENERATED grub.cfg from the same image
 kept as the reference for porting the multi-board menu/autodetect when a
 second sm8250 board lands. Our shipped grub.cfg is the pocknix-authored
 static one (root=PARTLABEL, single rp5 entry, timeout 0).
+
+
+# rocknix_abl kit (SM8250)
+
+abl_signed-SM8250.elf is NOT committed here — the PKGBUILD fetches it from the
+same pinned ROCKNIX ABL release the sm8550 package uses:
+
+  release:  https://github.com/ROCKNIX/abl/releases/tag/v1.1.7
+  asset:    rocknix-abl-v1.1.7.tar.gz
+  tarball sha512: fa1d213bec97661942b8083be1f2eb6b65cc200b4f3f76dd84261ba92a01ac92
+                  61ed6834350f2f647a5ed82fcabadf5011b9ba6769f471abeaf06210ae9221c1
+  abl_signed-SM8250.elf sha256 (release's own sidecar, re-checked in prepare()):
+                  a96f2677200b5b427983529c26eb496b738930a4100e7faa8d427b250d208ccb
+
+The four kit scripts are the same verbatim ROCKNIX sources the sm8550 package
+vendors, with %DEVICE% -> SM8250 (their package.mk substitution). Keep the two
+packages' copies identical; diff both against the ROCKNIX tree when advancing
+the sync pin.
+
+Why ship it when RP5/Flip 2 do not need it: SM8250 boards exist whose factory
+ABL has no usable UEFI (ROCKNIX added this kit for the Ayn Thor Lite), and it
+does not change our boot contract - the ROCKNIX ABL keeps an EFI boot path and
+ROCKNIX's own SM8250 target is arm-efi while shipping it, so GRUB still
+chainloads. On an RP5 it buys the ROCKNIX boot menu, not a boot fix.
+
+Nothing flashes it automatically. The in-OS path is pocknix-update-abl; the
+kit's Android scripts remain the path for a device that cannot boot pocknix.

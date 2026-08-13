@@ -5,10 +5,24 @@ _drop_stale_flathub_wants() {
   rm -f /etc/systemd/system/multi-user.target.wants/pocknix-flathub.service
 }
 
+# The hook only fires when fontconfig is next touched; prune here so this upgrade repairs the device.
+_prune_fontcache() {
+  /usr/bin/pocknix-fontcache-prune 2>/dev/null || true
+}
+
+# Same reason: the hook only fires on the next plasma-mobile transaction, so patch now.
+_apply_panel_touchfix() {
+  /usr/bin/pocknix-panel-touchfix 2>/dev/null || true
+}
+
 post_install() {
   _drop_stale_flathub_wants
+  _prune_fontcache
+  _apply_panel_touchfix
 }
 
 post_upgrade() {
   _drop_stale_flathub_wants
+  _prune_fontcache
+  _apply_panel_touchfix
 }

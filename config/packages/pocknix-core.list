@@ -22,3 +22,7 @@ pocknix-turnip-arm     # pinned aarch64 Turnip builds (ARM Proton side of the sa
 pocknix-desktop        # Plasma Mobile session + game<->desktop switch
 pocknix-decky          # Decky loader + Pocknix Control QAM plugin
 pocknix-snapshots      # pre-update btrfs snapshots + rollback (set-default) + QAM updater backend
+pocknix-base           # locked<->rolling base mode switch + the desktop updater
+pocknix-base-lock      # the frozen base's manifest; its version IS the base id
+pocknix-lock-migrate   # rolling->locked migration (no-op on fresh locked images)
+pocknix-tools          # maintenance app: rollback + base mode switch + installer GUI
