@@ -1,0 +1,8 @@
+# Enable on upgrade too: without the mount, x86 Proton does not run at all.
+_guestos() {
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl enable --now pocknix-guestos.service >/dev/null 2>&1 || true
+}
+post_install() { _guestos; }
+post_upgrade() { _guestos; }
+pre_remove() { systemctl disable --now pocknix-guestos.service >/dev/null 2>&1 || true; }

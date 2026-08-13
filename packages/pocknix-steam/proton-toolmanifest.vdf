@@ -1,10 +1,6 @@
-// pocknix-steam: replacement toolmanifest for Valve's ARM Proton builds ("Proton 11.0 (ARM64)",
-// "Proton Experimental (ARM64)"). Identical to Valve's EXCEPT it drops `require_tool_appid` — Valve's
-// value (a SteamLinuxRuntime arm64 pressure-vessel runtime) makes Proton run INSIDE a container that
-// Steam can't set up on pocknix (game launch fails at CreatingProcess / AppError_51 before Proton
-// runs). Without it, Proton runs directly on the host. Mirrors ROCKNIX's
-// /usr/share/steam/toolmanifest.vdf. The launcher re-copies this over Valve's every start, since
-// Steam restores its own on a Proton update.
+// Replacement toolmanifest for Valve's ARM Protons, and the canonical reason every pocknix Proton
+// drops `require_tool_appid`: host-direct is the validated path. pocknix-proton-prep re-copies this,
+// since Steam restores its own on every update.
 "manifest"
 {
   "version" "2"

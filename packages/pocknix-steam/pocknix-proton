@@ -6,4 +6,7 @@
 here="$(dirname "$0")"
 target="${here}/proton"
 [ -e "${target}" ] || target="${here}/_v2-entry-point"
-exec /usr/lib/pocknix/pocknix-proton-wrapper "${target}" "$@"
+# A container has its own /usr, so the wrapper is unreachable there; launching untweaked beats failing.
+WRAPPER=/usr/lib/pocknix/pocknix-proton-wrapper
+[ -x "${WRAPPER}" ] || exec "${target}" "$@"
+exec "${WRAPPER}" "${target}" "$@"

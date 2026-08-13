@@ -4,7 +4,7 @@
 # Steam is experimental (Valve publicbeta linuxarm64).
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=49
+pkgrel=53
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -40,13 +40,15 @@ license=('GPL2')
 depends=('gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
          'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
          'pocknix-steamos-shim' 'xorg-server-xvfb')
+install=pocknix-steam.install
 source=('pocknix-steam-install' 'pocknix-steam' 'steam' 'steam.desktop'
         'steam-256.png' 'steam-512.png' 'registry.vdf'
         'proton-toolmanifest.vdf'
         'pocknix-proton-prep' 'pocknix-proton-prep.service'
-        'pocknix-proton' 'pocknix-proton-wrapper' 'fex-profiles.json')
+        'pocknix-proton' 'pocknix-proton-wrapper' 'fex-profiles.json'
+        'pocknix-guestos-mount' 'pocknix-guestos.service' 'graphics_provider.json')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-steam-install" "${pkgdir}/usr/bin/pocknix-steam-install"
@@ -66,12 +68,10 @@ package() {
   # tries to update SteamOS (which we aren't) and dead-ends with "Updater apply error: 2".
   install -Dm644 "${srcdir}/registry.vdf"          "${pkgdir}/usr/share/pocknix-steam/registry.vdf"
   # ARM-Proton compat-tool resource: a require_tool_appid-free toolmanifest, shared by every ARM
-  # Proton build. pocknix-proton-prep applies it and generates each per-tool compatibilitytool.vdf.
+  # Proton build. pocknix-proton-prep installs it over Valve's in the downloaded app.
   install -Dm644 "${srcdir}/proton-toolmanifest.vdf"       "${pkgdir}/usr/share/pocknix-steam/proton-toolmanifest.vdf"
-  # Registers + keeps the ARM Proton compat tools usable, decoupled from Steam's own download/
-  # updates, so the first in-Steam download needs NO reboot. pocknix-steam runs it at game-session
-  # start; the user service (--watch) re-applies when a Proton is downloaded/updated. Enabled globally
-  # in build-sd-image.sh. See pocknix-proton-prep for the full rationale.
+  # Keeps the ARM Proton compat tools usable, decoupled from Steam's own downloads/updates.
+  # Run at session start; --watch re-applies mid-session. Enabled globally in build-sd-image.sh.
   install -Dm755 "${srcdir}/pocknix-proton-prep"           "${pkgdir}/usr/bin/pocknix-proton-prep"
   install -Dm644 "${srcdir}/pocknix-proton-prep.service"   "${pkgdir}/usr/lib/systemd/user/pocknix-proton-prep.service"
   # Per-game FEX profiles (Pocknix Control plugin writes /etc/pocknix/game-tweaks.json; the
@@ -80,4 +80,8 @@ package() {
   install -Dm755 "${srcdir}/pocknix-proton-wrapper"        "${pkgdir}/usr/lib/pocknix/pocknix-proton-wrapper"
   install -Dm755 "${srcdir}/pocknix-proton"                "${pkgdir}/usr/share/pocknix-steam/pocknix-proton"
   install -Dm644 "${srcdir}/fex-profiles.json"             "${pkgdir}/usr/share/pocknix/fex-profiles.json"
+  # Serves our x86 rootfs at the path Steam's FEX compat tool demands; see pocknix-guestos-mount.
+  install -Dm755 "${srcdir}/pocknix-guestos-mount"         "${pkgdir}/usr/lib/pocknix/pocknix-guestos-mount"
+  install -Dm644 "${srcdir}/pocknix-guestos.service"       "${pkgdir}/usr/lib/systemd/system/pocknix-guestos.service"
+  install -Dm644 "${srcdir}/graphics_provider.json"        "${pkgdir}/usr/share/pocknix-steam/graphics_provider.json"
 }

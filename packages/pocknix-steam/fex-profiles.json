@@ -13,7 +13,8 @@
         "VectorTSOEnabled": "0",
         "MemcpySetTSOEnabled": "0",
         "HalfBarrierTSOEnabled": "1"
-      }
+      },
+      "steam": "TSOEnabled:1,Multiblock:1,ThunksDB_GL:0,ThunksDB_Vulkan:0"
     },
     "fast": {
       "label": "Fast",
@@ -24,18 +25,8 @@
         "VectorTSOEnabled": "0",
         "MemcpySetTSOEnabled": "0",
         "HalfBarrierTSOEnabled": "0"
-      }
-    },
-    "compatible": {
-      "label": "Compatible",
-      "config": {
-        "TSOEnabled": "1",
-        "X87ReducedPrecision": "0",
-        "Multiblock": "0",
-        "VectorTSOEnabled": "1",
-        "MemcpySetTSOEnabled": "1",
-        "HalfBarrierTSOEnabled": "1"
-      }
+      },
+      "steam": "TSOEnabled:0,Multiblock:1,ThunksDB_GL:0,ThunksDB_Vulkan:0"
     }
   }
 }

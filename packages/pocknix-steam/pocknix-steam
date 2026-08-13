@@ -37,9 +37,7 @@ touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 mkdir -p "${STEAM}/package"
 echo steamdeck_publicbeta > "${STEAM}/package/beta"
 
-# Must run BEFORE gamescope: Steam reads compatibilitytools.d only at startup, so the ARM Proton
-# registration has to exist by then (written unconditionally, even before Proton is downloaded).
-# The --watch service fills in dist + toolmanifest later, so a mid-session download needs no reboot.
+# Must run BEFORE gamescope: Steam reads compatibilitytools.d only at startup.
 /usr/bin/pocknix-proton-prep
 
 # Session SWITCH self-heal: steamos-session-select SIGTERMs gamescope, but the Steam client
