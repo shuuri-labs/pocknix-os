@@ -18,12 +18,14 @@
 #                                matches devices/sm8550/profile.conf
 pkgname=pocknix-bsp-sm8550
 pkgver=0.2.0
-pkgrel=3
+pkgrel=5
 pkgdesc="pocknix board support: SM8550 family (RP6, Odin 2 family) — runtime board dispatch, input map, suspend quirks, audio UCM"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-depends=('pocknix-bsp-common')
+# pocknix-firmware-sm8550 rides this dep edge to the fleet: -Syu never installs
+# a new package name without one
+depends=('pocknix-bsp-common' 'pocknix-firmware-sm8550')
 # Exactly one device BSP may be installed (wrong-device guard for a shared repo).
 # 'replaces' migrates installs of the retired per-device BSPs (and the ancient
 # unified 'pocknix-bsp', carried over from the rp6 lineage).

@@ -1,0 +1,28 @@
+# ROCKNIX vendor blobs whose bare paths ALARM's linux-firmware owns (./paths):
+# any linux-firmware transaction reverts those to stock, killing sm8550 wifi at
+# the next firmware reload. /usr/lib/firmware/updates/ wins the kernel's search
+# and no ALARM package touches it; the overlay rest stays with build-image's rsync.
+pkgname=pocknix-firmware-sm8550
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="SM8550 family vendor firmware overrides (ath12k wifi + VPU), immune to linux-firmware updates"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('custom:qcom-firmware')
+# firmware blobs must ship byte-identical; some parse as ELF and strip would alter them
+options=('!strip')
+source=('paths')
+sha256sums=('SKIP')
+
+package() {
+  local staged="${startdir}/staged"   # populated by scripts/build-packages.sh from vendor/
+  local p
+  while IFS= read -r p; do
+    [ -n "${p}" ] || continue
+    if [ ! -f "${staged}/${p}" ]; then
+      echo "${pkgname}: ${p} not staged — build via 'make packages' (vendor/ lives on the build host)." >&2
+      return 1
+    fi
+    install -Dm644 "${staged}/${p}" "${pkgdir}/usr/lib/firmware/updates/${p}"
+  done < "${srcdir}/paths"
+}
