@@ -48,6 +48,22 @@ converge() {
   out="$(pacman -Syuu --noconfirm 2>&1)" || rc=$?
   printf '%s\n' "${out}"
   if [ "${rc}" -ne 0 ]; then
+    # Foreign compat splits (ALARM's mbedtls3) own the very files the base downgrade
+    # restores, and the downgrade orphans them: -Rdd exactly those and retry once,
+    # the same transaction restores the sonames. Repo-owned conflicts stay fatal.
+    local owners
+    owners="$(printf '%s\n' "${out}" \
+      | sed -n 's/.*exists in filesystem (owned by \([^)]*\)).*/\1/p' | LC_ALL=C sort -u \
+      | LC_ALL=C comm -23 - <(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u))"
+    if [ -n "${owners}" ]; then
+      echo "pocknix: removing foreign packages superseded by the base:" ${owners}
+      # shellcheck disable=SC2086
+      pacman -Rdd --noconfirm ${owners} && { rc=0
+        out="$(pacman -Syuu --noconfirm 2>&1)" || rc=$?
+        printf '%s\n' "${out}"; }
+    fi
+  fi
+  if [ "${rc}" -ne 0 ]; then
     printf '%s\n' "${out}" | sed -n 's/.*required by \([^ ]*\).*/\1/p' | sort -u > "${BLOCKED}"
     [ -s "${BLOCKED}" ] || rm -f "${BLOCKED}"
     echo "pocknix: convergence refused — an installed package pins a library newer" >&2
