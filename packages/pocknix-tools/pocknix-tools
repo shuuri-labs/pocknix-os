@@ -100,6 +100,30 @@ do_rollback() {  # $1: "" | --internal
   fi
 }
 
+ssh_state() { pocknix-ssh status 2>/dev/null | sed -n 's/^state=//p'; }
+
+ssh_addrs() { ip -4 -o addr show scope global 2>/dev/null | awk '{split($4,a,"/"); printf "%s ", a[1]}'; }
+
+do_ssh() {
+  local out rc=0 addrs
+  if [ "$(ssh_state)" = on ]; then
+    out="$(pkexec /usr/bin/pocknix-ssh off 2>&1)" || rc=$?
+    [ "${rc}" -eq 0 ] || { gui_err "Could not turn remote access off:\n\n$(printf '%s' "${out}" | tail -3)"; return 0; }
+    kdialog --title "$TITLE" --msgbox "Remote access is off. The device no longer accepts SSH logins." || true
+    return 0
+  fi
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Allow SSH logins to this device?\n\nAnyone on the same network can then log in with an account password, and Pocknix ships a well-known default one. If you have not changed it, do that first: open Konsole and run passwd (then sudo passwd root).\n\nIt stays on, across reboots, until you turn it off here." \
+    || return 0
+  out="$(pkexec /usr/bin/pocknix-ssh on 2>&1)" || rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    gui_err "Could not turn remote access on:\n\n$(printf '%s' "${out}" | tail -3)"
+    return 0
+  fi
+  addrs="$(ssh_addrs)"
+  kdialog --title "$TITLE" --msgbox "Remote access is on.\n\nLog in as $(id -un)${addrs:+ at ${addrs% }}.\nIt stays on until you turn it off here." || true
+}
+
 # terminal on purpose: pocknix-base demands a typed ROLL and streams the pacman run
 konsole_run() { konsole -e /bin/bash -c "pkexec $1; echo; read -rp 'Press Enter to close... '"; }
 
@@ -147,6 +171,8 @@ while :; do
   esac
   items+=(installer "Install or remove internal Pocknix...")
   abl_label="$(abl_item_label "$(abl_status)")" && items+=(abl "${abl_label}")
+  if [ "$(ssh_state)" = on ]; then items+=(ssh "Remote access (SSH) is ON - turn it off")
+  else items+=(ssh "Remote access (SSH) is off - turn it on..."); fi
   items+=(status "Show system status")
   choice="$(kdialog --title "$TITLE" --menu "Pocknix maintenance tools\nMode: ${mode^^}" "${items[@]}")" || exit 0
   case "${choice}" in
@@ -155,6 +181,7 @@ while :; do
     mode)              do_mode ;;
     installer)         /usr/bin/pocknix-installer-gui || true ;;
     abl)               do_abl ;;
+    ssh)               do_ssh ;;
     status)            do_status ;;
     *) exit 0 ;;
   esac

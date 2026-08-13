@@ -2,8 +2,8 @@
 # Pocknix Rollback and Installer shortcuts; the CLIs it fronts stay in their own packages.
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=7
-pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install"
+pkgrel=8
+pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH toggle"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('MIT')
@@ -12,12 +12,16 @@ depends=('pocknix-snapshots' 'pocknix-base' 'kdialog')
 replaces=('pocknix-installer')
 conflicts=('pocknix-installer')
 install=pocknix-tools.install
-source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui')
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui'
+        'pocknix-ssh' '53-pocknix-ssh.rules')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-tools" "${pkgdir}/usr/bin/pocknix-tools"
   install -Dm755 "${srcdir}/pocknix-installer-gui" "${pkgdir}/usr/bin/pocknix-installer-gui"
+  install -Dm755 "${srcdir}/pocknix-ssh" "${pkgdir}/usr/bin/pocknix-ssh"
   install -Dm644 "${srcdir}/pocknix-tools.desktop" \
     "${pkgdir}/usr/share/applications/pocknix-tools.desktop"
+  install -Dm644 "${srcdir}/53-pocknix-ssh.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/53-pocknix-ssh.rules"
 }

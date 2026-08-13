@@ -97,7 +97,7 @@ populate_qcom_abl_boot() { copy_abl_kit "$1"; }
 
 firstboot_config() {
   local root="$1"
-  log "configuring first boot (root login, fstab, ssh, network, hostname)"
+  log "configuring first boot (root login, fstab, sshd_config, network, hostname)"
   echo "root:${SD_ROOT_PASSWORD}" | chroot "${root}" chpasswd
   cat > "${root}/etc/fstab" <<EOF
 # pocknix-os test image
@@ -263,7 +263,8 @@ EOF
   fi
 
   # enable services for interaction/verification with no keyboard:
-  #   sshd + iwd (wifi) + systemd-resolved (DNS), diag (boot report).
+  #   iwd (wifi) + systemd-resolved (DNS), diag (boot report).
+  #   sshd is deliberately NOT here — see the SD_SSH block below.
   #   seatd: gamescope's DRM backend needs a seat (no logind seat over SSH).
   #   inputplumber: gamepad -> Steam Input (DualSense) mapping.
   #   NetworkManager (front-end Steam talks to) + iwd (its wifi backend) BOTH run now.
@@ -281,11 +282,17 @@ EOF
   #   is only the raw-drive/format list.) The UDisks2 polkit grant is in 50-pocknix-deck.rules.
   #   fstrim.timer (weekly): root ext4 is mounted without `discard`, so nothing tells the FTL which
   #   blocks are free and write amplification climbs for the device's life. Arch doesn't preset it.
-  chroot "${root}" systemctl enable sshd iwd NetworkManager systemd-resolved seatd inputplumber \
+  chroot "${root}" systemctl enable iwd NetworkManager systemd-resolved seatd inputplumber \
         bluetooth upower udisks2 fstrim.timer \
         pocknix-diag.service pocknix-expand-root.service \
         pocknix-lavd.service pocknix-gamescope-rt.service \
         >/dev/null 2>&1 || true
+  # SSH ships OFF: the image bakes in a well-known password, so a listening sshd
+  # is a standing exposure on any network the device joins.
+  if [ "${SD_SSH:-off}" = on ]; then
+    warn "SD_SSH=on — this image accepts SSH logins with the baked-in password"
+    chroot "${root}" systemctl enable sshd >/dev/null 2>&1 || true
+  fi
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
   # WirePlumber applies the device UCM (shipped by the device BSP) automatically.
   # pocknix-proton-prep: watches for Steam downloading/updating the ARM Protons and keeps their
@@ -398,6 +405,7 @@ main() {
   log "Flash it (DOUBLE-CHECK the device with lsblk first!):"
   echo "    sudo dd if=${OUT} of=/dev/sdX bs=4M conv=fsync status=progress"
   log "Then insert into the device (${DEVICE_PRETTY:-${DEVICE}}) and boot. root password: ${SD_ROOT_PASSWORD}"
+  [ "${SD_SSH:-off}" = on ] || log "SSH is OFF in this image (build with SD_SSH=on, or turn it on in Pocknix Tools)."
   log "Internal ROCKNIX is untouched; remove the SD to boot it again."
 }
 main "$@"
