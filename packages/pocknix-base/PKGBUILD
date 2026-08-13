@@ -2,7 +2,7 @@
 # switch and the desktop updater.
 pkgname=pocknix-base
 pkgver=0.2.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Locked/rolling base mode switch and desktop updater for pocknix"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

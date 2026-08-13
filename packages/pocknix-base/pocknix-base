@@ -17,6 +17,8 @@ set -euo pipefail
 CONF=/etc/pacman.conf
 FLAG=/etc/pocknix/rolling-mode
 MIGRATE=/usr/lib/pocknix/pocknix-lock-migrate
+PENDING=/var/lib/pocknix/lock-migrate-pending
+BLOCKED=/var/lib/pocknix/lock-converge-blocked
 
 die() { printf 'pocknix-base: %s\n' "$*" >&2; exit 1; }
 
@@ -49,10 +51,10 @@ status() {
     unknown) echo "mode          : UNKNOWN (neither [pocknix-base] nor [core] in ${CONF})" ;;
   esac
   echo "repos         : $(grep -o '^\[[^]]*\]' "${CONF}" | tr -d '[]' | grep -v '^options$' | paste -sd' ' -)"
-  if [ -f /var/lib/pocknix/lock-converge-blocked ]; then
-    echo "base update   : BLOCKED by $(paste -sd' ' /var/lib/pocknix/lock-converge-blocked)"
+  if [ -f "${BLOCKED}" ]; then
+    echo "base update   : BLOCKED by $(paste -sd' ' "${BLOCKED}")"
     echo "                remove it (pacman -Rs <name>) then: pocknix-base locked"
-  elif [ -f /var/lib/pocknix/lock-migrate-pending ]; then
+  elif [ -f "${PENDING}" ]; then
     echo "base update   : pending (runs on the next connect; systemctl start pocknix-lock-converge)"
   fi
   n="$(foreign | grep -c . || true)"
@@ -114,8 +116,17 @@ EOF
 
   locked)
     [ "$(id -u)" -eq 0 ] || die "must run as root (sudo pocknix-base locked)"
-    [ "$(mode)" = rolling ] || die "device is not in rolling mode (current: $(mode))"
     [ -x "${MIGRATE}" ] || die "${MIGRATE} missing (pocknix-lock-migrate not installed?)"
+    # A converge refused by a blocking package leaves the device LOCKED with the
+    # migration still armed, so the documented "remove it, re-run" must resume the
+    # converge here rather than fail the rolling-mode check.
+    if [ "$(mode)" = locked ] && [ -f "${PENDING}" ]; then
+      echo "The base update is still pending on this device; resuming the converge."
+      echo
+      "${MIGRATE}" converge
+      exit 0
+    fi
+    [ "$(mode)" = rolling ] || die "device is not in rolling mode (current: $(mode))"
     echo "Returning to the locked base: every base package converges (down) to the"
     echo "snapshot. Software installed while rolling may block this if it pins newer"
     echo "libraries — the converge names it and this command can be re-run after"
