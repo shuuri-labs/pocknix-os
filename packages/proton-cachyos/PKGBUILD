@@ -10,9 +10,7 @@
 # whatever we currently ship, so the date would just go stale in the UI.
 #
 # Two fixes applied over the raw tarball (both proven on the Valve ARM tool + armada):
-#   * toolmanifest.vdf: ours, WITHOUT require_tool_appid — the tarball's manifest requires a
-#     SteamLinuxRuntime pressure-vessel container that can't be set up here, and the failure
-#     is SILENT (Steam just runs a different Proton). See toolmanifest.vdf.
+#   * toolmanifest.vdf: ours, WITHOUT require_tool_appid (host-direct; see toolmanifest.vdf).
 #   * commandline goes through the pocknix-proton shim so per-game FEX profiles from
 #     Pocknix Control apply (wrapper = /usr/lib/pocknix/pocknix-proton-wrapper, pocknix-steam).
 #
@@ -28,7 +26,7 @@ _srctag=11.0-20260703
 _build=slr
 _major=${_srctag%%.*}
 pkgver=${_srctag//-/.}
-pkgrel=2
+pkgrel=3
 pkgdesc="CachyOS Proton (official ARM64 build) as a system Steam compatibility tool"
 arch=('aarch64')
 url="https://github.com/CachyOS/proton-cachyos"

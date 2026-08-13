@@ -1,8 +1,5 @@
 // proton-cachyos: replacement toolmanifest, installed OVER the tarball's own by the PKGBUILD.
-// Same shape as pocknix-steam's Proton-11-ARM manifest: drops `require_tool_appid` — the
-// tarball's manifest requires a SteamLinuxRuntime pressure-vessel container Steam can't set
-// up on pocknix, and the failure is SILENT (Steam quietly launches a different Proton
-// instead). Without it, Proton runs directly on the host.
+// Drops require_tool_appid (host-direct); rationale in pocknix-steam/proton-toolmanifest.vdf.
 "manifest"
 {
   "version" "2"
