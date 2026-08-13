@@ -1,10 +1,8 @@
-# pocknix-tools — the desktop maintenance app: snapshot rollback (running system
-# and the internal install from SD), the locked/rolling mode switch, and the
-# internal-storage installer GUI. Folds in the old standalone Pocknix Rollback
-# and Pocknix Installer shortcuts; the CLIs it fronts stay in their own packages.
+# pocknix-tools — the desktop maintenance app. Folds in the old standalone
+# Pocknix Rollback and Installer shortcuts; the CLIs it fronts stay in their own packages.
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=1
+pkgrel=7
 pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

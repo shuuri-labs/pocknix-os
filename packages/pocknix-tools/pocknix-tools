@@ -1,9 +1,7 @@
 #!/bin/bash
-# pocknix-tools — Plasma front-end for system maintenance (kdialog): snapshot
-# rollback for the running system AND for the internal install when booted from
-# SD, the locked/rolling base mode switch, and the internal-storage installer.
-# Every privileged step goes through pkexec; the rules ship with the package that
-# owns each binary (pocknix-snapshots, pocknix-base).
+# pocknix-tools — kdialog front-end for the maintenance CLIs. Every privileged
+# step goes through pkexec; the polkit rules ship with the package that owns
+# each binary (pocknix-snapshots, pocknix-base, pocknix-bsp-common).
 set -euo pipefail
 
 TITLE="Pocknix Tools"
@@ -20,8 +18,7 @@ base_mode() {
   else echo unknown; fi
 }
 
-# Internal-rollback item is offered only when we are NOT booted from the internal
-# root and a pocknix root partition exists there (deep checks stay in the CLI).
+# shallow gate for the menu item only — the deep checks stay in the CLI
 internal_candidate() {
   local disk="${POCKNIX_INTERNAL_DISK:-/dev/sda}" lbl="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}" part
   part="$(lsblk -rpno NAME,PARTLABEL "${disk}" 2>/dev/null | awk -v l="${lbl}" '$2==l{print $1}' | head -1)"
@@ -29,8 +26,44 @@ internal_candidate() {
   [ "$(findmnt -no SOURCE / | sed 's/\[.*//')" != "${part}" ]
 }
 
-# kdialog --menu from the CLI's snapshot table; newest preselected. $1: "" | --internal
-pick_snapshot() {
+abl_status() { pkexec /usr/bin/pocknix-update-abl --status 2>/dev/null || true; }
+
+abl_item_label() {
+  local st="$1" state ver
+  state="$(printf '%s\n' "${st}" | sed -n 's/^state=//p')"
+  ver="$(printf '%s\n' "${st}" | sed -n 's/^shipped_version=//p')"
+  case "${state}" in
+    differs|mixed)  echo "Bootloader: install or update to ${ver}..." ;;
+    uptodate)       echo "Bootloader is up to date (${ver})" ;;
+    gptrepair)      echo "Bootloader: repair partition table, then install ${ver}..." ;;
+    *)              return 1 ;;
+  esac
+}
+
+# the CLI keeps its own typed FLASH/REPAIR confirmation; never wire this into a hook
+do_abl() {
+  local st state ver
+  st="$(abl_status)"
+  state="$(printf '%s\n' "${st}" | sed -n 's/^state=//p')"
+  ver="$(printf '%s\n' "${st}" | sed -n 's/^shipped_version=//p')"
+  if [ "${state}" = uptodate ]; then
+    kdialog --title "$TITLE" --msgbox "The bootloader already matches the version this Pocknix ships.\n\nNothing to do." || true
+    return 0
+  fi
+  if [ "${state}" = gptrepair ]; then
+    kdialog --title "$TITLE" --warningcontinuecancel \
+      "This device's partition table is damaged and must be repaired before the bootloader can be installed.\n\nMany Retroid units ship this way. Only a single 4 KB header is rewritten, from this disk's own backup copy; no partition contents are touched and the original is kept.\n\nAfterwards the bootloader (ABL) ${ver} is installed, which rewrites both bootloader slots.\n\nKeep the device plugged in. You will confirm each step in a terminal." \
+      || return 0
+    konsole_run "/usr/bin/pocknix-update-abl"
+    return 0
+  fi
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Replace the device bootloader (ABL) with the ROCKNIX ${ver} build Pocknix ships?\n\nThis rewrites both bootloader slots on internal storage. If it is interrupted the device will not boot and needs a PC to recover.\n\nKeep it plugged in. The current bootloader is backed up to the boot partition first, and each slot is verified after writing.\n\nYou will be asked to type FLASH in a terminal to confirm." \
+    || return 0
+  konsole_run "/usr/bin/pocknix-update-abl"
+}
+
+pick_snapshot() {  # $1: "" | --internal; newest preselected
   local flag="$1" rows args=() id
   rows="$(pkexec /usr/bin/pocknix-rollback ${flag} --list 2>/dev/null | tail -n +2)" || rows=""
   [ -n "${rows}" ] || { gui_err "No snapshots found${flag:+ on the internal install}.\n\nSnapshots are taken automatically before every update."; return 1; }
@@ -57,16 +90,17 @@ do_rollback() {  # $1: "" | --internal
     gui_err "Rollback failed — nothing was changed:\n\n$(printf '%s' "${out}" | tail -4)"
     return 0
   fi
+  # set -euo pipefail: "Later" and a dismissed msgbox are answers, not failures —
+  # unguarded they would take the whole app down on a successful rollback.
   if [ -n "${flag}" ]; then
-    kdialog --title "$TITLE" --msgbox "Internal install rolled back to snapshot ${id}.\nIt boots into that state next time you start from internal storage."
-  else
-    kdialog --title "$TITLE" --yes-label "Reboot now" --no-label "Later" \
-      --yesno "Rolled back to snapshot ${id}.\nA reboot completes it." && systemctl reboot
+    kdialog --title "$TITLE" --msgbox "Internal install rolled back to snapshot ${id}.\nIt boots into that state next time you start from internal storage." || true
+  elif kdialog --title "$TITLE" --yes-label "Reboot now" --no-label "Later" \
+         --yesno "Rolled back to snapshot ${id}.\nA reboot completes it."; then
+    systemctl reboot
   fi
 }
 
-# The mode switch keeps its terminal UX on purpose: pocknix-base itself demands a
-# typed ROLL and streams the full pacman run — a GUI busy-bar would hide both.
+# terminal on purpose: pocknix-base demands a typed ROLL and streams the pacman run
 konsole_run() { konsole -e /bin/bash -c "pkexec $1; echo; read -rp 'Press Enter to close... '"; }
 
 do_mode() {
@@ -85,10 +119,9 @@ do_mode() {
   esac
 }
 
-# kdialog rich text cannot do real tables: <table> markup gets mangled, tags
-# inside a <pre> desync the parse, and inline text right before a <pre> is glued
-# to it and elided — so the CLI's printf columns inside one plain <pre> ARE the
-# table, with the heading inside it and nothing inline before it.
+# kdialog rich text mangles <table>, desyncs on tags inside a <pre>, and glues
+# inline text preceding a <pre> — so the CLI's printf columns inside one plain
+# <pre> ARE the table, heading included, with nothing inline before it.
 do_status() {
   local list
   list="$(pkexec /usr/bin/pocknix-rollback --list 2>/dev/null)" || list=""
@@ -101,7 +134,7 @@ do_status() {
     | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' \
     | sed 's/^\([A-Za-z][^:]*\):/<b>\1<\/b>:/' \
     | fold -s -w 96 | sed 's/$/<br>/')"
-  kdialog --title "$TITLE" --msgbox "<html>${status}<pre>${list}</pre></html>"
+  kdialog --title "$TITLE" --msgbox "<html>${status}<pre>${list}</pre></html>" || true
 }
 
 while :; do
@@ -113,6 +146,7 @@ while :; do
     rolling) items+=(mode "Return to locked mode (recommended)...") ;;
   esac
   items+=(installer "Install or remove internal Pocknix...")
+  abl_label="$(abl_item_label "$(abl_status)")" && items+=(abl "${abl_label}")
   items+=(status "Show system status")
   choice="$(kdialog --title "$TITLE" --menu "Pocknix maintenance tools\nMode: ${mode^^}" "${items[@]}")" || exit 0
   case "${choice}" in
@@ -120,6 +154,7 @@ while :; do
     rollback-internal) do_rollback --internal ;;
     mode)              do_mode ;;
     installer)         /usr/bin/pocknix-installer-gui || true ;;
+    abl)               do_abl ;;
     status)            do_status ;;
     *) exit 0 ;;
   esac

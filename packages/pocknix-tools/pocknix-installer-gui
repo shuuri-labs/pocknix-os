@@ -1,14 +1,8 @@
 #!/bin/bash
-# pocknix-installer-gui — Plasma front-end for pocknix-install-internal / pocknix-uninstall-internal
-# (the armada-installer `gui` flow, ported to kdialog — the KDE stack is already on the image, so no
-# GTK/zenity pull; the busy dialog is a kdialog progressbar driven indeterminate over D-Bus).
-#
-# Launched by pocknix-installer.desktop as the normal session user; every privileged step goes
-# through pkexec, authorized for the wheel group with no prompt in 50-pocknix-deck.rules (same
-# pattern as the SD-format helper). Branches on where we're booted from:
-#   SD boot, nothing installed   -> guided install: Android-size picker -> confirm -> busy -> poweroff
-#   SD boot, pocknix installed   -> reinstall / re-enable internal boot / remove & restore Android
-#   internal boot                -> instructions for the ROCKNIX ABL menu (Vol- boot)
+# pocknix-installer-gui — kdialog front-end for pocknix-install-internal /
+# pocknix-uninstall-internal (kdialog because the KDE stack is already on the
+# image — no GTK/zenity pull). Runs as the session user; every privileged step
+# goes through pkexec, wheel-authorized without a prompt in 50-pocknix-deck.rules.
 set -euo pipefail
 
 TITLE="Pocknix Installer"
@@ -79,7 +73,7 @@ install_flow() {
   run_busy "Installing Pocknix to internal storage — do not power off…" \
       "$INSTALL_CLI" --yes --userdata-gib "$ud" \
     || gui_die "Install failed (details in ${LOG}).<br/><br/>If internal storage was modified, do NOT boot it — re-run this installer from the SD card to finish."
-  offer_poweroff "<b>Install complete.</b><br/><br/>Power off, remove the SD card, then power on — Pocknix boots from internal storage."
+  offer_poweroff "<b>Install complete.</b><br/><br/>Power off and remove the SD card, then boot holding <b>Volume&nbsp;-</b> to open the ROCKNIX boot menu and set <b>Switch boot source</b> to <b>Internal</b> — Pocknix then boots from internal storage."
 }
 
 remove_flow() {
@@ -128,10 +122,9 @@ manage_flow() {
 }
 
 internal_boot_flow() {
-  # Booted from the internal install: the disk under / can't be repartitioned from
-  # here. The supported flow (both SoCs ship the ROCKNIX ABL) is the bootloader
-  # menu, so this is instructions only.
-  offer_poweroff "<b>Pocknix is running from internal storage.</b><br/><br/>Power off, then boot holding <b>Volume&nbsp;-</b> to open the ROCKNIX boot menu:<br/><br/><b>Force external boot</b> — start from the SD card instead.<br/><b>Nuke CFW</b> — remove Pocknix from internal storage and give Android its full partition size back."
+  # instructions only: the disk under / can't be repartitioned from here, so the
+  # supported flow is the ROCKNIX ABL boot menu
+  offer_poweroff "<b>Pocknix is running from internal storage.</b><br/><br/>Power off, then boot holding <b>Volume&nbsp;-</b> to open the ROCKNIX boot menu:<br/><br/><b>Switch boot source</b> — set it to <b>External</b> to start from the SD card instead.<br/><b>Uninstall CFW</b> — remove Pocknix from internal storage and give Android its full partition size back (the resize factory-resets Android).<br/><br/>To boot Android: switch the boot mode to <b>Android</b> to make it the default, or hold <b>Volume&nbsp;+</b> while powering on to boot it once."
 }
 
 # --- main ---
