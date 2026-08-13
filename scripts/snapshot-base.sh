@@ -32,6 +32,12 @@ source "$(dirname "$0")/lib.sh"
 [ "$(id -u)" -ne 0 ] || die "run as the user, no sudo (rclone + gpg live in the user account)"
 for t in curl tar awk sha256sum repo-add; do need_tool "$t"; done
 
+# A pinned build's sync dbs are [pocknix-base], not core/extra/alarm/aur, so the
+# harvest below would drop the shadowed ALARM copies and point residue downloads
+# at a repo path the ALARM mirror does not serve. Only a live-ALARM build is harvestable.
+[ -z "${POCKNIX_BASE_SNAPSHOT}" ] || die "POCKNIX_BASE_SNAPSHOT=${POCKNIX_BASE_SNAPSHOT} — a snapshot can only be harvested from an UNPINNED (live ALARM) build.
+Blank POCKNIX_BASE_SNAPSHOT in config/pocknix.conf, re-run 'sudo make build' + 'make packages', then snapshot."
+
 ID="${POCKNIX_SNAPSHOT_ID:-$(date -u +%Y%m%d)}"
 OUT="${BUILD_DIR}/snapshot/${ID}"
 RCLONE_DEST="${POCKNIX_BASE_RCLONE_REMOTE}"
@@ -87,6 +93,30 @@ done
 Converge/rebuild so all sources share one base (sudo make build; make packages per SoC), then re-run:
 ${conflicts}"
 log "union manifest: ${#want[@]} ALARM packages"
+
+# --- SoC completeness --------------------------------------------------------
+# The union covers every SoC's BUILD chroot but only ONE runtime rootfs, so a
+# runtime-only dep of another SoC's BSP silently misses the snapshot and that
+# SoC's images then fail to resolve. Fail rather than ship a one-SoC base.
+soc_missing=""
+for _bsp in "${POCKNIX_ROOT}"/devices/*/packages/pocknix-bsp-*/PKGBUILD; do
+  [ -f "${_bsp}" ] || continue
+  # source the PKGBUILD rather than grepping: a depends=() wrapped over several
+  # lines would silently yield nothing, and a guard that quietly stops guarding
+  # is worse than none.
+  _deps="$(bash -c 'depends=(); source "$1" >/dev/null 2>&1; printf "%s\n" "${depends[@]}"' _ "${_bsp}" 2>/dev/null)"
+  [ -n "${_deps}" ] || die "cannot read depends= from ${_bsp} — the SoC-completeness guard would be vacuous"
+  while read -r _dep; do
+    _dep="${_dep%%[<>=]*}"
+    case "${_dep}" in ''|pocknix-*) continue ;; esac
+    [ -n "${want[${_dep}]:-}" ] && continue
+    soc_missing+="  ${_dep} (needed by $(basename "$(dirname "${_bsp}")"))"$'\n'
+  done <<< "${_deps}"
+done
+[ -z "${soc_missing}" ] || die "base would not serve every SoC — these device BSP deps are absent:
+${soc_missing}
+Add them to config/packages/base.list (so EVERY build's rootfs installs them),
+rebuild, then snapshot again."
 
 # --- map names to repo files via the sync dbs the build used -----------------
 # The sync db desc carries %FILENAME% + %SHA256SUM%, so downloads are verified
@@ -187,6 +217,21 @@ for name in "${!want[@]}"; do
   [ -s "${OUT}/${fn}.sig" ] || die "missing signature ${fn}.sig — re-run (mirror should serve it)"
 done
 
+# OUT is resumable, so an aborted earlier attempt can leave packages this run no
+# longer wants; repo-add and the closing rclone sync would publish them anyway.
+declare -A keepfile
+for name in "${!want[@]}"; do
+  fn="${f_file[${name} ${want[${name}]}]}"
+  keepfile["${fn}"]=1; keepfile["${fn}.sig"]=1
+done
+for f in "${OUT}"/*.pkg.tar.*; do
+  [ -e "${f}" ] || continue
+  b="$(basename "${f}")"
+  [ -n "${keepfile[${b}]:-}" ] && continue
+  log "dropping leftover from an aborted run: ${b}"
+  rm -f "${f}"
+done
+
 # --- the exact base tarball, dated + hashed ----------------------------------
 [ -f "${CACHE_DIR}/${ALARM_TARBALL}" ] || die "no cached tarball ${CACHE_DIR}/${ALARM_TARBALL} — the snapshot must ship the tarball the build used"
 cp -f "${CACHE_DIR}/${ALARM_TARBALL}" "${OUT}/${DATED_TARBALL}"
@@ -213,11 +258,15 @@ log "building ${BASE_DB} (repo-add over ${#want[@]} packages)"
   for name in "${!want[@]}"; do printf '%s %s\n' "${name}" "${want[${name}]}"; done | sort
 } > "${OUT}/pocknix-base.lock"
 
+# Published alongside the base so a re-run can tell "the live base is already
+# this snapshot" from "the live base is the previous release" (see the rotation).
+printf '%s\n' "${ID}" > "${OUT}/SNAPSHOT_ID"
+
 # Same id, different contents would republish pocknix-base-lock-<id>-1 with new
 # bytes: devices never see the upgrade (same version) and the package that IS
 # the device's record of its base would report one it isn't on. Suffix instead.
 if [ -f "${LOCKFILE}" ] \
-   && [ "$(sed -n 's/^#.*snapshot \([0-9][0-9]*\).*/\1/p' "${LOCKFILE}" | head -1)" = "${ID}" ] \
+   && [ "$(sed -n 's/^#.*snapshot \([0-9][0-9.]*\).*/\1/p' "${LOCKFILE}" | head -1)" = "${ID}" ] \
    && ! diff -q <(grep -v '^#' "${LOCKFILE}") <(grep -v '^#' "${OUT}/pocknix-base.lock") >/dev/null; then
   die "snapshot ${ID} already exists with DIFFERENT contents — re-run with a distinct id:
   POCKNIX_SNAPSHOT_ID=${ID}.1 make snapshot"
@@ -233,14 +282,25 @@ fi
 [ -n "${RCLONE_DEST}" ] || die "POCKNIX_BASE_RCLONE_REMOTE unset — cannot upload"
 need_tool rclone
 if [ -n "$(rclone lsf --max-depth 1 "${RCLONE_DEST}" 2>/dev/null | head -1)" ]; then
-  log "rotating the current base -> ${RCLONE_PREV} (keeps the PREVIOUS release rebuildable)"
-  rclone sync --checksum "${RCLONE_DEST}" "${RCLONE_PREV}"
+  # A re-run after a failed publish must NEVER rotate: the live base is then this
+  # same (half-written) snapshot, and copying it over -prev destroys the previous
+  # release's only rebuild source. Equal ids = resume; unknown/older id = real rotation.
+  live_id="$(rclone cat "${RCLONE_DEST}/SNAPSHOT_ID" 2>/dev/null | head -1 | tr -d '[:space:]')"
+  if [ "${live_id}" = "${ID}" ]; then
+    warn "live base is ALREADY snapshot ${ID} — resuming a previous publish, NOT rotating (${RCLONE_PREV} keeps the last release)"
+  else
+    log "rotating the current base (${live_id:-id unknown}) -> ${RCLONE_PREV} (keeps the PREVIOUS release rebuildable)"
+    rclone sync --checksum "${RCLONE_DEST}" "${RCLONE_PREV}"
+  fi
 fi
 log "publishing -> ${RCLONE_DEST} ($(du -sh "${OUT}" | cut -f1))"
 # packages + tarball first, db + lock LAST: a client syncing mid-publish sees
 # either the old db (its packages all still present) or the new one (ditto).
 # -L: repo-add's pocknix-base.db is a symlink. The closing sync prunes the
 # superseded package versions, which by then no live db references.
+# SNAPSHOT_ID goes up FIRST, before anything else is mutated: from here on any
+# interruption leaves the remote id equal to ours, so a re-run skips the rotation.
+rclone copy --include 'SNAPSHOT_ID' "${OUT}" "${RCLONE_DEST}"
 rclone copy --include '*.pkg.tar.*' "${OUT}" "${RCLONE_DEST}"
 rclone copy --include "${DATED_TARBALL}" "${OUT}" "${RCLONE_DEST}"
 rclone copy -L --include 'pocknix-base.db*' --include 'pocknix-base.files*' \

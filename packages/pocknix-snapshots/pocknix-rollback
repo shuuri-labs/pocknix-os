@@ -105,7 +105,6 @@ case "${action}" in
   status) echo "internal default: $(btrfs subvolume get-default "${TOP}" | sed -n 's/.* path //p')"; list_snaps; exit 0 ;;
 esac
 
-# default target: the newest snapshot
 if [ -z "${target}" ]; then
   target="$(ls "${SNAPS}" | grep -E '^[0-9]{4}$' | sort -n | tail -1 || true)"
   [ -n "${target}" ] || die "no snapshots exist yet (they are created before each update)"
@@ -141,12 +140,10 @@ jq -n --arg from "${target}" --arg prev "$(btrfs subvolume get-default "${TOP}" 
   '{schema:1, from_snapshot:$from, previous_default:$prev, ts:$ts}' \
   > "${TOP}/${new}/var/lib/pocknix/rollback-info.json"
 
-# Kernel coherence: the snapshot restores /usr/lib/modules, but the kernel lives on
-# the FAT boot partition, outside btrfs. If the target's kernel differs from the
-# reference (running kernel, or the internal install's current default), STAGE
-# regenerated boot files from the target tree (KERNEL.new etc.) now — any failure
-# aborts here, before anything is committed. cmp is the ground truth (covers
-# rolling back across several kernel bumps, unlike the single-transaction flag).
+# The kernel lives on the FAT boot partition, outside btrfs: when the target's
+# kernel differs from the reference, STAGE regenerated boot files (*.new) from
+# the target tree now — any failure aborts before anything is committed. cmp is
+# ground truth: it covers rollbacks across several kernel bumps, the flag can't.
 staged=""
 if ! cmp -s "${KERNEL_REF}" "${TOP}/${new}/boot/Image"; then
   regen=""
