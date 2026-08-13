@@ -7,13 +7,16 @@ set -e
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak info org.mozilla.firefox >/dev/null 2>&1 \
   || flatpak install --system --noninteractive flathub org.mozilla.firefox
-# pre-flatpak installs: retire the pacman firefox ONLY once the flatpak is present
+# pre-flatpak installs: retire the pacman browsers ONLY once the flatpak is present
 # (never leave a device browserless). Failing hard is what makes the retry real: with
 # RemainAfterExit=yes a swallowed error leaves the unit active(exited), so the dispatcher's
 # `systemctl start` becomes a no-op and a db-locked removal would wait for a reboot.
-if flatpak info org.mozilla.firefox >/dev/null 2>&1 && pacman -Qq firefox >/dev/null 2>&1; then
-  pacman -Rns --noconfirm firefox || {
-    echo "pocknix-flathub-setup: removing the pacman firefox failed (db locked?) — retrying on the next link-up" >&2
-    exit 1
-  }
+if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
+  stale="$(pacman -Qq firefox angelfish 2>/dev/null || true)"
+  if [ -n "${stale}" ]; then
+    pacman -Rns --noconfirm ${stale} || {
+      echo "pocknix-flathub-setup: removing the pacman browsers (${stale//$'\n'/ }) failed (db locked?) — retrying on the next link-up" >&2
+      exit 1
+    }
+  fi
 fi

@@ -31,10 +31,6 @@ unrar                # .rar backend for ark (and CLI extraction)
 gwenview             # image viewer
 okular               # document / PDF viewer
 
-# --- browsers ---
-# firefox: deliberately absent — pocknix-flathub-setup ships it as a Flathub flatpak
-angelfish            # Plasma Mobile's touch-first web browser
-
 # --- Plasma Mobile gear (touch-first apps) ---
 koko                 # image gallery
 kclock               # clock / alarms / timers
