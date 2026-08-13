@@ -26,6 +26,24 @@ def _init_ns_mountpoint(part):
     return (proc.stdout or "").strip()
 
 
+def _boots_from(disk):
+    # PID 1's view again (private namespace), and btrfs SOURCE carries a [/subvol] suffix
+    # lsblk cannot resolve. /flash counts: a card can hold boot without hosting /.
+    for target in ("/", "/flash"):
+        proc = run_cmd(["findmnt", "-N", "1", "-fno", "SOURCE", target], timeout=10)
+        if proc is None or proc.returncode != 0:
+            continue
+        src = (proc.stdout or "").strip().split("[")[0]
+        if not src.startswith("/dev/"):
+            continue
+        parent = run_cmd(["lsblk", "-no", "PKNAME", src], timeout=10)
+        name = (parent.stdout or "").strip().splitlines() if parent and parent.returncode == 0 else []
+        node = f"/dev/{name[0].strip()}" if name and name[0].strip() else src
+        if node == disk:
+            return True
+    return False
+
+
 def detect_sdcard():
     absent = {"present": False}
     if not Path(SD_DISK).exists():
@@ -50,6 +68,7 @@ def detect_sdcard():
         "fstype": fs_node.get("fstype") or "",
         "label": fs_node.get("label") or "",
         "mountpoint": _init_ns_mountpoint(part),
+        "bootDisk": _boots_from(SD_DISK),
     }
 
 
@@ -59,6 +78,8 @@ def format_sdcard(label):
         raise ValueError("Label must be 1-16 characters: letters, digits, - or _")
     if not Path(SD_DISK).exists():
         raise RuntimeError("No microSD card detected")
+    if _boots_from(SD_DISK):
+        raise RuntimeError("This device booted from the SD card; it cannot be formatted")
     if not _format_lock.acquire(blocking=False):
         raise RuntimeError("A format is already in progress")
     try:

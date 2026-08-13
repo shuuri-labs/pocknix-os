@@ -105,6 +105,7 @@ export interface ConfigImportResult {
 
 export interface SdcardInfo {
   present: boolean;
+  bootDisk?: boolean;
   device?: string;
   sizeBytes?: number;
   fstype?: string;

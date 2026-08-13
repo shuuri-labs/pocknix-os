@@ -6,6 +6,7 @@ import type { SdcardInfo } from "../types";
 function cardSummary(card: SdcardInfo | null) {
   if (!card) return "Checking…";
   if (!card.present) return "No SD card detected";
+  if (card.bootDisk) return "Booted from this card - formatting disabled";
   const size = card.sizeBytes ? `${(card.sizeBytes / 1e9).toFixed(1)} GB` : "";
   const state = card.fstype === "ext4" ? (card.mountpoint ? "mounted" : "") : "not formatted for Steam";
   return [card.label || "unlabeled", size, card.fstype || "no filesystem", state].filter(Boolean).join(" · ");
@@ -109,12 +110,12 @@ export function Storage() {
         <TextField
           label="Label"
           value={label}
-          disabled={busy}
+          disabled={busy || !!card?.bootDisk}
           onChange={(event) => setLabel(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16))}
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        <ButtonItem layout="below" disabled={!card?.present || busy} onClick={confirmFormat}>
+        <ButtonItem layout="below" disabled={!card?.present || busy || !!card?.bootDisk} onClick={confirmFormat}>
           {busy ? "Formatting…" : "Format SD Card"}
         </ButtonItem>
       </PanelSectionRow>

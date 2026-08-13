@@ -8,7 +8,8 @@
 # Adapted from Valve's format-device.sh, with three pocknix-specific changes:
 #   1. mmcblk ONLY. Valve also formats /dev/sd[a-z] (USB). On the RP6 `sda` is the INTERNAL UFS OS
 #      disk, so accepting sd* here would let the UI nuke the running system. We hard-refuse anything
-#      that is not /dev/mmcblkN (the microSD slot), and additionally refuse the disk backing `/`.
+#      that is not /dev/mmcblkN (the microSD slot), and additionally refuse the disk the running
+#      system booted from.
 #   2. Owner is fixed at 1000:1000 (SteamOS's `deck`), NOT pocknix's local deck=1001. Every SteamOS
 #      device numbers deck=1000, so stamping the ext4 root_owner=1000 keeps a freshly formatted card
 #      portable to a real SteamOS device; sdcard-mount.sh's idmap presents it back as our 1001 here.
@@ -55,12 +56,18 @@ esac
 
 [[ -b "$DISK" ]] || die "not a block device: $DISK"
 
-# Belt-and-suspenders: never format the disk that backs the root filesystem.
-ROOT_SRC="$(findmnt -no SOURCE / 2>/dev/null)"
-ROOT_DISK="$(lsblk -no PKNAME "$ROOT_SRC" 2>/dev/null)"
-if [[ -n "$ROOT_DISK" && "/dev/${ROOT_DISK}" == "$DISK" ]]; then
-    die "refusing to format $DISK: it backs the running system"
-fi
+# /flash is checked as well as /: a card can hold the boot partition without hosting /.
+mount_disk() {   # parent disk backing a mountpoint, empty if not mounted
+    local src pk
+    src="$(findmnt -no SOURCE "$1" 2>/dev/null)"
+    src="${src%%\[*}"       # btrfs SOURCE carries a [/subvol] suffix lsblk cannot resolve
+    [[ -b "$src" ]] || return 0
+    pk="$(lsblk -no PKNAME "$src" 2>/dev/null | head -1)"
+    [[ -n "$pk" ]] && echo "/dev/${pk}" || echo "$src"
+}
+for mp in / /flash; do
+    [[ "$(mount_disk "$mp")" == "$DISK" ]] && die "refusing to format $DISK: the running system booted from it"
+done
 
 if [[ "$VALIDATE" == "1" ]]; then
     # Pre-flight the client runs before the real format. No writes.
