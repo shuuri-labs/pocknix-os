@@ -163,7 +163,10 @@ do_status() {
 
 while :; do
   mode="$(base_mode)"
-  items=(rollback "Roll back the last update...")
+  # kdialog returns the FIRST row when a tap never registered, so whatever leads this
+  # list is what a missed tap runs: keep the read-only one there.
+  items=(status "Show system status")
+  items+=(rollback "Roll back the last update...")
   internal_candidate && items+=(rollback-internal "Roll back the INTERNAL install...")
   case "${mode}" in
     locked)  items+=(mode "Switch to rolling mode (not recommended)...") ;;
@@ -173,7 +176,6 @@ while :; do
   abl_label="$(abl_item_label "$(abl_status)")" && items+=(abl "${abl_label}")
   if [ "$(ssh_state)" = on ]; then items+=(ssh "Remote access (SSH) is ON - turn it off")
   else items+=(ssh "Remote access (SSH) is off - turn it on..."); fi
-  items+=(status "Show system status")
   choice="$(kdialog --title "$TITLE" --menu "Pocknix maintenance tools\nMode: ${mode^^}" "${items[@]}")" || exit 0
   case "${choice}" in
     rollback)          do_rollback "" ;;

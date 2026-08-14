@@ -2,7 +2,7 @@
 # Pocknix Rollback and Installer shortcuts; the CLIs it fronts stay in their own packages.
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=9
+pkgrel=10
 pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH toggle"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
