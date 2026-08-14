@@ -120,9 +120,6 @@ EOF
   # file for it to land in. Ship a default symlink (overridable via SD_TIMEZONE); the user can change
   # it in the OOBE / Settings (deck is authorised via overlay 50-pocknix-deck.rules -> timedate1).
   chroot "${root}" ln -sfn "/usr/share/zoneinfo/${SD_TIMEZONE:-UTC}" /etc/localtime
-  if [ -f "${root}/etc/ssh/sshd_config" ]; then
-    sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' "${root}/etc/ssh/sshd_config"
-  fi
 
   # install the committed test-image overlay (diag dump, autologin, NM conf, fan/volume helpers)
   if [ -d "${POCKNIX_ROOT}/overlay" ]; then

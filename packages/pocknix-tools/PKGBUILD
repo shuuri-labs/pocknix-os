@@ -2,7 +2,7 @@
 # Pocknix Rollback and Installer shortcuts; the CLIs it fronts stay in their own packages.
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=8
+pkgrel=9
 pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH toggle"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -13,8 +13,10 @@ replaces=('pocknix-installer')
 conflicts=('pocknix-installer')
 install=pocknix-tools.install
 source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui'
-        'pocknix-ssh' '53-pocknix-ssh.rules')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'pocknix-ssh' '53-pocknix-ssh.rules' '10-pocknix-no-root-login.conf')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+# owner edits to the root-login policy survive upgrades as a .pacnew
+backup=('etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-tools" "${pkgdir}/usr/bin/pocknix-tools"
@@ -24,4 +26,6 @@ package() {
     "${pkgdir}/usr/share/applications/pocknix-tools.desktop"
   install -Dm644 "${srcdir}/53-pocknix-ssh.rules" \
     "${pkgdir}/usr/share/polkit-1/rules.d/53-pocknix-ssh.rules"
+  install -Dm644 "${srcdir}/10-pocknix-no-root-login.conf" \
+    "${pkgdir}/etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf"
 }
