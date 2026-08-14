@@ -13,8 +13,6 @@ As any Arch user knows, rolling updates can mean unexpected breakage, so staying
 >
 > **The default password (`pocknix`) is publicly known**, so it is strongly recommended you change it: run `passwd` (and `sudo passwd root`) after first boot. From v0.3 onwards, SSH is disabled by default.
 
----
-
 ## Key features
 
 - **Performance tuned.** Almost all of the graphics and display stack is recompiled with SoC-specific tuning, and Pocknix runs the ROCKNIX kernel with some key additions:
@@ -25,8 +23,6 @@ As any Arch user knows, rolling updates can mean unexpected breakage, so staying
 - **Mutable.** The root filesystem is writeable, and advanced users can switch to rolling mode for a full rolling Arch experience.
 - **Per-game performance settings**, including the ability to swap in different Turnip driver versions per game. Per-game configs can be exported as JSON files and shared with other Pocknix users.
 - **Package-based updates for fast iteration.** SteamOS on ARM is still very young and iterating quickly. Pocknix is built with this in mind: rather than full images, updates are delivered through `pacman`, so components can be updated or swapped out at bleeding-edge cadence.
-
----
 
 ## Supported devices
 
@@ -41,8 +37,6 @@ As any Arch user knows, rolling updates can mean unexpected breakage, so staying
 | AYN Thor | SM8550 | 📋 Planned |
 | Retroid Pocket Nova | SM8550 (QCS8550) | 📋 Planned |
 | AYN Odin 3 | SM8750 | 📋 Planned |
-
----
 
 ## How to install
 
@@ -60,8 +54,6 @@ The flashed SD card carries ROCKNIX's install kit in its `rocknix_abl` folder (v
 
 > **Although installing the ROCKNIX ABL is recommended, SM8250 users can boot Pocknix without it**: flash a Pocknix SD, insert it, boot while holding **Volume −**, switch the boot mode, and boot.
 
----
-
 ## How to update
 
 Updates ship through the Pocknix pacman repo - kernel included, no reflashing. Three ways to get them:
@@ -72,8 +64,6 @@ Updates ship through the Pocknix pacman repo - kernel included, no reflashing. T
 
 Note that the Steam client updates independently - Steam will notify you when an update is available.
 
----
-
 ## Installing to internal storage
 
 Running from the SD card works, but the OS and your games load much faster from internal storage. Installing there requires resizing Android's `userdata` partition, which **essentially factory-resets the Android side** (Android itself stays bootable; only user data is wiped). Two ways, both from a system booted off the SD:
@@ -82,8 +72,6 @@ Running from the SD card works, but the OS and your games load much faster from 
 - **Terminal**: run `pocknix-install-internal` (do a `--dry-run` first and read the plan).
 
 See [Install to internal storage](docs/install-to-internal.md) for the full walkthrough, including how to uninstall and restore the space to Android.
-
----
 
 ## How to play games
 
@@ -99,8 +87,6 @@ If a game misbehaves on both, the normal (x86) Protons should "just work" too, b
 - **Proton 11 (ARM64)**, Valve's stable ARM Proton build: may offer better compatibility or performance than GE or Cachy for some titles.
 
 **Proton Experimental and Proton 11 (ARM64) are not available on SM8250 devices**: DXVK 3 depends on 8-bit storage, which Mesa (the GPU driver) does not support on Adreno a6xx GPUs. Our SM8250 builds of the GE and Cachy Protons are patched to replace DXVK 3 with DXVK 2.7, and Valve's (x86) Proton 10 and below ship older DXVK versions. Proton 11 (x86) may not work on SM8250 devices for the same reason.
-
----
 
 ## Emulation
 
@@ -131,8 +117,6 @@ Supported systems:
 | PlayStation Portable | PPSSPP |
 | Arcade / Neo Geo | RetroArch (FBNeo) |
 
----
-
 ## Pocknix Control
 
 **Pocknix Control** is a Decky plugin in the Steam session (open the Quick Access Menu): a control panel for tuning the handheld and managing the system without leaving the couch. Six tabs:
@@ -146,7 +130,6 @@ Supported systems:
 
 See the [Pocknix Control docs](docs/pocknix-control.md) for the full tour.
 
----
 
 ## Known issues
 
@@ -154,8 +137,6 @@ See the [Pocknix Control docs](docs/pocknix-control.md) for the full tour.
 - **Controller support in desktop mode requires Steam to be running** - launch Steam from the desktop session to get controller input there. Even then, emulator controller mappings may not be correct in desktop mode. This is being worked on.
 - **Gyro does not work yet.** The motion sensors are not wired up, so games and emulators that use gyro aim or tilt controls will not see any input. Getting them working is on the list.
 - **MangoHud incurs a slight performance penalty.** It is fine for dialing in settings, but turn it off during real gameplay. I consider this a feature, not a bug - instead of staring at performance metrics (we're all guilty), just enjoy your games! 😃
-
----
 
 ## Building from source
 
@@ -170,13 +151,9 @@ sudo make sd-image  # flashable SD image -> build/image/<soc>/
 
 `make help` lists every target. Kernel enablement is committed under `kernel/`; only stock Linux source and firmware are fetched at build time.
 
----
-
 ## Contributing
 
 Contributions are welcome - emulator configs, testing on devices I do not own, and docs fixes are especially useful. [CONTRIBUTING.md](CONTRIBUTING.md) covers where changes go, how to build and test just the part you touched, what your testing should cover, and what a PR needs to include (notably: steps I can follow to re-test it on my own devices).
-
----
 
 ## Thanks and references
 
@@ -195,13 +172,9 @@ And on the wider ecosystem pocknix ships on top of, with thanks to all who build
 - [**KDE**](https://kde.org/) and the **Plasma Mobile** team - the touch-friendly desktop session.
 - The **Linux kernel**, **Armbian**, and the many upstream projects whose work this builds on.
 
----
-
 ## A note on AI
 
 In the interest of transparency: I do use AI as a tool - debugging and performance work, comparing against upstream, research, boilerplate, and drafting docs like this one. The architecture and every design decision are mine, and nothing lands without me understanding and verifying it. I would consider myself an "AI sceptic"; however, I'll admit it's been a real force multiplier for a lone developer working on this project.
-
----
 
 ## License
 
