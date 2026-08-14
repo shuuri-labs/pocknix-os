@@ -77,16 +77,15 @@ See [Install to internal storage](docs/install-to-internal.md) for the full walk
 
 ### Picking a Proton
 
-Download a game, then **set a compatibility tool for it**: open the game's **Properties → Compatibility**, tick **"Force the use of a specific Steam Play compatibility tool"**, and pick **Proton-GE 11 (ARM64)** or **Proton-CachyOS 11 (ARM64)** - both ship with Pocknix and either is a good default; if a game misbehaves or runs poorly on one, try the other. This is a per-game setting, so repeat it for each title you install.
+**On SM8550 devices (Retroid Pocket 6, Odin 2 family) there is nothing to do.** The Steam client now ships Valve's ARM Protons itself, and **Proton 11 (ARM64)** is downloaded and selected automatically the first time you launch a game.
 
-If a game misbehaves on both, the normal (x86) Protons should "just work" too, but performance will be worse than the native ARM builds - only reach for one when you cannot get a game to boot at all on an ARM Proton. Note: only Proton 10 and below work on SM8250 devices - see the end of this section.
+If a game misbehaves or runs poorly, **Proton Experimental (ARM64)** is worth trying. It's Valve's rolling preview build, so the newest fixes land there first, and given how new Proton for ARM is it's often the better option for compatibility and performance - though being a moving target, a Steam update can also change how it behaves. To switch, open the game's **Properties → Compatibility**, tick **"Force the use of a specific Steam Play compatibility tool"**, and pick it. This is a per-game setting.
 
-**SM8550 users have two additional ARM compat tools worth trying:**
+**On SM8250 devices (Retroid Pocket 5, Flip 2) you do need to pick one**, because Valve's ARM Protons cannot run games on these devices. For each game you install, open its **Properties → Compatibility**, tick **"Force the use of a specific Steam Play compatibility tool"**, and pick **Proton-GE 11 (ARM64)** or **Proton-CachyOS 11 (ARM64)** - both ship with Pocknix and either is a good default; if a game misbehaves or runs poorly on one, try the other.
 
-- **Proton Experimental (ARM64)**, Valve's rolling preview build: the newest fixes land here first, but being a moving target, a Steam update can also change how it behaves. Given how new Proton for ARM is, though, it's often the best option for compatibility and performance.
-- **Proton 11 (ARM64)**, Valve's stable ARM Proton build: may offer better compatibility or performance than GE or Cachy for some titles.
+The reason is DXVK 3, which Proton 11 and Proton Experimental both use: it depends on 8-bit storage, which Mesa (the GPU driver) does not support on the Adreno a6xx GPUs in SM8250 devices. Our SM8250 builds of the GE and Cachy Protons are patched to replace DXVK 3 with DXVK 2.7, which is why they work. Valve's (x86) Proton 10 and below ship older DXVK versions and are unaffected; Proton 11 (x86) may not work for the same reason.
 
-**Proton Experimental and Proton 11 (ARM64) are not available on SM8250 devices**: DXVK 3 depends on 8-bit storage, which Mesa (the GPU driver) does not support on Adreno a6xx GPUs. Our SM8250 builds of the GE and Cachy Protons are patched to replace DXVK 3 with DXVK 2.7, and Valve's (x86) Proton 10 and below ship older DXVK versions. Proton 11 (x86) may not work on SM8250 devices for the same reason.
+**For all SoC families:** if a game will not boot on any ARM Proton, the normal (x86) Protons should "just work" too, but performance will be worse than the native ARM builds - only reach for one as a last resort.
 
 ## Emulation
 
