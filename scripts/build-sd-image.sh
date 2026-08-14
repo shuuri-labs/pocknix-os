@@ -288,10 +288,15 @@ EOF
         pocknix-lavd.service pocknix-gamescope-rt.service \
         >/dev/null 2>&1 || true
   # SSH ships OFF: the image bakes in a well-known password, so a listening sshd
-  # is a standing exposure on any network the device joins.
+  # is a standing exposure on any network the device joins. The ALARM rootfs enables
+  # sshd itself, so it must be disabled here, not merely left unenabled.
   if [ "${SD_SSH:-off}" = on ]; then
     warn "SD_SSH=on — this image accepts SSH logins with the baked-in password"
     chroot "${root}" systemctl enable sshd >/dev/null 2>&1 || true
+  else
+    for u in sshd.service sshd.socket; do
+      chroot "${root}" systemctl disable "${u}" >/dev/null 2>&1 || true
+    done
   fi
   # audio server (PipeWire) as per-user services — start in the autologin/session user.
   # WirePlumber applies the device UCM (shipped by the device BSP) automatically.
