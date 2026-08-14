@@ -1,0 +1,9 @@
+// wheel (the deck owner) runs the calibration helper without a password, same trust
+// model as 50-pocknix-snapshots.rules.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/lib/pocknix/gamepad-calibration-run") {
+        return polkit.Result.YES;
+    }
+});

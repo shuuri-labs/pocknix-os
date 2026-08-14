@@ -1,0 +1,61 @@
+#!/bin/bash
+set -u
+
+APP_DIR=/usr/share/pocknix-gpcal
+RUNTIME_DIR=""
+WAYLAND_DISPLAY_NAME=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --runtime-dir)      RUNTIME_DIR="$2"; shift 2 ;;
+    --wayland-display)  WAYLAND_DISPLAY_NAME="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+log() { logger -t pocknix-gamepad-calibration -- "$*"; echo "$*" >&2; }
+
+fail() {
+  log "$1"
+  # Terminal=false in the desktop entry, so there is nowhere else to say it.
+  command -v kdialog >/dev/null 2>&1 && kdialog --error "$1" >/dev/null 2>&1
+  exit 1
+}
+
+[ "$(id -u)" = "0" ] || fail "pocknix-gamepad-calibration must run as root"
+
+# Bail rather than let the app fall back to its fake /tmp parameter dir, where it
+# looks like it works and calibrates nothing.
+params=""
+for candidate in /sys/module/*/parameters; do
+  [ -e "${candidate}/axis_leftx_max" ] && [ -e "${candidate}/update_params" ] || continue
+  params="${candidate}"
+  break
+done
+[ -n "${params}" ] || fail "This device has no calibratable gamepad driver."
+
+inputplumber_was_active=0
+if systemctl is-active --quiet inputplumber; then
+  inputplumber_was_active=1
+fi
+
+restore_inputplumber() {
+  if [ "${inputplumber_was_active}" = "1" ]; then
+    systemctl start inputplumber || log "failed to restart inputplumber"
+  fi
+}
+trap restore_inputplumber EXIT INT TERM
+
+# InputPlumber grabs the pad exclusively, so its raw events never reach the tool.
+if [ "${inputplumber_was_active}" = "1" ]; then
+  systemctl stop inputplumber
+fi
+
+export XDG_RUNTIME_DIR="${RUNTIME_DIR}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY_NAME}"
+export SDL_VIDEODRIVER=wayland
+export PYTHONDONTWRITEBYTECODE=1   # /usr/share is not ours to litter with .pyc
+
+# pyxel.load() resolves assets against the working directory
+cd "${APP_DIR}" || fail "GPcal is not installed at ${APP_DIR}"
+python3 main.py

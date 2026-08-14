@@ -1,0 +1,11 @@
+#!/bin/bash
+# pkexec clears the environment and root has no session of its own, so the
+# compositor handle has to be passed to the runner explicitly.
+set -u
+
+RUNNER=/usr/lib/pocknix/gamepad-calibration-run
+
+exec pkexec "${RUNNER}" \
+  --runtime-dir "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+  --wayland-display "${WAYLAND_DISPLAY:-wayland-0}" \
+  "$@"

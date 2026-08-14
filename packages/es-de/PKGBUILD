@@ -15,7 +15,7 @@
 # id from the release page's "ES-DE_aarch64.AppImage" link and bump sha + pkgrel.
 pkgname=es-de
 pkgver=3.4.1
-pkgrel=3
+pkgrel=4
 pkgdesc="ES-DE frontend for browsing and launching games (official aarch64 AppImage)"
 arch=('aarch64')
 url="https://es-de.org"
@@ -26,8 +26,9 @@ depends=('fuse2')
 options=('!strip')
 source=("ES-DE-${pkgver}.AppImage::https://gitlab.com/es-de/emulationstation-de/-/package_files/326321114/download"
         'es-de-wrapper'
-        'es-de.desktop')
-sha256sums=('b84eababe6d6388223cf8b1658bb237bc0125362acaae70e1ece55397c1eb414' 'SKIP' 'SKIP')
+        'es-de.desktop'
+        'es-de-icon.png')
+sha256sums=('b84eababe6d6388223cf8b1658bb237bc0125362acaae70e1ece55397c1eb414' 'SKIP' 'SKIP' 'SKIP')
 noextract=("ES-DE-${pkgver}.AppImage")
 
 package() {
@@ -35,5 +36,7 @@ package() {
   # `es-de` on PATH: what konsole tests, the app-grid entry, and docs all invoke.
   install -Dm755 "${srcdir}/es-de-wrapper" "${pkgdir}/usr/bin/es-de"
   # Desktop-mode app grid entry (game mode reaches ES-DE via Steam favorites/shortcuts instead).
+  # The AppImage keeps its icon inside the squashfs; ship the logo beside it instead.
+  install -Dm644 "${srcdir}/es-de-icon.png" "${pkgdir}/opt/pocknix/es-de/icon.png"
   install -Dm644 "${srcdir}/es-de.desktop" "${pkgdir}/usr/share/applications/es-de.desktop"
 }

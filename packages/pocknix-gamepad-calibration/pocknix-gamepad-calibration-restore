@@ -1,0 +1,46 @@
+#!/bin/bash
+# The driver comes back at its compiled-in defaults every boot; replay the save.
+set -u
+
+CONF=/etc/pocknix/gamepad-calibration.conf
+
+[ -r "${CONF}" ] || exit 0
+
+# sm8250 loads its gamepad driver as a module on device probe, so the parameters
+# can appear after this unit is ordered to run.
+params=""
+for _ in $(seq 1 50); do
+  for candidate in /sys/module/*/parameters; do
+    [ -e "${candidate}/axis_leftx_max" ] && [ -e "${candidate}/update_params" ] || continue
+    params="${candidate}"
+    break
+  done
+  [ -n "${params}" ] && break
+  sleep 0.2
+done
+
+if [ -z "${params}" ]; then
+  echo "no calibratable gamepad driver found, calibration not applied" >&2
+  exit 0
+fi
+
+applied=0
+while IFS='=' read -r key value; do
+  key="${key%%[[:space:]]*}"
+  value="${value%%[[:space:]]*}"
+  # Plain parameter names only: a key with a path in it would write anywhere root can.
+  case "${key}" in
+    ''|'#'*) continue ;;
+    *[!a-z0-9_]*) echo "ignoring malformed key ${key}" >&2; continue ;;
+  esac
+  [ -w "${params}/${key}" ] || { echo "unknown parameter ${key}, skipped" >&2; continue; }
+  if printf '%s' "${value}" > "${params}/${key}"; then
+    applied=1
+  else
+    echo "failed to write ${key}" >&2
+  fi
+done < "${CONF}"
+
+# The driver only picks up the new values when told to re-read them.
+[ "${applied}" = "1" ] && printf '1' > "${params}/update_params"
+exit 0

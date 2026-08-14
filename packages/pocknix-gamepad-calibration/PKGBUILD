@@ -1,0 +1,63 @@
+# pocknix-gamepad-calibration — desktop-mode stick/trigger calibration.
+# Port of Kdog's GPcal (github.com/cdeletre/GPcal, MIT). Userspace only: it writes the
+# gamepad driver's module parameters, so the result is live in both sessions.
+#
+# Upstream is vendored under gpcal/ rather than fetched: its GitHub archive checksum is
+# not guaranteed stable, and the release tarball is 96 MB for 1 MB of app.
+# sm8250-only for now — see pocknix-device-sm8250's depends=.
+pkgname=pocknix-gamepad-calibration
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix gamepad calibration (GPcal port): stick/trigger range, centre and deadzones"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('MIT')
+depends=('python' 'python-pyxel' 'polkit' 'systemd')
+optdepends=('inputplumber: released for the duration of a calibration run, then restarted'
+            'kdialog: shows the launcher errors on a session with no terminal')
+_gpcalcommit=2077e7af7e9a8c1df54af6f1959cb92daea03207
+source=('Pocknix.py' '0001-pocknix-runtime-detection-and-persistence.patch'
+        'pocknix-gamepad-calibration' 'gamepad-calibration-run'
+        'pocknix-gamepad-calibration-restore' 'pocknix-gamepad-calibration.service'
+        'pocknix-gamepad-calibration.desktop' '50-pocknix-gamepad-calibration.rules'
+        'LICENSE.gpcal')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+prepare() {
+  rm -rf "${srcdir}/gpcal"
+  cp -a "${startdir}/gpcal" "${srcdir}/gpcal"
+  install -Dm644 "${srcdir}/Pocknix.py" "${srcdir}/gpcal/gamedata/Klib/Pocknix.py"
+  patch -p1 -d "${srcdir}" < "${srcdir}/0001-pocknix-runtime-detection-and-persistence.patch"
+}
+
+package() {
+  local app="${pkgdir}/usr/share/pocknix-gpcal"
+  local src="${srcdir}/gpcal/gamedata"
+
+  install -Dm644 "${src}/main.py"  "${app}/main.py"
+  install -Dm644 "${src}/GPcal.py" "${app}/GPcal.py"
+  local f
+  for f in "${src}"/Klib/*.py;    do install -Dm644 "${f}" "${app}/Klib/$(basename "${f}")"; done
+  for f in "${src}"/assets/*;     do install -Dm644 "${f}" "${app}/assets/$(basename "${f}")"; done
+
+  install -Dm755 "${srcdir}/pocknix-gamepad-calibration" \
+    "${pkgdir}/usr/bin/pocknix-gamepad-calibration"
+  install -Dm755 "${srcdir}/gamepad-calibration-run" \
+    "${pkgdir}/usr/lib/pocknix/gamepad-calibration-run"
+  install -Dm644 "${srcdir}/50-pocknix-gamepad-calibration.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/50-pocknix-gamepad-calibration.rules"
+  install -Dm644 "${srcdir}/pocknix-gamepad-calibration.desktop" \
+    "${pkgdir}/usr/share/applications/pocknix-gamepad-calibration.desktop"
+
+  # Statically enabled; the unit's ConditionPathExists keeps it inert until a save.
+  install -Dm755 "${srcdir}/pocknix-gamepad-calibration-restore" \
+    "${pkgdir}/usr/bin/pocknix-gamepad-calibration-restore"
+  install -Dm644 "${srcdir}/pocknix-gamepad-calibration.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-gamepad-calibration.service"
+  install -d "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../pocknix-gamepad-calibration.service \
+    "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants/pocknix-gamepad-calibration.service"
+
+  install -Dm644 "${srcdir}/LICENSE.gpcal" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE.gpcal"
+}
