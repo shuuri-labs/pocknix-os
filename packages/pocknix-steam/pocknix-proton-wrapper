@@ -12,6 +12,7 @@ import os
 import pathlib
 import re
 import shlex
+import subprocess
 import sys
 import time
 
@@ -33,6 +34,13 @@ PE_AMD64 = 0x8664
 GAME_MODE_FILE = pathlib.Path("/run/pocknix/game-mode")
 FAN_MODES = ("quiet", "moderate", "performance")
 LAVD_MODES = ("autopilot", "performance", "balanced", "powersave")
+# device.conf is a sh board DISPATCHER, not a flat key=value file, so POCKNIX_BIG_CORES
+# only exists after SOURCING it the way every other consumer does.
+DEVICE_CONF_SNIPPET = (
+    '[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf;'
+    '[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf;'
+    'printf "%s" "${POCKNIX_BIG_CORES}"'
+)
 
 
 def is_arm_slr(real_proton):
@@ -218,6 +226,38 @@ def apply_game_modes(settings):
         print(f"pocknix-proton: failed to write game mode override: {exc}", file=sys.stderr)
 
 
+def big_cores():
+    # Mask is taskset-style ("3-7", "0,4-7"). No fallback guess: an empty set means "leave
+    # affinity alone", since pinning to the wrong cluster is worse than not pinning.
+    try:
+        mask = subprocess.run(["/bin/sh", "-c", DEVICE_CONF_SNIPPET], capture_output=True,
+                              text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    cores = set()
+    for part in mask.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        lo, _, hi = part.partition("-")
+        if not lo.isdigit() or (hi and not hi.isdigit()):
+            return set()
+        cores.update(range(int(lo), int(hi or lo) + 1))
+    return cores
+
+
+def apply_cpu_pin(settings):
+    # Opt-in per title: scx_lavd does the placing by default (see pocknix-steam's launch).
+    # Affinity survives the execv and is inherited by every child, incl. the SLR container.
+    if str(settings.get("cpuPin", "") or "").strip() != "big":
+        return
+    cores = big_cores() & os.sched_getaffinity(0)
+    if not cores:
+        print("pocknix-proton: no usable POCKNIX_BIG_CORES mask, leaving CPU affinity alone", file=sys.stderr)
+        return
+    os.sched_setaffinity(0, cores)
+
+
 def heal_arm_prefix(real_proton):
     # Steam's first-time setup runs VC-redist installers that plant amd64 CRT DLLs (real
     # files) into the prefix; wine's NATIVE arm64 services then die c000007b at boot, and
@@ -290,6 +330,10 @@ def main():
         apply_game_modes(settings)
     except Exception as exc:
         print(f"pocknix-proton: failed to apply game modes: {exc}", file=sys.stderr)
+    try:
+        apply_cpu_pin(settings)
+    except Exception as exc:
+        print(f"pocknix-proton: failed to pin CPU cores: {exc}", file=sys.stderr)
     try:
         heal_arm_prefix(real_proton)
     except Exception as exc:

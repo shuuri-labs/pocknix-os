@@ -17,7 +17,7 @@ SCHEMA_VERSION = 1
 MAX_IMPORT_BYTES = 512 * 1024
 MAX_FIELD_LEN = 4096
 
-GAME_KEYS = ("fexProfile", "audioLatency", "mesaVersion", "envVars", "lavdMode")
+GAME_KEYS = ("fexProfile", "audioLatency", "mesaVersion", "envVars", "lavdMode", "cpuPin")
 
 
 def _device_model():

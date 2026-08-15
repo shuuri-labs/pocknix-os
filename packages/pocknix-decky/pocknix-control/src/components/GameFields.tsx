@@ -23,6 +23,11 @@ export const lavdOptions = [
   { data: "autopilot", label: "Autopilot" },
   { data: "performance", label: "Performance" },
 ];
+// The proton wrapper resolves "big" against the board's POCKNIX_BIG_CORES mask.
+export const cpuPinOptions = [
+  { data: "", label: "All cores" },
+  { data: "big", label: "Big cores only" },
+];
 const globalChoice = { data: "", label: "Use global" };
 
 export function EnvVarsModal({ initial, onSave, closeModal }: { initial: string; onSave: (value: string) => void; closeModal?: () => void }) {
@@ -66,9 +71,11 @@ export function PerfFields({ values, patch }: {
   const perGameLavd = [globalChoice, ...lavdOptions];
   const fanValue = perGameFan.some((option) => option.data === String(values.fanMode ?? "")) ? String(values.fanMode ?? "") : "";
   const lavdValue = perGameLavd.some((option) => option.data === String(values.lavdMode ?? "")) ? String(values.lavdMode ?? "") : "";
+  const pinValue = cpuPinOptions.some((option) => option.data === String(values.cpuPin ?? "")) ? String(values.cpuPin ?? "") : "";
   return (
     <>
       <SelectEdit label="CPU Scheduler" value={lavdValue} options={perGameLavd} onChange={(id) => patch({ lavdMode: id })} />
+      <SelectEdit label="CPU Cores" value={pinValue} options={cpuPinOptions} onChange={(id) => patch({ cpuPin: id })} />
       <SelectEdit label="Fan Curve" value={fanValue} options={perGameFan} onChange={(id) => patch({ fanMode: id })} />
     </>
   );

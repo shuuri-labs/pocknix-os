@@ -397,6 +397,11 @@ const lavdOptions = [
     { data: "autopilot", label: "Autopilot" },
     { data: "performance", label: "Performance" },
 ];
+// The proton wrapper resolves "big" against the board's POCKNIX_BIG_CORES mask.
+const cpuPinOptions = [
+    { data: "", label: "All cores" },
+    { data: "big", label: "Big cores only" },
+];
 const globalChoice = { data: "", label: "Use global" };
 function EnvVarsModal({ initial, onSave, closeModal }) {
     const [value, setValue] = SP_REACT.useState(initial);
@@ -414,7 +419,8 @@ function PerfFields({ values, patch }) {
     const perGameLavd = [globalChoice, ...lavdOptions];
     const fanValue = perGameFan.some((option) => option.data === String(values.fanMode ?? "")) ? String(values.fanMode ?? "") : "";
     const lavdValue = perGameLavd.some((option) => option.data === String(values.lavdMode ?? "")) ? String(values.lavdMode ?? "") : "";
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: lavdValue, options: perGameLavd, onChange: (id) => patch({ lavdMode: id }) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: fanValue, options: perGameFan, onChange: (id) => patch({ fanMode: id }) })] }));
+    const pinValue = cpuPinOptions.some((option) => option.data === String(values.cpuPin ?? "")) ? String(values.cpuPin ?? "") : "";
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: lavdValue, options: perGameLavd, onChange: (id) => patch({ lavdMode: id }) }), SP_JSX.jsx(SelectEdit, { label: "CPU Cores", value: pinValue, options: cpuPinOptions, onChange: (id) => patch({ cpuPin: id }) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: fanValue, options: perGameFan, onChange: (id) => patch({ fanMode: id }) })] }));
 }
 /** The per-game tweak controls, shared by the Games tab and the library context-menu modal. */
 function TweakFields({ config, appid, values, patch }) {

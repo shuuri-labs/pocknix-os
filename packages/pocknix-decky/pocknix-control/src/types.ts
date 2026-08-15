@@ -12,6 +12,8 @@ export interface GameTweak {
   fanMode?: string;
   /** Per-game scx_lavd mode override, applied for the game session only; "" = use global. */
   lavdMode?: string;
+  /** "big" pins the game to the device's big cores (POCKNIX_BIG_CORES); "" = all cores. */
+  cpuPin?: string;
   [key: string]: any;
 }
 
