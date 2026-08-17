@@ -7,6 +7,16 @@ set -u
 STEAM="${HOME}/.local/share/Steam"
 RES=/usr/share/pocknix-steam
 
+# Subshell: device.conf sets many board vars; none may leak into this set -u script.
+DXVK2_DONOR="${RES}/dxvk2-donor"
+GPU_DXVK3="$(
+  set +u
+  for dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
+    [ -r "${dc}" ] && . "${dc}"
+  done
+  printf '%s' "${POCKNIX_GPU_DXVK3:-yes}"
+)"
+
 ARM_PROTONS=(
   "Proton 11.0 (ARM64)"
   "Proton Experimental (ARM64)"
@@ -42,6 +52,20 @@ apply_proton() { # <steamapps/common dir>
   # The toolmanifest's commandline is relative to the tool dir, so the shim must sit next to `proton`.
   cmp -s "${RES}/pocknix-proton" "${proton_dir}/pocknix-proton" 2>/dev/null \
     || install -Dm755 "${RES}/pocknix-proton" "${proton_dir}/pocknix-proton"
+
+  # DXVK 3 rejects a6xx and account-listed Valve tools can't be hidden, so swap in the
+  # 2.7 donor (Valve's own dlls, same wine lineage). One-dll cmp = write-free loop
+  # (a DXVK bump changes every dll); tmp+mv so a mid-swap launch never sees a half dir.
+  local dxvk="${proton_dir}/files/lib/wine/dxvk" probe
+  if [ "${GPU_DXVK3}" = no ] && [ -d "${DXVK2_DONOR}" ] && [ -d "${dxvk}" ]; then
+    probe="$(cd "${DXVK2_DONOR}" && find . -type f -name '*.dll' | sort | head -1)"
+    if [ -n "${probe}" ] && ! cmp -s "${DXVK2_DONOR}/${probe}" "${dxvk}/${probe}"; then
+      rm -rf "${dxvk}.pocknix-tmp"
+      cp -a "${DXVK2_DONOR}" "${dxvk}.pocknix-tmp" \
+        && rm -rf "${dxvk}" \
+        && mv "${dxvk}.pocknix-tmp" "${dxvk}"
+    fi
+  fi
 }
 
 # Protons that declare a runtime dependency launch inside an SLR container (Valve's x86 builds, and
