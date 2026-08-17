@@ -4,8 +4,8 @@
 # of each upstream series, built turnip-only from source with the SAME per-SoC tuning as
 # packages/mesa (POCKNIX_TUNE_CFLAGS from config/tuning/${SOC}.conf, sm8550 fallback).
 pkgname=pocknix-turnip-arm
-pkgver=20260806
-pkgrel=2
+pkgver=20260817
+pkgrel=1
 pkgdesc="Pinned aarch64 Turnip builds for per-game Mesa selection (SoC-tuned)"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
@@ -23,7 +23,7 @@ options=(!lto)
 # plus a commit count). Pinned, not floating, so a rebuild is reproducible; refresh
 # _develcommit deliberately. GitLab's generated archive is a loud sha256 mismatch if it ever
 # recompresses, not a silent swap.
-_develcommit=524a1411b67c623857732d11a2bc1bb2a1a7505d
+_develcommit=0b1b8798d81cb4da8c181c7d81076a0541006853
 _versions=('25.0.7' '25.1.9' '25.2.8' '25.3.6' '26.0.8' '26.1.6' '26.2.0' '26.3.0devel')
 source=('0001-c11-threads-fix-build-on-c23.patch'
         'https://archive.mesa3d.org/mesa-25.0.7.tar.xz'
@@ -42,7 +42,7 @@ sha256sums=('SKIP'
             'caf1c0061a68e88dfa74967a7e780c0e85d65b6c4e334cd69095a5dc54ad78bc'
             '5296b88a0f1e012e2cb9ada150a2bbadf728ca81e5a4fb2ab43c83a4d2158606'
             'efd4bb08cdb7c365a812cd4e6c9202ab55b2f22cdcd13c7d6c4f9647b799a4ef'
-            'dbb9deb127166bedaa9f2f6460bf12fd7569c90c40d84df0e3facde20b0b2575')
+            '9f0fb71d23005d8c2c2cea3af1a5c8768643e3b95d5fc0cf6e4e7c34db2b2ae2')
 
 # version -> source dir suffix: the devel snapshot extracts to mesa-<commit>, releases to
 # mesa-<ver> (RC tarballs keep the hyphen makepkg forbids in a pkgver).
