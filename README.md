@@ -77,7 +77,7 @@ See [Install to internal storage](docs/install-to-internal.md) for the full walk
 
 ### Picking a Proton
 
-**On SM8550 devices (Retroid Pocket 6, Odin 2 family) there is nothing to do.** The Steam client now ships Valve's ARM Protons itself, and **Proton 11 (ARM64)** is downloaded and selected automatically the first time you launch a game.
+The Steam client now ships Valve's ARM Protons itself, and **Proton 11 (ARM64)** is downloaded and selected automatically the first time you launch a game.
 
 If a game misbehaves or runs poorly, **Proton Experimental (ARM64)** is worth trying. It's Valve's rolling preview build, so the newest fixes land there first, and given how new Proton for ARM is it's often the better option for compatibility and performance - though being a moving target, a Steam update can also change how it behaves. To switch, open the game's **Properties → Compatibility**, tick **"Force the use of a specific Steam Play compatibility tool"**, and pick it. This is a per-game setting.
 
