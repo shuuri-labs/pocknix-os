@@ -5,6 +5,7 @@ import { ConfigSection } from "../components/ConfigSection";
 import { EnvVarsButton, PerfFields, TweakFields, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
 import { SelectEdit } from "../components/widgets";
 import { availableGames, editTargetOptions } from "../lib/games";
+import { fexSteamString, syncFexLaunchOption } from "../lib/launchOptions";
 import { clone } from "../lib/util";
 import type { Config } from "../types";
 
@@ -46,6 +47,10 @@ export function Games({ config, setConfig, reload }: {
       };
       return next;
     });
+    // Token policy mirrors the wrapper's merge: enabled = own-or-global profile, disabled = none.
+    const stored = tweaks.games[game.appid] || {};
+    const profile = enabled ? String(stored.fexProfile ?? tweaks.global.fexProfile ?? "") : "";
+    syncFexLaunchOption(game.appid, fexSteamString(profile, config.fexProfiles));
   };
   // "" is the explicit Default target, not "nothing selected"; store a sentinel
   // so it doesn't fall back to the running game in the selectedGame derivation.
@@ -100,7 +105,20 @@ export function Games({ config, setConfig, reload }: {
           <div className="pocknix-note">Changes apply on next game launch</div>
           {editingDefault ? (
             <>
-              <SelectEdit label="FEX Preset" value={fexValue} options={fexOptions} onChange={(id) => patchSettings({ fexProfile: id })} />
+              <SelectEdit
+                label="FEX Preset"
+                value={fexValue}
+                options={fexOptions}
+                onChange={(id) => {
+                  patchSettings({ fexProfile: id });
+                  // Enabled games without their own profile inherit this pick; resync their tokens.
+                  for (const [appid, entry] of Object.entries(tweaks.games)) {
+                    if (entry?.enabled === true && !entry.fexProfile) {
+                      syncFexLaunchOption(appid, fexSteamString(String(id), presets));
+                    }
+                  }
+                }}
+              />
               <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patchSettings({ audioLatency: id })} />
               <EnvVarsButton value={String(values.envVars ?? "")} onSave={(next) => patchSettings({ envVars: next })} />
             </>

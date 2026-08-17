@@ -170,4 +170,5 @@ def apply_config(path, source_appid, target_appid, target_name):
     tweaks = load_tweaks()
     tweaks.setdefault("games", {})[target_appid] = entry
     save_tweaks(tweaks)
-    return {"protonTool": tool}
+    # fexProfile/enabled let the frontend mirror the pick into launch options (Steam API only).
+    return {"protonTool": tool, "fexProfile": entry.get("fexProfile", ""), "enabled": entry.get("enabled") is True}

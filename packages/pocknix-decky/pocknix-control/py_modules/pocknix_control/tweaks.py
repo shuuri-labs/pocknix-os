@@ -12,17 +12,26 @@ TWEAKS_CONFIG = Path("/etc/pocknix/game-tweaks.json")
 FEX_PROFILES_CONFIG = Path("/usr/share/pocknix/fex-profiles.json")
 PLUGIN_FEX_PROFILES_CONFIG = Path(__file__).resolve().parent.parent.parent / "fex-profiles.json"
 TURNIP_DIRS = {"arm": Path("/usr/share/pocknix/vk-arm"), "x86": Path("/usr/share/pocknix/vk-x86")}
+CONTAINER_VK_LIST = Path("/usr/share/fex-emu/vk-x86-container.list")
 
 
 def mesa_versions():
-    # ARM payloads only: an x86 Proton's graphics come from the FEX rootfs, so a host pin never lands.
+    # One entry per series ("25.2"); the wrapper resolves the point release per Proton flavor.
+    # x86 SLR captures graphics from the FEX rootfs, so only image-embedded x86 payloads count
+    # — never offer a pin the wrapper would refuse at launch.
+    try:
+        embedded = set(CONTAINER_VK_LIST.read_text().split())
+    except OSError:
+        embedded = set()
     series = {}
-    for arch, base in [("arm", TURNIP_DIRS["arm"])]:
+    for arch, base in TURNIP_DIRS.items():
         try:
             versions = [p.name for p in base.iterdir() if (p / "icd.json").is_file()]
         except OSError:
             continue
         for v in versions:
+            if arch == "x86" and v not in embedded:
+                continue
             m = re.match(r"([0-9]+)\.([0-9]+)", v)
             if not m:
                 continue
@@ -35,6 +44,8 @@ def mesa_versions():
         # "git" marks an unreleased main snapshot, so a devel payload can't read as a
         # shipped release (the series key alone would show a bare "26.3").
         label = key + (" RC" if entry["rc"] else "") + (" git" if entry["devel"] else "")
+        if entry["archs"] != {"arm", "x86"}:
+            label += f" ({'ARM' if 'arm' in entry['archs'] else 'x86'} only)"
         choices.append({"data": key, "label": label})
     return sorted(choices, key=lambda c: tuple(int(x) for x in c["data"].split(".")))
 
@@ -53,8 +64,13 @@ def load_fex_contract():
 
 
 def fex_profile_labels(contract):
+    # "steam" = the profile's STEAM_COMPAT_FEX_CONFIG string (see src/lib/launchOptions.ts).
     return {
-        name: {"label": profile.get("label", name.title()), "config": profile.get("config", {})}
+        name: {
+            "label": profile.get("label", name.title()),
+            "config": profile.get("config", {}),
+            "steam": profile.get("steam", ""),
+        }
         for name, profile in contract["profiles"].items()
         if isinstance(profile, dict)
     }
