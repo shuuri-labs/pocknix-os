@@ -1,8 +1,9 @@
 import { openFilePicker, toaster } from "@decky/api";
 import { ButtonItem, ConfirmModal, PanelSection, PanelSectionRow, TextField, showModal } from "@decky/ui";
 import { useState } from "react";
-import { applyConfig, configDir, exportConfig, readConfig } from "../backend";
+import { applyConfig, configDir, exportConfig, getConfig, readConfig } from "../backend";
 import { availableCompatTools, resolveCompatTool, setCompatTool } from "../lib/compat";
+import { fexSteamString, syncFexLaunchOption } from "../lib/launchOptions";
 import { SelectEdit } from "./widgets";
 import type { ConfigPreview } from "../types";
 
@@ -57,6 +58,12 @@ function ImportModal({ path, preview, game, onDone, closeModal }: {
     setBusy(true);
     try {
       const result = await applyConfig(path, source, game.appid, game.name);
+      try {
+        const cfg = await getConfig();
+        const profile = result.enabled ? String(result.fexProfile || cfg.tweaks.global.fexProfile || "") : "";
+        await syncFexLaunchOption(game.appid, fexSteamString(profile, cfg.fexProfiles));
+      } catch (error) {
+      }
       if (result.protonTool) {
         const tools = await availableCompatTools(game.appid);
         const resolved = resolveCompatTool(result.protonTool, tools);

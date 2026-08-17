@@ -1,11 +1,16 @@
 #!/bin/sh
-# pocknix-proton — compat-tool entrypoint shim. toolmanifest.vdf's commandline points here
-# (paths are relative to the tool dir); wraps the real entrypoint next to it with the per-game
-# tweak wrapper. In Proton dirs that is `proton`; in SteamLinuxRuntime dirs (Valve x86 Protons
-# run inside the container) it is `_v2-entry-point`. Installed by pocknix-proton-prep.
+# pocknix-proton — compat-tool entrypoint shim: wraps the real entrypoint next to it with the
+# per-game tweak wrapper. Proton dirs: `proton`. SLR dirs: prep also installs this AS
+# `_v2-entry-point` with Valve's script at `.real` (see pocknix-proton-prep for why).
 here="$(dirname "$0")"
 target="${here}/proton"
+[ -e "${target}" ] || target="${here}/_v2-entry-point.real"
 [ -e "${target}" ] || target="${here}/_v2-entry-point"
+# Never exec ourselves (shim at _v2-entry-point with .real missing).
+if [ "${target}" -ef "$0" ]; then
+  echo "pocknix-proton: real entry point missing next to $0 (verify tool files in Steam)" >&2
+  exit 1
+fi
 # A container has its own /usr, so the wrapper is unreachable there; launching untweaked beats failing.
 WRAPPER=/usr/lib/pocknix/pocknix-proton-wrapper
 [ -x "${WRAPPER}" ] || exec "${target}" "$@"

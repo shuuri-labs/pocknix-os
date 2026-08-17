@@ -48,13 +48,28 @@ apply_proton() { # <steamapps/common dir>
 # Proton 11 ARM). Wrap the runtime's entry point so the tweak wrapper runs BEFORE pressure-vessel,
 # where its env still reaches the graphics capture.
 apply_slr() {
-  local slr_dir manifest
+  local slr_dir manifest entry real
   for slr_dir in "${STEAM}/steamapps/common/SteamLinuxRuntime"*/; do
     [ -d "${slr_dir}" ] || continue
     manifest="${slr_dir}toolmanifest.vdf"
     [ -f "${manifest}" ] || continue
     cmp -s "${RES}/pocknix-proton" "${slr_dir}pocknix-proton" 2>/dev/null \
       || install -Dm755 "${RES}/pocknix-proton" "${slr_dir}pocknix-proton"
+    # Steam caches this manifest per client session, so after a tool update it launches Valve's
+    # "/_v2-entry-point" until restart: claim that NAME too. The marker grep decides whose bytes
+    # a file holds — never copy any version of our shim over .real.
+    entry="${slr_dir}_v2-entry-point"
+    real="${slr_dir}_v2-entry-point.real"
+    if [ -f "${entry}" ] && ! grep -q pocknix-proton-wrapper "${entry}"; then
+      cp -p "${entry}" "${real}"
+    fi
+    if [ -f "${real}" ] && ! grep -q pocknix-proton-wrapper "${real}"; then
+      # tmp+mv: Steam may exec this exact path mid-write, and mv keeps it always runnable.
+      cmp -s "${RES}/pocknix-proton" "${entry}" 2>/dev/null || {
+        install -m755 "${RES}/pocknix-proton" "${entry}.pocknix-tmp" \
+          && mv -f "${entry}.pocknix-tmp" "${entry}"
+      }
+    fi
     if grep -q '"/_v2-entry-point ' "${manifest}"; then
       sed -i 's|"/_v2-entry-point |"/pocknix-proton |' "${manifest}"
     fi

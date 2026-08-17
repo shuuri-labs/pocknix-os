@@ -30,6 +30,8 @@ export interface InstalledGame {
 export interface FexProfile {
   label: string;
   config?: Record<string, string>;
+  /** Complete STEAM_COMPAT_FEX_CONFIG string for Valve's x86 FEX; "" = not expressible. */
+  steam?: string;
 }
 
 export interface GameRef {
@@ -103,6 +105,8 @@ export interface ConfigPreview {
 
 export interface ConfigImportResult {
   protonTool: string;
+  fexProfile?: string;
+  enabled?: boolean;
 }
 
 export interface SdcardInfo {

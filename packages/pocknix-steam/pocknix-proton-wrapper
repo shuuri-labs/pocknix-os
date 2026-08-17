@@ -43,10 +43,14 @@ DEVICE_CONF_SNIPPET = (
 )
 
 
+# prep's name claim hands us the ".real" sibling — both spellings must classify identically.
+SLR_ENTRY_NAMES = ("_v2-entry-point", "_v2-entry-point.real")
+
+
 def is_arm_slr(real_proton):
     # An SLR chain hides the Proton behind the entry point; the runtime dir name carries the arch.
     p = pathlib.Path(real_proton)
-    return p.name == "_v2-entry-point" and p.resolve().parent.name.endswith("-arm64")
+    return p.name in SLR_ENTRY_NAMES and p.resolve().parent.name.endswith("-arm64")
 
 
 def is_arm_proton(real_proton):
@@ -194,7 +198,7 @@ def apply_mesa_version(settings, real_proton):
         print(f"pocknix-proton: no {base.name} turnip payload for mesa {version}, using default driver", file=sys.stderr)
         return
     picked = max(candidates, key=lambda v: tuple(int(x) for x in re.findall(r"[0-9]+", v)))
-    if pathlib.Path(real_proton).name == "_v2-entry-point" and flavor == "x86":
+    if pathlib.Path(real_proton).name in SLR_ENTRY_NAMES and flavor == "x86":
         # x86 SLR captures graphics from the FEX rootfs, so only image-embedded versions survive.
         # An arm64 container captures the real host, where our payloads already live.
         try:

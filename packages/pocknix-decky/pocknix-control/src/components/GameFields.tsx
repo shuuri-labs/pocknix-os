@@ -2,6 +2,7 @@ import { ButtonItem, ConfirmModal, PanelSectionRow, TextField, showModal } from 
 import { useEffect, useState } from "react";
 import { availableCompatTools, registerForCompatTool, setCompatTool } from "../lib/compat";
 import type { CompatTool } from "../lib/compat";
+import { fexSteamString, syncFexLaunchOption } from "../lib/launchOptions";
 import { SelectEdit } from "./widgets";
 import type { Config } from "../types";
 
@@ -135,9 +136,17 @@ export function TweakFields({ config, appid, values, patch }: {
           setCompatTool(appid, String(name));
         }}
       />
-      <SelectEdit label="FEX Preset" value={fexValue} options={fexOptions} onChange={(id) => patch({ fexProfile: id })} />
+      <SelectEdit
+        label="FEX Preset"
+        value={fexValue}
+        options={fexOptions}
+        onChange={(id) => {
+          patch({ fexProfile: id });
+          syncFexLaunchOption(appid, fexSteamString(String(id), presets));
+        }}
+      />
       <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patch({ audioLatency: id })} />
-      <SelectEdit label="Mesa Version (ARM Proton only)" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
+      <SelectEdit label="Mesa Version" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
       <EnvVarsButton value={String(values.envVars ?? "")} onSave={(next) => patch({ envVars: next })} />
     </>
   );
