@@ -81,11 +81,9 @@ See [Install to internal storage](docs/install-to-internal.md) for the full walk
 
 If a game misbehaves or runs poorly, **Proton Experimental (ARM64)** is worth trying. It's Valve's rolling preview build, so the newest fixes land there first, and given how new Proton for ARM is it's often the better option for compatibility and performance - though being a moving target, a Steam update can also change how it behaves. To switch, open the game's **Properties → Compatibility**, tick **"Force the use of a specific Steam Play compatibility tool"**, and pick it. This is a per-game setting.
 
-**On SM8250 devices (Retroid Pocket 5, Flip 2) you do need to pick one**, because Valve's ARM Protons cannot run games on these devices. For each game you install, open its **Properties → Compatibility**, tick **"Force the use of a specific Steam Play compatibility tool"**, and pick **Proton-GE 11 (ARM64)** or **Proton-CachyOS 11 (ARM64)** - both ship with Pocknix and either is a good default; if a game misbehaves or runs poorly on one, try the other.
+Additional options worth trying are **Proton-GE 11 (ARM64)** and **Proton-CachyOS 11 (ARM64)** - both are included with Pocknix. If a game will not boot on any ARM Proton, the normal (x86) Protons should "just work" too, but performance will be worse than the native ARM builds - only reach for one as a last resort.
 
-The reason is DXVK 3, which Proton 11 and Proton Experimental both use: it depends on 8-bit storage, which Mesa (the GPU driver) does not support on the Adreno a6xx GPUs in SM8250 devices. Our SM8250 builds of the GE and Cachy Protons are patched to replace DXVK 3 with DXVK 2.7, which is why they work. Valve's (x86) Proton 10 and below ship older DXVK versions and are unaffected; Proton 11 (x86) may not work for the same reason.
-
-**For all SoC families:** if a game will not boot on any ARM Proton, the normal (x86) Protons should "just work" too, but performance will be worse than the native ARM builds - only reach for one as a last resort.
+> **Note for SM8250 users** (Retroid Pocket 5, Flip 2): Proton Experimental has moved to DXVK 3, and DXVK 3+ depends on 8-bit storage, which Mesa (the GPU driver) does not support on the Adreno a6xx GPUs in these devices. Pocknix bundles a hook that swaps an older DXVK (2.7) into **Proton Experimental (ARM64)** after it is installed, so it works anyway. The hook is also armed for **Proton 11 (ARM64)**, in case it ever gets bumped to DXVK 3+, and Pocknix's own SM8250 builds of the GE and Cachy Protons already ship DXVK 2.7. The hook does *not* cover the x86 Protons, so **Proton Experimental** (x86) likely will not work on these devices; Proton 11 (x86) still ships an older DXVK and is unaffected for now.
 
 ## Emulation
 
