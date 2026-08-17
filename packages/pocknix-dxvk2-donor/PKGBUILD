@@ -1,0 +1,22 @@
+# DXVK 2.7 donor that pocknix-proton-prep swaps into downloaded Valve ARM Protons on
+# POCKNIX_GPU_DXVK3=no boards (rationale: prep's apply_proton). Valve Proton 11's own
+# 2.7.1-467, dlls follow wine lineage (provenance: proton-ge-dxvk2/README.provenance).
+# Publish to the sm8250 repo ONLY; delivered by the pocknix-device-sm8250 dep edge.
+pkgname=pocknix-dxvk2-donor
+_donor=dxvk-arm64-2.7.1-467-valve-proton11
+pkgver=2.7.1.467
+pkgrel=1
+pkgdesc="Valve Proton 11 DXVK 2.7.1-467 donor dlls for a6xx (no storageBuffer8BitAccess)"
+arch=('aarch64')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('zlib')
+depends=('pocknix-steam')
+options=('!strip')
+source=("https://pocknix.shuuri.net/mirror/${_donor}.tar.xz")
+sha512sums=('0360fd5c00c16381be4380ea3f7b1f4c4afe6721fef483ad092bfd538bc57b2b4a869a17c084fbc2a795fc99c9dba10cf1a0258910fbb83afbe1a0257cf24962')
+
+package() {
+  # Tarball extracts to dxvk/ (a complete files/lib/wine/dxvk directory).
+  mkdir -p "${pkgdir}/usr/share/pocknix-steam"
+  cp -a "${srcdir}/dxvk" "${pkgdir}/usr/share/pocknix-steam/dxvk2-donor"
+}

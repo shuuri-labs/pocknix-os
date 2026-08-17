@@ -4,7 +4,7 @@
 # turns an ALARM base into pocknix for any sm8250 board (Retroid Pocket 5).
 pkgname=pocknix-device-sm8250
 pkgver=0.1.0
-pkgrel=5
+pkgrel=6
 pkgdesc="pocknix device metapackage: SM8250 family (RP5, RP Flip 2)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -15,6 +15,8 @@ depends=('pocknix-bsp-sm8250'
          'pocknix-steam'
          'proton-cachyos-dxvk2'
          'proton-ge-dxvk2'
+         # a6xx donor prep swaps into downloaded Valve ARM Protons (dep edge = delivery)
+         'pocknix-dxvk2-donor'
          'pocknix-desktop'
          'pocknix-emulation'
          'pocknix-decky'
