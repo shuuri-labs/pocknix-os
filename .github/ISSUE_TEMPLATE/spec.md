@@ -1,47 +1,40 @@
 ---
-name: "Bug spec"
-about: "A diagnosed bug, ready to pick up. If you are reporting a new problem, use
-  the bug report form instead. For planned non-bug work, use the Task template."
-title: "area: short problem statement"
+name: "Spec"
+about: "A specced work item, ready to pick up: a diagnosed bug or planned task.
+  If you are reporting a new problem, use the bug report form instead."
+title: "area: short summary"
 labels: specced
 ---
 
-<!-- This skeleton is also pasted over the body of a raw bug report when
-     converting it into a spec. -->
+<!-- Also pasted over the body of a raw bug report when converting it into a spec. -->
 
-## Problem
+## What and why
 
-<!-- What is wrong or missing, from the user's point of view. If converted from a
-     report or Discord thread, link it and credit the reporter. -->
+<!-- Bugs: the symptom, who hits it, exact repro steps, affected devices + session.
+     Tasks: what we're building and the motivation.
+     Either way: link the original report or Discord thread and credit the reporter. -->
 
-## Reproduction
+## What we know
 
-<!-- Exact steps. "Could not reproduce locally, reported on <device>" is fine - say so. -->
+<!-- Bugs: root cause, or the leads and eliminations so far.
+     Tasks: design decisions already made, prior art, known dead ends. -->
 
-- Devices affected:
-- Session (gaming / desktop / both):
+## Where it lives
 
-## Root cause (if known)
-
-<!-- What is actually going on, or the leads and eliminations so far. -->
-
-## Where the fix lives
-
-<!-- Path(s) per the "Where changes go" table in CONTRIBUTING.md,
-     e.g. packages/pocknix-steam/. Never vendor/. -->
+<!-- Path(s) per the "Where changes go" table in CONTRIBUTING.md. Never vendor/. -->
 
 ## Constraints
 
-<!-- Repo rules that apply to this task. Keep the ones that do: -->
+<!-- Repo rules that apply. Keep the ones that do: -->
 
 - [ ] `pkgrel` bump, so installed devices get the change via `pacman -Syu`
-- [ ] Fix lives in a robust location (survives `make sync`, session restart, reboot)
+- [ ] Lives in a robust location (survives `make sync`, session restart, reboot)
 - [ ] Covers both SoC families, or states why it is scoped to one
 
 ## Acceptance
 
-<!-- What "done" looks like: the observable behaviour, and what your on-device
-     testing must cover (see "What your testing should cover" in CONTRIBUTING.md). -->
+<!-- What "done" looks like: the observable behaviour, and what on-device testing
+     must cover (see "What your testing should cover" in CONTRIBUTING.md). -->
 
 - Hardware needed to validate:
 
