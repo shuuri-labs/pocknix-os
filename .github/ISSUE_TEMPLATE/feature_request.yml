@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an improvement or new capability
+labels: ["triage", "enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: >
+        Describe the situation, not just the feature. "I want to X but currently
+        have to Y" is more useful than a solution on its own.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: If you have a specific idea of how it should work.
+    validations:
+      required: false
+  - type: input
+    id: devices
+    attributes:
+      label: Which device(s) does this apply to?
+      placeholder: "RP5, all SM8550, all devices, ..."
+    validations:
+      required: false
+  - type: dropdown
+    id: involvement
+    attributes:
+      label: Would you want to help?
+      options:
+        - Just suggesting
+        - Happy to test it on my device
+        - Interested in implementing it
+    validations:
+      required: false

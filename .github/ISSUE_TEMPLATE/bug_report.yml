@@ -1,0 +1,66 @@
+name: Bug report
+description: Something is broken or misbehaving on your device
+labels: ["triage"]
+body:
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      options:
+        - Retroid Pocket 6
+        - Retroid Pocket 5
+        - Retroid Pocket Flip 2
+        - AYN Odin 2
+        - AYN Odin 2 Mini
+        - AYN Odin 2 Portal
+        - Other / not device-specific
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Pocknix version
+      description: >
+        The release you installed, or the version of the affected package if you
+        know it (`pacman -Q pocknix-steam`, `pacman -Q linux-pocknix`, ...).
+      placeholder: "v0.3, or pocknix-steam 0.1.0-56"
+    validations:
+      required: true
+  - type: dropdown
+    id: session
+    attributes:
+      label: Where it happens
+      options:
+        - Gaming mode (Steam)
+        - Desktop mode (Plasma)
+        - Both
+        - Boot / before any session
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or extra context
+      description: >
+        Anything else useful - journalctl output, screenshots, whether it worked
+        on a previous version.
+      render: text
+    validations:
+      required: false
