@@ -8,7 +8,8 @@ User guides for pocknix-os. New here? Start with the [project README](../README.
   games, and how to tweak emulator settings
 - [waydroid.md](waydroid.md) - running Android apps: setup, installing apps, and app shortcuts
 - [install-to-internal.md](install-to-internal.md) - moving pocknix from the SD card onto the
-  device's internal storage (and back out)
+  device's internal storage, the bootloader menu that picks what boots, uninstalling, and
+  restoring the factory bootloader
 - [snapshots.md](snapshots.md) - automatic pre-update snapshots, one-button rollback, and
   manual recovery when an update goes wrong
 

@@ -86,25 +86,8 @@ remove_flow() {
 }
 
 manage_flow() {
-  local info="$1" android pocknix primary rc=0
+  local info="$1" android pocknix rc=0
   android=$(val "$info" android_gib); pocknix=$(val "$info" pocknix_gib)
-
-  if [ "$(val "$info" boot_disabled)" = 1 ]; then
-    # Stage 1 of a removal was done (internal boot FAT deleted) but POCKNIX_ROOT is intact:
-    # offer to finish the removal, or to bring the internal install back (--enable-boot).
-    kdialog --title "$TITLE" --yes-label "Finish removal" --no-label "Re-enable internal boot" \
-      --cancel-label "Cancel" --warningyesnocancel \
-      "<b>Internal Pocknix is present but its boot is disabled</b> (removal step 1 was done).<br/><br/>Android: <b>${android} GB</b> &nbsp;&nbsp; Pocknix: <b>${pocknix} GB</b><br/><br/><b>Finish removal</b> gives the whole disk back to Android.<br/><b>Re-enable internal boot</b> brings the internal Pocknix back as it was." \
-      && rc=0 || rc=$?
-    case $rc in
-      0) remove_flow
-         offer_poweroff "<b>Pocknix removed.</b> Android has the full internal storage again (it factory-resets on its next boot).<br/><br/>Power off; remove the SD card to boot Android." ;;
-      1) run_busy "Re-enabling internal boot…" "$UNINSTALL_CLI" --enable-boot --yes \
-           || gui_die "Re-enable failed (details in ${LOG})."
-         offer_poweroff "<b>Internal boot re-enabled.</b><br/><br/>Power off, remove the SD card, then power on — internal Pocknix boots again." ;;
-    esac
-    return
-  fi
 
   kdialog --title "$TITLE" --yes-label "Reinstall Pocknix" --no-label "Remove, restore Android" \
     --cancel-label "Cancel" --warningyesnocancel \
@@ -124,7 +107,7 @@ manage_flow() {
 internal_boot_flow() {
   # instructions only: the disk under / can't be repartitioned from here, so the
   # supported flow is the ROCKNIX ABL boot menu
-  offer_poweroff "<b>Pocknix is running from internal storage.</b><br/><br/>Power off, then boot holding <b>Volume&nbsp;-</b> to open the ROCKNIX boot menu:<br/><br/><b>Switch boot source</b> — set it to <b>External</b> to start from the SD card instead.<br/><b>Uninstall CFW</b> — remove Pocknix from internal storage and give Android its full partition size back (the resize factory-resets Android).<br/><br/>To boot Android: switch the boot mode to <b>Android</b> to make it the default, or hold <b>Volume&nbsp;+</b> while powering on to boot it once."
+  offer_poweroff "<b>Pocknix is running from internal storage.</b><br/><br/>Power off, then boot holding <b>Volume&nbsp;-</b> to open the ROCKNIX boot menu:<br/><br/><b>Switch boot source</b> — set it to <b>SD Card</b> to start from the SD card instead.<br/><b>Uninstall CFW</b> — remove Pocknix from internal storage and give Android its full partition size back (the resize factory-resets Android).<br/><br/>To boot Android: switch the boot mode to <b>Android</b> to make it the default, or hold <b>Volume&nbsp;+</b> while powering on to boot it once."
 }
 
 # --- main ---
@@ -138,6 +121,6 @@ case "$(val "$info" mode)" in
   fresh)    install_flow "$info" ;;
   occupied) manage_flow "$info" ;;
   toosmall) gui_die "Internal storage is too small: Pocknix needs about $(val "$info" needed_gib) GB and Android's data partition is only $(val "$info" android_current_gib) GB." ;;
-  foreign)  gui_die "Internal storage has a Linux install this tool did not create (e.g. ROCKNIX).<br/><br/>Remove it first (bootloader menu → <b>Uninstall ROCKNIX</b>, or manually with parted), then relaunch." ;;
+  foreign)  gui_die "Internal storage has a Linux install this tool did not create (e.g. ROCKNIX).<br/><br/>Remove it first (boot menu → <b>Uninstall CFW</b>, or manually with parted), then relaunch." ;;
   *)        gui_die "Unexpected internal-storage state (details in ${LOG})." ;;
 esac

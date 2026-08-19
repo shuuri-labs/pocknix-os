@@ -104,7 +104,6 @@ if echo "$existing" | grep -qx -e "$ROOT_GPT_NAME"; then
   if [ "$DETECT" = 1 ]; then
     # --detect: machine-readable k=v state for pocknix-installer-gui. Read-only, exits 0.
     echo "mode=occupied"
-    if echo "$existing" | grep -qx -e "$BOOT_GPT_NAME"; then echo "boot_disabled=0"; else echo "boot_disabled=1"; fi
     parted -m -s "$DEVICE" unit B print | awk -F: -v r="$ROOT_GPT_NAME" -v b="$BOOT_GPT_NAME" '
       NR>2 { sz=$4; sub("B","",sz)
              if ($6=="userdata") a+=sz; else if ($6==r || $6==b) p+=sz }

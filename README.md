@@ -48,8 +48,8 @@ The flashed SD card carries ROCKNIX's install kit in its `rocknix_abl` folder (v
 
 1. Copy the `rocknix_abl` folder from the SD card to the root of Android's internal storage.
 2. Open **Settings → Handheld Settings → Advanced → Run Script as Root**, navigate to the `rocknix_abl` folder you just copied, and run `backup_abl.sh` (saves your stock bootloader next to the scripts) followed by `flash_abl.sh`.
-3. **(Optional, but recommended)** copy the `abl_a.img`/`abl_b.img` backups from inside the `rocknix_abl` folder to somewhere safe off the device - if you later install Pocknix to internal storage, the Android partition is factory-reset, ABL backups included.
-4. Boot into the ABL menu: hold **Volume −** while powering on or rebooting. Set the boot mode to **Linux** and the boot source to **SD Card**. **SM8550 users must also set the device model to match their device**; SM8250 users can skip this.
+3. **(Optional, but recommended)** copy the `abl_a.img`/`abl_b.img` backups from inside the `rocknix_abl` folder to somewhere safe off the device - if you later install Pocknix to internal storage, the Android partition is factory-reset, ABL backups included. They are the only way back to the factory bootloader; see [restoring the stock bootloader](docs/install-to-internal.md#restoring-the-stock-bootloader).
+4. Boot into the ABL menu: hold **Volume −** while powering on or rebooting - volume keys move through the entries, the power key selects. Set **Boot mode** to **Linux** and **Boot source** to **SD Card**. **SM8550 users must also set the device model to match their device**; SM8250 users can skip this.
 5. Insert the flashed microSD and boot. pocknix-os comes up from the SD card.
 
 > **Although installing the ROCKNIX ABL is recommended, SM8250 users can boot Pocknix without it**: flash a Pocknix SD, insert it, boot while holding **Volume −**, switch the boot mode, and boot.
@@ -68,10 +68,12 @@ Note that the Steam client updates independently - Steam will notify you when an
 
 Running from the SD card works, but the OS and your games load much faster from internal storage. Installing there requires resizing Android's `userdata` partition, which **essentially factory-resets the Android side** (Android itself stays bootable; only user data is wiped). Two ways, both from a system booted off the SD:
 
-- **Pocknix Installer**: switch to desktop mode and launch the **Pocknix Installer** shortcut.
+- **Pocknix Tools**: switch to desktop mode, launch **Pocknix Tools**, and pick *Install or remove internal Pocknix…*.
 - **Terminal**: run `pocknix-install-internal` (do a `--dry-run` first and read the plan).
 
-See [Install to internal storage](docs/install-to-internal.md) for the full walkthrough, including how to uninstall and restore the space to Android.
+Installing does not change what boots. Afterwards, power off and hold **Volume −** to open the ABL menu, then set **Boot source** to **Internal** - switch it back to **SD Card** any time you want to boot the SD card again.
+
+See [Install to internal storage](docs/install-to-internal.md) for the full walkthrough, including how to uninstall, how to give the space back to Android, and how to restore the factory bootloader.
 
 ## How to play games
 
