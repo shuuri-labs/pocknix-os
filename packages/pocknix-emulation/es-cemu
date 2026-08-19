@@ -3,4 +3,6 @@
 # AppImage emulators also need this as their bridge into ES-DE (not in PATH).
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+# Cemu matches its pad by SDL GUID, which differs between the two sessions.
+/usr/lib/pocknix/pocknix-cemu-profile 2>/dev/null || true
 exec taskset -c "${POCKNIX_BIG_CORES:-3-7}" /usr/bin/cemu "$@"

@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+# Cemu binds its controller profile to one SDL GUID, and the pad differs per session: game mode
+# gets Steam Input's virtual pad, desktop mode InputPlumber's xb360. Probe the SDL that Cemu links
+# (GUIDs vary by SDL version) and rewrite only uuid/display_name, never the mappings.
+import ctypes
+import os
+import pathlib
+import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
+
+TEMPLATE = pathlib.Path("/usr/share/pocknix-emulation/cemu-controller0.xml.in")
+PROFILE = pathlib.Path(os.path.expanduser("~/.config/Cemu/controllerProfiles/controller0.xml"))
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [("data", ctypes.c_uint8 * 16)]
+
+
+def joysticks():
+    """[(uuid, name)] in Cemu's "<n>_<guid>" form, where n counts devices sharing a GUID."""
+    try:
+        sdl = ctypes.CDLL("libSDL2-2.0.so.0")
+    except OSError:
+        return []
+    sdl.SDL_JoystickGetDeviceGUID.restype = _GUID
+    sdl.SDL_JoystickGetDeviceGUID.argtypes = [ctypes.c_int]
+    sdl.SDL_JoystickGetGUIDString.argtypes = [_GUID, ctypes.c_char_p, ctypes.c_int]
+    sdl.SDL_JoystickNameForIndex.restype = ctypes.c_char_p
+    sdl.SDL_JoystickNameForIndex.argtypes = [ctypes.c_int]
+    # 0x200 = SDL_INIT_JOYSTICK; dummy video keeps the probe headless inside a launcher.
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    if sdl.SDL_Init(0x200) != 0:
+        return []
+    found, seen = [], {}
+    for i in range(sdl.SDL_NumJoysticks()):
+        buf = ctypes.create_string_buffer(33)
+        sdl.SDL_JoystickGetGUIDString(sdl.SDL_JoystickGetDeviceGUID(i), buf, 33)
+        guid = buf.value.decode()
+        name = (sdl.SDL_JoystickNameForIndex(i) or b"Controller").decode(errors="replace")
+        found.append((f"{seen.get(guid, 0)}_{guid}", name))
+        seen[guid] = seen.get(guid, 0) + 1
+    sdl.SDL_Quit()
+    return found
+
+
+def main():
+    pads = joysticks()
+    if not pads:
+        return 0
+    uuid, name = pads[0]
+    connected = {u for u, _ in pads}
+    PROFILE.parent.mkdir(parents=True, exist_ok=True)
+
+    if PROFILE.exists():
+        try:
+            tree = ET.parse(PROFILE)
+        except ET.ParseError:
+            tree = None
+        if tree is not None:
+            controllers = tree.getroot().findall("controller")
+            if controllers:
+                if any((c.findtext("uuid") or "") in connected for c in controllers):
+                    return 0
+                node = controllers[0]
+                for tag, value in (("uuid", uuid), ("display_name", name)):
+                    child = node.find(tag)
+                    if child is None:
+                        child = ET.SubElement(node, tag)
+                    child.text = value
+                tree.write(PROFILE, encoding="UTF-8", xml_declaration=True)
+                return 0
+
+    if not TEMPLATE.is_file():
+        return 0
+    PROFILE.write_text(
+        TEMPLATE.read_text().replace("__UUID__", uuid).replace("__DISPLAY_NAME__", escape(name))
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

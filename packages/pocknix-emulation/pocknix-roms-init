@@ -132,6 +132,16 @@ if [ -f "${SHARE}/dolphin-Dolphin.ini.in" ] && [ ! -f "${HOME}/.config/dolphin-e
   cp "${SHARE}/dolphin-GCPadNew.ini.in"  "${HOME}/.config/dolphin-emu/GCPadNew.ini"  2>/dev/null || true
 fi
 
+# --- seed Cemu (Wii U) config: game path, fullscreen, no update nag ---
+# Also skips Cemu's onboarding wizard, which runs only when settings.xml is absent (CemuApp
+# isFirstStart). The controller profile is session-dependent, so pocknix-cemu-profile writes
+# that one at launch.
+if [ -f "${SHARE}/cemu-settings.xml.in" ] && [ ! -f "${HOME}/.config/Cemu/settings.xml" ]; then
+  mkdir -p "${HOME}/.config/Cemu"
+  sed "s|__ROMS__|${ROMS}|g" "${SHARE}/cemu-settings.xml.in" \
+    > "${HOME}/.config/Cemu/settings.xml" 2>/dev/null || true
+fi
+
 # --- seed PPSSPP (PSP) config: 4x internal resolution ---
 # PSP native is 480x272; 4x = 1920x1088, matching the 1080p panels. PPSSPP's "auto"
 # default scales with the window, which lands inconsistently on the rotated panels.

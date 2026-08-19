@@ -118,6 +118,7 @@ case "${system}" in
     # the old cemu-x86-bin/FEX route is retired).
     # Big-core pin — same trap as ps2 above.
     command -v Cemu >/dev/null 2>&1 || { echo "pocknix-play: cemu not installed" >&2; exit 1; }
+    /usr/lib/pocknix/pocknix-cemu-profile 2>/dev/null || true   # pad GUID differs per session
     exec taskset -c "${_big_cores}" Cemu -f -g "${rom}" ;;
 
   *)
