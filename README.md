@@ -133,7 +133,6 @@ See the [Pocknix Control docs](docs/pocknix-control.md) for the full tour.
 ## Known issues
 
 - **The Steam session can take a while to come up** - on first boot or after a Steam client update, entering game mode may leave you staring at a black screen for a *long* while, especially when running off an SD card. Be patient and leave the device to do its thing - it will come up. Better ways to show what is happening during these waits are being explored.
-- **Controller support in desktop mode requires Steam to be running** - launch Steam from the desktop session to get controller input there. Even then, emulator controller mappings may not be correct in desktop mode. This is being worked on.
 - **Gyro does not work yet.** The motion sensors are not wired up, so games and emulators that use gyro aim or tilt controls will not see any input. Getting them working is on the list.
 - **MangoHud incurs a slight performance penalty.** It is fine for dialing in settings, but turn it off during real gameplay. I consider this a feature, not a bug - instead of staring at performance metrics (we're all guilty), just enjoy your games! 😃
 
