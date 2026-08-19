@@ -1,9 +1,11 @@
 # Install pocknix-os to internal storage (and uninstall)
 
-> **RECOMMENDED: Install the ROCKNIX ABL first** if you have not already - see
+> **Install the ROCKNIX ABL first** if you have not already - see
 > [How to install](../README.md#how-to-install) in the README. It is what makes switching between
 > the internal install and the SD card a menu choice, and it can remove an internal install on its
-> own.
+> own. On **SM8550** devices (RP6, Odin 2) it is **REQUIRED, not optional**: Pocknix cannot boot
+> without it. Only **SM8250** devices (RP5, Flip 2) can run Pocknix on the stock bootloader, and the
+> ROCKNIX ABL is still recommended there.
 
 ## The ROCKNIX boot menu
 
@@ -145,8 +147,8 @@ Then, from Android:
    and run **`restore_backup_abl.sh`**.
 4. Reboot. The device is back on its factory bootloader and boots Android the way it shipped.
 
-> ⚠️ Keep the device plugged in while doing ABL writes: an interrupted or wrong bootloader write leaves a
-> device that needs a PC to recover.
+> ⚠️ Keep the device plugged in while doing ABL writes: an interrupted or wrong bootloader write
+> leaves a device that needs a PC to recover.
 
 After this, an SM8550 device (RP6, Odin 2) can no longer boot pocknix at all - the stock bootloader
 has no Linux boot path. Flash the ROCKNIX ABL again (README step 2) to bring it back.
