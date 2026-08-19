@@ -1,29 +1,27 @@
 #!/bin/sh
-# Option B: unplug the InputPlumber virtual controller before suspend.
-#
-# Why: with target_devices: [deck], InputPlumber emulates a Steam Deck pad as a
-# virtual USB device over USB/IP (vhci_hcd). vhci_hcd hard-refuses to suspend while
-# any virtual device is attached -- "vhci_hcd.0: We have N active connection. Do not
-# suspend." -> platform_pm_suspend returns -16 (-EBUSY) -> the WHOLE system suspend
-# aborts. (ROCKNIX dodges this by using the ds5 target, which is uhid, not USB/IP.)
-#
-# So stop InputPlumber (which detaches the vhci device) before sleep; the post hook
-# restarts it on resume. A flag in /run records that we stopped it, so we only
-# restart it if it was actually running (don't start it if the user disabled it).
+# vhci_hcd refuses to suspend while a virtual USB device is attached ("We have N active
+# connection. Do not suspend." -> -EBUSY aborts the whole system suspend), and InputPlumber's
+# `deck` target attaches over USB/IP. So stop InputPlumber before sleep -- but only then: the
+# desktop session's `xb360` target is plain uinput, and stopping there destroys the pad's evdev
+# node for nothing (ES-DE and friends rescan only on focus change, so they come back pad-less).
 STATUS=/sys/devices/platform/vhci_hcd.0/status
 FLAG=/run/pocknix-inputplumber-resume
 
-if systemctl is-active --quiet inputplumber; then
+# sockfd is nonzero hex on an attached port; the hex test also skips the header row.
+vhci_attached() {
+  [ -r "${STATUS}" ] || return 1
+  awk '$6 ~ /^[0-9a-f]+$/ && $6 != "000000" {f=1} END{exit !f}' "${STATUS}" 2>/dev/null
+}
+
+if vhci_attached && systemctl is-active --quiet inputplumber; then
   : > "${FLAG}"
   systemctl stop inputplumber
 fi
 
-# `systemctl stop` returns once the process is gone, but give the kernel a moment to
-# finish tearing down the virtual USB port. Wait (max ~3s) until no port has an open
-# socket (column 6 == 000000 on every non-header row), so suspend isn't aborted by a
-# still-attached port.
+# `systemctl stop` returns before the kernel has torn the port down; suspend still aborts if we
+# leave now. Wait ~3s for it to drain.
 i=0
-while [ -r "${STATUS}" ] && awk 'NR>1 && $6 != "000000" {f=1} END{exit !f}' "${STATUS}" 2>/dev/null; do
+while vhci_attached; do
   [ "${i}" -ge 30 ] && break
   i=$((i + 1))
   sleep 0.1

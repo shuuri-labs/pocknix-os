@@ -1,3 +1,11 @@
 #!/bin/bash
 # es-de wrapper — exec the official aarch64 AppImage (see PKGBUILD for why not a source build).
+
+# SDL2 discards joystick events while no SDL window has keyboard focus, and the window comes back
+# from suspend without it; ES-DE sets no hint of its own. Desktop only -- game mode never loses it.
+STATE_HOME="${XDG_STATE_HOME:-${HOME:-/home/deck}/.local/state}"
+if [ "$(cat "${STATE_HOME}/pocknix-session" 2>/dev/null)" = "plasma" ]; then
+  export SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1
+fi
+
 exec /opt/pocknix/es-de/ES-DE.AppImage "$@"

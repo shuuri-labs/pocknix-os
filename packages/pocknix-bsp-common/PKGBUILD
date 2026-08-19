@@ -5,7 +5,7 @@
 # devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=9
+pkgrel=11
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -25,9 +25,11 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'pocknix-fancontrol' 'pocknix-fan-mode' 'pocknix-lavd-mode'
         'pocknix-fancontrol.service' 'pocknix-lavd.service' 'pocknix-game-mode.conf'
         'pocknix-update-abl' '52-pocknix-abl.rules' 'pocknix-gpt-abl'
-        'pocknix-refresh-abl-kit')
+        'pocknix-refresh-abl-kit'
+        'pocknix-gamepad-target' 'pocknix-gamepad-target.service')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP')
 
 package() {
   # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
@@ -97,4 +99,12 @@ package() {
   install -Dm755 "${srcdir}/pocknix-refresh-abl-kit" "${pkgdir}/usr/bin/pocknix-refresh-abl-kit"
   install -Dm644 "${srcdir}/52-pocknix-abl.rules" \
     "${pkgdir}/usr/share/polkit-1/rules.d/52-pocknix-abl.rules"
+
+  # Enabled by a wants symlink rather than an enable hook: it is pulled in by InputPlumber itself.
+  install -Dm755 "${srcdir}/pocknix-gamepad-target" "${pkgdir}/usr/bin/pocknix-gamepad-target"
+  install -Dm644 "${srcdir}/pocknix-gamepad-target.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-gamepad-target.service"
+  install -d "${pkgdir}/usr/lib/systemd/system/inputplumber.service.wants"
+  ln -sf "../pocknix-gamepad-target.service" \
+    "${pkgdir}/usr/lib/systemd/system/inputplumber.service.wants/pocknix-gamepad-target.service"
 }

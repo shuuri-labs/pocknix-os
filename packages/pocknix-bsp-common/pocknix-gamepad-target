@@ -1,0 +1,72 @@
+#!/bin/sh
+# pocknix-gamepad-target — which virtual pad InputPlumber publishes for this session.
+#
+# The `deck` target's gamepad half is hidraw-only, like real Deck hardware: it publishes no evdev
+# joystick, so outside Steam nothing sees a controller. Desktop mode asks for `xb360` instead.
+# Every InputPlumber start re-reads the YAML (always `deck`), so the choice must be replayed after
+# one, not just at session launch. Evidence: pocknix-notes investigations/desktop-mode-gamepad.md.
+set -u
+
+SERVICE=org.shadowblip.InputPlumber
+IFACE=org.shadowblip.Input.CompositeDevice
+STATE=/run/pocknix/gamepad-target
+
+# Non-pad targets must survive the swap: the keyboard one re-emits the volume rocker off the
+# gpio-keys node InputPlumber grabs exclusively.
+is_pad_kind() {
+  case "$1" in
+    deck|deck-uhid|xb360|xbox-elite|xbox-series|ds5|ds5-edge|horipad-steam|gamepad|steam-deck) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+composites() {
+  busctl --system tree "${SERVICE}" 2>/dev/null \
+    | grep -o '/org/shadowblip/InputPlumber/CompositeDevice[0-9]\+' | sort -u
+}
+
+kind_of() {
+  busctl --system get-property "${SERVICE}" "$1" org.shadowblip.Input.Target DeviceType 2>/dev/null \
+    | sed -n 's/^s "\(.*\)"$/\1/p'
+}
+
+usage() { echo "usage: pocknix-gamepad-target <kind>|--apply" >&2; exit 2; }
+
+case "${1:-}" in
+  --apply)
+    KIND="$(cat "${STATE}" 2>/dev/null)" || exit 0 ;;
+  -*|"")
+    usage ;;
+  *)
+    KIND="$1"
+    mkdir -p /run/pocknix 2>/dev/null || true
+    printf '%s\n' "${KIND}" > "${STATE}" 2>/dev/null || true ;;
+esac
+[ -n "${KIND}" ] || exit 0
+
+# Composites appear a moment after the bus name does (udev enumeration), so ordering behind
+# inputplumber.service is not enough to find one.
+i=0
+while [ -z "$(composites)" ]; do
+  i=$((i + 1))
+  [ "${i}" -ge 100 ] && exit 0
+  sleep 0.1
+done
+
+for path in $(composites); do
+  targets="$(busctl --system get-property "${SERVICE}" "${path}" "${IFACE}" TargetDevices 2>/dev/null \
+             | grep -o '"[^"]*"' | tr -d '"')"
+  have_pad=0
+  keep=""
+  for t in ${targets}; do
+    k="$(kind_of "${t}")"
+    [ -n "${k}" ] || continue
+    if is_pad_kind "${k}"; then have_pad=1; else keep="${keep} ${k}"; fi
+  done
+  [ "${have_pad}" = 1 ] || continue
+
+  set -- "${KIND}" ${keep}
+  busctl --system call "${SERVICE}" "${path}" "${IFACE}" SetTargetDevices as "$#" "$@" >/dev/null 2>&1 \
+    || echo "pocknix-gamepad-target: failed to set ${KIND} on ${path}" >&2
+done
+exit 0

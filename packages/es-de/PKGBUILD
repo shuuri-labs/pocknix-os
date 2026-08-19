@@ -15,7 +15,7 @@
 # id from the release page's "ES-DE_aarch64.AppImage" link and bump sha + pkgrel.
 pkgname=es-de
 pkgver=3.4.1
-pkgrel=4
+pkgrel=5
 pkgdesc="ES-DE frontend for browsing and launching games (official aarch64 AppImage)"
 arch=('aarch64')
 url="https://es-de.org"

@@ -57,4 +57,9 @@ if command -v kwriteconfig6 >/dev/null 2>&1; then
     --key "Turn Off Screen" "none,Power Off,Turn Off Screen" 2>/dev/null || true
 fi
 
+# The game-mode `deck` target publishes no evdev joystick; see pocknix-gamepad-target.
+if command -v pocknix-gamepad-target >/dev/null 2>&1; then
+  pocknix-gamepad-target xb360 || true
+fi
+
 exec startplasmamobile

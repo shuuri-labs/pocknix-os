@@ -37,6 +37,12 @@ touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 mkdir -p "${STEAM}/package"
 echo steamdeck_publicbeta > "${STEAM}/package/beta"
 
+# Must precede Steam, which enumerates controllers once at startup; desktop mode leaves the pad
+# on xb360, and only `deck` gives Steam Input the Steam-native pad (Guide, QAM, L4/L5).
+if command -v pocknix-gamepad-target >/dev/null 2>&1; then
+  pocknix-gamepad-target deck || true
+fi
+
 # Must run BEFORE gamescope: Steam reads compatibilitytools.d only at startup.
 /usr/bin/pocknix-proton-prep
 
