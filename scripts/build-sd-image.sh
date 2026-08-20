@@ -147,7 +147,7 @@ EOF
   chroot "${root}" useradd -m -u 1001 -U -s /bin/bash -G video,render,input,audio,seat,wheel deck 2>/dev/null || true
   echo "deck:${SD_DECK_PASSWORD:-${SD_ROOT_PASSWORD}}" | chroot "${root}" chpasswd
   # XDG user dirs in deck's home (Dolphin "Places", file dialogs, screenshots, downloads expect
-  # these). The xdg-user-dirs package (desktop.list) also writes ~/.config/user-dirs.dirs at first
+  # these). The xdg-user-dirs package (pocknix-desktop-full) also writes ~/.config/user-dirs.dirs at first
   # login so XDG_PICTURES_DIR etc. resolve, but create them here so they exist from first boot.
   for d in Desktop Documents Downloads Music Pictures Videos; do
     mkdir -p "${root}/home/deck/${d}"   # ownership fixed by the chown below ('deck' is unknown to the host)

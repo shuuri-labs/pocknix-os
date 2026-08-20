@@ -95,7 +95,7 @@ upower               # battery %/time-to-empty estimate for Steam's gamepadui + 
                      #   deck UI shows no battery. UPower derives the time-remaining estimate from
                      #   discharge history, so it works even though the SM8550 psy exposes just
                      #   capacity/current/voltage (qcom_battmgr `/sys/class/power_supply/battery`).
-                     #   Was only pulled transitively by powerdevil (desktop.list) + never enabled;
+                     #   Was only pulled transitively by powerdevil (pocknix-desktop-full) + never enabled;
                      #   make it explicit + enabled (build-sd-image.sh) so the GAME session has it too.
 
 # --- storage ---

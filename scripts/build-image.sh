@@ -14,7 +14,8 @@ need_linux
 need_root build
 for t in curl tar rsync sed; do need_tool "$t"; done
 
-LOCAL_REPO_DIR="${LOCALREPO_DIR}"   # per-SoC: build/localrepo/${SOC} (set in lib.sh)
+LOCAL_REPO_DIR="${LOCALREPO_DIR}"                 # per-SoC: build/localrepo/${SOC} (set in lib.sh)
+LOCAL_REPO_SHARED_DIR="${LOCALREPO_SHARED_DIR}"   # SoC-neutral: build/localrepo/shared
 
 render_pacman_conf() {
   local out="$1"
@@ -22,18 +23,19 @@ render_pacman_conf() {
   render_base_pacman_conf "${out}"
 }
 
-# The local repo lives on the host; we bind-mount it to /localrepo inside the rootfs
-# chroot, so the repo Server is that in-chroot path.
+# The local repos live on the host; we bind-mount them to /localrepo{,-shared}
+# inside the rootfs chroot. Inserted ABOVE the first base repo (not appended):
+# unqualified names — the layer metas' depends resolve this way — pick the
+# FIRST repo in pacman.conf order, and ours must outrank ALARM, exactly like
+# the shipped stanzas.
 append_local_repo() {
   local out="$1"
   grep -q '^\[pocknix\]' "${out}" && return 0
-  log "adding local pocknix repo"
-  cat >> "${out}" <<EOF
-
-[pocknix]
-SigLevel = Never
-Server = file:///localrepo
-EOF
+  log "adding local pocknix + pocknix-shared repos"
+  local anchor="core"
+  grep -q '^\[pocknix-base\]' "${out}" && anchor="pocknix-base"
+  sed -i "0,/^\[${anchor}\]/s||[pocknix]\nSigLevel = Never\nServer = file:///localrepo\n\n[pocknix-shared]\nSigLevel = Never\nServer = file:///localrepo-shared\n\n[${anchor}]|" \
+    "${out}"
 }
 
 # fontconfig installs and caches long before any pocknix package, so the package's own prune can
@@ -46,39 +48,40 @@ prune_fontconfig_compat_links() {
   log "pruned ${n} stale-version fontconfig cache links"
 }
 
-# Install the local [pocknix] packages into the rootfs: the shared core set
-# (config/packages/pocknix-core.list), the emulation set (pocknix-emulation.list),
-# the SoC kernel (${KERNEL_PKG}), then the device metapackage
-# (devices/${DEVICE}/packages.list) which pulls the device BSP.
+# Install the local pocknix packages into the rootfs: the layer metapackages
+# (pocknix-core + the three optional layers — their depends= ARE the manifest,
+# see packages/shared/pocknix-*/PKGBUILD), the SoC kernel (${KERNEL_PKG}), then
+# the device metapackage (devices/${DEVICE}/packages.list) with the per-SoC set.
 install_local_packages() {
   local root="$1"
-  if [ ! -f "${LOCAL_REPO_DIR}/pocknix.db" ]; then
-    warn "no local repo at ${LOCAL_REPO_DIR} (build-packages.sh didn't run?) — skipping local pkgs"
+  if [ ! -f "${LOCAL_REPO_DIR}/pocknix.db" ] || [ ! -f "${LOCAL_REPO_SHARED_DIR}/pocknix-shared.db" ]; then
+    warn "no local repos at ${LOCAL_REPO_DIR} + ${LOCAL_REPO_SHARED_DIR} (build-packages.sh didn't run?) — skipping local pkgs"
     return 0
   fi
-  log "installing local pocknix packages (config/packages/pocknix-core.list + ${DEVICE} device set)"
+  log "installing local pocknix packages (layer metapackages + ${DEVICE} device set)"
   append_local_repo "${root}/etc/pacman.conf"
-  mkdir -p "${root}/localrepo"
+  mkdir -p "${root}/localrepo" "${root}/localrepo-shared"
   mount --bind "${LOCAL_REPO_DIR}" "${root}/localrepo"
+  mount --bind "${LOCAL_REPO_SHARED_DIR}" "${root}/localrepo-shared"
   chroot "${root}" pacman -Sy --noconfirm
-  # The shared package set lives in config/packages/pocknix-core.list (per-package notes
-  # there). Device packages (BSP + metapackage) come from devices/${DEVICE}/packages.list,
-  # installed AFTER the kernel step below (the metapackage depends on the kernel package).
-  #
-  # QUALIFY every target with `pocknix/`: `pacman -S <name>` selects the FIRST repo in pacman.conf
-  # order that has the name (NOT the highest version), and [pocknix] is appended LAST — so an
-  # unqualified `gamescope`/`mangohud` would resolve to ALARM's [extra] copy (gamescope's vanilla
-  # build black-screens the rotated panel; our patched mangohud has the Adreno reader). epoch=1 only
-  # affects `-Syu` upgrades, not `-S` selection. Qualifying forces our builds and errors loudly if a
-  # local package is genuinely missing from [pocknix] instead of silently grabbing ALARM's.
-  # mesa + vulkan-freedreno: our epoch-2 trimmed/tuned builds (packages/mesa — freedreno/turnip
-  # only, ROCKNIX's 25.1.5 pin, cortex-x3) REPLACE the ALARM copies base.list installed for
-  # bootstrap. Same package names; epoch 2 > ALARM's 1, so pacman treats it as a plain upgrade.
-  local -a _pkgs=()
-  local _p
-  while read -r _p; do _pkgs+=("pocknix/${_p}"); done \
-    < <(read_pkglist "${CONFIG_DIR}/packages/pocknix-core.list")
-  chroot "${root}" pacman -S --noconfirm --needed "${_pkgs[@]}"
+  # Same-name replacements FIRST, explicitly qualified: mesa + vulkan-freedreno
+  # (our epoch-2 trimmed/tuned freedreno/turnip builds), gamescope (ROCKNIX-
+  # patched; vanilla black-screens the rotated panel) and mangohud (Adreno
+  # reader) REPLACE the ALARM copies base.list installed for bootstrap. They are
+  # depends of the metas below, but a dep already satisfied by ALARM's installed
+  # copy would never be upgraded by a meta install — so force ours here, loudly.
+  chroot "${root}" pacman -S --noconfirm --needed \
+    pocknix/mesa pocknix/vulkan-freedreno pocknix/gamescope pocknix/mangohud
+  # The layer metas: pocknix-core (mandatory) + all three optional layers (the
+  # image ships the full experience; #48 makes emulation optional behind a
+  # flag). Their unqualified depends resolve by repo order — [pocknix] and
+  # [pocknix-shared] sit ABOVE the base repos (append_local_repo), so pocknix
+  # names always resolve to our builds, ALARM names to ALARM/base.
+  chroot "${root}" pacman -S --noconfirm --needed \
+    pocknix-shared/pocknix-core \
+    pocknix-shared/pocknix-steam-full \
+    pocknix-shared/pocknix-desktop-full \
+    pocknix-shared/pocknix-emulation-full
   # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
   # especially: ALARM's vanilla lacks --use-rotation-shader and black-screens on the RP6 (bitten 3x).
   local mesa_ver; mesa_ver="$(chroot "${root}" pacman -Q mesa 2>/dev/null | awk '{print $2}')"
@@ -101,23 +104,14 @@ install_local_packages() {
   chroot "${root}" pacman -Q pocknix-desktop >/dev/null 2>&1 || {
     die "pocknix-desktop not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=pocknix-desktop', confirm build/localrepo/pocknix-desktop-*.pkg.tar.* exists, then re-run."
   }
-  # Emulation layer (config/packages/pocknix-emulation.list): ES-DE frontend, vendored core
-  # set, AppImage emulators. ALARM-side deps (retroarch, ppsspp, fuse2) came from
-  # emulation.list above. Hard-required. NB: steam-rom-manager is NOT shipped — its Electron
-  # CLI deadlocked on-device (2026-07-05) and the Steam-library sync is done by
-  # pocknix-steam-sync (direct shortcuts.vdf write) instead; the PKGBUILD is retired to
-  # packages/attic/ (outside the build glob — makepkg + pacman -U it manually if ever wanted).
-  _pkgs=()
-  while read -r _p; do _pkgs+=("pocknix/${_p}"); done \
-    < <(read_pkglist "${CONFIG_DIR}/packages/pocknix-emulation.list")
-  chroot "${root}" pacman -S --noconfirm --needed "${_pkgs[@]}"
-  # Source-built emulators are OPTIONAL-warn (first-ever aarch64 builds = likeliest to fail; a
-  # missing one just leaves that system out of ES-DE, which degrades gracefully) — don't fail the
-  # whole image over 3DS/GameCube/WiiU.
+  # Source-built emulators are optdepends of pocknix-emulation-full, installed
+  # OPTIONAL-warn here (first-ever aarch64 builds = likeliest to fail; a missing
+  # one just leaves that system out of ES-DE, which degrades gracefully) — don't
+  # fail the whole image over 3DS/GameCube/WiiU.
   local oe
   for oe in dolphin-emu azahar cemu; do
-    chroot "${root}" pacman -S --noconfirm --needed "pocknix/${oe}" 2>/dev/null \
-      || warn "optional emulator ${oe} not in [pocknix] (build failed/skipped?) — image ships WITHOUT it"
+    chroot "${root}" pacman -S --noconfirm --needed "pocknix-shared/${oe}" 2>/dev/null \
+      || warn "optional emulator ${oe} not in [pocknix-shared] (build failed/skipped?) — image ships WITHOUT it"
   done
   # Kernel: swap ALARM's generic linux-aarch64 for our SoC kernel package (Image + modules,
   # built by `make kernel` -> staged into the package). Its own step (not bundled above) so a
@@ -135,7 +129,8 @@ install_local_packages() {
   fi
   # Device selection LAST: the per-device metapackage (devices/${DEVICE}/packages.list)
   # pins the device identity and pulls the BSP + the kernel package (already present).
-  _pkgs=()
+  local -a _pkgs=()
+  local _p
   while read -r _p; do _pkgs+=("pocknix/${_p}"); done \
     < <(read_pkglist "${DEVICE_DIR}/packages.list")
   chroot "${root}" pacman -S --noconfirm --needed "${_pkgs[@]}"
@@ -144,27 +139,31 @@ install_local_packages() {
   }
   log "device OK: $(chroot "${root}" pacman -Q "${DEVICE_META_PKG}" 2>/dev/null || echo "${DEVICE}")"
   umount "${root}/localrepo"
-  rmdir "${root}/localrepo" 2>/dev/null || true
+  umount "${root}/localrepo-shared"
+  rmdir "${root}/localrepo" "${root}/localrepo-shared" 2>/dev/null || true
   # NB the build-time sync dbs must NOT be dropped here: make snapshot harvests
   # its name->filename/sha mapping from this rootfs's dbs. build-sd-image.sh
   # deletes them from the IMAGE copy instead (they must not ship: see there).
-  # Drop the build-only [pocknix] stanza (its file:///localrepo bind mount doesn't exist on
-  # the device). With POCKNIX_REPO_URL set, re-add a stanza pointing at the PUBLISHED repo
-  # (see docs/pacman-repo.md), inserted ABOVE [core]: `pacman -S <name>` picks the FIRST
-  # repo that carries the name, so pocknix must outrank ALARM for our same-name packages
-  # (mesa, gamescope, ...). Without it the image ships reflash-only, as before.
-  sed -i '/^\[pocknix\]/,+2d' "${root}/etc/pacman.conf"
-  # Per-SoC published repo: POCKNIX_REPO_URL is the BASE url; each SoC's tree
-  # lives under it (tuned packages share pkgnames across SoCs with different
-  # binaries, so the trees must not mix — see pocknix-notes dev/pacman-repo.md).
+  # Drop the build-only stanzas (their file:///localrepo* bind mounts don't exist on
+  # the device). With POCKNIX_REPO_URL set, re-add stanzas pointing at the PUBLISHED
+  # repos (see pocknix-notes dev/pacman-repo.md), inserted ABOVE [core]: `pacman -S
+  # <name>` picks the FIRST repo that carries the name, so pocknix must outrank ALARM
+  # for our same-name packages (mesa, gamescope, ...). Without it the image ships
+  # reflash-only, as before.
+  sed -i '/^\[pocknix\]/,+2d;/^\[pocknix-shared\]/,+2d' "${root}/etc/pacman.conf"
+  # Published repos: POCKNIX_REPO_URL is the BASE url. [pocknix] is per-SoC
+  # (<base>/<soc> — tuned packages share pkgnames across SoCs with different
+  # binaries, so those trees must not mix); [pocknix-shared] (<base>/shared) is
+  # one tree for all SoCs. Order matters: per-SoC FIRST so a tuned package could
+  # never be shadowed by a same-name shared one.
   if [ -n "${POCKNIX_REPO_URL}" ]; then
-    log "shipping [pocknix] repo stanza -> ${POCKNIX_REPO_URL}/${SOC} (SigLevel ${POCKNIX_REPO_SIGLEVEL})"
+    log "shipping [pocknix] -> ${POCKNIX_REPO_URL}/${SOC} + [pocknix-shared] -> ${POCKNIX_REPO_URL}/shared (SigLevel ${POCKNIX_REPO_SIGLEVEL})"
     # anchor = the first base repo: [core] on a live-ALARM conf, [pocknix-base]
     # on a pinned one (which has no [core] at all — the old sed silently
     # no-opped there and the image shipped with NO [pocknix] stanza)
     local anchor="core"
     grep -q '^\[pocknix-base\]' "${root}/etc/pacman.conf" && anchor="pocknix-base"
-    sed -i "0,/^\[${anchor}\]/s||[pocknix]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}/${SOC}\n\n[${anchor}]|" \
+    sed -i "0,/^\[${anchor}\]/s||[pocknix]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}/${SOC}\n\n[pocknix-shared]\nSigLevel = ${POCKNIX_REPO_SIGLEVEL}\nServer = ${POCKNIX_REPO_URL}/shared\n\n[${anchor}]|" \
       "${root}/etc/pacman.conf"
     # Trust the repo key out of the box: bake the exported public key + lsign it, so a
     # fresh image can `pacman -Syu` without a manual pacman-key dance.
@@ -330,14 +329,12 @@ main() {
   chroot_mount "${ROOTFS_DIR}"
   configure_keyring "${ROOTFS_DIR}"
 
-  # 3. packages: base + the two session lists (steam = Phase 3 gamescope/mangohud; desktop = Phase 4
-  #    Plasma Mobile). All from ALARM (no holo needed) — see config/packages/steam.list. Installed in
-  #    ONE transaction so the (forced -Syy) repo-DB refresh happens once, not once per list.
+  # 3. packages: the ALARM base only (config/packages/base.list). The session
+  #    stacks (Steam/gamescope, Plasma Mobile, emulation) install later in
+  #    install_local_packages as depends of the layer metapackages — the metas'
+  #    depends= are the single manifest for image AND fleet.
   install_packages "${ROOTFS_DIR}" \
-        "${CONFIG_DIR}/packages/base.list" \
-        "${CONFIG_DIR}/packages/steam.list" \
-        "${CONFIG_DIR}/packages/desktop.list" \
-        "${CONFIG_DIR}/packages/emulation.list"
+        "${CONFIG_DIR}/packages/base.list"
 
   # Generate a UTF-8 locale. The ALARM base ships only "C"; Qt apps (all of Plasma) warn and fall
   # back to C.UTF-8 on every launch, and the C path is slower. Set en_US.UTF-8 system-wide.
