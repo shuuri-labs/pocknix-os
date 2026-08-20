@@ -54,7 +54,7 @@ converge() {
     local owners
     owners="$(printf '%s\n' "${out}" \
       | sed -n 's/.*exists in filesystem (owned by \([^)]*\)).*/\1/p' | LC_ALL=C sort -u \
-      | LC_ALL=C comm -23 - <(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u))"
+      | LC_ALL=C comm -23 - <(pacman -Slq pocknix pocknix-shared pocknix-base 2>/dev/null | LC_ALL=C sort -u))"
     if [ -n "${owners}" ]; then
       echo "pocknix: removing foreign packages superseded by the base:" ${owners}
       # shellcheck disable=SC2086
@@ -74,7 +74,7 @@ converge() {
   rm -f "${BLOCKED}"
   # report-only: packages no locked repo carries keep working but stop updating
   LC_ALL=C comm -23 <(pacman -Qq | LC_ALL=C sort) \
-                    <(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u) > "${FOREIGN}"
+                    <(pacman -Slq pocknix pocknix-shared pocknix-base 2>/dev/null | LC_ALL=C sort -u) > "${FOREIGN}"
   if [ -s "${FOREIGN}" ]; then
     echo "pocknix: these packages are not from pocknix and will no longer update:"
     sed 's/^/  /' "${FOREIGN}"

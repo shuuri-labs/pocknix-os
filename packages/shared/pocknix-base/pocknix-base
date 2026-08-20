@@ -35,7 +35,7 @@ snapshot_id() { pacman -Q pocknix-base-lock 2>/dev/null | awk '{print $2}' | cut
 # update). Guard: an unsynced device (fresh image, no dbs) would list EVERYTHING.
 foreign() {
   local repo
-  repo="$(pacman -Slq pocknix pocknix-base 2>/dev/null | LC_ALL=C sort -u)"
+  repo="$(pacman -Slq pocknix pocknix-shared pocknix-base 2>/dev/null | LC_ALL=C sort -u)"
   [ -n "${repo}" ] || return 0
   LC_ALL=C comm -23 <(pacman -Qq | LC_ALL=C sort) <(printf '%s\n' "${repo}")
 }

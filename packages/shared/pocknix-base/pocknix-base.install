@@ -10,10 +10,43 @@ _prune_superseded() {
         /var/lib/pocknix/extra-packages.snapshot
 }
 
+# Fielded devices predate the [pocknix-shared] repo (shared packages published
+# once, per-SoC repos keep only the SoC-specific set). Retrofit the stanza,
+# DERIVING the URL from the installed [pocknix] one — LAN-test devices point at
+# http://<vm>:8000/<soc> and must keep their host. pacman reads its config at
+# transaction start, so the repo becomes visible on the NEXT transaction (same
+# two-phase shape as pocknix-lock-migrate). Image builds are excluded by the
+# systemd guard: build-image.sh writes both stanzas itself.
+_add_shared_repo() {
+  [ -d /run/systemd/system ] || return 0
+  local conf=/etc/pacman.conf
+  grep -q '^\[pocknix-shared\]' "${conf}" && return 0
+  grep -q '^\[pocknix\]' "${conf}" || return 0
+  local server siglevel
+  server="$(awk '/^\[pocknix\]$/{f=1;next} /^\[/{f=0} f && sub(/^Server *= */,""){print; exit}' "${conf}")"
+  siglevel="$(awk '/^\[pocknix\]$/{f=1;next} /^\[/{f=0} f && sub(/^SigLevel *= */,""){print; exit}' "${conf}")"
+  [ -n "${server}" ] || return 0
+  server="${server%/}"; server="${server%/*}/shared"
+  awk -v srv="${server}" -v sig="${siglevel}" '
+    function emit() { print "[pocknix-shared]"
+                      if (sig != "") print "SigLevel = " sig
+                      print "Server = " srv
+                      print ""
+                      done=1 }
+    /^\[/ { if (inpk && !done) emit(); inpk = ($0 == "[pocknix]") }
+    { print }
+    END { if (inpk && !done) emit() }
+  ' "${conf}" > "${conf}.pocknix-shared" && cat "${conf}.pocknix-shared" > "${conf}"
+  rm -f "${conf}.pocknix-shared"
+  echo "pocknix: added the [pocknix-shared] repo (${server}); active from the next update."
+}
+
 post_install() {
   _prune_superseded
+  _add_shared_repo
 }
 
 post_upgrade() {
   _prune_superseded
+  _add_shared_repo
 }
