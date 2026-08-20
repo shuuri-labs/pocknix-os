@@ -15,6 +15,16 @@ _apply_panel_touchfix() {
   /usr/bin/pocknix-panel-touchfix 2>/dev/null || true
 }
 
+# Devices seeded before the stamp existed: backfill so an uninstall sticks from the
+# first -Syu. Upgrade-only, a fresh image must still seed.
+_backfill_flathub_stamp() {
+  [ -e /var/lib/pocknix/flathub-seeded ] && return 0
+  if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
+    mkdir -p /var/lib/pocknix
+    touch /var/lib/pocknix/flathub-seeded
+  fi
+}
+
 post_install() {
   _drop_stale_flathub_wants
   _prune_fontcache
@@ -25,4 +35,5 @@ post_upgrade() {
   _drop_stale_flathub_wants
   _prune_fontcache
   _apply_panel_touchfix
+  _backfill_flathub_stamp
 }
