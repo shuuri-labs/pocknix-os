@@ -1,0 +1,27 @@
+# pocknix-core — the mandatory layer, installed on every device. Its depends=
+# IS the manifest: adding a package here is the ONE line that both installs it
+# on fresh images and delivers it to fielded devices on their next -Syu
+# (pacman never installs a new package NAME on its own — see issue #49).
+# Delivered to pre-core devices by a single bootstrap edge from
+# pocknix-bsp-common. Optional layers (pocknix-*-full) are NOT depends here:
+# a hard edge from core would make `pacman -Rs <layer>` impossible.
+pkgname=pocknix-core
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix mandatory layer: GPU stack, input, storage, base/update tooling"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('mesa'                     # epoch-2 trimmed/tuned freedreno build ([pocknix] outranks ALARM)
+         'vulkan-freedreno'
+         'inputplumber'             # gamepad -> Steam Input; BSP device configs target it
+         'pocknix-sdcard-automount'
+         'pocknix-snapshots'        # pre-update btrfs snapshots + rollback
+         'pocknix-base'             # locked<->rolling switch + desktop updater
+         'pocknix-base-lock'
+         'pocknix-lock-migrate'     # formerly delivered via a false bsp-common edge
+         'pocknix-tools')           # formerly delivered via a false pocknix-desktop edge
+
+package() {
+  :   # pure metapackage
+}

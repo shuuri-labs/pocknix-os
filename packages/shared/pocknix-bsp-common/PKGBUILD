@@ -5,14 +5,16 @@
 # devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=12
+pkgrel=13
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-# pocknix-lock-migrate rides along so a plain -Syu delivers the locked-base
-# migration to devices that predate it (new names install only via a dep edge)
-depends=('sudo' 'pocknix-lock-migrate')
+# pocknix-core rides along so a plain -Syu delivers the mandatory layer to
+# devices that predate it (new names install only via a dep edge). This is the
+# ONE deliberate delivery edge; everything else delivers through pocknix-core's
+# own depends. Supersedes the old pocknix-lock-migrate edge (now in core).
+depends=('sudo' 'pocknix-core')
 optdepends=('inputplumber: the 001-inputplumber suspend hooks manage its USB/IP deck target'
             'scx-scheds: scx_lavd for pocknix-lavd.service (unit self-skips without it)')
 install=pocknix-bsp-common.install

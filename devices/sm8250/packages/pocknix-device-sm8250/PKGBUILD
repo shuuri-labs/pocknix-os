@@ -1,10 +1,11 @@
-# pocknix-device-sm8250 — metapackage: the complete SM8250 family system.
-# Depends on the family BSP + the SoC kernel + the arm-efi bootloader payload +
-# the shared session stack. Installing this (and nothing else pocknix-specific)
-# turns an ALARM base into pocknix for any sm8250 board (Retroid Pocket 5).
+# pocknix-device-sm8250 — metapackage: the per-SoC members of an SM8250 system.
+# ONLY per-SoC packages belong here (BSP, kernel, bootloader, the SoC's proton
+# choice, calibration); shared members live on pocknix-core / the
+# pocknix-*-full layers — a dep edge from here would block `pacman -Rs` of an
+# optional layer.
 pkgname=pocknix-device-sm8250
 pkgver=0.1.0
-pkgrel=6
+pkgrel=7
 pkgdesc="pocknix device metapackage: SM8250 family (RP5, RP Flip 2)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -12,17 +13,11 @@ license=('GPL2')
 depends=('pocknix-bsp-sm8250'
          'linux-pocknix-sm8250'
          'pocknix-bootloader-sm8250'
-         'pocknix-steam'
+         # a6xx lacks 8-bit storage -> DXVK 3 rejects the GPU: dxvk2-pinned protons
          'proton-cachyos-dxvk2'
          'proton-ge-dxvk2'
          # a6xx donor prep swaps into downloaded Valve ARM Protons (dep edge = delivery)
          'pocknix-dxvk2-donor'
-         'pocknix-desktop'
-         'pocknix-emulation'
-         'pocknix-decky'
-         'pocknix-turnip-arm'
-         'pocknix-turnip-x86'
-         'pocknix-sdcard-automount'
          # sm8250-only: the raw trigger view reads retroid/mangmi ABS_HAT2X/Y, dead on
          # rsinput. A dep edge, not a list entry: -Syu never installs a new package name.
          'pocknix-gamepad-calibration')

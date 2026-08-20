@@ -1,0 +1,25 @@
+# pocknix-steam-full — the Steam gaming-session layer. Hard depends= so
+# `pacman -Rs pocknix-steam-full` removes exactly this layer (issue #49).
+# Per-SoC members (the proton compat tools / dxvk2 variants) live on the
+# pocknix-device-<soc> metapackages instead — repo membership is per-SoC there.
+pkgname=pocknix-steam-full
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix optional layer: Steam gamescope session, FEX x86 runtime, Decky"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('pocknix-steam'        # session launcher + native ARM client installer
+         'gamescope'            # ROCKNIX-patched; vanilla black-screens rotated panels
+         'mangohud'             # patched (Adreno sysfs reader + mangoapp pacing)
+         'xorg-xwayland'        # gamescope --xwayland-count
+         'pocknix-steamos-shim' # steamos-update/BIOS stubs so the Deck OOBE doesn't dead-end
+         'pocknix-decky'        # Decky loader + Pocknix Control QAM plugin (runs under FEX)
+         'fex-emu'
+         'fex-rootfs'           # ~1.1 GB Arch x86 squashfs the games' libraries resolve from
+         'pocknix-turnip-arm'   # per-game Mesa Version tweak (ARM Proton side)
+         'pocknix-turnip-x86')  # per-game Mesa Version tweak (x86 side)
+
+package() {
+  :   # pure metapackage
+}
