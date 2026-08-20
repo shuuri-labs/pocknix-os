@@ -1,11 +1,7 @@
-# pocknix system default (/etc/xdg/kscreenlockerrc — KConfig cascade; a user setting in
-# ~/.config/kscreenlockerrc still overrides).
-#
-# No PIN lock screen in the desktop session: Plasma Mobile's kscreenlocker defaults lock
-# after an idle timeout AND on every resume, so each wake press landed on the phone-style
-# PIN pad — pointless friction on a handheld whose gaming session (gamescope) has no lock
-# at all. Autolock=false kills the idle-timeout lock, LockOnResume=false the wake lock.
-# Manual locking (if ever wired to a button) still works; these only stop the automatic ones.
+# System default (/etc/xdg/kscreenlockerrc); a user's ~/.config/kscreenlockerrc still wins.
+# Autolock=false drops the idle-timeout lock, LockOnResume=false the wake lock; manual locking
+# is unaffected. Plasma Mobile locks on both by default, which put a PIN pad in front of every
+# wake press on a handheld whose gaming session has no lock at all.
 [Daemon]
 Autolock=false
 LockOnResume=false

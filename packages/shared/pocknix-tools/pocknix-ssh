@@ -1,6 +1,6 @@
 #!/bin/bash
-# pocknix-ssh — turn the SSH server on/off. status is unprivileged (the menu polls
-# it on every draw); on/off need root and come in via pkexec (53-pocknix-ssh.rules).
+# pocknix-ssh — turn the SSH server on/off. status stays unprivileged because the menu
+# polls it on every draw; on/off need root and arrive via pkexec (53-pocknix-ssh.rules).
 set -euo pipefail
 
 # sshd.socket can pull the daemon in on its own, so both units move together

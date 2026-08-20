@@ -1,8 +1,7 @@
 #!/bin/bash
-# pocknix steamos-select-branch shim — Steam's "OS Update Channel" hook (also queried during OOBE;
-# its absence logs "failed to query current OS branch"). One fixed channel; selection is a no-op
-# until real OTA exists. Mirrors armada-select-branch's flags:
-#   -l  list available channel tokens   -c  current channel token   <branch>  set channel
+# pocknix steamos-select-branch shim — Steam's "OS Update Channel" hook; its absence logs
+# "failed to query current OS branch" during the OOBE. Valve's flags:
+#   -l  list channel tokens   -c  current channel token   <branch>  set channel
 set -u
 case "${1:-}" in
   -l) printf '%s\n' stable ;;

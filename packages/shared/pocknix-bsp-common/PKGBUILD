@@ -1,8 +1,6 @@
-# pocknix-bsp-common — the device-NEUTRAL board-support mechanics shared by every
-# pocknix device: the sleep.d dispatcher + suspend hooks, the handheld power-key
-# policy, and the session udev rules. Device-specific quirks (input maps, audio
-# UCM, SoC suspend/cpuidle tweaks, device.conf) live in each device's BSP under
-# devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
+# pocknix-bsp-common — the device-NEUTRAL board support shared by every pocknix device.
+# Device-specific quirks (input maps, audio UCM, SoC suspend/cpuidle tweaks, device.conf)
+# live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
 pkgrel=13
@@ -10,10 +8,8 @@ pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-# pocknix-core rides along so a plain -Syu delivers the mandatory layer to
-# devices that predate it (new names install only via a dep edge). This is the
-# ONE deliberate delivery edge; everything else delivers through pocknix-core's
-# own depends. Supersedes the old pocknix-lock-migrate edge (now in core).
+# pocknix-core rides along so a plain -Syu delivers the mandatory layer to devices that
+# predate it: a new package name only reaches installed devices via a dep edge.
 depends=('sudo' 'pocknix-core')
 optdepends=('inputplumber: the 001-inputplumber suspend hooks manage its USB/IP deck target'
             'scx-scheds: scx_lavd for pocknix-lavd.service (unit self-skips without it)')
@@ -35,53 +31,35 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP')
 
 package() {
-  # systemd system-sleep hook that dispatches our sleep.d/{pre,post} scripts
   install -Dm755 "${srcdir}/pocknix-sleep" \
     "${pkgdir}/usr/lib/systemd/system-sleep/pocknix-sleep"
 
-  # suspend/resume hooks (run by the hook above, in name order)
-  # 001-inputplumber: drop the USB/IP virtual controller before sleep so vhci_hcd
-  # doesn't veto suspend (the `deck` target attaches over USB/IP); restore on resume.
+  # sleep.d hooks run in name order; the numeric prefixes are that ordering.
   install -Dm755 "${srcdir}/inputplumber-sleep-pre" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/001-inputplumber"
   install -Dm755 "${srcdir}/inputplumber-sleep-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/001-inputplumber"
-  # 002-usb-role: toggle the USB role across suspend (else dwc3/type-c
-  # renegotiation holds resume ~10s); restore on resume.
   install -Dm755 "${srcdir}/usb-role-sleep-pre" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/002-usb-role"
   install -Dm755 "${srcdir}/usb-role-sleep-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/002-usb-role"
-  # 003-sdam-debug: Qualcomm PMIC SDAM suspend breadcrumb (fail-soft on non-SPMI
-  # hardware — the dd just logs to kmsg and moves on).
   install -Dm755 "${srcdir}/sdam-debug-pre" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/003-sdam-debug"
   install -Dm755 "${srcdir}/sdam-debug-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/003-sdam-debug"
 
-  # Power button: wake-and-stay (HandlePowerKey=ignore) instead of systemd's default
-  # poweroff (which made a wake-press shut the device down). Sleep via the Steam menu.
-  # Handheld policy, not a device quirk — pairs with pocknix-powerd (overlay).
   install -Dm644 "${srcdir}/20-pocknix-powerkey.conf" \
     "${pkgdir}/usr/lib/systemd/logind.conf.d/20-pocknix-powerkey.conf"
 
-  # udev rule: let the 'video' group (non-root session user) write panel brightness
-  # so Steam's brightness slider works as the deck user. Matches any backlight.
   install -Dm644 "${srcdir}/90-pocknix-backlight.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/90-pocknix-backlight.rules"
-  # Controller uaccess for the non-root deck session (ALARM has no game-devices-udev).
-  # Critical for the InputPlumber 'deck' target (Valve 28de) hidraw that Steam Input reads.
   install -Dm644 "${srcdir}/60-pocknix-controllers.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/60-pocknix-controllers.rules"
 
-  # sudo for the wheel group (deck is in wheel since image creation but the stock
-  # /etc/sudoers grants nothing, so 'sudo' as deck was "not in the sudoers file").
-  # 0440 is the sudoers.d requirement (sudo skips group/world-writable files).
+  # 0440 is a sudoers.d requirement: sudo skips group/world-writable files.
   install -Dm440 "${srcdir}/10-pocknix-wheel" \
     "${pkgdir}/etc/sudoers.d/10-pocknix-wheel"
 
-  # Fan curve + scx_lavd daemons; the .install migration removes the pre-packaging overlay
-  # copies. Both honor the per-game override /run/pocknix/game-mode from the proton wrapper.
   install -Dm755 "${srcdir}/pocknix-fancontrol" "${pkgdir}/usr/bin/pocknix-fancontrol"
   install -Dm755 "${srcdir}/pocknix-fan-mode"   "${pkgdir}/usr/bin/pocknix-fan-mode"
   install -Dm755 "${srcdir}/pocknix-lavd-mode"  "${pkgdir}/usr/bin/pocknix-lavd-mode"
@@ -92,13 +70,9 @@ package() {
   install -Dm644 "${srcdir}/pocknix-game-mode.conf" \
     "${pkgdir}/usr/lib/tmpfiles.d/pocknix-game-mode.conf"
 
-  # Device-neutral (reads the SoC from the installed kit), so it lives here
-  # rather than duplicated in both bootloader packages.
   install -Dm755 "${srcdir}/pocknix-update-abl" "${pkgdir}/usr/bin/pocknix-update-abl"
   # Not in PATH: it writes a partition table, and has exactly one caller.
   install -Dm755 "${srcdir}/pocknix-gpt-abl" "${pkgdir}/usr/lib/pocknix/pocknix-gpt-abl"
-  # the hook lives in each bootloader package; the script is device-neutral so
-  # it lives here (rationale in its own header)
   install -Dm755 "${srcdir}/pocknix-refresh-abl-kit" "${pkgdir}/usr/bin/pocknix-refresh-abl-kit"
   install -Dm644 "${srcdir}/52-pocknix-abl.rules" \
     "${pkgdir}/usr/share/polkit-1/rules.d/52-pocknix-abl.rules"
@@ -111,7 +85,6 @@ package() {
   ln -sf "../pocknix-gamepad-target.service" \
     "${pkgdir}/usr/lib/systemd/system/inputplumber.service.wants/pocknix-gamepad-target.service"
 
-  # occasional wifi-dead boots: iwd must not race the driver (why: the drop-in)
   install -Dm644 "${srcdir}/iwd-wait-wlan0.conf" \
     "${pkgdir}/usr/lib/systemd/system/iwd.service.d/10-pocknix-wait-wlan0.conf"
 }

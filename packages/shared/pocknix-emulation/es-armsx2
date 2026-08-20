@@ -1,7 +1,8 @@
 #!/bin/bash
-# ES-DE launch wrapper for ARMSX2 (PS2): big-core taskset pin, mirroring pocknix-play.
-# Same rationale as es-eden: ES-DE launches bypass pocknix-play, and unpinned the MTVU
-# thread lands on a little core -> chop + audio crackle (RP6 2026-07-06, verified).
+# ES-DE's bundled launch commands bypass pocknix-play, so es_find_rules.xml points at these
+# wrappers instead: the big-core pin has to live here too, or unpinned emulator threads land
+# on a little core (chop + audio crackle). The /opt AppImages are also not in PATH, so this
+# is ES-DE's only route to them.
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 exec taskset -c "${POCKNIX_BIG_CORES:-3-7}" /opt/pocknix/emulators/armsx2/ARMSX2.AppImage "$@"

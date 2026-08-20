@@ -1,16 +1,14 @@
 #!/bin/bash
-# pocknix-snapshots — inspect + prune the pre-update btrfs snapshots.
-#   list           snapshot table (id, date, ok, kernel?, targets)
-#   status         which root is mounted / which boots next / free space
-#   prune [--quiet]  apply retention: keep newest ${POCKNIX_SNAPSHOT_KEEP} snapshots
-#                  + 1 abandoned root subvol. Run by the post-update hook + rollback.
+# pocknix-snapshots — inspect and prune the pre-update btrfs snapshots. Retention is
+# ${POCKNIX_SNAPSHOT_KEEP} snapshots plus one abandoned root subvol; prune runs from
+# the post-update hook and from pocknix-rollback.
 set -euo pipefail
 
 . /usr/lib/pocknix/snapshot-lib.sh
 
 die() { echo "pocknix-snapshots: $*" >&2; exit 1; }
 
-snap_fmt_date() {  # ISO-8601 UTC (stored) -> local DD/MM/YYYY HH:MM (shown)
+snap_fmt_date() {  # stored ISO-8601 UTC -> local DD-MM-YYYY HH:MM
   date -d "$1" +"%d-%m-%Y %H:%M" 2>/dev/null || echo "$1"
 }
 
@@ -54,7 +52,6 @@ cmd_prune() {
   pocknix_snap_supported || exit 0
   [ "$(id -u)" = 0 ] || die "prune needs root"
 
-  # 1) pre-update snapshots: keep the newest ${POCKNIX_SNAPSHOT_KEEP}
   local ids extra id
   ids="$(ls "${SNAP_DIR}" 2>/dev/null | grep -E '^[0-9]{4}$' | sort -n || true)"
   extra=$(( $(wc -l <<<"${ids}") - POCKNIX_SNAPSHOT_KEEP ))
@@ -66,8 +63,8 @@ cmd_prune() {
     done
   fi
 
-  # 2) abandoned root subvols (@ / @rb-*): keep ONE beyond the default + the mounted
-  # root, for post-mortem after a rollback. Never touch the default or the running root.
+  # One abandoned root subvol (@ / @rb-*) is kept for post-mortem after a rollback;
+  # the default and the running root are never candidates.
   local top=/run/pocknix/prune-top mounted default roots keepable r
   mounted="$(snap_mounted_subvol)"; default="$(snap_default_subvol)"
   mkdir -p "${top}"

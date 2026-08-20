@@ -1,8 +1,5 @@
 #!/bin/bash
-# pocknix jupiter-biosupdate shim. The manual Settings > System > Check for Updates flow treats a
-# missing helper (exit 127) as a check failure and shows the generic "Update Error" dialog, unlike
-# the OOBE/background flow which tolerates absence. Always exit 0 = "no BIOS update" (same
-# convention as the community BIOS-update-block stub on real Decks). Do NOT reuse the
-# steamos-update script here: its `check` exits 7, which Steam's BIOS check reads as "update
-# available" and prompts spuriously.
+# pocknix jupiter-biosupdate shim. Settings > System > Check for Updates treats a missing helper
+# (127) as a check failure and shows "Update Error". exit 0 = "no BIOS update"; do NOT reuse
+# steamos-update here, whose 7 the BIOS check reads as "update available" and prompts on.
 exit 0

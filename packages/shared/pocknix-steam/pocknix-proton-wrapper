@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-# pocknix-proton-wrapper — apply the per-game FEX profile before Proton (ARM64/FEX) launches.
-# Ported from armada's armada-proton-wrapper (path swap: /etc/pocknix, /usr/share/pocknix).
-#
-# The Pocknix Control Decky plugin writes /etc/pocknix/game-tweaks.json (global + per-appid
-# fexProfile choices). At game launch, Steam's toolmanifest commandline points at the
-# pocknix-proton shim, which execs this wrapper around the real `proton` entrypoint. We merge
-# the chosen profile's knobs over the host base FEX config, write a per-launch app config
-# under XDG_RUNTIME_DIR, export FEX_APP_CONFIG, and exec Proton — its bundled FEX reads it.
+# pocknix-proton-wrapper — applies the per-game tweaks from /etc/pocknix/game-tweaks.json, then
+# execs the real Proton entrypoint. Reached via the pocknix-proton shim named in the
+# toolmanifest commandline; every tweak must survive execv, since that is all we get.
 import json
 import os
 import pathlib
@@ -22,9 +17,8 @@ TWEAKS_CONFIG = pathlib.Path("/etc/pocknix/game-tweaks.json")
 FEX_PROFILES_CONFIG = pathlib.Path("/usr/share/pocknix/fex-profiles.json")
 TURNIP_ARM_DIR = pathlib.Path("/usr/share/pocknix/vk-arm")
 TURNIP_X86_DIR = pathlib.Path("/usr/share/pocknix/vk-x86")
-# Versions also embedded in the fex-rootfs image (that package ships this list).
-# pressure-vessel resolves graphics against the FEX rootfs, NOT the host — pinning a
-# version the image lacks poisons the container env and the game loses Vulkan entirely.
+# pressure-vessel resolves graphics against the FEX rootfs, NOT the host, so pinning a version
+# the image lacks poisons the container env and the game loses Vulkan entirely.
 CONTAINER_VK_LIST = pathlib.Path("/usr/share/fex-emu/vk-x86-container.list")
 # CRT DLLs wine's NATIVE arm64 service processes import; an amd64 redist copy of these in
 # the prefix kills wineboot/services.exe with c000007b before any game code runs.
@@ -159,13 +153,9 @@ def write_fex_config(settings, game_id, profiles):
 
 
 def apply_audio_latency(settings):
-    # Per-game audio buffer: exports PULSE_LATENCY_MSEC, which winepulse honors (verified
-    # on-device 2026-07-05: stream renegotiates 256/48000 -> e.g. 720/48000 and SFX-burst
-    # underruns drop ~10x — docs/gamescope-fps-investigation.md follow-up). The value is the
-    # game's audio buffer in ms; bigger absorbs FEX-translated mixer overruns at the cost of
-    # audio latency, so it's a PER-GAME tweak (rhythm games stay on the tight default).
-    # A Steam launch-option override (`PULSE_LATENCY_MSEC=... %command%`) is already in our
-    # env by the time we run — it wins; we only fill in when unset.
+    # winepulse honors PULSE_LATENCY_MSEC: a bigger buffer absorbs FEX-translated mixer
+    # overruns at the cost of latency, hence per-game rather than global. A launch-option
+    # override is already in our env by now, so only fill in when unset.
     value = str(settings.get("audioLatency", "") or "").strip()
     if value.isdigit() and 10 <= int(value) <= 500 and "PULSE_LATENCY_MSEC" not in os.environ:
         os.environ["PULSE_LATENCY_MSEC"] = value

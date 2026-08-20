@@ -1,7 +1,6 @@
-# pocknix-lock-migrate — converter: rolling device -> locked base, and the
-# engine behind `pocknix-base locked`. The base repo URL is stamped at build
-# time (POCKNIX_BASE_URL, injected by build-packages.sh); it is stable across
-# snapshots, so bumped bases need no repoint on devices.
+# pocknix-lock-migrate — rolling device -> locked base. The base repo URL is stamped in
+# at build time (POCKNIX_BASE_URL from build-packages.sh) and is stable across snapshots,
+# so a bumped base never has to repoint devices.
 pkgname=pocknix-lock-migrate
 pkgver=0.1.0
 pkgrel=3

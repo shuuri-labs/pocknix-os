@@ -1,6 +1,5 @@
 #!/bin/bash
-# ES-DE launch wrapper for cemu: big-core taskset pin, mirroring es-armsx2.
-# AppImage emulators also need this as their bridge into ES-DE (not in PATH).
+# ES-DE launch wrapper; es-armsx2 explains why the pin lives here.
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 # Cemu matches its pad by SDL GUID, which differs between the two sessions.

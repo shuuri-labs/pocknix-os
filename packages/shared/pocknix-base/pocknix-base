@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
-# pocknix-base — show or switch the device's package base.
-#
-#   pocknix-base            what mode/snapshot this device is on
-#   pocknix-base rolling    unlock: track live ALARM (typed confirmation)
-#   pocknix-base locked     return to the locked base (full converge)
-#
-# rolling appends the live repos BELOW [pocknix] (name resolution keeps our
-# packages winning) and runs a full -Syu in the same breath — never leave the
-# half-frozen partial-upgrade state the lock exists to prevent. The
-# rolling-mode flag is visible admin intent: it stops pocknix-lock-migrate
-# auto-relocking the device. locked reuses the migrator, so re-locking doubles
-# as the repair tool for a broken rolling experiment.
+# pocknix-base — show or switch the device's package base (locked snapshot vs live ALARM).
+# rolling appends the live repos BELOW [pocknix] so pocknix packages keep winning name
+# resolution, and -Syu's in the same breath: never leave the half-frozen partial-upgrade
+# state the lock exists to prevent. The rolling-mode flag is admin intent — it is what
+# stops pocknix-lock-migrate auto-relocking the device.
 
 set -euo pipefail
 
@@ -31,8 +24,8 @@ mode() {
 # the snapshot id IS the pocknix-base-lock pkgver (the stable repo url carries none)
 snapshot_id() { pacman -Q pocknix-base-lock 2>/dev/null | awk '{print $2}' | cut -d- -f1; }
 
-# installed but in neither locked repo (hand-installs; they keep working, never
-# update). Guard: an unsynced device (fresh image, no dbs) would list EVERYTHING.
+# Installed but in neither locked repo. Guard: on an unsynced device (fresh image,
+# no dbs) an empty repo list would make every installed package look foreign.
 foreign() {
   local repo
   repo="$(pacman -Slq pocknix pocknix-shared pocknix-base 2>/dev/null | LC_ALL=C sort -u)"
@@ -88,8 +81,7 @@ case "${1:-status}" in
 EOF
     read -rp "  Type ROLL to continue: " a
     [ "${a}" = "ROLL" ] || { echo "cancelled."; exit 0; }
-    # both conf generators emit the section as header/SigLevel/Server, so the
-    # range delete is stable
+    # both conf generators emit the section as header/SigLevel/Server, so the range is stable
     sed -i '/^\[pocknix-base\]$/,/^Server = /d' "${CONF}"
     cat >> "${CONF}" <<'EOF'
 
@@ -117,9 +109,8 @@ EOF
   locked)
     [ "$(id -u)" -eq 0 ] || die "must run as root (sudo pocknix-base locked)"
     [ -x "${MIGRATE}" ] || die "${MIGRATE} missing (pocknix-lock-migrate not installed?)"
-    # A converge refused by a blocking package leaves the device LOCKED with the
-    # migration still armed, so the documented "remove it, re-run" must resume the
-    # converge here rather than fail the rolling-mode check.
+    # A converge refused by a blocking package leaves the device locked with the migration
+    # still armed, so "remove it, re-run" must resume here, not fail the rolling-mode check.
     if [ "$(mode)" = locked ] && [ -f "${PENDING}" ]; then
       echo "The base update is still pending on this device; resuming the converge."
       echo

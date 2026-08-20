@@ -1,7 +1,4 @@
-// proton-cachyos: registers the CachyOS ARM64 Proton build as a selectable compat tool.
-// The INTERNAL name ("proton-cachyos") is what Steam writes into config.vdf when a game (or
-// the global default) is set to this tool — it NEVER changes across versions, so pacman
-// updates swap the files underneath without breaking any selection.
+// The internal name "proton-cachyos" is what Steam writes into config.vdf; it must never change.
 "compatibilitytools"
 {
   "compat_tools"

@@ -1,8 +1,5 @@
-# Two migrations, both rm -f (no-ops on fresh images):
-#  - the updater used to ship UNPACKAGED in /usr/local (image overlay), which
-#    wins PATH over the packaged /usr/bin copy and would shadow it forever;
-#  - pocknix-install (guarded extras installer) is gone; its state files would
-#    otherwise linger and confuse support.
+# Unowned overlay leftovers: /usr/local wins PATH and would shadow the packaged
+# /usr/bin copy forever.
 _prune_superseded() {
   rm -f /usr/local/bin/pocknix-update \
         /usr/share/applications/pocknix-updater.desktop \
@@ -10,13 +7,10 @@ _prune_superseded() {
         /var/lib/pocknix/extra-packages.snapshot
 }
 
-# Fielded devices predate the [pocknix-shared] repo (shared packages published
-# once, per-SoC repos keep only the SoC-specific set). Retrofit the stanza,
-# DERIVING the URL from the installed [pocknix] one — LAN-test devices point at
-# http://<vm>:8000/<soc> and must keep their host. pacman reads its config at
-# transaction start, so the repo becomes visible on the NEXT transaction (same
-# two-phase shape as pocknix-lock-migrate). Image builds are excluded by the
-# systemd guard: build-image.sh writes both stanzas itself.
+# Retrofits the [pocknix-shared] stanza onto devices that predate it. The URL is
+# DERIVED from the installed [pocknix] one because LAN-test devices point at their own
+# host. pacman reads its config at transaction start, so the repo goes live on the next
+# transaction; the systemd guard keeps image builds out (build-image.sh writes both).
 _add_shared_repo() {
   [ -d /run/systemd/system ] || return 0
   local conf=/etc/pacman.conf

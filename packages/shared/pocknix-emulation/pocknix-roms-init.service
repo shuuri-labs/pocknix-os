@@ -1,11 +1,7 @@
-# --user oneshot: seed the ~/ROMs tree + ES-DE/RetroArch configs on the deck login.
-# Enabled for the session user at image time with:
-#   systemctl --global enable pocknix-roms-init.service
-# (same --global mechanism build-sd-image.sh uses for pipewire/wireplumber). Runs once per login,
-# is fully idempotent, and never blocks the session (the script is guarded + exits 0).
+# Enabled at image time with `systemctl --global enable`, not by the package: it is a --user
+# unit and there is no user to enable it for at install time.
 [Unit]
 Description=pocknix: create ~/ROMs tree and seed emulator configs on first login
-# Only meaningful in a graphical session; ordering is best-effort (oneshot, non-blocking).
 After=graphical-session-pre.target
 PartOf=graphical-session.target
 

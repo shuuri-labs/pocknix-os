@@ -1,5 +1,4 @@
-// wheel may pkexec pocknix-ssh without a prompt (same trust as
-// 50-pocknix-deck.rules). The GUI does the warning before it turns SSH on.
+// Promptless pkexec of pocknix-ssh for wheel, same trust as 50-pocknix-deck.rules.
 polkit.addRule(function(action, subject) {
     if (!subject.isInGroup("wheel")) { return; }
     if (action.id == "org.freedesktop.policykit.exec" &&

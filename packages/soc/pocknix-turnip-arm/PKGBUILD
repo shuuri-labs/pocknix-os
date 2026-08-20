@@ -1,8 +1,6 @@
-# pocknix-turnip-arm — pinned aarch64 Turnip builds, selectable per game (ARM Proton path).
-# Counterpart of pocknix-turnip-x86: the "Mesa Version" tweak points VK_DRIVER_FILES here for
-# ARM Proton games (arm64ec wine renders through the native ARM Vulkan stack). Latest release
-# of each upstream series, built turnip-only from source with the SAME per-SoC tuning as
-# packages/mesa (POCKNIX_TUNE_CFLAGS from config/tuning/${SOC}.conf, sm8550 fallback).
+# pocknix-turnip-arm — pinned aarch64 Turnip builds, one per upstream series, that the per-game
+# "Mesa Version" tweak selects by pointing VK_DRIVER_FILES at them (ARM Proton path).
+# Counterpart of pocknix-turnip-x86; same per-SoC tuning contract as packages/soc/mesa.
 pkgname=pocknix-turnip-arm
 pkgver=20260817
 pkgrel=1
@@ -17,12 +15,8 @@ makedepends=(meson ninja python-mako python-packaging python-yaml python-ply
              wayland wayland-protocols zlib zstd
              xorgproto libx11 libxcb libxext libxshmfence libxxf86vm libxrandr xcb-util-keysyms)
 options=(!lto)
-# dir/tweak value strips the rc hyphen (makepkg pkgver rules); _srctag() restores it.
-# "26.3.0devel" is the bleeding-edge entry = a PINNED mesa main snapshot (what the AUR's
-# mesa-git builds, which has no tag: its version is synthesized from the tree's VERSION file
-# plus a commit count). Pinned, not floating, so a rebuild is reproducible; refresh
-# _develcommit deliberately. GitLab's generated archive is a loud sha256 mismatch if it ever
-# recompresses, not a silent swap.
+# The "devel" entry is a PINNED mesa main snapshot (main carries no tag) — pinned, not floating,
+# so rebuilds reproduce; refresh _develcommit deliberately.
 _develcommit=0b1b8798d81cb4da8c181c7d81076a0541006853
 _versions=('25.0.7' '25.1.9' '25.2.8' '25.3.6' '26.0.8' '26.1.6' '26.2.0' '26.3.0devel')
 source=('0001-c11-threads-fix-build-on-c23.patch'
@@ -44,8 +38,8 @@ sha256sums=('SKIP'
             'efd4bb08cdb7c365a812cd4e6c9202ab55b2f22cdcd13c7d6c4f9647b799a4ef'
             '9f0fb71d23005d8c2c2cea3af1a5c8768643e3b95d5fc0cf6e4e7c34db2b2ae2')
 
-# version -> source dir suffix: the devel snapshot extracts to mesa-<commit>, releases to
-# mesa-<ver> (RC tarballs keep the hyphen makepkg forbids in a pkgver).
+# The devel snapshot extracts to mesa-<commit>, releases to mesa-<ver>; RC tarballs keep the
+# hyphen that makepkg forbids in a version string, so our entries strip it and this restores it.
 _srctag() {
   case "$1" in
     *devel) printf '%s' "${_develcommit}" ;;
@@ -54,8 +48,8 @@ _srctag() {
 }
 
 prepare() {
-  # c11-threads C23 fix: upstream from 26.x, backported into some late 25.x point releases
-  # — dry-run first and apply only where missing (a reversed-patch prompt hangs the build).
+  # The c11-threads C23 fix is already in 26.x and some late 25.x point releases: dry-run first
+  # and apply only where missing, because a reversed-patch prompt hangs the build.
   local v
   for v in "${_versions[@]}"; do
     cd "${srcdir}/mesa-$(_srctag "$v")"
@@ -66,14 +60,12 @@ prepare() {
 }
 
 build() {
-  # Same tuning contract as packages/mesa: per-SoC flags injected by build-packages.sh,
-  # sm8550 (cortex-x3/armv9) fallback for a standalone makepkg.
+  # Same tuning contract as packages/soc/mesa (sm8550 fallback for a standalone makepkg).
   local _rocknix_tune="${POCKNIX_TUNE_CFLAGS:--march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics}"
   export CFLAGS="${CFLAGS} ${_rocknix_tune}"
   export CXXFLAGS="${CXXFLAGS} ${_rocknix_tune}"
 
-  # Turnip-only subset of packages/mesa's option set: no gallium/GL at all, both WSI
-  # platforms (x11 for XWayland games, wayland for gamescope-native).
+  # Both WSI platforms stay on: x11 for XWayland games, wayland for gamescope-native ones.
   local v
   for v in "${_versions[@]}"; do
     meson setup "build-${v}" "mesa-$(_srctag "$v")" --prefix=/usr --buildtype=plain \
@@ -106,8 +98,7 @@ package() {
     meson install -C "build-${v}" --destdir "${stage}" --no-rebuild
     dir="${pkgdir}/usr/share/pocknix/vk-arm/${v}"
     install -Dm755 "${stage}/usr/lib/libvulkan_freedreno.so" "${dir}/libvulkan_freedreno.so"
-    # ICD manifest name is arch-suffixed pre-26 (freedreno_icd.aarch64.json); rewrite the
-    # library_path value unconditionally (26.x uses a bare soname, same as the x86 payloads).
+    # ICD manifest name is arch-suffixed pre-26 (freedreno_icd.aarch64.json), bare after — glob it.
     sed -E "s|\"library_path\": *\"[^\"]*\"|\"library_path\": \"/usr/share/pocknix/vk-arm/${v}/libvulkan_freedreno.so\"|" \
       "${stage}"/usr/share/vulkan/icd.d/freedreno_icd*.json > "${dir}/icd.json"
     chmod 0644 "${dir}/icd.json"

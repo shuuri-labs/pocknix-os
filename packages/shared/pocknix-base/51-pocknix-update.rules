@@ -1,7 +1,5 @@
-// wheel may pkexec these two fixed-purpose CLIs without a prompt (same trust as
-// 50-pocknix-deck.rules). Shipped by the PACKAGE so a device gaining the
-// /usr/bin binaries via -Syu gains the authorization the same way.
-// pocknix-base still demands its typed ROLL before anything happens.
+// Passwordless pkexec of these two CLIs for wheel, same trust as 50-pocknix-deck.rules.
+// Shipped by the package so the authorization travels with the binaries it authorizes.
 polkit.addRule(function(action, subject) {
     if (!subject.isInGroup("wheel")) { return; }
     if (action.id == "org.freedesktop.policykit.exec" &&

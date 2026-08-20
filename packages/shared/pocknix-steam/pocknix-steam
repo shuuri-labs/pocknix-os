@@ -1,10 +1,5 @@
 #!/bin/bash
 # pocknix-steam — launch the native ARM64 Steam client in Big Picture under gamescope.
-#
-# The performance overlay is just `--mangoapp` + the mangohud dep, no config plumbing: it stays
-# blank until Steam's Settings > In Game > Performance > "Show performance metrics" is on, which
-# is a user toggle, not a wiring bug. GPU/power fields need OUR mangohud (vanilla has no
-# msm/freedreno reader).
 set -e
 
 export HOME="${HOME:-/root}"
@@ -16,8 +11,7 @@ CLIENT="${CLIENT_DIR}/steam"
 # then the aarch64 shim dir.
 LDLP="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu"
 
-# The client tree is seeded at BUILD time (no network installer at runtime), so an absent tree
-# is unrecoverable here, not something to fall back from.
+# Seeded at BUILD time, so an absent tree is unrecoverable here, not something to fall back from.
 if [ ! -x "${CLIENT}" ]; then
   echo "[pocknix-steam] native Steam client missing at ${CLIENT} — the build-time bake didn't seed it." >&2
   exit 1
@@ -31,9 +25,8 @@ cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
 touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 
 # Re-pin EVERY launch: the ARM64 Big-Picture client only works on steamdeck_publicbeta, and
-# anything that flips the channel (a desktop-mode `steam`, a server-side change) leaves Steam
-# reading "installed version 0" and stuck forever on "Installing update" with steamwebhelper
-# crash-looping. Re-asserting here is what makes the next launch self-heal.
+# anything that flips the channel leaves Steam reading "installed version 0", stuck on
+# "Installing update" with steamwebhelper crash-looping until this reasserts it.
 mkdir -p "${STEAM}/package"
 echo steamdeck_publicbeta > "${STEAM}/package/beta"
 
@@ -46,10 +39,9 @@ fi
 # Must run BEFORE gamescope: Steam reads compatibilitytools.d only at startup.
 /usr/bin/pocknix-proton-prep
 
-# Session SWITCH self-heal: steamos-session-select SIGTERMs gamescope, but the Steam client
-# re-parents and survives holding its single-instance lock. Coming back, the new steam exits with
-# "Steam is already running", gamescope's primary child dies instantly and the supervisor hot-loops.
-# Safe because this only runs at session START, when no legitimate Steam is alive.
+# A session switch SIGTERMs gamescope but the Steam client re-parents and survives holding its
+# single-instance lock, so the next launch exits "Steam is already running" and gamescope
+# hot-loops. Safe only because this runs at session START, when no legitimate Steam is alive.
 uid="$(id -u)"
 if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhelper >/dev/null 2>&1; then
   echo "[pocknix-steam] clearing a stale Steam from a previous session..."
@@ -68,8 +60,7 @@ if command -v pocknix-steam-sync >/dev/null 2>&1; then
   pocknix-steam-sync || echo "[pocknix-steam] Steam-library sync failed (non-fatal)"
 fi
 
-# Panel geometry comes from the BSP's device.conf, with the admin override sourced last so it
-# wins; the fallbacks below are the RP6's values.
+# /etc override is sourced last so it wins.
 for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
   [ -r "${_dc}" ] && . "${_dc}"
 done
@@ -86,14 +77,11 @@ esac
 # Do NOT add a core pin here: scx_lavd places the bursty threads itself and needs the littles free
 # for batch work; a hard taskset fights it.
 
-# Log to a file, never the tty: tty1 must stay blank because it is what shows between compositors
-# on a session switch. It lives in the deck HOME because deck cannot write /var/log. Do NOT exec
-# gamescope either, since the session switch pkills it by name.
+# Log to a file, never the tty: tty1 is what shows between compositors on a session switch and
+# must stay blank. Do NOT exec gamescope either, since the session switch pkills it by name.
 GS_LOG="${HOME}/pocknix-steam.log"
-# gamepadui sizes its UI from the output's physical mm: 177x100 is ~275 DPI (handheld-correct);
-# the ~96 DPI default reads as a desktop monitor and renders the UI tiny.
-# The present-path env vars belong nowhere here (see pocknix-notes dev/steam.md) and
-# -noshaders keeps Steam's fossilize compile from stealing CPU during play.
+# gamepadui sizes its UI from the output's physical mm; the ~96 DPI default reads as a desktop
+# monitor and renders the UI tiny. -noshaders keeps fossilize from stealing CPU during play.
 env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM="${PANEL_MM}" \
   gamescope -W "${GS_W}" -H "${GS_H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \

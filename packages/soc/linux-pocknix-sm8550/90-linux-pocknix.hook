@@ -1,6 +1,5 @@
-# Rebuild the qcom-abl /flash/KERNEL whenever the pocknix kernel's Image/dtbs/modules change, so a
-# `pacman -U linux-pocknix` on the device is a complete kernel deploy (Image+modules+/flash/KERNEL).
-# No-ops in the image-build chroot (pocknix-build-bootimg skips when /flash isn't mounted).
+# Makes a kernel pacman transaction on the device a complete deploy; no-ops in the image-build
+# chroot, where pocknix-build-bootimg finds no mounted /flash.
 [Trigger]
 Operation = Install
 Operation = Upgrade

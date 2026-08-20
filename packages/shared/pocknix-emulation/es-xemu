@@ -1,7 +1,5 @@
 #!/bin/bash
-# ES-DE launch wrapper for xemu (original Xbox): big-core taskset pin, mirroring
-# es-armsx2. Also the only bridge to the AppImage — xemu ships under
-# /opt/pocknix/emulators (not PATH), so ES-DE's bundled find rules never see it.
+# ES-DE launch wrapper; es-armsx2 explains why the pin lives here.
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 exec taskset -c "${POCKNIX_BIG_CORES:-3-7}" /opt/pocknix/emulators/xemu/xemu.AppImage "$@"

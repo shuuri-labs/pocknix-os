@@ -1,5 +1,5 @@
-# proton-ge — GE-Proton ARM64 build as a system compat tool.
-# Constant tool dir + internal name, so a bump swaps files under existing per-game selections.
+# proton-ge — GE-Proton ARM64 build as a system compat tool; packaging rules are
+# proton-cachyos's (see its header).
 pkgname=proton-ge
 _srctag=GE-Proton11-5
 _ver=${_srctag#GE-Proton}
@@ -35,7 +35,6 @@ package() {
   mkdir -p "${pkgdir}/${tooldir}"
   cp -a "${dist}/." "${pkgdir}/${tooldir}/"
 
-  # Ours over upstream's: constant internal name, and no require_tool_appid (host-direct).
   install -Dm644 "${srcdir}/compatibilitytool.vdf" "${pkgdir}/${tooldir}/compatibilitytool.vdf"
   install -Dm644 "${srcdir}/toolmanifest.vdf"      "${pkgdir}/${tooldir}/toolmanifest.vdf"
   install -Dm755 "${srcdir}/pocknix-proton"        "${pkgdir}/${tooldir}/pocknix-proton"

@@ -1,9 +1,7 @@
 #!/bin/sh
-# pocknix system-sleep hook. systemd runs every executable in
-# /usr/lib/systemd/system-sleep/ around suspend/resume with:
-#   $1 = pre | post     $2 = suspend | hibernate | hybrid-sleep | suspend-then-hibernate
-# We dispatch our own ordered hooks in /usr/lib/pocknix/sleep.d/{pre,post}/.
-# (Minimal, infra-free port of ROCKNIX's quirks sleep.d runner.)
+# systemd runs every executable in /usr/lib/systemd/system-sleep/ with $1 = pre|post and
+# $2 = suspend|hibernate|hybrid-sleep|suspend-then-hibernate. We fan that out to our own
+# name-ordered hooks in /usr/lib/pocknix/sleep.d/{pre,post}/.
 stage="$1"
 case "${stage}" in
   pre)  dir=/usr/lib/pocknix/sleep.d/pre  ;;

@@ -1,9 +1,7 @@
 #!/bin/sh
-# Toggle the USB role across suspend: left untouched, the dwc3/type-c
-# stack renegotiates on resume and holds dwc3+ufshcd resume ~10s each.
-# TCPM/pmic_glink reverts the written value within ~300ms - the forced
-# re-resolution is the operative part, so verify + re-assert once and
-# log reverts to kmsg. The post hook restores the saved role.
+# Left untouched, the dwc3/type-c stack renegotiates on resume and holds dwc3+ufshcd resume
+# ~10s each. TCPM/pmic_glink reverts the written value within ~300ms anyway - forcing the
+# re-resolution is the operative part, so verify and re-assert once.
 for r in /sys/class/usb_role/*-role-switch/role; do
   [ -f "$r" ] || continue
   mkdir -p /run/pocknix

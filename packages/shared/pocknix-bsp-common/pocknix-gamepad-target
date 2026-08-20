@@ -1,10 +1,8 @@
 #!/bin/sh
-# pocknix-gamepad-target — which virtual pad InputPlumber publishes for this session.
-#
-# The `deck` target's gamepad half is hidraw-only, like real Deck hardware: it publishes no evdev
-# joystick, so outside Steam nothing sees a controller. Desktop mode asks for `xb360` instead.
-# Every InputPlumber start re-reads the YAML (always `deck`), so the choice must be replayed after
-# one, not just at session launch. Evidence: pocknix-notes investigations/desktop-mode-gamepad.md.
+# pocknix-gamepad-target — which virtual pad InputPlumber publishes for this session. The `deck`
+# target is hidraw-only like real Deck hardware and publishes no evdev joystick, so outside Steam
+# nothing sees a pad; desktop mode asks for `xb360`. Every InputPlumber start re-reads its YAML
+# (always `deck`), so the choice must be replayed after one, not just at session launch.
 set -u
 
 SERVICE=org.shadowblip.InputPlumber
@@ -12,7 +10,7 @@ IFACE=org.shadowblip.Input.CompositeDevice
 STATE=/run/pocknix/gamepad-target
 
 # Non-pad targets must survive the swap: the keyboard one re-emits the volume rocker off the
-# gpio-keys node InputPlumber grabs exclusively.
+# gpio-keys node InputPlumber holds exclusively.
 is_pad_kind() {
   case "$1" in
     deck|deck-uhid|xb360|xbox-elite|xbox-series|ds5|ds5-edge|horipad-steam|gamepad|steam-deck) return 0 ;;

@@ -1,6 +1,5 @@
-# Refresh the ABL kit on /flash so provisioning another device from this card
-# uses the ABL this system ships. Copies FILES; does not flash the bootloader
-# (ROCKNIX's update.sh calls updateabl here, we deliberately do not).
+# Keeps the kit on /flash matching the shipped ABL, so provisioning another device from this card
+# uses it. Copies FILES only — never flash the bootloader from a hook (ROCKNIX's update.sh does).
 [Trigger]
 Operation = Install
 Operation = Upgrade

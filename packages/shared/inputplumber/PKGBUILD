@@ -1,7 +1,6 @@
-# inputplumber — input router/remapper daemon. Creates a unified virtual controller
-# (e.g. DualSense) from the raw gamepad so Steam Input sees a proper pad + handles the
-# Guide button, rumble, etc. We use the upstream PREBUILT aarch64 release (same as
-# ROCKNIX) — no Rust build in the chroot. RP6 device config ships in pocknix-bsp.
+# inputplumber — input router/remapper daemon: presents a unified virtual controller so Steam
+# Input sees a proper pad (Guide button, rumble). Upstream's PREBUILT aarch64 release, so the
+# build chroot needs no Rust toolchain; the per-device config ships in pocknix-bsp.
 pkgname=inputplumber
 pkgver=0.75.2
 pkgrel=2
@@ -12,14 +11,13 @@ license=('GPL3')
 depends=('systemd' 'libevdev' 'libiio' 'polkit' 'dbus')
 provides=('inputplumber')
 conflicts=('inputplumber')
-# Prebuilt binary: don't strip/lto/etc.
+# Prebuilt binary.
 options=('!strip' '!debug' '!lto')
 source=("inputplumber-aarch64-${pkgver}.tar.gz::https://github.com/ShadowBlip/InputPlumber/releases/download/v${pkgver}/inputplumber-aarch64.tar.gz")
 sha256sums=('SKIP')
 
 package() {
-  # Release tarball lays out usr/ at the top (bin, lib/systemd, share/inputplumber, dbus,
-  # polkit). Handle either a top-level usr/ or a single wrapper dir containing usr/.
+  # The release tarball has usr/ at the top, sometimes inside one wrapper dir.
   local usrdir
   if [ -d "${srcdir}/usr" ]; then
     usrdir="${srcdir}/usr"

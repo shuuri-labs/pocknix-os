@@ -1,23 +1,12 @@
 # pocknix-bootloader-sm8550 — the ROCKNIX ABL install kit for SM8550 boards.
-#
-# Boot contract (qcom-abl): XBL -> ABL -> /KERNEL (Android boot image) off the
-# FAT labeled ROCKNIX. The FACTORY ABL only boots Android, so the ROCKNIX ABL
-# must be flashed to abl_a/abl_b ONCE before any SD can boot — contrast sm8250,
-# arm-efi, where the factory ABL chainloads UEFI GRUB and no flash is needed.
-# The kit (elf + Android-side scripts) lets a stock-Android device provision
-# straight from a pocknix SD; build-sd-image.sh copies it to the SD boot FAT
-# root, the exact layout ROCKNIX documents. One elf covers the whole SM8550
-# family — ROCKNIX keys it by SoC, not board. Provenance, hashes and vendoring
-# rules: README.provenance.
-# Nothing here flashes at build or install time: first provisioning runs the
-# kit by hand from rooted Android, afterwards pocknix-update-abl does it from
-# the running system. Both are deliberate user actions — no auto-flash hook,
-# unlike ROCKNIX's updateabl.
-#
-# Version bump: set _ablver to the new release tag (watch ROCKNIX's pin in
-# their packages/tools/rocknix-abl/package.mk during `make sync` review — the
-# ABL and the boot contract above must stay matched), reset pkgrel=1, refresh
-# the tarball sha512.
+# Boot contract (qcom-abl): XBL -> ABL -> /KERNEL (Android boot image) off the FAT labeled ROCKNIX.
+# The factory ABL boots only Android, so the ROCKNIX ABL must be flashed to abl_a/abl_b ONCE before
+# any SD boots — unlike sm8250, whose factory ABL chainloads UEFI GRUB. One elf covers the whole
+# SM8550 family: ROCKNIX keys it by SoC, not board.
+# Nothing here flashes at build or install time; both flashing paths (the kit by hand from rooted
+# Android, pocknix-update-abl afterwards) are deliberate user actions.
+# A bump must keep the ABL matched to this contract — watch ROCKNIX's own pin in
+# packages/tools/rocknix-abl/package.mk when reviewing `make sync`.
 pkgname=pocknix-bootloader-sm8550
 _ablver=1.1.7
 pkgver=${_ablver}
@@ -42,11 +31,10 @@ sha512sums=('fa1d213bec97661942b8083be1f2eb6b65cc200b4f3f76dd84261ba92a01ac9261e
             'SKIP')
 
 prepare() {
-  # The release ships a .sha256 sidecar per elf — verify the one we ship.
+  # the release ships a .sha256 sidecar per elf
   ( cd "rocknix-abl-v${_ablver}" && sha256sum -c "abl_signed-SM8550.elf.sha256" )
-  # ROCKNIX package.mk substitution: the flash script names the SoC's elf.
   sed 's/%DEVICE%/SM8550/g' flash_abl.sh.template > flash_abl.sh
-  # the elf carries no version of its own
+  # pocknix-update-abl reports the shipped version; the elf itself carries none
   echo "${_ablver}" > version
 }
 

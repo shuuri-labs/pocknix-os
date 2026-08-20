@@ -1,7 +1,6 @@
 [Unit]
 Description=pocknix: register the Flathub remote for Discover/flatpak
-# Adding the remote fetches flathub.flatpakrepo (the GPG key + URL), so it needs the network the
-# first time. After that the remote exists and ExecStart is a no-op even offline.
+# remote-add fetches flathub.flatpakrepo, so the first run needs the network; later runs no-op.
 After=network-online.target
 Wants=network-online.target
 
@@ -10,6 +9,5 @@ Type=oneshot
 ExecStart=/usr/bin/pocknix-flathub-setup
 RemainAfterExit=yes
 
-# No [Install]: the NM dispatcher hook (50-pocknix-flathub) starts this, never a boot transaction.
-# It was WantedBy=multi-user.target and failed every boot (target reached ~10s before wlan0 has
-# DNS); retrying there would stall multi-user.target, which is ordered after it.
+# Do not add [Install]: only the NM dispatcher hook (50-pocknix-flathub) may start this - see
+# pocknix-flathub-dispatcher for why a boot transaction cannot work.

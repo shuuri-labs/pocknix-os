@@ -1,7 +1,7 @@
 #!/bin/bash
 # pocknix-snapshot-pre — alpm PreTransaction hook body: read-only snapshot of the root
-# subvolume + info.json metadata, before pacman touches anything. Targets arrive on
-# stdin (NeedsTargets). EVERY exit path is 0: the update must proceed regardless.
+# subvolume plus info.json. Targets arrive on stdin (NeedsTargets), and every exit path
+# must stay 0 — a missing snapshot may never block the update.
 set -uo pipefail
 
 . /usr/lib/pocknix/snapshot-lib.sh
@@ -9,17 +9,17 @@ pocknix_snap_supported || exit 0
 
 RUN=/run/pocknix
 mkdir -p "${RUN}"
-rm -f "${RUN}/last-transaction.json"   # stale info from a previous transaction
+rm -f "${RUN}/last-transaction.json"
 
 targets="$(cat || true)"
 [ -n "${targets}" ] || exit 0
 
 kernel_in=false
 grep -q '^linux-pocknix-' <<<"${targets}" && kernel_in=true
-# the kernel version the SNAPSHOT contains (pre-transaction = old version)
+# pre-transaction, so this is the kernel the snapshot will contain
 kernel_pkg="$(pacman -Q linux-pocknix-sm8550 linux-pocknix-sm8250 2>/dev/null | head -n1 || true)"
 
-write_last_transaction() {  # $1 = snapshot id or empty, $2 = low_space bool
+write_last_transaction() {
   jq -n --arg id "${1}" --argjson low "${2}" --argjson kin "${kernel_in}" \
     '{schema:1, snapshot_id:(if $id == "" then null else $id end),
       low_space:$low, kernel_in_transaction:$kin}' \
@@ -43,8 +43,8 @@ if ! btrfs subvolume snapshot -r / "${dir}/snapshot" >/dev/null; then
   exit 0
 fi
 
-# transaction_ok flips to true in the PostTransaction hook; if pacman dies mid-commit
-# the post hook never runs and this snapshot stays marked as an interrupted transaction.
+# transaction_ok flips in the PostTransaction hook, so a pacman that dies mid-commit
+# leaves the snapshot marked as an interrupted transaction.
 jq -n \
   --arg id "${id}" --arg created "$(date -u +%FT%TZ)" \
   --arg kernel_pkg "${kernel_pkg}" --argjson kin "${kernel_in}" \

@@ -63,7 +63,7 @@ do_abl() {
   konsole_run "/usr/bin/pocknix-update-abl"
 }
 
-pick_snapshot() {  # $1: "" | --internal; newest preselected
+pick_snapshot() {
   local flag="$1" rows args=() id
   rows="$(pkexec /usr/bin/pocknix-rollback ${flag} --list 2>/dev/null | tail -n +2)" || rows=""
   [ -n "${rows}" ] || { gui_err "No snapshots found${flag:+ on the internal install}.\n\nSnapshots are taken automatically before every update."; return 1; }
@@ -78,7 +78,7 @@ pick_snapshot() {  # $1: "" | --internal; newest preselected
     "${args[@]}"
 }
 
-do_rollback() {  # $1: "" | --internal
+do_rollback() {
   local flag="$1" id out rc=0
   id="$(pick_snapshot "${flag}")" || return 0
   [ -n "${id}" ] || return 0
@@ -143,16 +143,14 @@ do_mode() {
   esac
 }
 
-# kdialog rich text mangles <table>, desyncs on tags inside a <pre>, and glues
-# inline text preceding a <pre> — so the CLI's printf columns inside one plain
-# <pre> ARE the table, heading included, with nothing inline before it.
+# kdialog rich text mangles <table>, desyncs on tags inside a <pre> and glues inline text
+# preceding one, so the CLI's printf columns inside a single plain <pre> are the table.
 do_status() {
   local list
   list="$(pkexec /usr/bin/pocknix-rollback --list 2>/dev/null)" || list=""
   list="$(printf 'Snapshots (newest first)\n\n'; printf '%s\n' "${list}" | head -1; printf '%s\n' "${list}" | tail -n +2 | sort -r)"
-  # status stays proportional (wraps, all packages visible) but rich text eats
-  # newlines and the wide pre defeats word-wrap: explicit <br>s + pre-folding.
-  # Escape first — the converge-blocked hint contains a literal <name>.
+  # Rich text eats newlines and a wide pre defeats word-wrap, hence explicit <br>s and
+  # pre-folding; escape first, since the converge-blocked hint contains a literal <name>.
   local status
   status="$(pocknix-base status 2>&1 \
     | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' \

@@ -1,16 +1,9 @@
 #!/bin/bash
 # pocknix-update-boot — refresh the arm-efi boot files on /flash from the installed kernel.
-#
-# Run by the linux-pocknix alpm hook after a kernel install/upgrade (and runnable by hand).
-# arm-efi contract (SM8250): GRUB's "linux /KERNEL" loads a RAW arm64 Image and the board dtb
-# is a separate "devicetree /boot/grub/<board>.dtb" — so a kernel deploy is two copies, no
-# mkbootimg. Keeps /flash/KERNEL.bak and writes /flash/KERNEL.md5 (contract parity with the
-# qcom-abl devices; GRUB itself doesn't check it).
-#
-# SRCROOT (default /): alternate root tree to deploy FROM — pocknix-rollback passes the target
-# snapshot so the deployed kernel matches the rolled-back modules. OUT_SUFFIX (default empty):
-# stage as KERNEL${OUT_SUFFIX} / *.dtb${OUT_SUFFIX} without touching the live files or
-# KERNEL.bak (rollback renames after its atomic commit). Defaults = byte-identical hook path.
+# arm-efi contract (SM8250): GRUB loads a RAW arm64 Image at /KERNEL and the board dtb separately
+# from /boot/grub, so a kernel deploy is two copies and no mkbootimg. KERNEL.md5 is written only for
+# parity with the qcom-abl devices; GRUB never checks it.
+# SRCROOT / OUT_SUFFIX behave as in linux-pocknix-sm8550's pocknix-build-bootimg (rollback staging).
 set -euo pipefail
 
 FLASH="${FLASH:-/flash}"
@@ -18,8 +11,7 @@ SRCROOT="${SRCROOT:-}"
 OUT_SUFFIX="${OUT_SUFFIX:-}"
 
 [ -f "${SRCROOT}/boot/Image" ] || { echo "pocknix-update-boot: no ${SRCROOT}/boot/Image — nothing to do"; exit 0; }
-# In the image-build chroot /flash isn't a real mount; build-sd-image.sh populates the FAT
-# there instead, so skip. On the device /flash is the FAT boot partition (fstab) -> refresh.
+# In the image-build chroot /flash is not a mount; build-sd-image.sh populates the FAT instead.
 mountpoint -q "$FLASH" || { echo "pocknix-update-boot: $FLASH not mounted — skipping (build chroot?)"; exit 0; }
 
 mount -o remount,rw "$FLASH" 2>/dev/null || true

@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# pocknix-lock-migrate — convert a rolling pocknix device to the locked base,
-# no reflash. Also the engine behind `pocknix-base locked`.
-#
-# Two phases because pacman.conf cannot be swapped inside the transaction that
-# resolves against it: prepare (post_install, inside the delivering -Syu)
-# rewrites the repos and arms a marker; converge (NM-dispatched on a real
-# link-up) runs -Syuu — downgrades ALLOWED, rolling devices may be AHEAD of
-# the snapshot. Fresh locked images hit the already-locked check and no-op.
+# pocknix-lock-migrate — convert a rolling device to the locked base in place; also the
+# engine behind `pocknix-base locked`. Two phases because pacman.conf cannot be swapped
+# inside the transaction resolving against it: prepare rewrites the repos and arms a marker
+# from post_install; converge runs -Syuu later, downgrades allowed since a rolling device
+# may be AHEAD of the snapshot.
 
 set -euo pipefail
 
@@ -18,11 +15,11 @@ FOREIGN="${STATE}/foreign-packages"
 BASE_URL="@POCKNIX_BASE_URL@"   # stamped by the PKGBUILD from the build's pin
 
 prepare() {
-  # no systemd = image-build chroot, not a device: rewriting the conf there
-  # strips the repos the rest of the build resolves against
+  # no systemd = image-build chroot: rewriting the conf there would strip the repos
+  # the rest of the build resolves against
   [ -d /run/systemd/system ] || exit 0
-  grep -q '^\[pocknix-base\]' "${CONF}" && exit 0   # already locked
-  # the rolling flag is deliberate admin intent — never auto-relock over it
+  grep -q '^\[pocknix-base\]' "${CONF}" && exit 0
+  # the rolling flag is admin intent — never auto-relock over it
   [ -e /etc/pocknix/rolling-mode ] && exit 0
   install -d "${STATE}"
   awk 'BEGIN{drop=0}
@@ -42,15 +39,15 @@ EOF
 
 converge() {
   [ -f "${MARKER}" ] || exit 0
-  # a versioned dep on a downgraded lib makes pacman refuse the transaction
-  # (correctly); record the blocker or the retry-on-reconnect looks like a stall
+  # pacman refuses the transaction when a versioned dep pins a downgraded lib; record
+  # the blocker, or the retry-on-reconnect just looks like a stall
   local out rc=0
   out="$(pacman -Syuu --noconfirm 2>&1)" || rc=$?
   printf '%s\n' "${out}"
   if [ "${rc}" -ne 0 ]; then
-    # Foreign compat splits (ALARM's mbedtls3) own the very files the base downgrade
-    # restores, and the downgrade orphans them: -Rdd exactly those and retry once,
-    # the same transaction restores the sonames. Repo-owned conflicts stay fatal.
+    # Foreign compat splits (ALARM's mbedtls3) own the very files the downgrade restores
+    # and are orphaned by it: -Rdd exactly those and retry, since the same transaction
+    # puts the sonames back. Repo-owned conflicts stay fatal.
     local owners
     owners="$(printf '%s\n' "${out}" \
       | sed -n 's/.*exists in filesystem (owned by \([^)]*\)).*/\1/p' | LC_ALL=C sort -u \
@@ -72,7 +69,6 @@ converge() {
     exit 1
   fi
   rm -f "${BLOCKED}"
-  # report-only: packages no locked repo carries keep working but stop updating
   LC_ALL=C comm -23 <(pacman -Qq | LC_ALL=C sort) \
                     <(pacman -Slq pocknix pocknix-shared pocknix-base 2>/dev/null | LC_ALL=C sort -u) > "${FOREIGN}"
   if [ -s "${FOREIGN}" ]; then

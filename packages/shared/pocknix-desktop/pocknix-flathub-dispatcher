@@ -1,13 +1,8 @@
 #!/bin/sh
-# NM dispatcher hook -> register the Flathub remote when the link is really up.
-# Installed as /etc/NetworkManager/dispatcher.d/50-pocknix-flathub.
-# network-online.target is reached ~10s before wlan0 has DNS (NM reports startup complete before the
-# iwd backend has the link), so a boot-time remote-add always failed. Retrying at boot would be
-# worse: the service is Before=multi-user.target, so it would stall boot with no Wi-Fi in range.
-# $1 = interface, $2 = action.
-# NM fires two spurious events seconds before any usable link, both of which would just log a failed
-# fetch every boot: `up` for the loopback device it manages, and connectivity-change while still
-# NONE. Verified by logging every invocation across a boot.
+# NM dispatcher hook (/etc/NetworkManager/dispatcher.d/50-pocknix-flathub); $1=interface, $2=action.
+# network-online.target lands ~10s before wlan0 has DNS, so a boot-time remote-add always failed;
+# the service is Before=multi-user.target, so retrying there would stall boot with no Wi-Fi around.
+# NM also fires `up` for its loopback device and connectivity-change while still NONE - both spurious.
 [ "$1" = lo ] && exit 0
 
 case "$2" in

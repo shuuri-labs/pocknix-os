@@ -1,20 +1,8 @@
-# mangohud — Vulkan/GL performance overlay + the `mangoapp` binary that gamescope --mangoapp
-# spawns for Steam's built-in performance overlay. NOT in ALARM for aarch64, so we build it from
-# source (same pattern as packages/soc/gamescope). The heavy deps (imgui, implot, spdlog, vk-bootstrap,
-# vkroots, vulkan-headers, vulkan-utility-libraries) are meson WRAPS — downloaded during
-# `meson setup` (the build chroot has network, as gamescope's git build does). mangoapp itself
-# links system glfw3 (src meson: dependency('glfw3')).
-# Pin to v0.8.3 — the version ROCKNIX pairs with the SAME gamescope commit (fe78bc6) we build.
-# gamescope --mangoapp is tightly coupled to the mangoapp/imgui versions; 0.8.4 + floating wrapdb
-# subprojects gave a mangoapp that runs + reads its config but won't composite the overlay.
-#
-# patches/ = the ROCKNIX/armada Adreno+Qualcomm readers (armada release 20260621: "MangoHud shows
-# previously missing GPU and power metrics"). Vanilla mangohud has NO reader for the msm/freedreno
-# GPU or the Qualcomm battery, so GPU load/clock/temp + power draw render blank. They apply cleanly
-# to 0.8.3 IN ORDER (0001 reworks msm detection -> msm_drm/msm_dpu; 0002 points it at the SM8550
-# devfreq node 3d00000.gpu + gpuss_0_thermal hwmon; 0004 fixes the Qualcomm power_now path/scale).
-# 0006 (SM8750) is intentionally omitted — we're SM8550. Patches are flat in the package dir
-# (makepkg strips local source entries to basename, so a patches/ subdir wouldn't be found).
+# mangohud — Vulkan/GL overlay + the mangoapp binary gamescope --mangoapp spawns.
+# Pinned to v0.8.3: mangoapp is tightly coupled to gamescope's version, and 0.8.4 gave an
+# overlay that runs and reads its config but never composites. Subprojects come from meson
+# wraps, so the build chroot needs network. Patch files stay flat in the package dir —
+# makepkg strips local source entries to their basename.
 pkgname=mangohud
 pkgver=0.8.3
 pkgrel=5
@@ -39,18 +27,10 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
   cd MangoHud
-  # Adreno/Qualcomm GPU + battery readers — order matters (0001 must precede 0002).
-  # 0002 is PER-SoC (drop-in alternatives, same hunks): both point the kgsl reader
-  # at the devfreq node /sys/class/devfreq/3d00000.gpu (same GPU MMIO base on
-  # sm8550 AND sm8250), but the hwmon thermal-zone name differs — gpuss_0_thermal
-  # (sm8550) vs gpu_top_thermal (sm8250, ROCKNIX's own SM8250 mangohud patch).
-  # build-packages.sh injects POCKNIX_SOC; the fallback keeps standalone makepkg
-  # building the sm8550 flavor.
-  # 0006 = the composite-tax fix: mangoapp's visible-overlay loop free-runs (new_frame
-  # latches, never cleared) -> repaints at up to display refresh -> forces gamescope's
-  # ~3.5ms rotated composite at 72-120/s = up to ~32-41% of the GPU = ~10fps off the game.
-  # Pace redraws to gamescope's per-frame messages instead. Measured root cause:
-  # docs/archive/gamescope-fps-investigation.md "GPU-side session (2026-07-02)".
+  # Order matters: 0001 must precede 0002. The 0002 pair are drop-in alternatives with the
+  # same hunks — the devfreq node 3d00000.gpu is shared, only the hwmon zone differs
+  # (gpuss_0_thermal on sm8550, gpu_top_thermal on sm8250). Fallback = sm8550 so a
+  # standalone makepkg without build-packages.sh's POCKNIX_SOC still builds.
   local _socpatch
   case "${POCKNIX_SOC:-sm8550}" in
     sm8250) _socpatch=0002-SM8250-GPU ;;
@@ -66,19 +46,11 @@ prepare() {
 
 build() {
   cd MangoHud
-  # CPU tuning = ROCKNIX's exact SM8550 userspace flags (distribution config/arch.aarch64 +
-  # devices/SM8550/options: TARGET_CPU=cortex-x3, TARGET_VARIANT=armv9-a,
-  # TARGET_CPU_FLAGS=+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2, plus their
-  # -mno-outline-atomics). Appended after ALARM's defaults so -march/-mtune override them.
-  # buildtype=plain -> meson respects these env flags.
-  # Per-SoC: build-packages.sh injects POCKNIX_TUNE_CFLAGS from config/tuning/${SOC}.conf
-  # (sm8250 = armv8.2/a76.a55); the fallback is the sm8550 string so a standalone makepkg
-  # reproduces the original build.
+  # Appended after ALARM's defaults so -march/-mtune override; buildtype=plain below is
+  # what makes meson honour them. Fallback = sm8550, as in packages/soc/mesa.
   local _rocknix_tune="${POCKNIX_TUNE_CFLAGS:--march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics}"
   export CFLAGS="${CFLAGS} ${_rocknix_tune}"
   export CXXFLAGS="${CXXFLAGS} ${_rocknix_tune}"
-  # mangoapp=true builds the standalone overlay app gamescope --mangoapp launches.
-  # NVIDIA backends disabled (no NVIDIA here; avoids nvml/xnvctrl deps).
   meson setup build --prefix=/usr --buildtype=plain \
     -Dmangoapp=true \
     -Dwith_nvml=disabled \

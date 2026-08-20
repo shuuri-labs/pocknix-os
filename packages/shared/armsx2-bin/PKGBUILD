@@ -1,27 +1,10 @@
-# armsx2-bin — ARMSX2, the PS2 emulator for the RP6 (vendored aarch64 AppImage).
-#
-# WHY ARMSX2 and not PCSX2: upstream PCSX2 is x86-centric; ARMSX2 is the PCSX2 2.7 fork with a
-# NATIVE ARM64 JIT/recompiler and explicit Adreno/Turnip tuning ("faster blending on Adreno") —
-# targets Snapdragon 865+, so the RP6's 8 Gen 2 is comfortably above the bar. This is the best PS2
-# path on this hardware. Needs the user's own PS2 BIOS in ~/ROMs/bios (see ROMS-README).
-#
-# Source: the MAIN project's Linux arm64 nightlies (the MaSieS4Fun fork bridge build this package
-# started on is retired — upstream took over Linux desktop). Stable tags are Android-APK-only, so
-# the nightly-YYYYMMDD prereleases are the only Linux channel: we pin one nightly by date + commit
-# + sha256 and bump deliberately. Each nightly ships a 4k and a 16k page-size variant; our kernels
-# use the ARM64-default 4K pages (no page-size override anywhere in the kernel tooling) -> the 4K
-# asset. Runtime is the standard AppImage type2-runtime (squashfs, honors FUSERMOUNT_PROG), so the
-# fuse2 dep and pocknix-play's launch env carry over unchanged.
-#
-# Upstream renames the nightly assets without warning (last at 20260805): when a bump 404s, re-read
-# the release page's asset list instead of editing only _nightly/_gitsha.
-#
-# ES-DE drives it via the stock PCSX2 emulator name (es_find_rules.xml maps PCSX2 -> this path);
-# Steam favorites launch it via pocknix-play. AppImage needs fuse2 at runtime (emulation.list).
+# armsx2-bin — ARMSX2, the native-ARM64 PCSX2 fork, as a vendored aarch64 AppImage.
+# Stable tags are Android-APK-only, so the nightlies are the only Linux channel; upstream renames
+# those assets without warning, so a bump that 404s needs the release page's asset list re-read,
+# not just an edited _nightly/_gitsha. Take the 4K-page variant: our kernels use 4K pages.
 pkgname=armsx2-bin
 _nightly=20260805
 _gitsha=dd5b6616eb
-# Base tracks upstream's stable line; the nightly date is what orders our bumps.
 pkgver=2.6.6.nightly${_nightly}
 pkgrel=2
 pkgdesc="ARMSX2 — PS2 emulator, native-ARM64 PCSX2 fork (vendored AppImage, official nightly)"
@@ -37,8 +20,7 @@ sha256sums=('a77c2fb01864af1652ca462c57451aef57657f394725d06d230879a54e61e259'
 noextract=("ARMSX2-${pkgver}.AppImage")
 
 prepare() {
-  # Extract the AppImage's own icon (.DirIcon, chasing symlinks) for the desktop entry.
-  # Native aarch64 AppImage: --appimage-extract runs fine in the build chroot, no FUSE.
+  # --appimage-extract needs no FUSE, so the icon can be pulled in the build chroot.
   cd "${srcdir}"
   chmod u+x "ARMSX2-${pkgver}.AppImage"
   rm -rf squashfs-root AppDir
@@ -56,10 +38,9 @@ prepare() {
 }
 
 package() {
-  # Canonical name matches pocknix-emulation's es_find_rules.xml + pocknix-play.
+  # Name is fixed: es_find_rules.xml and pocknix-play both hardcode this path.
   install -Dm755 "${srcdir}/ARMSX2-${pkgver}.AppImage" \
     "${pkgdir}/opt/pocknix/emulators/armsx2/ARMSX2.AppImage"
-  # Plasma app-grid entry + the icon extracted in prepare().
   install -Dm644 "${srcdir}/icon.png" "${pkgdir}/opt/pocknix/emulators/armsx2/icon.png"
   install -Dm644 "${srcdir}/pocknix-armsx2.desktop" "${pkgdir}/usr/share/applications/pocknix-armsx2.desktop"
 }

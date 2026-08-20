@@ -5,22 +5,18 @@ from pathlib import Path
 
 from .system import atomically_write
 
-# Stick RGB rings expose as multicolor LED-class devices. sysfs resets on reboot,
-# so the chosen state is persisted and re-applied from Plugin._main on load.
-# RP6/RP5/Flip 2: /sys/class/leds/rgb:l1..l4 and rgb:r1..r4 (4 ring segments per stick).
-# Odin 2: /sys/class/leds/left-joystick and right-joystick (1 node per stick,
-# pwm-leds-multicolor). Same multi_intensity/brightness ABI in both cases.
-# Odin 2 also has left-side/right-side strips, which carry no colour of their own.
+# Stick RGB rings are multicolor LED-class devices; sysfs resets on reboot, so state is
+# persisted here and re-applied from Plugin._main on load. Same multi_intensity/brightness
+# ABI on both node layouts: RP6/RP5/Flip 2 name four ring segments per stick as
+# rgb:l1..l4 / rgb:r1..r4, Odin 2 names one node per stick (left-joystick, right-joystick).
 LED_CONFIG = Path("/etc/pocknix/led.json")
 LED_CLASS_DIR = Path("/sys/class/leds")
 
-# The QAM flushes both sticks' pending edits in one tick on close, so the setters
-# land concurrently.
+# The QAM flushes both sticks' pending edits in one tick on close, so setters land concurrently.
 _LOCK = threading.Lock()
 
 
 def _segments(side):
-    # RP6 groups each ring segment under rgb:<l|r><n>; Odin names the whole stick.
     # Probed per call, not at import: plugin load can precede the LED driver.
     segs = sorted(LED_CLASS_DIR.glob(f"rgb:{side[0]}[0-9]*"))
     if segs:

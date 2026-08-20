@@ -1,27 +1,14 @@
 # gamescope (pocknix) — patched build for rotated msm/DPU panels.
-#
-# Vanilla gamescope (incl. ALARM's) CANNOT drive these panels: they are mounted rotated
-# (DTS rotation=<270>), and gamescope tries a DRM *plane* rotation that the msm DPU
-# rejects -> "Failed to prepare 1-layer flip (Invalid argument)" forever (upstream
-# issue #1883/#819). Rotation is done in the COMPOSITOR instead: PR #2228 (0007+0008)
-# folds the rotation into the composite pass, autodetected or forced via
-# --force-composition-rotation (pocknix-steam passes it; wants logical LANDSCAPE -W/-H).
-# Replaces ROCKNIX's 0005 rotation-shader (in git history at the 4286887-pinned revision).
-#
-# The mangoapp frametime revert (upstream e572411d) is deliberately NOT carried: on
-# current bases its early-return also skips wlserver_app_presented(), dropping the
-# game's presentation feedback. Re-add only if ring-0 composites >> present rate, as a
-# proper rebase. cv_mangoapp_use_output_timing is NOT a substitute.
-#
-# epoch=1 so this is preferred over ALARM's [extra] gamescope when both are visible.
-# pkgver: the segment after "rocknix." must vercmp HIGHER on every bump — commit date
-# then short sha (a bare sha segment is non-monotonic: 4286887 > 6644cc9 numerically).
+# Vanilla gamescope cannot drive them: it asks for a DRM plane rotation the msm DPU rejects,
+# so every flip fails ("Failed to prepare 1-layer flip"). 0007/0008 rotate in the composite
+# pass instead; pocknix-steam forces it and passes logical LANDSCAPE -W/-H.
+# epoch=1 outranks ALARM's gamescope. The pkgver segment after "rocknix." must vercmp higher
+# on every bump, hence commit date then sha — a bare sha is non-monotonic.
 pkgname=gamescope
 epoch=1
 pkgver=3.16.0.rocknix.20260802.6644cc9
 pkgrel=2
 _commit=6644cc9a07d8ba937003deae8bd7c28a490d0c64
-# Grant CAP_SYS_NICE to the installed binary (realtime scheduling) — see gamescope.install.
 install=gamescope.install
 pkgdesc="SteamOS session compositing WM — patched (rotation-shader, for msm/rotated panels)"
 arch=('aarch64')
@@ -29,7 +16,6 @@ url="https://github.com/ValveSoftware/gamescope"
 license=('BSD-2-Clause')
 provides=('gamescope')
 conflicts=('gamescope')
-# Runtime libs (makepkg also auto-adds .so deps; these are the non-obvious ones).
 depends=('wayland' 'libdrm' 'libinput' 'libxkbcommon' 'pixman' 'systemd-libs' 'libcap'
          'luajit' 'libdecor' 'libx11' 'libxext' 'libxfixes' 'libxdamage' 'libxcomposite'
          'libxrender' 'libxxf86vm' 'libxtst' 'libxi' 'libxcursor' 'libxmu' 'libxres'
@@ -50,10 +36,8 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
   cd gamescope
-  # subprojects (wlroots, libliftoff, etc.) are git submodules at this commit.
   git submodule update --init --recursive
-  # 0001/0004/0006 = ROCKNIX stack (their numbering); 0007/0008 = upstream PR #2228
-  # composite rotation (see header; launch flags live in packages/pocknix-steam).
+  # Numbering is inherited: 0001/0004/0006 keep ROCKNIX's, 0007/0008 are upstream PR #2228.
   patch -p1 < "${srcdir}/0001-WaylandBackend-wire-up-wl_touch-implementation.patch"
   patch -p1 < "${srcdir}/0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch"
   patch -p1 < "${srcdir}/0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch"
@@ -63,18 +47,12 @@ prepare() {
 
 build() {
   cd gamescope
-  # The pinned gamescope/wlroots build with -Werror, but ALARM's libs are newer than
-  # upstream CI built against (e.g. newer libinput adds enum values -> -Werror=switch).
-  # Disable -Werror wholesale rather than chase each version-skew warning. CFLAGS
-  # propagate into the subprojects (wlroots etc.), and being last they override -Werror.
+  # gamescope and wlroots build with -Werror against older libs than ALARM ships (newer
+  # libinput enums alone break -Werror=switch); appended last, these override it, and they
+  # propagate into the subprojects.
   export CFLAGS+=" -Wno-error" CXXFLAGS+=" -Wno-error"
-  # CPU tuning = ROCKNIX's exact SM8550 userspace flags (distribution config/arch.aarch64 +
-  # devices/SM8550/options): armv9-a + their feature set (SVE off), tuned for the X3 prime,
-  # -mno-outline-atomics per their arch config. Appended last so -march/-mtune override
-  # ALARM's generic armv8-a defaults; propagates into wlroots/libliftoff subprojects too.
-  # Per-SoC: build-packages.sh injects POCKNIX_TUNE_CFLAGS from config/tuning/${SOC}.conf
-  # (sm8250 = armv8.2/a76.a55); the fallback is the sm8550 string so a standalone makepkg
-  # reproduces the original build.
+  # Appended last so -march/-mtune override ALARM's defaults, subprojects included.
+  # Fallback = sm8550, as in packages/soc/mesa.
   local _rocknix_tune="${POCKNIX_TUNE_CFLAGS:--march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics}"
   export CFLAGS+=" ${_rocknix_tune}" CXXFLAGS+=" ${_rocknix_tune}"
   meson setup build \

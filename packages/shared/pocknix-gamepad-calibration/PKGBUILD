@@ -2,9 +2,8 @@
 # Port of Kdog's GPcal (github.com/cdeletre/GPcal, MIT). Userspace only: it writes the
 # gamepad driver's module parameters, so the result is live in both sessions.
 #
-# Upstream is vendored under gpcal/ rather than fetched: its GitHub archive checksum is
-# not guaranteed stable, and the release tarball is 96 MB for 1 MB of app.
-# sm8250-only for now — see pocknix-device-sm8250's depends=.
+# Upstream is vendored under gpcal/ rather than fetched: its GitHub archive checksum is not
+# guaranteed stable, and the release tarball is 96 MB for 1 MB of app.
 pkgname=pocknix-gamepad-calibration
 pkgver=0.1.0
 pkgrel=1

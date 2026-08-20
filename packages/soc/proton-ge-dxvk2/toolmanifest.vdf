@@ -1,4 +1,4 @@
-// Drops require_tool_appid (host-direct); rationale in pocknix-steam/proton-toolmanifest.vdf.
+// See pocknix-steam/proton-toolmanifest.vdf.
 "manifest"
 {
   "version" "2"

@@ -6,9 +6,8 @@ export function gameDisplayName(game: GameRef | null | undefined): string {
   return game.name || `App ${game.appid}`;
 }
 
-// The backend lists every appmanifest in steamapps, which includes tools (Proton, Steam Linux
-// Runtime, Steamworks Common Redistributables, …). Steam's own appStore overview knows the type
-// (app_type 1 = game, 4 = tool); fall back to name patterns when the overview isn't available.
+// The backend lists every appmanifest in steamapps, tools included. app_type 4 = tool in
+// Steam's appStore overview; this name pattern is the fallback when no overview exists.
 const NON_GAME_NAME = /^(Proton[ 0-9]|Proton (Hotfix|EasyAntiCheat|BattlEye)|Steam Linux Runtime|Steamworks Common)/i;
 
 function isGame(appid: string, name: string): boolean {
@@ -20,9 +19,8 @@ function isGame(appid: string, name: string): boolean {
   return !NON_GAME_NAME.test(name);
 }
 
-// Non-Steam shortcuts have no appmanifest, so the backend scan can't see them; Steam's
-// deckDesktopApps collection holds their appids (unsigned; force with >>> in case a build
-// hands out the signed-int32 form) and appStore resolves the names.
+// Non-Steam shortcuts have no appmanifest, so only deckDesktopApps sees them. Their appids are
+// unsigned and above 2^31, hence the >>> 0: some builds hand out the signed-int32 form.
 export function nonSteamShortcuts(): GameRef[] {
   try {
     const ids = window.collectionStore?.deckDesktopApps?.apps;
@@ -54,8 +52,8 @@ export function availableGames(config: Config): GameRef[] {
   for (const shortcut of nonSteamShortcuts()) {
     games.set(shortcut.appid, shortcut);
   }
-  // Games with saved tweaks stay listed even if the lookups above miss them —
-  // existing per-game config must remain reachable. Shortcut appids sit above 2^31.
+  // Saved tweaks keep a game listed even when the lookups above miss it, so existing
+  // per-game config can never become unreachable.
   for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
     if (game && typeof game === "object" && !games.has(String(appid))) {
       games.set(String(appid), { appid: String(appid), name: game.name || `App ${appid}`, nonSteam: Number(appid) >= 0x80000000 });

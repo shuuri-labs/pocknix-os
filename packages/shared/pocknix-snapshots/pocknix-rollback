@@ -1,15 +1,8 @@
 #!/bin/bash
-# pocknix-rollback — roll the OS back to a pre-update snapshot WITHOUT a bootloader
-# menu (the sm8550 ABL has none): make a writable snapshot of the chosen read-only
-# snapshot at the btrfs toplevel, point the filesystem's DEFAULT subvolume at it
-# (the single atomic commit — cmdline/fstab name no subvol, so next boot lands there),
-# regenerate the boot files from the target tree when its kernel differs, reboot.
-# /home, /var/log, /.snapshots and the pacman cache are separate subvols: untouched.
-#
-#   pocknix-rollback [--to <id>] [--yes]     roll back (default: newest snapshot)
-#   pocknix-rollback --internal [...]        same, against the INTERNAL install while
-#                                            booted from something else (SD card)
-#   pocknix-rollback --list | --status       snapshot table / status (both modes)
+# pocknix-rollback — roll the OS back to a pre-update snapshot. The sm8550 ABL has no boot
+# menu, so the switch is a btrfs set-default on a writable copy of the chosen snapshot: one
+# atomic commit, and cmdline/fstab must keep naming no subvol for / for it to take effect.
+# /home, /var/log, /.snapshots and the pacman cache are separate subvols, so they survive.
 set -euo pipefail
 
 . /usr/lib/pocknix/snapshot-lib.sh
@@ -33,7 +26,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# --list/--status on the running system stay delegated (no root needed there)
+# --list/--status need no root, so the running system delegates them.
 if [ -z "${internal}" ]; then
   case "${action}" in
     list)   exec pocknix-snapshots list ;;
@@ -43,7 +36,6 @@ fi
 
 [ "$(id -u)" = 0 ] || die "needs root (or pkexec pocknix-rollback)"
 
-# mktemp-free fixed mountpoints under /run + a mkdir lock: single instance
 mkdir -p "${RUN}"
 mkdir "${RUN}/rollback.lock" 2>/dev/null || die "another rollback is already running"
 cleanup() {
@@ -55,8 +47,6 @@ cleanup() {
 trap cleanup EXIT
 
 if [ -n "${internal}" ]; then
-  # Resolve the internal install from the board contract (same keys the installer
-  # uses); refuse when we ARE the internal install — that's the plain path.
   [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
   [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
   disk="${POCKNIX_INTERNAL_DISK:-/dev/sda}"
@@ -74,7 +64,7 @@ if [ -n "${internal}" ]; then
   [ -d "${SNAPS}" ] || die "internal install has no snapshots (pre-btrfs install?)"
   mount "${int_boot}" "${INT_FLASH}" || die "cannot mount internal boot ${int_boot}"
   FLASH="${INT_FLASH}"
-  # kernel-diff reference = what the internal install would boot TODAY
+  # kernel-diff reference: what the internal install would boot today.
   cur_default="$(btrfs subvolume get-default "${TOP}" | sed -n 's/.* path //p')"
   KERNEL_REF="${TOP}/${cur_default}/boot/Image"
 else
@@ -86,7 +76,7 @@ else
   KERNEL_REF=/boot/Image
 fi
 
-list_snaps() {  # table over ${SNAPS} (matches pocknix-snapshots list)
+list_snaps() {
   printf '%-6s %-17s %-4s %-8s %s\n' "ID" "CREATED" "OK" "KERNEL" "TARGETS"
   local info
   for info in "${SNAPS}"/[0-9][0-9][0-9][0-9]/info.json; do
@@ -129,21 +119,19 @@ ts="$(date -u +%Y%m%d-%H%M%S)"
 new="@rb-${ts}"
 btrfs subvolume snapshot "${src}" "${TOP}/${new}" >/dev/null
 
-# The snapshot was taken INSIDE a pacman transaction (PreTransaction hook), so it
-# contains pacman's own db.lck — restored as-is it blocks every future update.
+# Taken inside a pacman transaction, so the snapshot carries pacman's own db.lck;
+# restored as-is it blocks every future update.
 rm -f "${TOP}/${new}/var/lib/pacman/db.lck"
 
-# marker inside the new root: the booted system (QAM) can say "this was rolled back";
-# also the ConditionPathExists gate for pocknix-rollback-repair.service.
+# Also the ConditionPathExists gate for pocknix-rollback-repair.service.
 mkdir -p "${TOP}/${new}/var/lib/pocknix"
 jq -n --arg from "${target}" --arg prev "$(btrfs subvolume get-default "${TOP}" | sed -n 's/.* path //p')" --arg ts "$(date -u +%FT%TZ)" \
   '{schema:1, from_snapshot:$from, previous_default:$prev, ts:$ts}' \
   > "${TOP}/${new}/var/lib/pocknix/rollback-info.json"
 
-# The kernel lives on the FAT boot partition, outside btrfs: when the target's
-# kernel differs from the reference, STAGE regenerated boot files (*.new) from
-# the target tree now — any failure aborts before anything is committed. cmp is
-# ground truth: it covers rollbacks across several kernel bumps, the flag can't.
+# The kernel lives on the FAT boot partition, outside btrfs, so it cannot ride the
+# subvolume switch: stage *.new first, where a failure still aborts before the commit.
+# cmp, not the transaction flag: a rollback can span several kernel bumps.
 staged=""
 if ! cmp -s "${KERNEL_REF}" "${TOP}/${new}/boot/Image"; then
   regen=""
@@ -157,12 +145,11 @@ if ! cmp -s "${KERNEL_REF}" "${TOP}/${new}/boot/Image"; then
   staged=1
 fi
 
-# THE COMMIT: a single atomic btrfs transaction. Crash before this line: nothing
-# changed (stray @rb-* pruned later). Crash after: the new root boots.
+# The commit. Crash before it and nothing changed (a stray @rb-* is pruned later);
+# crash after and the new root boots.
 btrfs subvolume set-default "$(btrfs inspect-internal rootid "${TOP}/${new}")" "${TOP}"
 
-# activate staged boot files (crash in this window leaves *.new for the target
-# system's pocknix-rollback-repair.service to finish on its next boot)
+# A crash in this window leaves *.new for pocknix-rollback-repair.service to finish.
 if [ -n "${staged}" ]; then
   mount -o remount,rw "${FLASH}" 2>/dev/null || true
   shopt -s nullglob

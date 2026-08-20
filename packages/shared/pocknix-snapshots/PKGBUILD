@@ -1,9 +1,7 @@
-# pocknix-snapshots — pre-update btrfs snapshots + bootloader-free rollback.
-# Two alpm hooks snapshot the root subvolume around EVERY pacman transaction;
-# pocknix-rollback switches the filesystem's default subvolume (no boot-config
-# change on either bootloader style) and keeps the /flash kernel coherent via
-# the linux-pocknix deploy scripts' SRCROOT/OUT_SUFFIX staging mode. All entry
-# points no-op when / is not btrfs (build chroot, pre-snapshot ext4 installs).
+# pocknix-snapshots — pre-update btrfs snapshots plus a rollback that needs no boot
+# menu: two alpm hooks wrap every pacman transaction, and pocknix-rollback switches the
+# fs default subvolume. Every entry point no-ops when / is not btrfs (build chroot,
+# pre-snapshot ext4 installs).
 pkgname=pocknix-snapshots
 pkgver=0.1.0
 pkgrel=2
@@ -13,9 +11,6 @@ url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=('btrfs-progs' 'jq' 'util-linux')
 backup=('etc/pocknix/snapshots.conf')
-# NB: no updater ships here — the QAM update path is Pocknix Control's transient
-# unit (pocknix-decky updates.py) and the desktop path is overlay pocknix-update;
-# both get snapshots for free because the hooks live in alpm.
 source=('05-pocknix-snapshot.hook' '99-pocknix-snapshot-post.hook'
         'snapshot-lib.sh'
         'pocknix-snapshot-pre' 'pocknix-snapshot-post'
@@ -40,15 +35,11 @@ package() {
 
   install -Dm644 "${srcdir}/snapshots.conf" "${pkgdir}/etc/pocknix/snapshots.conf"
 
-  # desktop entry point moved to pocknix-tools (removing it here uninstalls the
-  # old standalone shortcut on upgrade)
-
-  # passwordless pkexec for wheel (desktop/ssh path; the QAM backend is already root)
   install -Dm644 "${srcdir}/50-pocknix-snapshots.rules" \
     "${pkgdir}/usr/share/polkit-1/rules.d/50-pocknix-snapshots.rules"
 
-  # repair oneshot, statically enabled (wants symlink): ConditionPathExists gates it
-  # to rolled-back boots, so it is inert everywhere else
+  # statically enabled via a wants symlink; ConditionPathExists keeps it inert
+  # except on a rolled-back boot
   install -Dm644 "${srcdir}/pocknix-rollback-repair.service" \
     "${pkgdir}/usr/lib/systemd/system/pocknix-rollback-repair.service"
   install -d "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants"

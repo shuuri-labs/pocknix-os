@@ -1,30 +1,15 @@
 # Maintainer: pocknix-os
 #
-# fex-rootfs — Phase 3b piece 2/6: the x86_64 userland FEX presents to translated x86 programs.
-#
-# WHAT/WHY: FEX translates x86 *CPU* instructions to ARM, but x86 programs (Proton/Wine + games)
-# still load x86 *libraries* (libc, libstdc++, ld-linux, …). Our device's /usr/lib is all ARM, which
-# x86 code can't load. So FEX needs a complete x86 Linux userland — the "RootFS" — to resolve those
-# libs from. FEXServer mounts this squashfs read-only at runtime (hence the `squashfuse` dep) and
-# presents it as / to every x86 process.
-#
-# MIRRORS the references:
-#   - ROCKNIX (compat/fex-emu): RootFS="ArchLinux", squashfs + squashfuse, and copies the native
-#     Turnip driver (libvulkan_freedreno.so) into /usr/share/fex-emu/ for the Vulkan host-thunk.
-#   - armada (30-install-steam-session.sh): ships a rootfs image (default.erofs) baked into the OS +
-#     Config.json RootFS=<image>, ThunksDB all enabled.
-# We use the *Arch* x86_64 rootfs (its glibc matches our build sysroot, like ROCKNIX), as squashfs,
-# baked into the package (no first-boot fetch — same reasoning as the build-time Steam bake).
-#
-# The matching base Config.json (RootFS + thunk wiring + ThunksDB) ships from packages/soc/fex-emu.
+# fex-rootfs — the x86_64 Arch userland FEXServer FUSE-mounts as / for every translated x86
+# process, so x86 programs can resolve x86 libraries on our all-ARM device. Baked into the
+# package rather than fetched at first boot. Its Config.json ships from packages/soc/fex-emu.
 
 pkgname=fex-rootfs
 _rootfsdate=2026-01-08             # pinned dated image from FEX's rootfs CDN (immutable path)
 _mesaver=26.1.5-1                  # x86_64 turnip dropped INTO the image (see repack below)
-# Per-game Mesa Version payloads (same pins as pocknix-turnip-x86), embedded INSIDE the
-# image: pressure-vessel captures graphics against this rootfs, not the host, so host-only
-# payloads are invisible to it. vk-x86-container.list ships to the HOST — the proton
-# wrapper refuses to pin versions the image lacks for SLR launches.
+# Per-game Mesa Version payloads (same pins as pocknix-turnip-x86) must live INSIDE the image:
+# pressure-vessel captures graphics against this rootfs, not the host, so host-only payloads
+# are invisible to it. vk-x86-container.list ships to the host as the wrapper's SLR pin gate.
 _vkvers=('25.2.7-1' '25.3.5-1' '26.0.6-1' '26.1.6-1')
 pkgver=${_rootfsdate//-/}          # 20260108
 pkgrel=5
@@ -32,25 +17,14 @@ pkgdesc="x86_64 ArchLinux RootFS for FEX (x86 game userland + native Turnip GPU 
 arch=('aarch64')
 url="https://rootfs.fex-emu.gg/"
 license=('custom')                 # a full Arch x86 userland — mixed upstream licensing
-# squashfuse: FEXServer FUSE-mounts the .sqsh at runtime. vulkan-freedreno: the native Adreno
-# (Turnip) Vulkan driver the FEX Vulkan host-thunk loads for GPU passthrough (we symlink the
-# system copy, see package()). fex-emu: the consumer.
 depends=('fex-emu' 'squashfuse' 'vulkan-freedreno')
 makedepends=('squashfs-tools')
 options=('!strip' '!debug')
 
-# MESA OVERLAY (pkgrel 3): the CDN image bundles x86 turnip Mesa 25.3.3-git, which reports
-# storageBuffer8BitAccess=false under FEX — DXVK 3.x hard-requires it ("No adapters found",
-# hit with proton-cachyos x86). Upstream has published no newer ArchLinux image (2026-01-08 is
-# still latest), so we repack the sqsh with Arch x86_64 vulkan-freedreno 26.1.5 + its two deps
-# the image lacks (libdisplay-info, xcb-util-keysyms; rootfs glibc 2.42 covers the rest).
-# Validated on-device 2026-07-24: Mesa 26.1.5-arch1.1, feature true, KH runs on DXVK 3.0.2.
-# ONLY the libs are overlaid (not the pkgs' icd jsons — the image's freedreno_icd.*.json
-# already point at /usr/lib/libvulkan_freedreno.so; adding the unsuffixed json would
-# double-enumerate the driver).
-#
-# FEX itself verifies rootfs images with xxh3_64, but makepkg pins sha256 like every
-# other remote source here (dated URL path is immutable, so the pin is stable).
+# Mesa overlay: the CDN image's bundled x86 turnip reports storageBuffer8BitAccess=false, which
+# DXVK 3.x hard-requires, so the sqsh is repacked with newer vulkan-freedreno plus the two deps
+# the image lacks. Overlay the LIBS only — the image's freedreno_icd.*.json already point at
+# /usr/lib/libvulkan_freedreno.so, and adding the pkgs' unsuffixed json double-enumerates it.
 source=("ArchLinux-${_rootfsdate}.sqsh::https://rootfs.fex-emu.gg/ArchLinux/${_rootfsdate}/ArchLinux.sqsh"
         "vulkan-freedreno-${_mesaver}-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/v/vulkan-freedreno/vulkan-freedreno-1%3A${_mesaver}-x86_64.pkg.tar.zst"
         "libdisplay-info-0.3.0-1-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/l/libdisplay-info/libdisplay-info-0.3.0-1-x86_64.pkg.tar.zst"
@@ -77,8 +51,8 @@ sha256sums=('cb059973b7953ad9165845529655189b96f9a174b14a6a149c87ec884b0c5e90'
             '6b5785d7b7d7993a828d3f79c6c0e369a619d6e786dd2cfdfd8ac4ab1ad8a2d2')
 
 package() {
-  # Repack under fakeroot so the image's stored ownerships survive the round-trip. Match the
-  # original's compression (zstd, 128K blocks — checked via unsquashfs -s).
+  # Repack under fakeroot so the image's stored ownerships survive the round-trip, and match the
+  # original's compression (zstd, 128K blocks, per unsquashfs -s).
   unsquashfs -q -d "${srcdir}/rootfs" "${srcdir}/ArchLinux-${_rootfsdate}.sqsh"
   tar --zstd -xf "${srcdir}/vulkan-freedreno-${_mesaver}-x86_64.pkg.tar.zst" \
     -C "${srcdir}/rootfs" usr/lib/libvulkan_freedreno.so
@@ -87,8 +61,8 @@ package() {
   tar --zstd --wildcards -xf "${srcdir}/xcb-util-keysyms-0.4.1-5-x86_64.pkg.tar.zst" \
     -C "${srcdir}/rootfs" 'usr/lib/libxcb-keysyms.so*'
 
-  # Per-game Mesa Version payloads (see _vkvers note above). Same layout + icd rewrite as
-  # pocknix-turnip-x86; paths resolve identically in the rootfs and on the host.
+  # Same payload layout + icd rewrite as pocknix-turnip-x86; the paths must resolve identically
+  # in the rootfs and on the host.
   local full ver vkdir
   for full in "${_vkvers[@]}"; do
     ver="${full%-*}"
@@ -107,20 +81,15 @@ package() {
   mksquashfs "${srcdir}/rootfs" "${srcdir}/ArchLinux-repacked.sqsh" \
     -comp zstd -b 131072 -no-progress -quiet
 
-  # Ship the rootfs where FEX looks (Config.json RootFS="ArchLinux.sqsh" resolves under here, the
-  # same /usr/share/fex-emu/RootFS dir fex-emu's package() pre-creates — armada's default.erofs model).
+  # Config.json RootFS="ArchLinux.sqsh" resolves under this dir, which fex-emu's package() creates.
   install -Dm0644 "${srcdir}/ArchLinux-repacked.sqsh" \
     "${pkgdir}/usr/share/fex-emu/RootFS/ArchLinux.sqsh"
 
-  # Native GPU passthrough: the Vulkan HOST thunk must reach the real Adreno driver. ROCKNIX
-  # copies libvulkan_freedreno.so (Turnip) into /usr/share/fex-emu/ for exactly this; we SYMLINK
-  # the system driver instead of copying, so the thunk always loads whatever vulkan-freedreno is
-  # installed (now our epoch-2 tuned build) — a bundled copy froze ALARM's turnip at fex-rootfs
-  # build time and silently went stale when mesa changed.
+  # The Vulkan host thunk loads turnip from here. Symlink rather than copy, so it always tracks
+  # the installed vulkan-freedreno instead of freezing at fex-rootfs build time.
   install -d "${pkgdir}/usr/share/fex-emu"
   ln -s /usr/lib/libvulkan_freedreno.so "${pkgdir}/usr/share/fex-emu/libvulkan_freedreno.so"
 
-  # Host-side manifest of the embedded payload versions (the wrapper's SLR pin gate).
   printf '%s\n' "${_vkvers[@]%-*}" > "${srcdir}/vk-x86-container.list"
   install -Dm644 "${srcdir}/vk-x86-container.list" "${pkgdir}/usr/share/fex-emu/vk-x86-container.list"
 }

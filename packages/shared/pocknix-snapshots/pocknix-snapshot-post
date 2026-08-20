@@ -1,7 +1,5 @@
 #!/bin/bash
-# pocknix-snapshot-post — alpm PostTransaction hook body: the transaction committed, so
-# mark the pre-snapshot OK, flag reboot-required on kernel changes, drop any stale
-# "this system was rolled back" marker, and prune to the retention policy.
+# pocknix-snapshot-post — alpm PostTransaction hook body: the transaction committed.
 set -uo pipefail
 
 . /usr/lib/pocknix/snapshot-lib.sh
@@ -20,11 +18,10 @@ if [ -n "${id}" ] && [ -f "${SNAP_DIR}/${id}/info.json" ]; then
     && mv "${SNAP_DIR}/${id}/.info.tmp" "${SNAP_DIR}/${id}/info.json"
 fi
 
-# /run marker: tmpfs, so it clears itself on the reboot it asks for
+# on tmpfs, so it clears itself on the reboot it asks for
 [ "${kin}" = true ] && touch "${RUN}/reboot-required"
 
-# a completed transaction supersedes the rolled-back state (the marker exists so the
-# UI can say "this system was rolled back" until the user moves on — which is now)
+# a completed transaction supersedes the rolled-back state the UI reports
 rm -f /var/lib/pocknix/rollback-info.json
 
 pocknix-snapshots prune --quiet || true

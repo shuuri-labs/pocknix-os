@@ -4,16 +4,14 @@
 SNAP_DIR=/.snapshots
 SNAP_CONF=/etc/pocknix/snapshots.conf
 
-# defaults, overridable via ${SNAP_CONF} (pacman backup= file)
-POCKNIX_SNAPSHOT_KEEP=5              # pre-update snapshots to retain
-POCKNIX_SNAPSHOT_MIN_FREE_MIB=1024   # below this: skip the snapshot, never block the update
-POCKNIX_SNAPSHOT_WARN_FREE_MIB=5120  # below this: the QAM UI shows a low-space warning
+# defaults; ${SNAP_CONF} documents each one and overrides it
+POCKNIX_SNAPSHOT_KEEP=5
+POCKNIX_SNAPSHOT_MIN_FREE_MIB=1024
+POCKNIX_SNAPSHOT_WARN_FREE_MIB=5120
 [ -f "${SNAP_CONF}" ] && . "${SNAP_CONF}"
 
-# Snapshots are supported when / is btrfs AND the @snapshots subvol is mounted.
-# Both are false in the image-build chroot and on pre-btrfs (ext4) installs, so
-# every hook/CLI entry point starts here and silently no-ops (same trick as the
-# kernel hooks' `mountpoint -q /flash`).
+# Both conditions are false in the image-build chroot and on pre-btrfs installs, which
+# is how every hook and CLI silently no-ops there instead of failing.
 pocknix_snap_supported() {
   [ "$(findmnt -no FSTYPE / 2>/dev/null)" = btrfs ] || return 1
   mountpoint -q "${SNAP_DIR}" || return 1
@@ -22,7 +20,7 @@ pocknix_snap_supported() {
 
 snap_free_mib() { df --output=avail -m "${SNAP_DIR}" 2>/dev/null | tail -1 | tr -d ' '; }
 
-snap_next_id() {  # next zero-padded snapshot id (0001, 0002, ...)
+snap_next_id() {  # zero-padded, 0001 upwards
   local last
   last="$(ls "${SNAP_DIR}" 2>/dev/null | grep -E '^[0-9]{4}$' | sort -n | tail -1)"
   printf '%04d' $(( 10#${last:-0} + 1 ))

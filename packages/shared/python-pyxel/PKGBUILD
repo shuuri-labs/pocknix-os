@@ -1,9 +1,7 @@
-# python-pyxel — the Pyxel retro game engine, from upstream's own aarch64 wheel.
-# Wheel, not source: a source build drags in rust + maturin for one small tool.
-#
-# Pinned to 2.5.3 — the .pyxres resource format must match what GPcal was authored
-# against. abi3 survives Python minor bumps but site-packages is version-scoped, so an
-# ALARM python bump needs a pkgrel rebuild, not a new pkgver.
+# python-pyxel — the Pyxel retro game engine, from upstream's own aarch64 wheel; a source build
+# would drag in rust + maturin. Pinned to 2.5.3 so the .pyxres format matches what GPcal was
+# authored against. abi3 survives Python minor bumps, but site-packages is version-scoped, so an
+# ALARM python bump needs a pkgrel rebuild rather than a new pkgver.
 pkgname=python-pyxel
 pkgver=2.5.3
 pkgrel=1
@@ -22,7 +20,7 @@ package() {
   local sitedir
   sitedir="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
   install -d "${pkgdir}${sitedir}"
-  # a wheel is a zip; bsdtar (libarchive, in base-devel) unpacks it in place
+  # a wheel is a zip, so bsdtar unpacks it in place
   bsdtar -xf "${srcdir}/${_wheel}" -C "${pkgdir}${sitedir}" \
     "pyxel" "pyxel-${pkgver}.dist-info"
 

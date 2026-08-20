@@ -1,27 +1,18 @@
 #!/bin/sh
-# pocknix-fancontrol — fan curve (device-neutral: auto-discovers the hwmon pwm; RP5 sm8250 has one too).
-# Ported from ROCKNIX hardware/quirks/platforms/SM8550/bin/fancontrol (+ 005-thermal_path /
-# 020-fan_control). Without this nothing takes PWM control of the fan, so it never spins and the
-# device cooks. Discovers the hwmon PWM fan + the CPU/GPU thermal zones, then drives pwm1 from a
-# temp->speed table every few seconds. Runs as root (writes /sys).
-#
-# Curve selection: /var/lib/pocknix/fan-mode (quiet|moderate|performance), re-read every tick so
-# the Pocknix Control plugin / pocknix-fan-mode switch curves live with a bare file write — no
-# service restart. Curves = ROCKNIX's of the same names ("performance" = their "aggressive").
-# Default quiet — ROCKNIX's SHIPPED default (rocknix system.cfg: cooling.profile=quiet). We
-# previously baked "moderate" (fan from 55°C, every step 5-10°C earlier) — obnoxiously loud.
+# pocknix-fancontrol — fan curve, run as root. Nothing else takes PWM control of the fan, so
+# without this it never spins and the device cooks. /var/lib/pocknix/fan-mode is re-read every
+# tick, so switching curves is a bare file write with no service restart. Curves and the quiet
+# default are ROCKNIX's (their system.cfg ships cooling.profile=quiet).
 set -u
 
 MODE_FILE=/var/lib/pocknix/fan-mode
 GAME_MODE_FILE=/run/pocknix/game-mode
 
-# Fan PWM (hwmon pwm1) — ROCKNIX 020-fan_control.
 FAN_PWM="$(ls /sys/class/hwmon/hwmon*/pwm1 2>/dev/null | head -1)"
 [ -n "${FAN_PWM}" ] || { echo "pocknix-fancontrol: no hwmon pwm1 fan found, exiting"; exit 0; }
 FAN_EN="${FAN_PWM}_enable"
 
-# CPU + GPU thermal zones only — ROCKNIX 005-thermal_path. gpu* (not gpuss*):
-# sm8550 zones are gpuss-N-thermal but sm8250's GPU zone is gpu-top-thermal.
+# gpu* not gpuss*: sm8550 names its zones gpuss-N-thermal, sm8250 gpu-top-thermal.
 SENSORS=""
 for z in /sys/devices/virtual/thermal/thermal_zone*/; do
   case "$(cat "${z}type" 2>/dev/null)" in
@@ -30,13 +21,11 @@ for z in /sys/devices/virtual/thermal/thermal_zone*/; do
 done
 [ -n "${SENSORS}" ] || { echo "pocknix-fancontrol: no cpu/gpu thermal zones, exiting"; exit 0; }
 
-# PWM (0-255) vs temperature (millidegC) tables, highest first. Same speed steps for every
-# mode (ROCKNIX's); only the temperature thresholds shift.
+# PWM 0-255 against millidegC, highest first; only the thresholds differ per mode.
 SPEEDS="255 204 153 119 102 77 51 0"
 
-# Per-game override: "<pid> <fan> <lavd>" written by pocknix-proton-wrapper. The pid IS the
-# game session (the wrapper execs into Proton), so a dead pid means no override — the pick
-# reverts on any kind of game exit with no cleanup step. "-" = that field not overridden.
+# Per-game override, "<pid> <fan> <lavd>" from pocknix-proton-wrapper; "-" = not overridden.
+# The pid IS the game session, so a dead pid means no override and exits need no cleanup step.
 effective_mode() {
   if read -r pid fan _ < "${GAME_MODE_FILE}" 2>/dev/null; then
     if [ -n "${pid}" ] && [ "${fan}" != "-" ] && [ -d "/proc/${pid}" ]; then
@@ -49,13 +38,13 @@ effective_mode() {
 
 curve_temps() {
   case "$(effective_mode)" in
-    performance) echo "80000 75000 70000 65000 60000 55000 50000 0" ;;  # ROCKNIX "aggressive"
+    performance) echo "80000 75000 70000 65000 60000 55000 50000 0" ;;
     moderate)    echo "85000 80000 75000 70000 65000 60000 55000 0" ;;
     *)           echo "95000 85000 80000 75000 70000 65000 60000 0" ;;  # quiet (default)
   esac
 }
 
-# Take manual PWM control; restore automatic on exit.
+# pwm1_enable: 1 = manual control, 0 = back to the hardware's automatic mode.
 [ -e "${FAN_EN}" ] && echo 1 > "${FAN_EN}" 2>/dev/null
 trap '[ -e "${FAN_EN}" ] && echo 0 > "${FAN_EN}" 2>/dev/null; exit 0' INT TERM
 

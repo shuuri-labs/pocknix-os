@@ -1,57 +1,28 @@
 #!/bin/bash
-# pocknix-desktop — launch the Plasma Mobile desktop session on the RP6.
-#
-# This is the Desktop half of the two-session model (the Steam half is pocknix-steam). It is
-# exec'd by ~deck/.bash_profile on tty1 when the session-choice file says "plasma" — exactly the
-# same autologin path the game session uses, so we inherit the non-root 'deck' PAM session
-# (XDG_RUNTIME_DIR=/run/user/1001 + the per-user PipeWire stack) with no extra setup.
-#
-# Compositor: Plasma Mobile IS its own compositor (kwin_wayland + plasmashell mobileshell) — it is
-# NOT hosted in Sway or a bare compositor (locked decision; see the plasma-mobile-compositor memory
-# and docs/plasma-mobile-plan.md). The upstream entrypoint /usr/bin/startplasmamobile sets the
-# phone/handset env (PLASMA_PLATFORM, mobile QQC2 style, …), runs plasma-mobile-envmanager, then
-# execs startplasma-wayland, which brings up kwin_wayland on the DRM backend (default on a tty) and
-# launches the mobile shell. It self-handles the D-Bus session (plasma-dbus-run-session-if-needed),
-# so no dbus-run-session wrapper is needed here.
-#
-# Display rotation (the RP6 panel is portrait 1080x1920 mounted rotated): unlike gamescope, kwin
-# drives DRM directly and needs a REAL output transform, not a shader. That is applied once the
-# compositor is up by pocknix-desktop-rotate (shipped as an /etc/xdg/autostart entry), NOT here —
-# kscreen needs the running session to talk to. See pocknix-desktop-rotate.
+# pocknix-desktop — launch the Plasma Mobile desktop session.
+# Exec'd by ~deck/.bash_profile on tty1 so the session inherits the deck PAM session
+# (XDG_RUNTIME_DIR + per-user PipeWire). startplasmamobile handles its own D-Bus session.
 set -e
 
 export HOME="${HOME:-/home/deck}"
 
-# Fail loudly if the mobile stack isn't installed (e.g. game-only image): better than a black VT.
 if ! command -v startplasmamobile >/dev/null 2>&1; then
   echo "pocknix-desktop: startplasmamobile not found — is the plasma-mobile stack installed?" >&2
   exit 1
 fi
 
-# Seat backend: this device runs seatd (the Steam/gamescope session uses it), and the getty
-# autologin session is NOT reliably "active" on seat0 for logind-based clients. kwin_wayland
-# defaults to libseat's logind backend, which then can't get DRM master ("atomic commit failed:
-# Permission denied") or open input ("login1/session/_NN Unknown object") -> the panel stays on
-# the console while kwin spins. Forcing libseat to seatd makes kwin acquire the seat exactly the
-# way gamescope does (deck is in the 'seat' group -> can reach /run/seatd.sock). See progress.md.
+# The getty autologin session is not reliably "active" on seat0, so libseat's default logind
+# backend leaves kwin unable to take DRM master or open input. seatd is what gamescope uses.
 export LIBSEAT_BACKEND=seatd
 
-# XWayland socket dir: kwin only starts XWayland (needed by X11 apps — the native Steam client in
-# desktop mode) if /tmp/.X11-unix is a STICKY dir owned by root or us. The boot tmpfiles rule
-# (root:1777, pocknix-x11.conf) doesn't reliably survive a prior game-mode session: gamescope creates
-# /tmp/.X11-unix as deck:0755 (no sticky), which XWayland refuses -> kwin runs Wayland-only -> Steam
-# dies with "Unable to open a connection to X" (leaving orphan steam procs). Re-assert it here, right
-# before kwin: we run as deck, so chmod works when we or gamescope own it, and no-ops on root:1777.
+# kwin starts XWayland only if /tmp/.X11-unix is sticky; a prior gamescope session leaves it
+# deck:0755, so XWayland is refused and the X11 Steam client cannot connect. Re-assert per launch.
 mkdir -p /tmp/.X11-unix 2>/dev/null || true
 chmod 1777 /tmp/.X11-unix 2>/dev/null || true
 
-# Power button: unbind powerdevil's "Turn Off Screen" global shortcut, which Plasma Mobile
-# binds to the Power Off key in tablet mode (powerdevil dpms.cpp — lock + DPMS off). pocknix-powerd
-# owns the key (short press = suspend), and the RP6 delivers the WAKING press to userspace after
-# resume, so this binding turned the freshly-lit panel straight back off — the "second press to
-# wake" bug. This is a *different* path from powerButtonAction (also disabled, /etc/xdg/powerdevilrc).
-# Re-asserted every launch (fixes-go-in-robust-locations): a fresh home or a powerdevil default
-# change must not resurrect it. Format: "active,default,description" — active=none.
+# pocknix-powerd owns the power key; the device also delivers the WAKING press to userspace, so
+# powerdevil's tablet-mode "Turn Off Screen" binding blanks the panel right after resume.
+# Distinct from powerButtonAction (/etc/xdg/powerdevilrc). Value is "active,default,description".
 if command -v kwriteconfig6 >/dev/null 2>&1; then
   kwriteconfig6 --file kglobalshortcutsrc --group org_kde_powerdevil \
     --key "Turn Off Screen" "none,Power Off,Turn Off Screen" 2>/dev/null || true

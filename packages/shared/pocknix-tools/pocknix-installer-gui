@@ -1,30 +1,27 @@
 #!/bin/bash
 # pocknix-installer-gui — kdialog front-end for pocknix-install-internal /
-# pocknix-uninstall-internal (kdialog because the KDE stack is already on the
-# image — no GTK/zenity pull). Runs as the session user; every privileged step
-# goes through pkexec, wheel-authorized without a prompt in 54-pocknix-installer.rules.
+# pocknix-uninstall-internal. Runs as the session user; privileged steps go through
+# pkexec, wheel-authorized without a prompt by 54-pocknix-installer.rules.
 set -euo pipefail
 
 TITLE="Pocknix Installer"
 LOG="/tmp/pocknix-installer.log"
 INSTALL_CLI="/usr/bin/pocknix-install-internal"
 UNINSTALL_CLI="/usr/bin/pocknix-uninstall-internal"
-# Internal disk from the BSP's device.conf (matches the CLIs' resolution; RP6 default).
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 DEVICE="${POCKNIX_INTERNAL_DISK:-/dev/sda}"
 
 command -v kdialog >/dev/null 2>&1 || { echo "kdialog not installed" >&2; exit 1; }
-# qdbus drives the progress dialog (Arch names the Qt6 binary qdbus6; ships in qt6-tools).
+# Arch names the Qt6 binary qdbus6 (qt6-tools); the Qt5 name is still around.
 QDBUS="$(command -v qdbus6 || command -v qdbus || true)"
 
 gui_die() { kdialog --title "$TITLE" --error "$1" || true; exit 1; }
 
-val() { sed -n "s/^$2=//p" <<<"$1" | head -1; }   # val "$info" key
+val() { sed -n "s/^$2=//p" <<<"$1" | head -1; }
 
-# Busy dialog around a privileged CLI run. The CLI's output is too sparse to drive a percentage,
-# so the bar is made indeterminate (Qt range 0..0). $ref is "service path" — two words, unquoted
-# on purpose. Output goes to $LOG for the failure dialogs.
+# The CLI's output cannot drive a percentage, so the bar is made indeterminate (Qt range
+# 0..0). $ref is "service path" — two words, unquoted on purpose.
 run_busy() {
   local label="$1" ref rc=0; shift
   ref=$(kdialog --title "$TITLE" --progressbar "$label" 100)
@@ -40,8 +37,7 @@ offer_poweroff() {
   fi
 }
 
-# Android-size picker: a radio list of sensible sizes beats a slider here (kdialog sliders can't
-# set a default, and coarse presets are friendlier on a touch panel anyway).
+# A radio list, not a slider: kdialog sliders cannot set a default.
 choose_android_size() {
   local amin="$1" amax="$2" def g st args=()
   def=$amin; [ "$amax" -ge 32 ] && def=32
@@ -105,12 +101,10 @@ manage_flow() {
 }
 
 internal_boot_flow() {
-  # instructions only: the disk under / can't be repartitioned from here, so the
-  # supported flow is the ROCKNIX ABL boot menu
+  # instructions only: the disk under / cannot be repartitioned from here
   offer_poweroff "<b>Pocknix is running from internal storage.</b><br/><br/>Power off, then boot holding <b>Volume&nbsp;-</b> to open the ROCKNIX boot menu:<br/><br/><b>Switch boot source</b> — set it to <b>SD Card</b> to start from the SD card instead.<br/><b>Uninstall CFW</b> — remove Pocknix from internal storage and give Android its full partition size back (the resize factory-resets Android).<br/><br/>To boot Android: switch the boot mode to <b>Android</b> to make it the default, or hold <b>Volume&nbsp;+</b> while powering on to boot it once."
 }
 
-# --- main ---
 src=$(findmnt -no SOURCE / 2>/dev/null || true)
 case "$src" in
   "$DEVICE"*) internal_boot_flow; exit 0 ;;

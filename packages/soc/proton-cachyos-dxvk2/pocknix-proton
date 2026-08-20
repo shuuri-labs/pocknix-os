@@ -1,7 +1,4 @@
 #!/bin/sh
-# pocknix-proton — compat-tool entrypoint shim, proton-cachyos copy. Same contract as the
-# pocknix-steam original (which pocknix-proton-prep installs into the VALVE tool dirs at
-# runtime): this one ships inside the package because the tool dir is root-owned /usr/share,
-# out of reach of the user-level prep. Wraps the real `proton` next to it with the per-game
-# FEX profile wrapper.
+# pocknix-proton — compat-tool entrypoint shim; see pocknix-steam/pocknix-proton. Ships
+# in-package because the tool dir is root-owned, out of reach of the user-level prep.
 exec /usr/lib/pocknix/pocknix-proton-wrapper "$(dirname "$0")/proton" "$@"

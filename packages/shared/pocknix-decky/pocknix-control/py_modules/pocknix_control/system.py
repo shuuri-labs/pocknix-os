@@ -20,11 +20,9 @@ def atomically_write(path, text, mode=None):
 
 
 def _clean_env():
-    # Decky's PluginLoader is a PyInstaller bundle: it points LD_LIBRARY_PATH at its own
-    # extracted (x86_64) libs. A child that re-resolves shared libraries against them dies —
-    # concretely, the FEX-rootfs /bin/sh picked up PyInstaller's older libreadline and failed
-    # with "undefined symbol: rl_trim_arg_from_keyseq" (rc=127). PyInstaller preserves the
-    # original value in LD_LIBRARY_PATH_ORIG; restore it, else drop the variable.
+    # PyInstaller points LD_LIBRARY_PATH at the bundle's own extracted x86_64 libs, so any
+    # child re-resolving against them dies on symbol mismatches. It stashes the real value in
+    # LD_LIBRARY_PATH_ORIG.
     env = os.environ.copy()
     orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
     if orig:

@@ -4,9 +4,8 @@ from pathlib import Path
 
 from .system import run_cmd
 
-# The QAM updater mirrors pocknix-update, the desktop updater (a plain pacman -Syu) but runs it as
-# a detached transient unit through PID 1: the loader (and Steam itself) can die mid-update
-# without killing the pacman transaction, and the QAM re-attaches to the log on reopen.
+# The upgrade runs as a detached transient unit under PID 1 so the loader or Steam dying
+# mid-update cannot kill the pacman transaction; the QAM re-attaches to the log on reopen.
 UNIT = "pocknix-qam-update"
 # Lives in /run so a reboot clears the finished/failed state together with the log.
 LOG = Path("/run/pocknix-update.log")
@@ -18,18 +17,15 @@ CHECK_DB = Path("/run/pocknix-check-db")
 
 VER_RE = re.compile(r"^(\S+)\s+(\S+)$")
 
-# One check at a time. The frontend's own 'checking' state dies with the QAM panel
-# (closing mid-check + retapping raced pacman on the throwaway db: "unable to lock
-# database"), so the serialization has to live here.
+# Serialization must live here, not in the frontend: its 'checking' state dies with the QAM
+# panel, so close-mid-check then retap raced pacman on the throwaway db ("unable to lock database").
 _check_lock = threading.Lock()
 
 
 def _pacman(args, timeout):
-    # Every pacman call goes through PID 1, never in-process: the plugin's python is an
-    # x86_64 FEX guest, so a bare "pacman" resolves into the FEX x86 rootfs overlay - a
-    # foreign pacman reading the overlay's stock pacman.conf (no [pocknix] repo, so repo
-    # priority pins vanish and held-back packages get reported as updates) whose download
-    # sandbox also dies under emulation ("restricting syscalls via seccomp: 22").
+    # Never call pacman in-process: this python is an x86_64 FEX guest, so a bare "pacman"
+    # resolves into the FEX rootfs overlay - a foreign pacman on a stock pacman.conf (no
+    # [pocknix] repo, so pins vanish) whose download sandbox also dies under emulation.
     return run_cmd(
         ["systemd-run", "--quiet", "--collect", "--wait", "--pipe", "/usr/bin/pacman", *args],
         timeout=timeout,
@@ -66,9 +62,8 @@ def _check_updates_locked():
     if proc is None or proc.returncode != 0:
         detail = ((proc.stderr if proc else "") or "").strip()[-200:]
         raise RuntimeError(f"Could not refresh package databases: {detail or 'timed out (slow mirror or no network?)'}")
-    # -Sup resolves exactly like the real -Syu (repo order, IgnorePkg, replaces), so a
-    # package held back by the pocknix repo's priority is never reported as updatable —
-    # unlike -Qu, which reports any repo's newer version.
+    # -Sup resolves like the real -Syu (repo order, IgnorePkg, replaces); -Qu would report any
+    # repo's newer version and so falsely list packages held back by [pocknix] priority.
     proc = _pacman(["-Sup", "--dbpath", str(CHECK_DB), "--print-format", "%n %v"], timeout=60)
     if proc is None or proc.returncode != 0:
         detail = ((proc.stderr if proc else "") or "").strip()[-200:]

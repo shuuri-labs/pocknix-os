@@ -1,23 +1,7 @@
 # fex-emu (pocknix) — FEX x86/x86-64 -> AArch64 emulator, built WITH thunks.
-#
-# Why from source: neither the AUR/ALARM fex-emu nor Valve's holo-aarch64 repo ship
-# thunks (ALARM has no x86 cross-toolchain — FEX issue #1996). Without HostThunks the
-# loader SIGILLs on every x86 binary, and without GuestThunks x86 games emulate the
-# whole GL/Vulkan stack = unusably slow. Both our references build FEX themselves.
-#
-# This ports armada's recipe (github.com/virtudude/armada-packages/fex), which is the
-# clean answer to "the thunk build needs nix" (ROCKNIX's crux): it DROPS ROCKNIX's nix
-# patch (0004) and instead cross-compiles the x86 GUEST thunks with plain clang
-# (-target x86_64/i686-linux-gnu) against an x86 dev sysroot. We assemble that sysroot
-# from pinned Arch x86_64 + lib32 packages (archive.archlinux.org) instead of Fedora
-# RPMs, so the whole build stays inside our `make packages` chroot.
-#
-# Pinned to FEX-2608 (e869aa64, 2026-08-04) — ahead of ROCKNIX + armada, both still on
-# 2605/a04b0241. Patches 0001/0002/0005/0006 (NOT 0004 nix). 0003 was dropped at 2607:
-# upstream's new target_include_directories_from_pkgconfig() helper strips /usr/include
-# itself ("to avoid mixing foreign-architecture standard library headers"), which is the
-# exact leak 0003 patched around. 0006 is armada-original: fixes glibc>=2.41 SVE
-# math-header leakage in thunkgen (our Arch glibc is 2.43, so we need it).
+# Built from source because no aarch64 Arch/ALARM/holo prebuilt ships thunks; the x86
+# GUEST thunks cross-compile with plain clang against a sysroot assembled from pinned
+# Arch x86_64 + lib32 packages, so the build stays inside the `make packages` chroot.
 pkgname=fex-emu
 _commit=e869aa644a16e4332cdc15c1ea0b4d13d482385d
 pkgver=2608.20260804.e869aa64
@@ -26,27 +10,22 @@ pkgdesc="Fast usermode x86/x86-64 emulator for AArch64, built with host+guest th
 arch=('aarch64')
 url="https://github.com/FEX-Emu/FEX"
 license=('MIT')
-# Runtime: host libs the thunks forward to (dlopen'd lazily; absent ones just disable
-# that thunk) + the rootfs-mount tooling FEXServer execs at startup.
 depends=('systemd-libs' 'squashfuse' 'erofs-utils' 'fuse2'
          'alsa-lib' 'libdrm' 'libglvnd' 'libx11' 'libxrandr' 'wayland' 'vulkan-icd-loader')
 # clang is mandatory (FEX upstream only builds with clang); lld for the guest cross-link.
-# qt6 for FEXConfig; the rest are FEX's host build/thunk deps (mirrors armada's spec).
 makedepends=('git' 'clang' 'lld' 'llvm' 'cmake' 'ninja' 'pkgconf'
              'python' 'python-setuptools'
              'qt6-base' 'qt6-declarative'
              'libepoxy' 'sdl2-compat'
              'alsa-lib' 'libdrm' 'libglvnd' 'libx11' 'libxrandr' 'openssl' 'wayland' 'zlib')
-# NB: fmt/xxhash/Catch2 deliberately NOT makedepends. FEX does `find_package(<x> QUIET)` and only
-# falls back to its version-pinned `External/<x>` submodule if the system one is ABSENT. Arch's
-# rolling fmt (v11) is too new — its stricter formattability checks reject FEX's join_view<std::byte*>
-# format calls (CodeCache.cpp / Dispatcher.cpp) → build error. So we force FEX's bundled copies via
-# CMAKE_DISABLE_FIND_PACKAGE_* below (this is effectively what armada/ROCKNIX get — no system fmt).
+# FEX falls back to its pinned External/ submodules only when find_package misses, and Arch's
+# rolling fmt v11 rejects FEX's join_view<std::byte*> format calls — hence the
+# CMAKE_DISABLE_FIND_PACKAGE_* forcing below, and no fmt/xxhash/Catch2 in makedepends.
 provides=('fex-emu')
 conflicts=('fex-emu')
 options=('!lto')   # FEX manages its own LTO; let the upstream build decide.
 
-# --- pinned x86 dev sysroot (build-time only; for compiling the x86 guest thunks) ---
+# pinned x86 dev sysroot (build-time only; for compiling the x86 guest thunks)
 _glibc='2.43+r22+g8362e8ce10b2-2'
 _gcc='16.1.1+r12+g301eb08fa2c5-1'
 _apihdr='7.1-1'
@@ -66,7 +45,6 @@ source=("fex::git+https://github.com/FEX-Emu/FEX.git#commit=${_commit}"
         "fexsysroot-gcc-libs.pkg.tar.zst::${_arch}/g/gcc-libs/gcc-libs-${_gcc}-x86_64.pkg.tar.zst"
         "fexsysroot-lib32-gcc-libs.pkg.tar.zst::${_arch}/l/lib32-gcc-libs/lib32-gcc-libs-${_gcc}-x86_64.pkg.tar.zst"
         "fexsysroot-linux-api-headers.pkg.tar.zst::${_arch}/l/linux-api-headers/linux-api-headers-${_apihdr}-x86_64.pkg.tar.zst")
-# Let makepkg fetch but NOT auto-extract the x86 sysroot pkgs; we merge them deliberately.
 noextract=('fexsysroot-glibc.pkg.tar.zst'
            'fexsysroot-lib32-glibc.pkg.tar.zst'
            'fexsysroot-gcc.pkg.tar.zst'
@@ -78,34 +56,27 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
 
 prepare() {
   cd "${srcdir}/fex"
-  # FEX vendors its deps (vixl, jemalloc, Vulkan-Headers, zydis, ...) as submodules,
-  # pinned at this commit. makepkg's git source does not recurse them — do it here.
+  # FEX pins its deps (vixl, jemalloc, Vulkan-Headers, zydis) as submodules and makepkg's
+  # git source does not recurse them.
   git submodule update --init --recursive
-  # Patch stack (armada order; 0004 nix intentionally absent, 0003 obsolete since 2607).
   local p
   for p in 0001 0002 0005 0006; do
     patch -p1 < "${srcdir}/${p}-"*.patch
   done
 
-  # --- assemble the x86 dev sysroot from the pinned Arch x86 packages ---
   msg2 "assembling x86 dev sysroot from pinned Arch x86_64 + lib32 packages"
   rm -rf "${srcdir}/sysroot"; mkdir -p "${srcdir}/sysroot"
   local pkg
   for pkg in "${srcdir}"/fexsysroot-*.pkg.tar.zst; do
-    # Extract the whole pkg (not just a `usr` member): some of these pkgs have no
-    # bare `usr/` directory entry, so a `usr` filter fails with "usr: Not found in
-    # archive". LC_ALL=C silences bsdtar's locale warning in the minimal chroot.
+    # Extract whole: some of these pkgs carry no bare `usr/` directory entry, so a `usr`
+    # member filter fails with "usr: Not found in archive".
     LC_ALL=C bsdtar -xpf "${pkg}" -C "${srcdir}/sysroot"
   done
-  # Drop the pacman package metadata that lands at the sysroot root (just tidy).
   rm -f "${srcdir}/sysroot"/.{BUILDINFO,INSTALL,MTREE,PKGINFO} 2>/dev/null || true
-  # clang links -lstdc++ for the guest thunks; ensure the unversioned link exists
-  # for both bitnesses (gcc-libs ships only libstdc++.so.6).
+  # clang links -lstdc++ for the guest thunks, but gcc-libs ships only libstdc++.so.6.
   [ -e "${srcdir}/sysroot/usr/lib/libstdc++.so" ]   || ln -sf libstdc++.so.6 "${srcdir}/sysroot/usr/lib/libstdc++.so"
   [ -e "${srcdir}/sysroot/usr/lib32/libstdc++.so" ] || ln -sf libstdc++.so.6 "${srcdir}/sysroot/usr/lib32/libstdc++.so"
 
-  # Substitute the real /usr/include/c++/<ver> dir into the toolchain files
-  # (e.g. /usr/include/c++/16.1.1), mirroring armada's spec %prep.
   local cppinc="/$(cd "${srcdir}/sysroot" && ls -d usr/include/c++/*)"
   sed -i "s,%CPPINC%,${cppinc},g" "${srcdir}/toolchain_x86_64.cmake" "${srcdir}/toolchain_x86_32.cmake"
 }
@@ -114,16 +85,9 @@ build() {
   cd "${srcdir}/fex"
   # FEX requires clang as the host compiler; makepkg defaults to gcc, so force it.
   export CC=clang CXX=clang++
-  # TUNE_CPU matches ROCKNIX, per SoC (injected by build-packages.sh from
-  # config/tuning/${SOC}.conf; fallback = the sm8550 value for standalone makepkg).
-  # ROCKNIX's FEX package.mk deliberately remaps the SM8550 TARGET_CPU (cortex-x3) DOWN to
-  # cortex-a78 (case cortex-x3|cortex-x4 -> TUNE_CPU=cortex-a78), and on SM8250 derives
-  # cortex-a55 from the a76.a55 pair (TUNE_CPU="${TARGET_CPU##*.}" = the LITTLE core: FEX
-  # worker threads land on the littles too). Either way this only tunes FEXCore's OWN engine
-  # to a safe armv8.2 baseline; the JIT output (the translated game) is runtime-tuned to the
-  # real CPU regardless, so tuning the engine to the big/prime core buys nothing and risks an
-  # armv9 host-tool SIGILL on the build host. (Our earlier cortex-x3 was a misread of the
-  # device TARGET_CPU; FEX never uses it raw.)
+  # TUNE_CPU (injected per-SoC by build-packages.sh) tunes only FEXCore's own engine — JIT
+  # output is runtime-tuned to the real CPU — so it stays at a safe armv8.2 core to avoid an
+  # armv9 host-tool SIGILL on the build host. Do not raise it to the device's prime core.
   cmake -G Ninja -S . -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr \
@@ -141,12 +105,9 @@ build() {
     -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON \
     -DCMAKE_DISABLE_FIND_PACKAGE_xxhash=ON \
     -DCMAKE_DISABLE_FIND_PACKAGE_Catch2=ON
-  # Cap ninja parallelism. FEXCore's OpcodeDispatcher TUs (Vector.cpp, X87*.cpp …) each
-  # peak at ~2-3 GB RSS under clang -O2/Release; an unbounded `ninja` (= nproc, e.g. 8)
-  # OOMs a typical build VM (systemd-oomd reaps the cgroup → "subcommand failed" with no
-  # compiler error). Default -j2 fits ~7-8 GB RAM; override per host, e.g.
-  #   FEX_NINJA_JOBS=1 make packages PKG=fex-emu   (tighter)
-  #   FEX_NINJA_JOBS=6 …                            (lots of RAM)
+  # FEXCore's OpcodeDispatcher TUs peak at ~2-3 GB RSS each, so an unbounded ninja OOMs the
+  # build VM — systemd-oomd reaps the cgroup and makepkg reports "subcommand failed" with no
+  # compiler error. -j2 fits ~7-8 GB; raise FEX_NINJA_JOBS on a bigger host.
   ninja -C build -j"${FEX_NINJA_JOBS:-2}"
 }
 
@@ -154,24 +115,11 @@ package() {
   cd "${srcdir}/fex"
   DESTDIR="${pkgdir}" ninja -C build install
 
-  # FEX's data dirs for RootFS + overlays (other pieces drop content here).
   install -dm0755 "${pkgdir}/usr/share/fex-emu/RootFS"
   install -dm0755 "${pkgdir}/usr/share/fex-emu/overlays"
 
-  # Base global config (RootFS name + thunk wiring filled in by the pocknix-fex piece;
-  # this is a sane default so a bare `FEX <x86 binary>` smoke-test works post-install).
-  #
-  # ThunksDB is ALL ZERO (pkgrel 2, 2026-07-24) — deliberate:
-  #  - On the host, NO thunk ever engages on our Arch rootfs (the @PREFIX_LIB@ overlay
-  #    path mismatch; A/B-verified for Vulkan AND GL: emulated turnip / FD740 renderer,
-  #    zero LoadLib lines). So zeroing changes nothing for pocknix-play/Decky/host x86.
-  #  - Inside Steam Linux Runtime containers (x86 Proton) the overlay DID apply to
-  #    pressure-vessel's graphics capture, copying guest thunk STUBS into the container
-  #    as libvulkan/libwayland — guest loads them from unbless-able paths and FEX
-  #    segfaults ("NoExec instruction in entry block"). Zeroing makes the capture read
-  #    real bytes, so x86 Proton works with NO per-game launch options.
-  #  - ARM Proton is untouched either way: its bundled arm64ec FEX has no Linux-lib
-  #    thunks, and its per-game config flows via FEX_APP_CONFIG (env), not this file.
-  # Thunk libs still ship; re-enable per-app via FEX_APP_CONFIG if a use case appears.
+  # Config.json ships ThunksDB all-zero: a non-zero entry makes pressure-vessel's graphics
+  # capture copy guest thunk stubs into the SLR container, which FEX then refuses to bless
+  # ("NoExec instruction in entry block"). Re-enable per-app via FEX_APP_CONFIG, not here.
   install -Dm0644 "${srcdir}/Config.json" "${pkgdir}/usr/share/fex-emu/Config.json"
 }

@@ -1,6 +1,5 @@
-// Per-game Proton selection via SteamClient.Apps. This drives the SAME state as Steam's own
-// per-game compatibility dropdown (SpecifyCompatTool + app details), so the two UIs stay in
-// sync by construction — we never store a shadow copy.
+// Drives the same state as Steam's own per-game compatibility dropdown (SpecifyCompatTool +
+// app details), so never store a shadow copy: the two UIs stay in sync by construction.
 
 export interface CompatTool {
   name: string;

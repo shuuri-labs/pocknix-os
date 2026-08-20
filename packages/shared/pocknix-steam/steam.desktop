@@ -7,5 +7,4 @@ Icon=steam
 Terminal=false
 Categories=Game;
 MimeType=x-scheme-handler/steam;
-# Also registers `steam` as the handler for steam:// URLs so per-game shortcuts launch.
 StartupNotify=true

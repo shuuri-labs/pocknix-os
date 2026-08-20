@@ -1,9 +1,6 @@
-# Dolphin GameCube pad seed (-> ~/.config/dolphin-emu/GCPadNew.ini). Dolphin ships keyboard
-# bindings = dead controller on device. In game mode every emulator sees Steam Input's virtual
-# "Microsoft X-Box 360 pad" via evdev (same device the RetroArch/ARMSX2/Eden seeds target).
-# Positional face-button layout (GC B = west, GC X = east). Axes: 0/1 left stick, 3/4 right
-# stick (C-Stick), 2/5 analog triggers, Hat 0 = dpad. NB the trailing " 0" is part of the
-# device's actual evdev name (RP5 2026-07-22: without it Dolphin binds nothing, dead controller).
+# Dolphin GameCube pad seed (-> ~/.config/dolphin-emu/GCPadNew.ini); Dolphin's own default is
+# keyboard-only, i.e. a dead controller. Face buttons are mapped positionally (GC B = west).
+# The trailing " 0" belongs to the evdev device name — drop it and Dolphin binds nothing.
 [GCPad1]
 Device = evdev/0/Microsoft X-Box 360 pad 0
 Buttons/A = SOUTH

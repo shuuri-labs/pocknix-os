@@ -1,18 +1,8 @@
 #!/bin/bash
-# steamos-session-select — switch between the Steam game session (gamescope) and the Plasma Mobile
-# desktop session on pocknix-os.
-#
-# This is the SteamOS contract: Steam's "Switch to Desktop" button runs `steamos-session-select
-# desktop`, and the Plasma "Return to Game Mode" tile runs `steamos-session-select gamescope`.
-#
-# pocknix has no display manager — the tty1 ~deck/.bash_profile is a SUPERVISOR LOOP that launches
-# the session named in the choice file and relaunches when its compositor exits. So switching is:
-#   1. write the new choice to the state file, then
-#   2. SIGTERM the current compositor — the loop then relaunches into the new choice.
-# Crucially this keeps the SAME long-lived logind session active on seat0, which is what lets kwin
-# get DRM master after a switch (restarting getty churned the session and broke that — see
-# ~deck/.bash_profile and docs/plasma-mobile-plan.md). No getty restart, no polkit: we only signal
-# our own user's processes.
+# steamos-session-select — the SteamOS-contract name Steam and the Plasma tile both invoke to
+# switch sessions. There is no display manager: ~deck/.bash_profile supervises, so switching means
+# rewriting the choice file and SIGTERMing the compositor. Never restart getty to do this — the
+# same logind session must stay active on seat0 or kwin cannot take DRM master afterwards.
 set -u
 
 STATE_HOME="${XDG_STATE_HOME:-${HOME:-/home/deck}/.local/state}"
@@ -30,16 +20,12 @@ mkdir -p "${STATE_HOME}"
 printf '%s\n' "${sel}" > "${CHOICE_FILE}"
 echo "steamos-session-select: next session = ${sel} (signalling current compositor to exit)" >&2
 
-# Terminate whichever compositor is currently running (the other match is a no-op). SIGTERM lets it
-# shut down cleanly; the supervisor loop relaunches into ${sel}. No -x: the patterns also catch the
-# wrappers (kwin_wayland_wrapper, etc.). We run as the session user, so no privilege is needed.
+# No -x: the patterns must also catch the wrappers (kwin_wayland_wrapper, etc.).
 uid="$(id -u)"
 pkill -u "${uid}" -TERM gamescope    2>/dev/null || true
 pkill -u "${uid}" -TERM kwin_wayland 2>/dev/null || true
-# Leaving game mode: also stop the Steam client. gamescope dying doesn't take Steam with it (it
-# re-parents + keeps its single-instance lock), which wastes resources during the Plasma session and
-# makes the NEXT game-mode launch bail "Steam is already running". Best-effort TERM here; the game
-# launcher (pocknix-steam) force-clears any survivor on the way back.
+# gamescope dying does not take Steam with it: it re-parents and keeps its single-instance lock,
+# so the next game-mode launch would bail "Steam is already running". pocknix-steam clears survivors.
 if [ "${sel}" = plasma ]; then
   pkill -u "${uid}" -TERM steam          2>/dev/null || true
   pkill -u "${uid}" -TERM steamwebhelper 2>/dev/null || true

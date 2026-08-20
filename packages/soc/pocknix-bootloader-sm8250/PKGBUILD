@@ -1,18 +1,11 @@
 # pocknix-bootloader-sm8250 — the arm-efi boot chain payload for SM8250 boards.
-#
-# Boot contract: XBL -> an ABL providing UEFI -> GRUB (EFI/BOOT/bootaa64.efi) ->
-# boot/grub/grub.cfg -> "linux /KERNEL" + "devicetree /boot/grub/<board>.dtb".
-# RP5/Flip 2 factory ABLs already satisfy it; the ROCKNIX ABL kit ships INERT
-# (nothing flashes at build/install/update time — the user-run path is
-# pocknix-update-abl) for boards whose factory ABL has no usable UEFI (AYN Thor
-# Lite). Contrast sm8550, qcom-abl, where the ABL MUST be flashed first.
-# bootaa64.efi is a VENDORED ROCKNIX BINARY and the ABL kit is fetched at build
-# time — provenance, hashes and the self-build fallback: README.provenance.
-# grub.cfg is the single source of truth for the RUNTIME kernel cmdline;
-# build-packages.sh enforces it byte-matches the profile's KERNEL_CMDLINE.
-# grubenv is only installed to /flash if missing — it stores the user's saved
-# menu choice. The alpm hooks refresh /flash from /usr/share/pocknix/bootloader
-# on upgrade; build-sd-image.sh populates a fresh SD from the same tree.
+# Boot contract: XBL -> an ABL providing UEFI -> GRUB (EFI/BOOT/bootaa64.efi) -> boot/grub/grub.cfg
+# -> "linux /KERNEL" + "devicetree /boot/grub/<board>.dtb". Factory RP5/Flip 2 ABLs already satisfy
+# it, so the ABL kit ships INERT: only the user-run pocknix-update-abl ever flashes, unlike sm8550
+# where the ABL must be flashed before anything boots.
+# grub.cfg is the single source of truth for the runtime cmdline; build-packages.sh enforces that it
+# byte-matches the profile's KERNEL_CMDLINE. grubenv carries the user's saved menu choice, so it is
+# installed to /flash only when missing.
 pkgname=pocknix-bootloader-sm8250
 pkgver=20260701          # the ROCKNIX release bootaa64.efi was extracted from
 pkgrel=9
@@ -47,11 +40,10 @@ sha512sums=('SKIP'
             'SKIP')
 
 prepare() {
-  # The release ships a .sha256 sidecar per elf — verify the one we ship.
+  # the release ships a .sha256 sidecar per elf
   ( cd "rocknix-abl-v${_ablver}" && sha256sum -c "abl_signed-SM8250.elf.sha256" )
-  # ROCKNIX package.mk substitution: the flash script names the SoC's elf.
   sed 's/%DEVICE%/SM8250/g' flash_abl.sh.template > flash_abl.sh
-  # pocknix-update-abl reports the shipped version; the elf itself carries none.
+  # pocknix-update-abl reports the shipped version; the elf itself carries none
   echo "${_ablver}" > version
 }
 
@@ -72,8 +64,7 @@ package() {
   install -Dm755 "${srcdir}/backup_abl.sh"         "${kit}/backup_abl.sh"
   install -Dm755 "${srcdir}/restore_backup_abl.sh" "${kit}/restore_backup_abl.sh"
   install -Dm644 "${srcdir}/version"               "${kit}/version"
-  # pocknix-update-grub refreshes GRUB on /flash but not the kit; this hook does
-  # the kit, on both SoCs, from pocknix-bsp-common's script.
+  # pocknix-update-grub refreshes GRUB on /flash but not the kit; this hook covers the kit.
   install -Dm644 "${srcdir}/95-pocknix-abl-kit.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/95-pocknix-abl-kit.hook"
 }

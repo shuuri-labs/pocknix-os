@@ -1,9 +1,7 @@
 #!/bin/bash
-# pocknix-rollback-repair — finish an interrupted rollback. pocknix-rollback stages
-# regenerated boot files as /flash/*.new BEFORE its atomic set-default commit and
-# renames them right after; a crash in that window boots the new root with the old
-# kernel still active (bootable, one boot of module skew). This oneshot (condition-
-# gated on the rollback marker) activates any leftover staged files. Always exits 0.
+# pocknix-rollback-repair — activate boot files left staged as /flash/*.new by a
+# rollback that died between its set-default commit and the rename (see
+# pocknix-rollback). Marker-gated oneshot; always exits 0.
 set -uo pipefail
 
 FLASH=/flash

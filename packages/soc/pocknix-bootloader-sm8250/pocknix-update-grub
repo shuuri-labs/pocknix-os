@@ -1,20 +1,14 @@
 #!/bin/bash
-# pocknix-update-grub — refresh the arm-efi bootloader files on /flash from the
-# installed pocknix-bootloader-<soc> package tree (/usr/share/pocknix/bootloader).
-#
-# Run by the 95-pocknix-bootloader alpm hook after a package upgrade (and runnable
-# by hand). Mirrors ROCKNIX's devices/SM8250/bootloader/update.sh: the GRUB binary
-# and grub.cfg are refreshed; grubenv is installed only if missing (it stores the
-# user's saved menu choice). dtbs are NOT handled here — they belong to the kernel
-# package (pocknix-update-boot).
+# pocknix-update-grub — refresh the arm-efi bootloader files on /flash from the installed
+# pocknix-bootloader-<soc> tree. GRUB and grub.cfg are replaced; grubenv only if missing, since it
+# holds the user's saved menu choice. dtbs belong to the kernel package (pocknix-update-boot).
 set -euo pipefail
 
 FLASH="${FLASH:-/flash}"
 BL=/usr/share/pocknix/bootloader
 
 [ -d "$BL" ] || { echo "pocknix-update-grub: no $BL — nothing to do"; exit 0; }
-# In the image-build chroot /flash isn't a real mount; build-sd-image.sh populates
-# the FAT there instead, so skip. On the device /flash is the FAT boot partition.
+# In the image-build chroot /flash is not a mount; build-sd-image.sh populates the FAT instead.
 mountpoint -q "$FLASH" || { echo "pocknix-update-grub: $FLASH not mounted — skipping (build chroot?)"; exit 0; }
 
 mount -o remount,rw "$FLASH" 2>/dev/null || true
@@ -24,11 +18,10 @@ if [ -f "$BL/EFI/BOOT/bootaa64.efi" ]; then
   cp -f "$BL/EFI/BOOT/bootaa64.efi" "$FLASH/EFI/BOOT/bootaa64.efi"
 fi
 if [ -f "$BL/boot/grub/grub.cfg" ]; then
-  # Resolve the PARTUUID BEFORE touching /flash: the packaged cfg carries the
-  # fixed SD GUID, so copying without re-pinning points a non-SD install at a
-  # root that does not exist, and it looks fine until the next reboot.
-  # sed strips btrfs's "[/subvol]" (blkid cannot open it); `|| true` stops the
-  # failure killing the script under `set -e` before the guard reacts.
+  # Resolve the PARTUUID BEFORE touching /flash: the packaged cfg carries the fixed SD GUID, so
+  # copying it without re-pinning points a non-SD install at a root that does not exist, and that
+  # looks fine until the next reboot. sed strips btrfs's "[/subvol]", which blkid cannot open;
+  # `|| true` keeps set -e from killing the script before the guard below reacts.
   ROOT_SRC="$(findmnt -no SOURCE / 2>/dev/null | sed 's/\[.*//' || true)"
   ROOT_PU="$(blkid -s PARTUUID -o value "$ROOT_SRC" 2>/dev/null || true)"
   if [ -n "$ROOT_PU" ]; then

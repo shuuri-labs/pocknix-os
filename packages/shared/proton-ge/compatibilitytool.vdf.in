@@ -1,5 +1,4 @@
-// proton-ge: registers the GE-Proton ARM64 build as a selectable compat tool.
-// The internal name never changes, so bumps keep per-game selections working.
+// The internal name "proton-ge" is what Steam writes into config.vdf; it must never change.
 "compatibilitytools"
 {
   "compat_tools"

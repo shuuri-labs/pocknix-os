@@ -1,6 +1,6 @@
 #!/bin/sh
-# NM dispatcher hook -> finish lock migration once the link is really up. Same
-# event filtering as 50-pocknix-flathub (see its header). $1 = iface, $2 = action.
+# NM dispatcher hook ($1 = iface, $2 = action): finish the lock migration once the link
+# is really up. Same event filtering as 50-pocknix-flathub.
 [ "$1" = lo ] && exit 0
 
 case "$2" in

@@ -1,26 +1,5 @@
-# pocknix-emulation — the "drop ROMs in and play" layer: ES-DE + preconfigured emulators.
-#
-# Symmetric with pocknix-desktop: this is a data/scripts package (arch=any). The HEAVY runtime
-# (es-de, retroarch, the libretro core set, the standalone emulators) is NOT a depends() here —
-# it is delivered into the rootfs from config/packages/emulation.list at image time, the same
-# base.list/steam.list/desktop.list pattern. Reason (identical to pocknix-desktop): makepkg -s
-# would otherwise drag ES-DE/RetroArch/Qt/etc. into the BUILD chroot just to build this no-op
-# data package. So this package ships ONLY:
-#   - pocknix-roms-init         first-run (per deck login): create ~/Emulation/{ROMs/<system>,BIOS,
-#                               Saves,States} and SEED the ES-DE/RetroArch/ARMSX2 configs if absent
-#                               (robust-location pattern: user configs live in $HOME, a package can't
-#                               write /home/deck, so we stage under /usr/share and copy on first login)
-#   - pocknix-roms-init.service the --user oneshot that runs it (enabled --global at image time)
-#   - pocknix-steam-sync        ES-DE + starred favorites -> Steam library, by DIRECT binary-VDF
-#                               write into shortcuts.vdf (RetroDeck "Steam Sync" model, minus SRM:
-#                               Steam ROM Manager's Electron CLI deadlocked on every display
-#                               backend on-device 2026-07-05 and was retired from the flow)
-#   - pocknix-play              <system> <rom> launcher — the target of every favorite shortcut;
-#                               owns the system->core/emulator default mapping
-#   - es_find_rules.xml         ES-DE emulator lookup -> our binary/AppImage install paths
-#   - retroarch.cfg             sane RetroArch defaults (system_directory -> ~/Emulation/BIOS, Turnip)
-#   - ROMS-README.txt           dropped into ~/Emulation so the user knows where ROMs/BIOS/keys go
-#
+# pocknix-emulation — the "drop ROMs in and play" layer: ES-DE + preconfigured emulator
+# configs, shipped as an arch=any data/scripts package.
 pkgname=pocknix-emulation
 pkgver=0.1.0
 pkgrel=12
@@ -28,9 +7,9 @@ pkgdesc="ES-DE + preconfigured emulators for the RP6: drop ROMs into ~/Emulation
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-# JUST bash — see the header. The emulator runtime comes via config/packages/emulation.list. The
-# scripts `command -v`-guard their callees (retroarch, es-de) so an install WITHOUT the runtime
-# present degrades gracefully instead of erroring.
+# depends() stays 'bash': the emulator runtime ships via config/packages/emulation.list so
+# makepkg -s does not drag ES-DE/RetroArch/Qt into the build chroot for this data package.
+# The scripts `command -v`-guard their callees, so a runtime-less install degrades gracefully.
 depends=('bash')
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'pocknix-play'
         'es-eden' 'es-armsx2' 'es-dolphin' 'es-psp' 'es-xemu'
@@ -39,25 +18,16 @@ source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-steam-sync' 'po
         'eden-qt-config.ini.in' 'ppsspp.ini.in'
         'pocknix-cemu-profile' 'cemu-settings.xml.in' 'cemu-controller0.xml.in'
         'dolphin-Dolphin.ini.in' 'dolphin-GFX.ini.in' 'dolphin-GCPadNew.ini.in'
-        # per-system RetroArch tuning seeds (content-dir overrides + shader presets), harvested
-        # from on-device A/B sessions. FLAT names: makepkg cannot retrieve local sources from
-        # subdirectory paths (gba.cfg in retroarch-config/mGBA/ failed with "not found in the
-        # build directory", 2026-07-08); package() maps retroarch-<Core>-<file> into the
-        # retroarch-config/<Core>/ tree that pocknix-roms-init seeds from.
+        # FLAT names: makepkg cannot retrieve local sources from subdirectory paths, so
+        # package() maps retroarch-<Core>-<file> back into the retroarch-config/<Core>/ tree.
         'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
   install -Dm755 "${srcdir}/pocknix-play"      "${pkgdir}/usr/bin/pocknix-play"
-  # ES-DE + favorites -> Steam library by DIRECT shortcuts.vdf write (run by pocknix-steam at
-  # session start; Steam down, no display needed, <1s). Replaced the whole SRM pipeline — see
-  # the pocknix-steam-sync header for the burial notes.
   install -Dm755 "${srcdir}/pocknix-steam-sync" "${pkgdir}/usr/bin/pocknix-steam-sync"
 
-  # ES-DE launch wrappers: big-core taskset pin for the heavy standalones (Eden, ARMSX2).
-  # ES-DE's bundled launch commands bypass pocknix-play, so es_find_rules.xml points at these
-  # instead of the raw AppImages (unpinned = choppy pacing, verified RP6 + RP5).
   install -Dm755 "${srcdir}/es-eden"    "${pkgdir}/usr/lib/pocknix/es-eden"
   install -Dm755 "${srcdir}/es-armsx2"  "${pkgdir}/usr/lib/pocknix/es-armsx2"
   install -Dm755 "${srcdir}/es-psp"     "${pkgdir}/usr/lib/pocknix/es-psp"
@@ -68,40 +38,23 @@ package() {
   install -Dm755 "${srcdir}/es-vita3k"  "${pkgdir}/usr/lib/pocknix/es-vita3k"
   install -Dm755 "${srcdir}/es-dolphin" "${pkgdir}/usr/lib/pocknix/es-dolphin"
 
-  # --user oneshot: runs pocknix-roms-init on the deck login (create tree + seed configs). Enabled
-  # for all users with `systemctl --global enable pocknix-roms-init.service` in build-sd-image.sh
-  # (same mechanism as pipewire.socket / wireplumber there).
   install -Dm644 "${srcdir}/pocknix-roms-init.service" \
     "${pkgdir}/usr/lib/systemd/user/pocknix-roms-init.service"
 
-  # Config seeds staged under /usr/share; pocknix-roms-init copies them into $HOME on first login if
-  # the user has none yet (never clobbers user edits).
   install -Dm644 "${srcdir}/es_find_rules.xml" \
     "${pkgdir}/usr/share/pocknix-emulation/es_find_rules.xml"
-  # Custom system definitions: full-entry overrides where ES-DE's bundled launch command is
-  # wrong for pocknix (ps2 -> ARMSX2 via the pin wrapper; ES-DE only offers the RA core).
   install -Dm644 "${srcdir}/es_systems.xml" \
     "${pkgdir}/usr/share/pocknix-emulation/es_systems.xml"
   install -Dm644 "${srcdir}/retroarch.cfg" \
     "${pkgdir}/usr/share/pocknix-emulation/retroarch.cfg"
   install -Dm644 "${srcdir}/ROMS-README.txt" \
     "${pkgdir}/usr/share/pocknix-emulation/ROMS-README.txt"
-  # ARMSX2 (PS2) config template: skips the setup wizard, Vulkan renderer, SDL pad bindings,
-  # 2.5x upscale, standardized BIOS name — harvested from an on-device wizard run + tuning
-  # session (2026-07-06). Instantiated per-user by pocknix-roms-init.
   install -Dm644 "${srcdir}/armsx2-PCSX2.ini.in" \
     "${pkgdir}/usr/share/pocknix-emulation/armsx2-PCSX2.ini.in"
-  # Eden (Switch) config seed: Player-1 SDL pad bindings (Eden ships none, dead controller
-  # otherwise) + 1x resolution (Eden's 1.5x default slips frames on the RP5 GPU) + vsync,
-  # which pocknix-roms-init rewrites per device at seed time (120Hz -> Mailbox, 60Hz -> FIFO).
-  # RP6 verified 2026-07-07, RP5 verified 2026-07-22.
   install -Dm644 "${srcdir}/eden-qt-config.ini.in" \
     "${pkgdir}/usr/share/pocknix-emulation/eden-qt-config.ini.in"
-  # PPSSPP (PSP) config seed: 4x internal resolution (1080p-class on the panels)
   install -Dm644 "${srcdir}/ppsspp.ini.in" \
     "${pkgdir}/usr/share/pocknix-emulation/ppsspp.ini.in"
-  # Dolphin (GameCube/Wii) config seeds: Vulkan backend, 2x internal res, evdev pad bindings,
-  # analytics/confirm-stop modals pre-answered (blocking in game mode). RP5-authored 2026-07-22.
   install -Dm755 "${srcdir}/pocknix-cemu-profile" "${pkgdir}/usr/lib/pocknix/pocknix-cemu-profile"
   install -Dm644 "${srcdir}/cemu-settings.xml.in" \
     "${pkgdir}/usr/share/pocknix-emulation/cemu-settings.xml.in"
@@ -113,10 +66,6 @@ package() {
     "${pkgdir}/usr/share/pocknix-emulation/dolphin-GFX.ini.in"
   install -Dm644 "${srcdir}/dolphin-GCPadNew.ini.in" \
     "${pkgdir}/usr/share/pocknix-emulation/dolphin-GCPadNew.ini.in"
-  # Per-system RetroArch tuning (seeded into ~/.config/retroarch/config by pocknix-roms-init):
-  # GBA = integer scaling + lcd3x (on-device tuned 2026-07-06). The lcd3x preset references the
-  # vendored shader set (retroarch-shaders-pocknix) by relative path. The user's bezel overlay is
-  # deliberately NOT baked (trademarked console logo in the artwork) — device-only.
   install -Dm644 "${srcdir}/retroarch-mGBA-gba.cfg"    "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.cfg"
   install -Dm644 "${srcdir}/retroarch-mGBA-gba.slangp" "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.slangp"
 }

@@ -1,5 +1,3 @@
-## Let the wheel group use sudo (with password). The ALARM base ships the stock
-## /etc/sudoers with the %wheel line commented out, so the deck user (in wheel
-## since image creation) had no sudo at all. deck's password is set at image
-## build (SD_DECK_PASSWORD, falling back to the root password).
+## The ALARM base ships the stock /etc/sudoers with the %wheel line commented out, so
+## deck (in wheel since image creation) had no sudo at all without this.
 %wheel ALL=(ALL:ALL) ALL

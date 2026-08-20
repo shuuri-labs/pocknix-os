@@ -1,26 +1,9 @@
 #!/usr/bin/python3
-# pocknix-steam-sync — ES-DE -> Steam library sync, by DIRECT shortcuts.vdf manipulation.
-# Replaces the Steam ROM Manager pipeline outright: SRM's CLI (a headless-driven Electron GUI)
-# proved unusable on this platform — it deadlocked under xvfb, on the session's Xwayland, AND on
-# wayland with software rendering, with real favorites present (exhaustively verified on-device
-# 2026-07-05). This tool does the same job in <1s with zero dependencies beyond python3 stdlib.
-#
-# What it syncs, per logged-in Steam account:
-#   * "ES-DE" itself — the frontend must always be reachable from game mode (desktop mode has no
-#     controller nav), so it is unconditionally part of the set.
-#   * every ES-DE FAVORITE (starred game): scans ~/ES-DE/gamelists/*/gamelist.xml for
-#     <favorite>true</favorite>, launches via `pocknix-play <system> "<rom>"` (the single
-#     system->emulator coupling point). Favorites-only by design — never the whole library.
-#
-# Ownership model: every entry this tool writes carries DevkitGameID="pocknix" (invisible in the
-# UI) + a "Pocknix" tag (shows as a Steam collection). Each run REPLACES exactly the
-# pocknix-owned subset — add a star, it appears; remove a star, it disappears; user-made
-# shortcuts are never touched.
-#
-# MUST run while Steam is down (Steam rewrites shortcuts.vdf on exit): pocknix-steam runs it at
-# game-session start, before the client launches. No display needed. Artwork is NOT fetched
-# (that was SRM's one real value-add); a small SteamGridDB fetcher can be added later, keyed by
-# the deterministic appid = crc32(exe+appname)|0x80000000 -> grid/<appid>*.png.
+# pocknix-steam-sync — writes ES-DE plus every starred ES-DE favorite into Steam's
+# shortcuts.vdf, per logged-in account, as `pocknix-play <system> "<rom>"` entries.
+# MUST run while Steam is DOWN: Steam rewrites shortcuts.vdf wholesale on exit.
+# Entries carry DevkitGameID="pocknix" and each run replaces exactly that owned subset,
+# so a user's own shortcuts survive.
 import os
 import struct
 import sys
@@ -51,13 +34,12 @@ def rom_dir() -> str:
 
 ROMS = rom_dir()
 PLAY = "/usr/bin/pocknix-play"
-OWNER = "pocknix"  # DevkitGameID marker for entries we own
+OWNER = "pocknix"
 TAG = "Pocknix"
 
 TYPE_MAP, TYPE_STR, TYPE_INT, END = 0x00, 0x01, 0x02, 0x08
 
 
-# --- binary VDF (shortcuts.vdf) ---
 def parse_map(data: bytes, pos: int):
     out = {}
     while True:
@@ -117,7 +99,6 @@ def make_entry(appname: str, exe: str, launch_options: str = "") -> dict:
     }
 
 
-# --- ES-DE favorites ---
 def favorites() -> list[dict]:
     out = []
     for gl in sorted(glob.glob(os.path.join(GAMELISTS, "*", "gamelist.xml"))):
@@ -156,8 +137,7 @@ def sync(cfgdir: str, desired: list[dict]) -> None:
         except (ValueError, IndexError) as e:
             print(f"[pocknix-steam-sync] {path}: unparseable ({e}) — leaving untouched", file=sys.stderr)
             return
-    # keep everything we don't own (incl. legacy ES-DE entries from the retired SRM/injector
-    # paths only if unowned — the old injector wrote no DevkitGameID, so drop by appname too)
+    # legacy ES-DE entries carry no DevkitGameID, so they are matched by appname instead.
     kept = [
         v for v in shortcuts.values()
         if isinstance(v, dict)

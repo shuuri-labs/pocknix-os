@@ -1,7 +1,6 @@
-# pocknix-desktop-full — the Plasma Mobile desktop-session layer. Hard
-# depends= so `pacman -Rs pocknix-desktop-full` removes exactly this layer
-# (issue #49). Built with ./nodeps: makepkg -s would drag the whole KDE/Qt
-# stack into the build chroot just to lay out nothing.
+# pocknix-desktop-full — the Plasma Mobile desktop-session layer. Hard depends= so that
+# `pacman -Rs pocknix-desktop-full` removes exactly this layer and nothing else.
+# Build with ./nodeps: makepkg -s would drag the whole KDE/Qt stack in to lay out nothing.
 pkgname=pocknix-desktop-full
 pkgver=0.1.0
 pkgrel=1
@@ -9,8 +8,7 @@ pkgdesc="pocknix optional layer: Plasma Mobile desktop session, KDE apps, Waydro
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-depends=('pocknix-desktop'   # session scripts + game<->desktop switch
-         # Plasma Mobile shell (runs on kwin_wayland, not Sway)
+depends=('pocknix-desktop'
          'plasma-mobile'
          'plasma-workspace'
          'kwin'
@@ -20,7 +18,6 @@ depends=('pocknix-desktop'   # session scripts + game<->desktop switch
          'plasma-settings'
          'kscreen'           # kscreen-doctor drives the rotated-DSI transform
          'xdg-user-dirs'
-         # KDE apps (Plasma Mobile ships only the shell)
          'konsole'
          'kate'
          'dolphin'
@@ -34,11 +31,11 @@ depends=('pocknix-desktop'   # session scripts + game<->desktop switch
          'kweather'
          'waydroid'          # needs the kernel's binder/binderfs (build-kernel.sh)
          'flatpak'
-         'discover'          # KDE store with the Flatpak backend
+         'discover'
          'bluedevil'
-         'kdialog'           # installer GUI dialogs
+         'kdialog'           # the internal installer's GUI dialogs
          'qt6-tools')        # qdbus6 drives the kdialog progress dialog
 
 package() {
-  :   # pure metapackage
+  :
 }

@@ -1,13 +1,10 @@
-# proton-ge-dxvk2 — proton-ge with DXVK pinned to 2.7 (the sm8250 variant).
-# Same rationale + rules as proton-cachyos-dxvk2 (see its header): current GE release
-# with only files/lib/wine/dxvk/ swapped; publish to the sm8250 repo ONLY; _srctag
-# tracks proton-ge in lockstep.
+# proton-ge-dxvk2 — proton-ge with DXVK pinned to 2.7; same rationale and rules as
+# proton-cachyos-dxvk2 (see its header).
 #
-# Donor = VALVE Proton 11 ARM dlls (see README.provenance), NOT a GE release: GE's
-# oldest ARM build already carries DXVK's storageBuffer8BitAccess floor (it landed on
-# DXVK master pre-3.0-tag; a "2.7.1-*" version string proves nothing, verify per-build).
-# Valve's dlls run under GE's wine (same Proton lineage) but CRASH under cachy's —
-# mind the lineage rule if either donor ever changes.
+# The donor is VALVE Proton 11's dlls, not a GE release: even GE's oldest ARM build carries
+# DXVK's storageBuffer8BitAccess floor, which landed on master before the 3.0 tag, so a
+# "2.7.1-*" version string proves nothing — verify per build. Valve's dlls run under GE's
+# wine but CRASH under cachy's, so any donor change must respect that lineage.
 pkgname=proton-ge-dxvk2
 _srctag=GE-Proton11-5
 _ver=${_srctag#GE-Proton}

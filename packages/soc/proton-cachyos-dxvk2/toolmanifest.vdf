@@ -1,10 +1,7 @@
-// proton-cachyos: replacement toolmanifest, installed OVER the tarball's own by the PKGBUILD.
-// Drops require_tool_appid (host-direct); rationale in pocknix-steam/proton-toolmanifest.vdf.
+// Installed OVER the tarball's own; see pocknix-steam/proton-toolmanifest.vdf.
 "manifest"
 {
   "version" "2"
-  // /pocknix-proton (shipped in the tool dir by this package) applies the per-game FEX
-  // profile (Pocknix Control plugin) then execs the real /proton next to it.
   "commandline" "/pocknix-proton %verb%"
   "use_sessions" "1"
   "compatmanager_layer_name" "proton"

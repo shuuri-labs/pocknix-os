@@ -1,7 +1,6 @@
-# pocknix-emulation-full — the emulation layer (spec: issue #48). Hard
-# depends= so `pacman -Rs pocknix-emulation-full` removes exactly this layer;
-# the source-built emulators are optdepends because a failed optional build
-# must not block the layer, and they are not removed with it.
+# pocknix-emulation-full — the emulation layer metapackage. depends= is hard so that
+# `pacman -Rs pocknix-emulation-full` removes exactly this layer; the source-built emulators
+# are optdepends instead, so a failed optional build cannot block the layer.
 pkgname=pocknix-emulation-full
 pkgver=0.1.0
 pkgrel=1
@@ -9,15 +8,15 @@ pkgdesc="pocknix optional layer: ES-DE frontend, RetroArch cores, standalone emu
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-depends=('pocknix-emulation'   # config/scripts glue (deliberately glue-only, see its PKGBUILD)
+depends=('pocknix-emulation'
          'es-de'
          'libretro-cores-pocknix'
-         'retroarch'           # the libretro frontend (ALARM)
+         'retroarch'
          'libretro-core-info'
          'retroarch-autoconfig-pocknix'
          'retroarch-shaders-pocknix'
-         'ppsspp'              # PSP default; the libretro core is the alt
-         'fuse2'               # AppImage runtime for the *-bin emulators
+         'ppsspp'
+         'fuse2'
          'armsx2-bin'
          'rpcs3-bin'
          'eden-bin'

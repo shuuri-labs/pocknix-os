@@ -1,15 +1,7 @@
-# wxwidgets-pocknix — wxWidgets 3.3 (gtk3), built because Cemu requires >=3.3 and ALARM ships
-# 3.2.11 (cemu configure died on it, 2026-07-06). Nothing else on the image uses wxWidgets, so
-# this exists solely for packages/shared/cemu.
-#
-# Single lean package (Arch splits common/gtk3/qt5; we merge base+gtk3 and skip qt5 entirely) with
-# webview + mediactrl OFF — Cemu's find_package needs only: base core gl propgrid xrc. That drops
-# the webkit2gtk + gstreamer dependency chains.
-#
-# RESOLUTION TRICK: named wxwidgets-pocknix with provides/conflicts on the Arch names. cemu
-# depends on 'wxwidgets-gtk3>=3.3' — ALARM's real wxwidgets-gtk3 (3.2) fails the constraint, so
-# pacman/makepkg fall through to this provider. (A same-name epoch bump wouldn't work here:
-# unqualified `pacman -S name` picks the FIRST repo with the name, and [pocknix] is last.)
+# wxwidgets-pocknix — wxWidgets 3.3 (gtk3), existing solely because cemu needs >=3.3 and ALARM
+# ships 3.2. The name plus provides/conflicts is the resolution trick: ALARM's 3.2 cannot satisfy
+# cemu's 'wxwidgets-gtk3>=3.3', so pacman falls through to this provider. A same-name epoch bump
+# would NOT work: unqualified `pacman -S <name>` takes the first repo with the name, [pocknix] is last.
 pkgname=wxwidgets-pocknix
 pkgver=3.3.2
 pkgrel=2
@@ -26,7 +18,6 @@ sha256sums=('SKIP')
 
 prepare() {
   cd wxWidgets
-  # bundled 3rdparty bits (nanosvg, catch, pcre) are submodules
   git submodule update --init --recursive
 }
 

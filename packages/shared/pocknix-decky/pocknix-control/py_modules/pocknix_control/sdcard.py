@@ -5,9 +5,8 @@ from pathlib import Path
 
 from .system import run_cmd
 
-# The RP6's microSD slot is /dev/mmcblk0; the internal UFS OS disk is sda. The formatter
-# re-enforces this (mmcblk-only + refuses the disk backing /), so this constant is a UI
-# convenience, not the safety boundary.
+# The microSD slot is mmcblk0, the internal OS disk sda. This constant is UI convenience only:
+# the formatter is the safety boundary (mmcblk-only, refuses the disk backing /).
 SD_DISK = "/dev/mmcblk0"
 SD_PART = "/dev/mmcblk0p1"
 FORMATTER = "/usr/lib/hwsupport/format-device.sh"
@@ -83,10 +82,9 @@ def format_sdcard(label):
     if not _format_lock.acquire(blocking=False):
         raise RuntimeError("A format is already in progress")
     try:
-        # Run the formatter through PID 1, not directly: in our private mount namespace its
-        # umount would only detach the card locally while the init-namespace mount stayed
-        # live under mkfs. systemd-run puts it in the init namespace (and with a clean env,
-        # sidestepping the PyInstaller LD_LIBRARY_PATH poisoning entirely).
+        # systemd-run, not a direct call: run in our private mount namespace the formatter's
+        # umount detaches the card only locally, leaving the init-ns mount live under mkfs.
+        # PID 1 also gives it a clean env, free of the PyInstaller LD_LIBRARY_PATH poisoning.
         proc = run_cmd(
             ["systemd-run", "--quiet", "--collect", "--wait", "--pipe",
              FORMATTER, "--device", SD_DISK, "--label", label, "--force"],

@@ -1,12 +1,8 @@
 #!/bin/bash
 # pocknix-decky-sync — seed Decky Loader + OS-shipped plugins into deck's homebrew dir.
-# Ported from armada's armada-decky-sync (user/path swap, no SELinux chcon).
-#
-# Decky owns its own self-updates INSIDE ~/homebrew; the image copies under /usr/share only
-# SEED first installs and replace the loader when the OS bundles a NEWER version than what's
-# on disk (version-compared, so a user's self-updated loader is never downgraded).
-# OS-shipped plugins (PocknixControl) are re-copied every boot — they're system UI, the image
-# is their source of truth; user-installed plugins in other dirs are untouched.
+# Decky self-updates inside ~/homebrew, so the loader is replaced only when the OS bundles a
+# strictly newer version; a user's self-updated loader must never be downgraded. OS-shipped
+# plugins are system UI and get re-copied every boot; other plugin dirs are left alone.
 set -euo pipefail
 
 user_name=deck
@@ -31,10 +27,9 @@ install -d -m 0755 "${homebrew}/services"
 install -d -m 0755 "${homebrew}/plugins"
 install -d -m 0755 "${homebrew}/settings"
 
-# Disable any pre-existing Decky plugin_loader.service so it doesn't conflict with ours.
+# Decky's own installer unit would race pocknix-decky-loader.service for the loader.
 systemctl disable --now plugin_loader.service >/dev/null 2>&1 || true
 
-# Decky owns self-updates; the image copy seeds installs and newer OS-bundled loaders.
 if loader_needs_seed && [[ -x "${loader_src}" ]]; then
     install -Dpm 0755 "${loader_src}" "${homebrew}/services/PluginLoader"
     [[ ! -f "${loader_version_src}" ]] || install -Dpm 0644 "${loader_version_src}" "${homebrew}/services/.loader.version"

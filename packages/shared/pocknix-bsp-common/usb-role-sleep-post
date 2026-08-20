@@ -1,5 +1,4 @@
 #!/bin/sh
-# Restore the USB role saved by the pre hook's suspend-time toggle.
 for r in /sys/class/usb_role/*-role-switch/role; do
   [ -f "$r" ] || continue
   s="/run/pocknix/usb-role.$(basename "$(dirname "$r")")"

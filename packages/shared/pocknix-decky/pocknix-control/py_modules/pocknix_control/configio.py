@@ -7,10 +7,9 @@ from pathlib import Path
 from .system import atomically_write
 from .tweaks import load_tweaks, save_tweaks
 
-# Per-game config export/import. JSON, versioned, appid-keyed merge-overwrite on import.
-# Export writes exactly ONE game's profile; the schema keeps a "games" map so a shared
-# file may carry several (community packs) and import handles either. Global defaults are
-# NOT portable (ignored on import), and fan settings are never included (device-local).
+# Per-game config export/import. Export writes one profile, but the schema keeps a "games"
+# map so a shared community pack carrying several still imports. Device-local settings (fan,
+# global defaults) are outside GAME_KEYS and so never travel between devices.
 EXPORT_DIR = Path("/home/deck/PocknixGameConfigs")
 STEAM_CONFIG_VDF = Path("/home/deck/.local/share/Steam/config/config.vdf")
 SCHEMA_VERSION = 1
@@ -33,9 +32,8 @@ def _clean_str(value):
 
 
 def _compat_tool_mapping():
-    # Last-persisted per-game compat picks from Steam's config.vdf (Steam flushes on
-    # change; fine for export). Appid "0" is the global-default slot — never include it
-    # (seeding it once broke Proton downloads entirely, Valve bug 6874).
+    # Appid "0" is the global-default compat slot: never export it. Setting it makes Steam
+    # refuse all Proton downloads (Valve bug 6874).
     try:
         text = STEAM_CONFIG_VDF.read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -77,9 +75,8 @@ def config_dir():
 
 
 def export_config(appid, name, basename="", allow_overwrite=False):
-    # Two-phase collision handling: with allow_overwrite unset, an existing target returns
-    # {exists} instead of writing — the UI then offers a rename ("control-fast") or an
-    # explicit overwrite, and calls again with the chosen basename + allow_overwrite.
+    # Collision handling is two-phase: an existing target returns {exists} without writing so
+    # the UI can offer rename-or-overwrite, then call again with allow_overwrite.
     appid = str(appid)
     if not appid.isdigit():
         raise ValueError("invalid appid")
@@ -114,8 +111,8 @@ def export_config(appid, name, basename="", allow_overwrite=False):
 
 
 def _load_payload(path):
-    # Imported files are foreign: enforce suffix/size caps and reduce every entry to the
-    # known-key allowlist (fanMode and anything unknown is dropped on the floor).
+    # Imported files are foreign input: cap size and reduce every entry to the GAME_KEYS
+    # allowlist rather than trusting the payload's shape.
     p = Path(str(path))
     if p.suffix.lower() != ".json":
         raise ValueError("not a .json file")
@@ -153,10 +150,9 @@ def read_config(path):
 
 
 def apply_config(path, source_appid, target_appid, target_name):
-    # Apply ONE profile from the file to a game of the user's choosing — deliberately not
-    # keyed by the exporter's appid (the target may be a non-Steam copy with its own
-    # shortcut appid). The profile's tool goes back to the frontend, which applies it to
-    # the target through Steam's own API (SpecifyCompatTool).
+    # The target is chosen by the user, not keyed by the exporter's appid: a non-Steam copy
+    # carries its own shortcut appid. The compat tool must go back through Steam's own
+    # SpecifyCompatTool API, so it is returned to the frontend rather than written here.
     target_appid = str(target_appid)
     if not target_appid.isdigit():
         raise ValueError("invalid target game")
@@ -170,5 +166,4 @@ def apply_config(path, source_appid, target_appid, target_name):
     tweaks = load_tweaks()
     tweaks.setdefault("games", {})[target_appid] = entry
     save_tweaks(tweaks)
-    # fexProfile/enabled let the frontend mirror the pick into launch options (Steam API only).
     return {"protonTool": tool, "fexProfile": entry.get("fexProfile", ""), "enabled": entry.get("enabled") is True}

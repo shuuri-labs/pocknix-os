@@ -1,16 +1,7 @@
 #!/bin/bash
-# pocknix-play <system> <rom> — launch a game by ES-DE system name. THE single coupling point
-# between the Steam library and the emulators: every SRM favorite shortcut targets this script
-# (pocknix-steam-sync writes `pocknix-play <system> "<rom>"` as the launch command), so emulator/
-# core swaps happen HERE once, and existing Steam shortcuts keep working.
-#
-# The system->core/emulator mapping mirrors the pocknix defaults (see packages/
-# libretro-cores-pocknix for the curation rationale). ES-DE's own launches do NOT go through this
-# script — ES-DE uses its bundled launch commands + es_find_rules.xml — so keep the two aligned
-# when changing a default.
-#
-# NOTE standalone emulator CLI flags are per-upstream and UNVERIFIED-ON-DEVICE where marked;
-# ES-DE's bundled commands are the reference if one misbehaves.
+# pocknix-play <system> <rom> — the launch target of every Steam favorite shortcut, so an
+# emulator or core swap happens here once and existing shortcuts keep working. ES-DE launches
+# do NOT come through here (bundled commands + es_find_rules.xml): keep the two aligned.
 set -u
 
 system="${1:-}"; rom="${2:-}"
@@ -19,9 +10,9 @@ if [ -z "${system}" ] || [ -z "${rom}" ]; then
 fi
 [ -e "${rom}" ] || { echo "pocknix-play: ROM not found: ${rom}" >&2; exit 1; }
 
-# Big-core mask for emulator pinning comes from the device BSP (POCKNIX_BIG_CORES):
-# sm8550 = 3-7 (A710/A715 mids + X3 prime), sm8250 = 4-7 (A77s; 0-3 are the A55
-# littles). Fallback = the verified sm8550 mask.
+# POCKNIX_BIG_CORES comes from the device BSP: sm8550 = 3-7, sm8250 = 4-7 (0-3 are A55
+# littles); fallback is the sm8550 mask. Heavy emulators must taskset onto it — scx_lavd
+# otherwise parks the critical thread on a little core (chop + audio crackle).
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 _big_cores="${POCKNIX_BIG_CORES:-3-7}"
@@ -29,8 +20,6 @@ _big_cores="${POCKNIX_BIG_CORES:-3-7}"
 EMUS=/opt/pocknix/emulators
 CORES=/usr/lib/libretro
 
-# RetroArch path: -f fullscreen; per-core config/overrides come from the user's retroarch.cfg
-# (seeded by pocknix-roms-init).
 run_core() {
   local core="${CORES}/$1_libretro.so"
   [ -f "${core}" ] || { echo "pocknix-play: core missing: ${core} (libretro-cores-pocknix not installed?)" >&2; exit 1; }
@@ -40,19 +29,14 @@ run_core() {
 run_appimage() {  # $1 = path under EMUS; remaining args = emulator flags (rom appended by caller)
   local app="${EMUS}/$1"; shift
   [ -x "${app}" ] || { echo "pocknix-play: emulator missing: ${app}" >&2; exit 1; }
-  # Scrub Steam's launch env: Steam injects LD_PRELOAD (gameoverlayrenderer.so) + its runtime
-  # LD_LIBRARY_PATH into shortcuts; AppImages with bundled Qt SIGABRT on that mix (ARMSX2,
-  # on-device 2026-07-06: instant crash from the Steam shortcut, fine with a clean env).
-  # System binaries (retroarch, dolphin) tolerate it — only the AppImage tier scrubs.
-  # FUSERMOUNT_PROG: under Steam's child env the AppImage runtime fails to find fusermount via
-  # PATH (verified on-device) — point it at the binary directly.
-  # ${_pin}: optional taskset prefix set by the caller (heavy emulators pin to the big cores).
+  # Steam injects LD_PRELOAD (gameoverlayrenderer.so) + its runtime LD_LIBRARY_PATH into
+  # shortcuts: AppImages with bundled Qt SIGABRT on that mix, and their runtime then cannot
+  # find fusermount via PATH. System binaries tolerate it, so only this tier scrubs.
   exec env -u LD_PRELOAD -u LD_LIBRARY_PATH FUSERMOUNT_PROG=/usr/bin/fusermount \
     ${_pin:-} "${app}" "$@"
 }
 
 case "${system}" in
-  # --- RetroArch tier (defaults; alternates ship in the same package) ---
   nes|famicom)                          run_core fceumm ;;
   snes|sfc)                             run_core snes9x ;;
   n64)                                  run_core mupen64plus_next ;;
@@ -63,7 +47,7 @@ case "${system}" in
   sega32x)                              run_core picodrive ;;
   saturn)                               run_core yabasanshiro ;;
   dreamcast)                            run_core flycast ;;
-  psx)                                  run_core duckstation ;;   # pcsx_rearmed = the ARM classic alternate
+  psx)                                  run_core duckstation ;;
   tg16|pcengine)                        run_core mednafen_pce_fast ;;
   supergrafx|sgfx)                      run_core mednafen_supergrafx ;;
   neogeo|arcade|fbneo)                  run_core fbneo ;;
@@ -76,47 +60,33 @@ case "${system}" in
   ngp|ngpc)                             run_core mednafen_ngp ;;
   virtualboy)                           run_core mednafen_vb ;;
 
-  # --- standalone tier ---
   psp)
-    # ALARM's ppsspp; binary name differs across versions (ppsspp vs PPSSPPSDL).
+    # the binary is renamed across ppsspp versions.
     for b in ppsspp PPSSPPSDL; do
       command -v "$b" >/dev/null 2>&1 && exec "$b" --fullscreen "${rom}"
     done
     echo "pocknix-play: ppsspp not installed" >&2; exit 1 ;;
   gc|wii)
-    # Big-core pin (same story as ps2/switch; unpinned Dolphin chops, RP5-confirmed 2026-07-22).
     command -v dolphin-emu >/dev/null 2>&1 || { echo "pocknix-play: dolphin-emu not installed" >&2; exit 1; }
-    exec taskset -c "${_big_cores}" dolphin-emu -b -e "${rom}" ;;        # -b batch: no GUI, quit on stop
+    exec taskset -c "${_big_cores}" dolphin-emu -b -e "${rom}" ;;
   ps2)
-    # Pin to the big cores (POCKNIX_BIG_CORES, see top). Verified on-device 2026-07-06 (RP6):
-    # unpinned, scx_lavd let the MTVU thread land on a little A510 -> constant chop + audio
-    # crackle; pinned = perfectly smooth. lavd schedules freely WITHIN the allowed set.
     _pin="taskset -c ${_big_cores}"
     run_appimage armsx2/ARMSX2.AppImage -batch -fullscreen -- "${rom}" ;;
   ps3)
-    # Big-core pin — same trap as ps2 above (PPU/SPU threads are the heaviest in the set).
     _pin="taskset -c ${_big_cores}"
     run_appimage rpcs3/rpcs3.AppImage --no-gui "${rom}" ;;
   switch)
-    # Big-core pin (same as ps2: Eden's emulated-core thread landed on a little A510 unpinned,
-    # poor pacing; the big-core pin gives smooth 60, verified on-device 2026-07-07 on the RP6).
-    # Config (pad bindings + Mailbox vsync) seeded by pocknix-roms-init. System Turnip 26.1.4
-    # runs Eden directly now (per-app driver shim retired with the mesa 26.1.4 bump).
     _pin="taskset -c ${_big_cores}"
-    run_appimage eden/Eden.AppImage -f -g "${rom}" ;;                      # yuzu-lineage flags
+    run_appimage eden/Eden.AppImage -f -g "${rom}" ;;
   xbox)
-    # Big-core pin — same trap as ps2 above.
     _pin="taskset -c ${_big_cores}"
     run_appimage xemu/xemu.AppImage -full-screen -dvd_path "${rom}" ;;
   n3ds|3ds)
     command -v azahar >/dev/null 2>&1 || { echo "pocknix-play: azahar not installed" >&2; exit 1; }
     exec azahar "${rom}" ;;
   psvita)
-    run_appimage vita3k/Vita3K.AppImage -r "${rom}" ;;                     # -r = run title (VERIFY on-device)
+    run_appimage vita3k/Vita3K.AppImage -r "${rom}" ;;
   wiiu)
-    # Native aarch64 Cemu (source build, packages/cemu — upstream grew an ARM64 recompiler;
-    # the old cemu-x86-bin/FEX route is retired).
-    # Big-core pin — same trap as ps2 above.
     command -v Cemu >/dev/null 2>&1 || { echo "pocknix-play: cemu not installed" >&2; exit 1; }
     /usr/lib/pocknix/pocknix-cemu-profile 2>/dev/null || true   # pad GUID differs per session
     exec taskset -c "${_big_cores}" Cemu -f -g "${rom}" ;;

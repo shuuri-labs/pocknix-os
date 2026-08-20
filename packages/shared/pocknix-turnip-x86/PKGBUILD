@@ -1,8 +1,6 @@
-# pocknix-turnip-x86 — archived x86_64 Turnip (vulkan-freedreno) builds, selectable per game.
-# The Pocknix Control "Mesa Version" tweak points VK_DRIVER_FILES at one of these; FEX guests
-# resolve host paths the rootfs doesn't shadow, so x86 games load the chosen driver instead of
-# the rootfs copy. Latest release of each series Arch publishes for x86_64 (starts at 25.2.1 —
-# older series predate Arch's per-driver split; 26.2 RCs never hit the repos).
+# pocknix-turnip-x86 — archived x86_64 Turnip builds the "Mesa Version" tweak points
+# VK_DRIVER_FILES at. Works because FEX guests resolve host paths the rootfs does not shadow.
+# Series start at 25.2: older ones predate Arch's per-driver x86_64 split.
 pkgname=pocknix-turnip-x86
 pkgver=20260804
 pkgrel=2
@@ -31,9 +29,8 @@ package() {
     tar --zstd -xOf "${srcdir}/vulkan-freedreno-${full}-x86_64.pkg.tar.zst" \
       usr/lib/libvulkan_freedreno.so > "${dir}/libvulkan_freedreno.so"
     chmod 0755 "${dir}/libvulkan_freedreno.so"
-    # Reuse the package's own ICD json (correct api_version), repointed at our copy.
-    # 26.x renamed it freedreno_icd.json AND switched library_path to a bare soname (which
-    # would resolve to the rootfs /usr/lib copy), so rewrite the value unconditionally.
+    # Reuse the package's own ICD json for its api_version, but rewrite library_path
+    # unconditionally: 26.x switched it to a bare soname, which resolves to the rootfs copy.
     tar --zstd -xOf "${srcdir}/vulkan-freedreno-${full}-x86_64.pkg.tar.zst" \
       --wildcards 'usr/share/vulkan/icd.d/freedreno_icd*.json' \
       | sed -E "s|\"library_path\": *\"[^\"]*\"|\"library_path\": \"/usr/share/pocknix/vk-x86/${ver}/libvulkan_freedreno.so\"|" \

@@ -1,22 +1,7 @@
 #!/bin/sh
-# pocknix-lavd-mode — get/set/toggle the scx_lavd power mode.
-#
-# The chosen mode persists across reboots in /var/lib/pocknix/lavd-mode;
-# pocknix-lavd.service launches through `pocknix-lavd-mode run`, which reads it
-# (default: autopilot). Setting a mode rewrites the file and restarts the service,
-# so the switch takes effect immediately — including mid-game (sched_ext swaps
-# schedulers live; tasks fall back to EEVDF for the moment scx_lavd is down).
-#
-#   pocknix-lavd-mode                # print the current mode
-#   pocknix-lavd-mode performance    # set a mode + restart the scheduler
-#   pocknix-lavd-mode autopilot
-#   pocknix-lavd-mode toggle         # flip autopilot <-> performance
-#   pocknix-lavd-mode run            # (internal, used by the .service ExecStart)
-#
-# Modes (scx_lavd upstream): autopilot picks powersave/balanced/performance from
-# measured load; performance disables core compaction + prefers fast cores + high
-# clocks always. balanced/powersave are accepted too for manual experiments.
-# Setting needs root (writes /var/lib + restarts a system unit).
+# pocknix-lavd-mode — get/set/toggle the scx_lavd power mode, persisted in
+# /var/lib/pocknix/lavd-mode. Switching mid-game is safe: sched_ext swaps schedulers live and
+# tasks fall back to EEVDF for the moment scx_lavd is down. Setting a mode needs root.
 MODE_FILE=/var/lib/pocknix/lavd-mode
 GAME_MODE_FILE=/run/pocknix/game-mode
 DEFAULT=autopilot
@@ -28,8 +13,7 @@ current() {
   printf '%s\n' "${m}"
 }
 
-# Per-game override: "<pid> <fan> <lavd>" from pocknix-proton-wrapper; dead pid = no
-# override (the pid is the game session itself), so reverts need no cleanup step.
+# Per-game override record; format and lifetime documented in pocknix-fancontrol.
 effective() {
   if read -r pid _ lavd < "${GAME_MODE_FILE}" 2>/dev/null; then
     case "${lavd}" in
@@ -49,9 +33,6 @@ case "${1:-}" in
     current
     ;;
   run)
-    # Supervise scx_lavd following the effective mode, so a per-game pick applies at game
-    # launch and reverts at exit without touching this unit. A mode change restarts the
-    # child (sched_ext falls back to EEVDF for the gap, same as a service restart).
     child=""
     trap 'kill "${child}" 2>/dev/null; exit 0' INT TERM
     running=""

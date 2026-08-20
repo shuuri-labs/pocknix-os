@@ -1,9 +1,8 @@
 #!/bin/sh
-# vhci_hcd refuses to suspend while a virtual USB device is attached ("We have N active
-# connection. Do not suspend." -> -EBUSY aborts the whole system suspend), and InputPlumber's
-# `deck` target attaches over USB/IP. So stop InputPlumber before sleep -- but only then: the
-# desktop session's `xb360` target is plain uinput, and stopping there destroys the pad's evdev
-# node for nothing (ES-DE and friends rescan only on focus change, so they come back pad-less).
+# vhci_hcd -EBUSYs the whole system suspend while a virtual USB device is attached, and
+# InputPlumber's `deck` target attaches over USB/IP. Only then: the desktop `xb360` target is
+# plain uinput, and stopping there destroys the pad's evdev node for nothing (ES-DE and friends
+# rescan on focus change only, so they come back pad-less).
 STATUS=/sys/devices/platform/vhci_hcd.0/status
 FLAG=/run/pocknix-inputplumber-resume
 
@@ -18,8 +17,8 @@ if vhci_attached && systemctl is-active --quiet inputplumber; then
   systemctl stop inputplumber
 fi
 
-# `systemctl stop` returns before the kernel has torn the port down; suspend still aborts if we
-# leave now. Wait ~3s for it to drain.
+# `systemctl stop` returns before the kernel tears the port down; suspend still aborts if we
+# leave now.
 i=0
 while vhci_attached; do
   [ "${i}" -ge 30 ] && break

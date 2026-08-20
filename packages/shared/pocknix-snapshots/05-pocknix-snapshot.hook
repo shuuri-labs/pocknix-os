@@ -1,7 +1,5 @@
-# Read-only btrfs snapshot of the root subvolume BEFORE any package transaction, so
-# pocknix-rollback (QAM "Roll back" button / CLI) can undo it. Fires for EVERY pacman
-# entry point (QAM update, pocknix-update, plain -Syu over ssh) — the protection lives
-# in alpm, not in any updater. Deliberately NO AbortOnFail: a failed or skipped snapshot
+# Living in alpm is what makes every update path (QAM, pocknix-update, a plain -Syu
+# over ssh) snapshot-protected. No AbortOnFail: a snapshot that fails or is skipped
 # (ext4 install, build chroot, low disk space) must never block the update itself.
 [Trigger]
 Operation = Install

@@ -1,22 +1,6 @@
-# pocknix-desktop — the Plasma Mobile "desktop" session for the Retroid Pocket 6, plus the
-# game<->desktop session switch. The Steam half is pocknix-steam; this is its symmetric twin.
-#
-# The heavy Plasma Mobile stack itself is NOT a depends() here — it's delivered by the
-# pocknix-desktop-full layer metapackage (built --nodeps). Reason: makepkg -s would otherwise pull
-# the entire KDE/Qt stack into the BUILD chroot just to build this no-op arch=any data package
-# (hundreds of MB, no purpose). So this package ships only the scripts. It ships:
-#   - pocknix-desktop            the launcher (.bash_profile execs it when the choice = plasma)
-#   - pocknix-desktop-rotate     applies the RP6 panel rotation+scale to the live kwin session
-#                                (autostarted via /etc/xdg/autostart) — the rotated-DSI crux
-#   - pocknix-desktop-remove-taskpanel  deletes the shell's bottom taskpanel containment each
-#                                session — with the baked gesture/navigation panels disabled it
-#                                still lingers as a ~12px overlay strip (PanelView min clamp)
-#   - steamos-session-select     the REAL game<->desktop switch (Steam "Switch to Desktop" + the
-#                                Plasma "Return to Game Mode" tile both call this)
-#   - return-to-gamemode.desktop an app-grid tile that runs `steamos-session-select gamescope`
-#
-# Plasma Mobile runs on kwin_wayland (its own compositor), NOT in Sway — locked decision; see
-# docs/plasma-mobile-plan.md and the plasma-mobile-compositor memory.
+# pocknix-desktop — the Plasma Mobile desktop session plus the game<->desktop session switch.
+# depends() stays 'bash': the Plasma Mobile stack ships via the pocknix-desktop-full metapackage
+# so makepkg -s does not drag all of KDE/Qt into the build chroot for this arch=any data package.
 pkgname=pocknix-desktop
 pkgver=0.1.0
 pkgrel=20
@@ -24,13 +8,6 @@ pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session swit
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-# depends() is intentionally JUST 'bash'. The Plasma Mobile runtime stack (plasma-mobile +
-# startplasmamobile, plasma-workspace, kwin, plasma-nano, plasma-nm, powerdevil, plasma-settings,
-# kscreen/kscreen-doctor) is delivered via the pocknix-desktop-full layer metapackage, NOT as
-# depends here — listing plasma-mobile/kscreen would drag the entire KDE/Qt stack into the BUILD
-# chroot at makepkg time for no reason. The launcher + rotate scripts `command -v`-guard their
-# callees (startplasmamobile, kscreen-doctor) and fail gracefully if the stack is absent.
-# (The old pocknix-tools delivery edge is retired: pocknix-core carries it now.)
 depends=('bash')
 install='pocknix-desktop.install'
 source=('pocknix-desktop' 'pocknix-desktop-rotate' 'pocknix-desktop-rotate.desktop'

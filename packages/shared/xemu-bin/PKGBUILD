@@ -1,8 +1,5 @@
-# xemu-bin — xemu, the original-Xbox emulator (vendored OFFICIAL native aarch64 AppImage).
-#
-# xemu publishes first-party aarch64 Linux AppImages (a pleasant surprise — no fork needed).
-# Needs the user's Xbox BIOS/flash + HDD image files — xemu names them in its settings on first
-# run; keep them in ~/ROMs/bios (see ROMS-README).
+# xemu-bin — xemu, the original-Xbox emulator, vendored from upstream's first-party aarch64
+# Linux AppImage.
 pkgname=xemu-bin
 pkgver=0.8.136
 pkgrel=3
@@ -19,8 +16,6 @@ sha256sums=('8d2598bab0680ddd36c2d15ecccb70523e29adb852cd75e35bc5943dc0eb4816'
 noextract=("xemu-${pkgver}.AppImage")
 
 prepare() {
-  # Extract the AppImage's own icon (.DirIcon, chasing symlinks) for the desktop entry.
-  # Native aarch64 AppImage: --appimage-extract runs fine in the build chroot, no FUSE.
   cd "${srcdir}"
   chmod u+x "xemu-${pkgver}.AppImage"
   rm -rf squashfs-root AppDir
@@ -40,7 +35,6 @@ prepare() {
 package() {
   install -Dm755 "${srcdir}/xemu-${pkgver}.AppImage" \
     "${pkgdir}/opt/pocknix/emulators/xemu/xemu.AppImage"
-  # Plasma app-grid entry + the icon extracted in prepare().
   install -Dm644 "${srcdir}/icon.svg" "${pkgdir}/opt/pocknix/emulators/xemu/icon.svg"
   install -Dm644 "${srcdir}/pocknix-xemu.desktop" "${pkgdir}/usr/share/applications/pocknix-xemu.desktop"
 }

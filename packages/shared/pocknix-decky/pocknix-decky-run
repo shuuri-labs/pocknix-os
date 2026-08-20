@@ -1,23 +1,13 @@
 #!/bin/bash
 # pocknix-decky-run — launch Decky's PluginLoader (x86_64 PyInstaller binary) under FEX.
-#
-# FEX does NOT intercept guest->guest execve itself; it needs the FEX-x86_64 binfmt_misc
-# handler, and the PyInstaller onefile bootloader re-execs itself (ENOEXEC without it).
-# pocknix keeps that binfmt DISABLED globally because it breaks Steam's Proton compat-tool
-# setup (see pocknix-fex-binfmt-off.service). binfmt_misc is user-namespace scoped on
-# kernels >= 6.7, so run the loader in a private user+mount namespace with its OWN
-# binfmt_misc instance: FEX x86 handlers enabled in here, still off for Steam/Proton.
-#
-# The userns maps the full uid range (0,0,2^32-1) so uid 0 stays real root for D-Bus/
-# systemctl and file access. Known limit: CAP_CHOWN is checked against the init userns,
-# so chown to another uid fails in here — pocknix-decky-sync (init ns) owns the deck
-# chown of the seeded tree instead.
+# The onefile bootloader re-execs itself so it needs the FEX binfmt handler, which pocknix keeps
+# globally off (it breaks Steam's Proton compat-tool setup); binfmt_misc is userns-scoped on
+# >= 6.7, hence the private instance. CAP_CHOWN is still checked against the init userns, so
+# chowning the seeded tree belongs in pocknix-decky-sync.
 set -eu
 
-# --propagation slave (not unshare's default private): init-ns mount/umount events still
-# propagate IN, so the loader and its plugin backends see current mounts (SD automounts)
-# instead of pinning a stale copy that keeps the block device busy across a format. Our
-# own mounts (the binfmt instance) still never propagate back out.
+# slave, not unshare's default private: init-ns mounts still propagate IN, so plugin backends
+# see live SD automounts instead of pinning a stale copy that keeps the device busy on format.
 exec unshare --user --map-users=0,0,4294967295 --map-groups=0,0,4294967295 --mount --propagation slave \
   /bin/bash -c '
     set -eu

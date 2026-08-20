@@ -49,8 +49,7 @@ export function useDebouncedSave(options: DebouncedSaveOptions) {
     return () => window.clearTimeout(timer);
   }, [value]);
 
-  // QAM panels unmount the moment the menu closes. The cleanup above clears the only
-  // pending timer, so without this unmount flush any edit made <delay ms before closing
-  // was silently dropped (how the first on-device Audio Buffer edit got lost, 2026-07-05).
+  // QAM panels unmount the moment the menu closes, and the cleanup above clears the only
+  // pending timer: without this flush, any edit made <delay ms before closing is dropped.
   useEffect(() => () => void flushRef.current(), []);
 }

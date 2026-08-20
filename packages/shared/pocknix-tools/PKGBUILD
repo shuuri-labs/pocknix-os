@@ -1,6 +1,5 @@
-# pocknix-tools — the desktop maintenance app. Folds in the old standalone
-# Pocknix Rollback and Installer shortcuts. Also ships the internal-install CLIs
-# (moved from the image overlay so installer fixes reach existing SDs via -Syu, #34).
+# pocknix-tools — the desktop maintenance app. It also ships the internal-install CLIs,
+# which live here rather than in the image overlay so fixes reach fielded SDs on -Syu (#34).
 pkgname=pocknix-tools
 pkgver=0.1.0
 pkgrel=12
@@ -9,7 +8,6 @@ arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('MIT')
 depends=('pocknix-snapshots' 'pocknix-base' 'kdialog')
-# absorbs the short-lived standalone installer package (never published)
 replaces=('pocknix-installer')
 conflicts=('pocknix-installer')
 install=pocknix-tools.install
@@ -17,7 +15,6 @@ source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui'
         'pocknix-install-internal' 'pocknix-uninstall-internal' '54-pocknix-installer.rules'
         'pocknix-ssh' '53-pocknix-ssh.rules' '10-pocknix-no-root-login.conf')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
-# owner edits to the root-login policy survive upgrades as a .pacnew
 backup=('etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf')
 
 package() {

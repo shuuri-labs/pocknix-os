@@ -5,9 +5,8 @@ from pathlib import Path
 
 from .system import atomically_write
 
-# Ported from armada-control's tweaks.py (path swap). The tweaks file is consumed at game
-# launch by pocknix-proton-wrapper (pocknix-steam); the profile contract ships with the
-# wrapper at /usr/share/pocknix/fex-profiles.json, with a plugin-dir fallback copy.
+# The tweaks file is consumed at game launch by pocknix-proton-wrapper; the profile contract
+# ships with that wrapper, so the plugin-dir copy is only a fallback for a missing pocknix-steam.
 TWEAKS_CONFIG = Path("/etc/pocknix/game-tweaks.json")
 FEX_PROFILES_CONFIG = Path("/usr/share/pocknix/fex-profiles.json")
 PLUGIN_FEX_PROFILES_CONFIG = Path(__file__).resolve().parent.parent.parent / "fex-profiles.json"
@@ -17,8 +16,8 @@ CONTAINER_VK_LIST = Path("/usr/share/fex-emu/vk-x86-container.list")
 
 def mesa_versions():
     # One entry per series ("25.2"); the wrapper resolves the point release per Proton flavor.
-    # x86 SLR captures graphics from the FEX rootfs, so only image-embedded x86 payloads count
-    # — never offer a pin the wrapper would refuse at launch.
+    # x86 SLR captures graphics from the FEX rootfs, so an x86 payload that is not embedded in
+    # the image would be a pin the wrapper refuses at launch.
     try:
         embedded = set(CONTAINER_VK_LIST.read_text().split())
     except OSError:
@@ -100,8 +99,7 @@ def load_tweaks():
 
 
 def sanitize_tweaks(data):
-    # This file is read by the proton wrapper at game launch, so reject non-appid keys
-    # and oversized input.
+    # The proton wrapper reads this at game launch, so a bad key here breaks launching.
     if not isinstance(data, dict):
         raise ValueError("tweaks must be an object")
     if len(json.dumps(data)) > 256 * 1024:

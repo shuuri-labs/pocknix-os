@@ -1,5 +1,3 @@
-// HSV <-> RGB conversion for the stick-light color picker.
-
 export function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   const hh = ((h % 360) + 360) % 360;
   const ss = Math.max(0, Math.min(100, s)) / 100;

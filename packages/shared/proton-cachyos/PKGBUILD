@@ -1,26 +1,13 @@
-# proton-cachyos — CachyOS's Proton, official ARM64 build, shipped as a SYSTEM compat tool.
+# proton-cachyos — CachyOS's official ARM64 Proton, shipped as a SYSTEM compat tool. This is the
+# reference for the other pocknix Proton packages (proton-ge, the *-dxvk2 variants).
 #
-# Why pacman-shipped (vs Steam-downloaded like Valve's "Proton 11.0 (ARM64)"): CachyOS
-# publishes an arm64 tarball with every release but Steam knows nothing about it, so WE own
-# the update channel — same model CachyOS itself uses. The tool installs to a CONSTANT dir
-# (/usr/share/steam/compatibilitytools.d/proton-cachyos) with a CONSTANT internal name in
-# compatibilitytool.vdf; Steam stores that internal name in config.vdf per-game selections,
-# so a `pacman -Syu` bump swaps the files underneath and every game already set to it keeps
-# working. The dropdown label carries only the MAJOR version — the entry is a pointer to
-# whatever we currently ship, so the date would just go stale in the UI.
+# The tool dir and the compatibilitytool.vdf internal name must both stay CONSTANT across bumps:
+# Steam records that internal name in per-game config.vdf selections, so keeping it lets a
+# pacman -Syu swap the files underneath while every game already set to it keeps working. For the
+# same reason the dropdown label carries the MAJOR version only, never the release date.
 #
-# Two fixes applied over the raw tarball (both proven on the Valve ARM tool + armada):
-#   * toolmanifest.vdf: ours, WITHOUT require_tool_appid (host-direct; see toolmanifest.vdf).
-#   * commandline goes through the pocknix-proton shim so per-game FEX profiles from
-#     Pocknix Control apply (wrapper = /usr/lib/pocknix/pocknix-proton-wrapper, pocknix-steam).
-#
-# Registration: pocknix-proton-prep (pocknix-steam) mirrors every system tool dir into
-# ~/.local/share/Steam/compatibilitytools.d as one constant symlink — the tool dir is
-# root-owned so the user-dir side can't be done here.
-#
-# Version bump: set _srctag to the new release tag's middle part (see url releases page),
-# reset pkgrel=1, refresh sha512sums (upstream publishes .sha512sum next to each tarball).
-# Kernel note: CONFIG_NTSYNC=y on both SoCs already, wine's ntsync fast path just works.
+# pocknix-proton-prep (pocknix-steam) does the user-dir registration, since the tool dir is
+# root-owned and cannot symlink itself into ~/.local/share/Steam/compatibilitytools.d.
 pkgname=proton-cachyos
 _srctag=11.0-20260703
 _build=slr
@@ -31,8 +18,6 @@ pkgdesc="CachyOS Proton (official ARM64 build) as a system Steam compatibility t
 arch=('aarch64')
 url="https://github.com/CachyOS/proton-cachyos"
 license=('BSD' 'LGPL' 'zlib' 'MIT' 'MPL' 'custom')
-# pocknix-steam: the FEX-profile wrapper the shim execs + the prep that registers system tools.
-# python: the `proton` entrypoint is a python3 script.
 depends=('bash' 'python' 'pocknix-steam')
 options=('!strip' 'emptydirs')
 _dist="proton-cachyos-${_srctag}-${_build}-arm64"
@@ -54,14 +39,13 @@ package() {
   mkdir -p "${pkgdir}/${tooldir}"
   cp -a "${srcdir}/${_dist}/." "${pkgdir}/${tooldir}/"
 
-  # Our vdfs OVER the tarball's (constant internal name; no require_tool_appid), and the
-  # shim next to `proton` (toolmanifest commandline paths are relative to the tool dir).
+  # The shim must land next to `proton`: toolmanifest commandline paths resolve relative to the
+  # tool dir.
   install -Dm644 "${srcdir}/compatibilitytool.vdf" "${pkgdir}/${tooldir}/compatibilitytool.vdf"
   install -Dm644 "${srcdir}/toolmanifest.vdf"      "${pkgdir}/${tooldir}/toolmanifest.vdf"
   install -Dm755 "${srcdir}/pocknix-proton"        "${pkgdir}/${tooldir}/pocknix-proton"
 
-  # License files out of the tool dir (mirrors CachyOS's own packaging; tolerant — upstream
-  # has moved these between releases).
+  # Tolerant of absence: upstream moves these between releases.
   local f
   for f in LICENSE LICENSE.OFL PATENTS.AV1; do
     if [ -f "${pkgdir}/${tooldir}/${f}" ]; then

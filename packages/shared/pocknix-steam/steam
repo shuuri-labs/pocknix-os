@@ -1,17 +1,8 @@
 #!/bin/bash
-# steam — desktop-mode launcher for the native ARM64 Steam client on the RP6.
-#
-# pocknix-steam launches the client under gamescope in Big Picture (game mode). This is the OTHER
-# entry point: a plain `/usr/bin/steam` that runs the SAME native client as a normal windowed app
-# inside the Plasma Mobile (kwin_wayland) desktop session, and forwards arguments. Two reasons it's
-# needed in desktop mode:
-#   1. there's no Steam menu entry otherwise (the client is bootstrapped into ~/.local/share/Steam,
-#      not installed as a package, so nothing puts `steam` on PATH or a steam.desktop in the menu);
-#   2. the per-game shortcuts Steam writes call `steam steam://rungameid/<id>` — without a `steam`
-#      command on PATH those shortcuts appear but can't launch. This provides that command.
-#
-# Same client dir / LD_LIBRARY_PATH / cwd contract as pocknix-steam (see the comments there), minus
-# gamescope and the -gamepadui/-steamos3 Big-Picture flags — we want the normal desktop UI here.
+# steam — desktop-mode launcher for the same native ARM64 client pocknix-steam runs under
+# gamescope. The client is bootstrapped into $HOME rather than packaged, so nothing else puts a
+# `steam` on PATH, which Steam's own per-game shortcuts (`steam steam://rungameid/<id>`) need.
+# Same client dir / LD_LIBRARY_PATH / cwd contract as pocknix-steam.
 set -e
 
 export HOME="${HOME:-/home/deck}"
@@ -19,22 +10,19 @@ STEAM="${HOME}/.local/share/Steam"
 CLIENT_DIR="${STEAM}/steamrtarm64"
 CLIENT="${CLIENT_DIR}/steam"
 
-# client's own dir FIRST (bundled libvpx.so.6 etc.), then the aarch64 shim dir — as in pocknix-steam.
+# Client's own dir FIRST: its bundled libvpx.so.6 must shadow the system one.
 export LD_LIBRARY_PATH="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu"
 
-# Bootstrap the native client on first use if game mode never ran (shared installer).
 if [ ! -x "${CLIENT}" ]; then
   /usr/bin/pocknix-steam-install
 fi
 
-# Steam resolves legacy module paths (bin/vgui2_s.dll …) relative to getcwd — cd in like pocknix-steam.
+# Steam resolves legacy module paths (bin/vgui2_s.dll …) relative to getcwd.
 cd "${CLIENT_DIR}" 2>/dev/null || { echo "steam: missing ${CLIENT_DIR}" >&2; exit 1; }
 
-# The Steam client is X11-only — under the Plasma (kwin) desktop it needs DISPLAY -> XWayland, else it
-# dies with "Unable to open a connection to X" (and leaves orphan steam procs that wreck the next game
-# session). kwin starts XWayland because /tmp/.X11-unix exists (pocknix-x11.conf). Don't RELY on Plasma
-# exporting DISPLAY into our env (it isn't reliably propagated to app-grid launches) — derive it from
-# the live XWayland socket ourselves. Game mode doesn't need this (gamescope sets DISPLAY directly).
+# The client is X11-only and dies "Unable to open a connection to X" without DISPLAY, leaving orphan
+# steam procs that wreck the next game session. Plasma does not reliably propagate DISPLAY into
+# app-grid launches, so derive it from the live XWayland socket instead of trusting the env.
 if [ -z "${DISPLAY:-}" ]; then
   for _s in /tmp/.X11-unix/X*; do
     [ -S "${_s}" ] || continue
@@ -45,11 +33,9 @@ if [ -z "${DISPLAY:-}" ]; then
   [ -n "${DISPLAY:-}" ] || echo "steam: WARNING no XWayland socket in /tmp/.X11-unix — is the Plasma session up + kwin's XWayland running?" >&2
 fi
 
-# Keep the native ARM client pinned to steamdeck_publicbeta even in desktop mode — otherwise plain
-# `steam` can flip package/beta to steamdeck_stable, which then breaks the next game-mode launch
-# (steamwebhelper crash-loop / endless "Installing update"). See pocknix-steam.
+# Re-pin here too: a desktop-mode `steam` otherwise flips package/beta to steamdeck_stable and
+# breaks the next game-mode launch. See pocknix-steam.
 mkdir -p "${STEAM}/package"
 echo steamdeck_publicbeta > "${STEAM}/package/beta"
 
-# Forward args (e.g. `steam steam://rungameid/<id>` from game shortcuts, or none to open the window).
 exec "${CLIENT}" "$@"

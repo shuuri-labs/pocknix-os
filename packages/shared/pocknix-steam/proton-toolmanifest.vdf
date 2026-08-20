@@ -1,11 +1,10 @@
-// Replacement toolmanifest for Valve's ARM Protons, and the canonical reason every pocknix Proton
-// drops `require_tool_appid`: host-direct is the validated path. pocknix-proton-prep re-copies this,
-// since Steam restores its own on every update.
+// Replacement toolmanifest for Valve's ARM Protons, and the reason every pocknix Proton drops
+// `require_tool_appid`: host-direct, without an SLR container, is the validated path.
+// pocknix-proton-prep re-copies this, since Steam restores its own on every update.
 "manifest"
 {
   "version" "2"
-  // /pocknix-proton (installed next to the dist by pocknix-proton-prep) applies the per-game
-  // FEX profile (Pocknix Control plugin) then execs the real /proton.
+  // Paths in commandline are relative to the tool dir; /pocknix-proton is the tweak shim.
   "commandline" "/pocknix-proton %verb%"
   "use_sessions" "1"
   "compatmanager_layer_name" "proton"

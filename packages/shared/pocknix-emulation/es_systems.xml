@@ -1,21 +1,11 @@
 <?xml version="1.0"?>
 <!--
-  pocknix ES-DE custom system definitions. Seeded to ~/ES-DE/custom_systems/es_systems.xml by
-  pocknix-roms-init. A custom entry REPLACES the bundled system of the same name, so each entry
-  here is the FULL definition (copied from ES-DE's bundled linuxarm es_systems.xml) with only
-  the launch command changed.
-
-  ps2: ES-DE's linuxarm build offers ONLY the RetroArch pcsx2 core (LRPS2) for PS2 — no
-  standalone-PCSX2 command at all — and pocknix deliberately doesn't ship that core (PS2 default
-  is ARMSX2, see the PCSX2 note in es_find_rules.xml). Command drives the es-armsx2 big-core pin
-  wrapper with pocknix-play's verified ARMSX2 flags.
-
-  psx: no bundled PS1 command names a core we ship except pcsx_rearmed, and ES-DE's
-  "DuckStation" is the standalone (no arm64 build) — ours is the libretro core it never names.
-
-  gc/wii: bundled default is the RetroArch dolphin core, also not shipped (pocknix default =
-  standalone Dolphin, same commands as bundled "Dolphin (Standalone)" alternative — promoted to
-  the default here).
+  pocknix ES-DE custom system definitions, seeded to ~/ES-DE/custom_systems/ by pocknix-roms-init.
+  A custom entry REPLACES the bundled system of the same name, so every entry here must be the
+  FULL definition, not a delta. Each one exists because the bundled launch commands name cores or
+  standalones we do not ship: ps2 offers only the LRPS2 core, psx names a DuckStation standalone
+  that has no arm64 build (ours is the libretro core), gc/wii default to the RetroArch dolphin
+  core. All commands go through the /usr/lib/pocknix/es-* wrappers for the big-core pin.
 -->
 <systemList>
     <system>

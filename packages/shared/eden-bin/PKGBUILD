@@ -1,19 +1,7 @@
-# eden-bin — Eden, the Switch emulator (vendored aarch64 AppImage, clang-PGO build).
-#
-# Switch on pocknix is a deliberate DELTA over ROCKNIX (they omit it for legal caution, not tech).
-# Of the post-DMCA maintained forks (Eden / Citron / Ryubing), Eden is the pocknix default: strong
-# Snapdragon 8-Gen-2/Elite commitment, aarch64-native Linux AppImages, and a clang-PGO variant.
-# Citron can be added later as an alternate (its forge API was unreachable when this was written).
-#
-# IMPORTANT: Eden's GitHub mirror was DMCA'd (Feb 2026 Nintendo wave) — builds come from their
-# self-hosted Forgejo, git.eden-emu.dev. If the host moves again, check their site for the new forge.
-#
-# We track the NIGHTLY channel (eden-ci/nightly on that forge, assets on nightly.eden-emu.dev):
-# tags are months apart while the Switch-on-Adreno work lands continuously. Nightly tags are
-# `v<epoch>.<shortsha>` and the epoch is NOT derivable from the sha, so _tag pins it separately.
-#
-# Needs the user's own prod.keys (+ firmware) — see ROMS-README.txt (~/ROMs/bios or the path Eden
-# names on first run).
+# eden-bin — Eden, the Switch emulator, as a vendored aarch64 clang-PGO AppImage.
+# Builds come from the self-hosted Forgejo (git.eden-emu.dev, assets on nightly.eden-emu.dev)
+# because the GitHub mirror was DMCA'd. Tagged releases are months apart, so we track NIGHTLY;
+# its tags are v<epoch>.<shortsha> with the epoch not derivable from the sha, so _tag is pinned.
 pkgname=eden-bin
 _nightly=20260804
 _gitsha=ba9130fbf9
@@ -33,8 +21,6 @@ sha256sums=('1e87890ab7acd0310e77dd188649f1d2a0a66ca23929bb700a6b04cb9be0a4b5'
 noextract=("Eden-${pkgver}.AppImage")
 
 prepare() {
-  # Extract the AppImage's own icon (.DirIcon, chasing symlinks) for the desktop entry.
-  # Native aarch64 AppImage: --appimage-extract runs fine in the build chroot, no FUSE.
   cd "${srcdir}"
   chmod u+x "Eden-${pkgver}.AppImage"
   rm -rf squashfs-root AppDir
@@ -54,7 +40,6 @@ prepare() {
 package() {
   install -Dm755 "${srcdir}/Eden-${pkgver}.AppImage" \
     "${pkgdir}/opt/pocknix/emulators/eden/Eden.AppImage"
-  # Plasma app-grid entry + the icon extracted in prepare().
   install -Dm644 "${srcdir}/icon.png" "${pkgdir}/opt/pocknix/emulators/eden/icon.png"
   install -Dm644 "${srcdir}/pocknix-eden.desktop" "${pkgdir}/usr/share/applications/pocknix-eden.desktop"
 }

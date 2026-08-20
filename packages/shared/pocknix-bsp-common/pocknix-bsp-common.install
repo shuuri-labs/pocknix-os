@@ -1,6 +1,5 @@
-# Migration from the image-overlay era (pre 0.1.0-5): the fan/scheduler daemons shipped as
-# unowned overlay files; /etc/systemd units shadow the packaged /usr/lib ones, and the old
-# enable symlinks point at the /etc paths, so remove the legacy copies and re-enable.
+# Pre-0.1.0-5 the fan/scheduler daemons shipped as unowned overlay files. /etc units shadow
+# the packaged /usr/lib ones and the old enable symlinks point at /etc, so both must go.
 _migrate_fan_lavd() {
   rm -f /usr/local/bin/pocknix-fancontrol /usr/local/bin/pocknix-fan-mode \
         /usr/local/bin/pocknix-lavd-mode \

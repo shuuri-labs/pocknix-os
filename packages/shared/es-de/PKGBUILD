@@ -1,18 +1,7 @@
-# es-de — the ES-DE frontend (EmulationStation Desktop Edition), OFFICIAL aarch64 AppImage.
-#
-# The emulation-layer frontend (see packages/shared/pocknix-emulation): scans ~/ROMs, shows/launches the
-# library, and its per-game "favorite" star drives the Steam sync (pocknix-steam-sync).
-#
-# WHY THE APPIMAGE AND NOT A SOURCE BUILD: the source build (upstream's AUR recipe) hard-depends on
-# freeimage, which Arch dropped and ALARM never carried for aarch64 — `make packages` died on
-# "target not found: freeimage" (2026-07-05). Upstream ships an official Linux-aarch64 AppImage
-# (their SteamOS-on-ARM target) with everything bundled, so vendor that instead — same pattern as
-# the emulator *-bin packages. Custom find rules in ~/ES-DE/custom_systems (seeded by
-# pocknix-roms-init) still apply on top of the AppImage's bundled config.
-#
-# The package_files id is NOT immutable — upstream re-uploaded this asset once and
-# the old id 404ed; the sha256 pins the exact vendored bytes. On a 404, take the new
-# id from the release page's "ES-DE_aarch64.AppImage" link and bump sha + pkgrel.
+# es-de — the ES-DE frontend, vendored from upstream's official aarch64 AppImage. A source
+# build is not an option: it hard-depends on freeimage, which ALARM has no aarch64 build of.
+# The source URL's package_files id is NOT immutable — on a 404 take the new id from the
+# release page's "ES-DE_aarch64.AppImage" link and bump the sha256 with it.
 pkgname=es-de
 pkgver=3.4.1
 pkgrel=5
@@ -33,10 +22,8 @@ noextract=("ES-DE-${pkgver}.AppImage")
 
 package() {
   install -Dm755 "${srcdir}/ES-DE-${pkgver}.AppImage" "${pkgdir}/opt/pocknix/es-de/ES-DE.AppImage"
-  # `es-de` on PATH: what konsole tests, the app-grid entry, and docs all invoke.
   install -Dm755 "${srcdir}/es-de-wrapper" "${pkgdir}/usr/bin/es-de"
-  # Desktop-mode app grid entry (game mode reaches ES-DE via Steam favorites/shortcuts instead).
-  # The AppImage keeps its icon inside the squashfs; ship the logo beside it instead.
+  # The AppImage hides its icon inside the squashfs, so the desktop entry needs its own copy.
   install -Dm644 "${srcdir}/es-de-icon.png" "${pkgdir}/opt/pocknix/es-de/icon.png"
   install -Dm644 "${srcdir}/es-de.desktop" "${pkgdir}/usr/share/applications/es-de.desktop"
 }

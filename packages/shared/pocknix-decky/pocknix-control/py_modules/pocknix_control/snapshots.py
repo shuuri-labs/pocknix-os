@@ -7,9 +7,8 @@ from pathlib import Path
 from .system import run_cmd
 from .updates import _unit_running
 
-# Status is file-reads only (poll-safe, no subprocess): the loader's private mount
-# namespace inherits the boot-time fstab mounts, /run is the shared tmpfs, and the
-# snapshot metadata is plain JSON written by the pocknix-snapshots alpm hooks.
+# Status stays file-reads only so the UI can poll it: the loader's private mount namespace
+# still inherits the boot-time fstab mounts and /run is the shared tmpfs.
 SNAP_DIR = Path("/.snapshots")
 SNAP_CONF = Path("/etc/pocknix/snapshots.conf")
 ROLLBACK_INFO = Path("/var/lib/pocknix/rollback-info.json")
@@ -111,8 +110,8 @@ def start_rollback(snapshot_id):
     if not _rollback_lock.acquire(blocking=False):
         raise RuntimeError("A rollback is already in progress")
     try:
-        # Through PID 1 like every privileged op (init namespace + clean env; the CLI
-        # stages boot files, then flips the btrfs default subvol — seconds, so --wait).
+        # Through PID 1 like every privileged op (init namespace + clean env); --wait is
+        # safe because the CLI only stages boot files and flips the btrfs default subvol.
         proc = run_cmd(
             ["systemd-run", "--quiet", "--collect", "--wait", "--pipe",
              ROLLBACK_CLI, "--to", snapshot_id, "--yes"],

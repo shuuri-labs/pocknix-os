@@ -1,12 +1,10 @@
 import { MenuItem, afterPatch, fakeRenderComponent, findModuleChild, showModal } from "@decky/ui";
 import { GameSettingsModal } from "../components/GameSettingsModal";
 
-// Adds "Pocknix Settings" to the library entry context menu (the Start-button menu).
-// The menu class is no longer a module export: locate its module by the
-// "().LibraryContextMenu" classname marker, take the wrapper member (the one injecting
-// `navigator:` via the jsx runtime), and fake-render it — the element's type is the real
-// class. Steam UI internals are unversioned, so every step is guarded: if the shape
-// changes we lose the menu item, never the plugin.
+// LibraryContextMenu is not a module export, so it is reached by classname marker ->
+// `navigator:` wrapper -> fake-render, whose element type is the real class.
+// Steam UI internals are unversioned: every step is guarded so a shape change costs the
+// menu item, never the plugin.
 export function patchLibraryContextMenu(): () => void {
   try {
     const menuModule = findModuleChild((mod: any) => {
@@ -29,9 +27,7 @@ export function patchLibraryContextMenu(): () => void {
     if (!wrapper) return () => {};
     const LibraryContextMenu = fakeRenderComponent(wrapper as any)?.type;
     if (!LibraryContextMenu?.prototype?.BuildManageSubmenu) return () => {};
-    // Patch the Manage submenu builder rather than the top-level render, so the entry
-    // lands under Manage. The builder's return shape is guarded both ways (plain item
-    // array vs element with children).
+    // The builder returns either a plain item array or an element with children.
     const patch = afterPatch(LibraryContextMenu.prototype, "BuildManageSubmenu", function (this: any, _args: any[], ret: any) {
       try {
         const overview = this.props?.overview;

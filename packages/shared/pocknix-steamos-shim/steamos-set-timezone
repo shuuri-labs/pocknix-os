@@ -1,10 +1,7 @@
 #!/bin/bash
-# pocknix steamos-set-timezone shim — the Steam Deck UI's Settings -> System timezone picker shells
-# out to THIS helper, not to `timedatectl`. On a non-SteamOS base the helper is absent, so Steam's
-# selection silently no-ops (exec returns 127) even though the terminal `timedatectl` works. Steam
-# runs the helper as the 'deck' user, so we set the zone via timedated over D-Bus: 'deck' is in
-# 'wheel' and 50-pocknix-deck.rules grants org.freedesktop.timedate1.* -> polkit authorises it with
-# no password prompt. Mirrors Valve's steamos-set-timezone interface (single arg = Area/City).
+# pocknix steamos-set-timezone shim — the Deck UI's timezone picker calls this helper rather than
+# timedatectl, so without it the selection silently no-ops (127). Runs as 'deck', so it needs
+# 50-pocknix-deck.rules granting org.freedesktop.timedate1.* to wheel with no password prompt.
 set -u
 tz="${1:-}"
 [ -n "${tz}" ]                       || { echo "usage: steamos-set-timezone <Area/City>" >&2; exit 1; }

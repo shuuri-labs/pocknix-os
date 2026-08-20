@@ -1,36 +1,10 @@
 #!/bin/bash
-# pocknix-desktop-rotate — apply the RP6 panel rotation + scale to the live Plasma Mobile session.
-#
-# WHY this exists: the RP6 DSI panel is physically portrait (1080x1920) mounted rotated, so an
-# un-transformed Plasma session comes up sideways. gamescope side-steps this by rotating in its
-# composite pass (--force-composition-rotation); kwin_wayland instead drives DRM directly and
-# needs a REAL output transform. kscreen-doctor can set that transform, and kwin PERSISTS it
-# (Plasma 6 stores output config in ~/.config/kwinoutputconfig.json, not the old
-# ~/.local/share/kscreen dir), so this only has to run once per fresh home — but it's safe to
-# run every session (idempotent).
-#
-# In practice on the RP6 the rotation half is a no-op belt-and-braces: kwin honors the DRM
-# panel-orientation hint natively. The SCALE half is the load-bearing part — kwin's auto default
-# is 1.5, not the 2.5 this panel needs (confirmed on-device 2026-07-07).
-#
-# It is launched from /etc/xdg/autostart/pocknix-desktop-rotate.desktop (i.e. AFTER the shell +
-# kscreen kded are up), because kscreen-doctor talks to the running KScreen daemon over D-Bus; it
-# can't be done from the launcher before the compositor exists.
-#
-# Overridable via the environment (e.g. from the autostart .desktop or a drop-in):
-#   POCKNIX_ROTATE  rotation token for kscreen-doctor (none|left|right|inverted)   default: left
-#   POCKNIX_SCALE   output scale factor for the 6" 1080x1920 panel                 default: 2.5
-#   POCKNIX_OUTPUT  output name to target (e.g. DSI-1); default = autodetect the connected one
-#
-# NOTE (left vs right): the game session uses `--force-orientation left` (right rendered
-# upside-down — see gamescope-rp6-gpu memory). kscreen's transform is a different axis convention,
-# so `left` here is the starting guess; if Plasma comes up upside-down, set POCKNIX_ROTATE=right.
-# This is the single biggest unknown in the desktop session and must be confirmed on hardware.
+# pocknix-desktop-rotate — apply the panel rotation + scale to the live Plasma Mobile session.
+# Runs from /etc/xdg/autostart, not the launcher: kscreen-doctor talks to the KScreen daemon over
+# D-Bus, so the compositor must already be up. Idempotent; kwin persists the result.
 set -u
 
-# Device values come from the BSP-shipped device.conf (POCKNIX_DESKTOP_ROTATE/_SCALE);
-# /etc/pocknix/device.conf is the admin override. The POCKNIX_ROTATE/POCKNIX_SCALE env
-# vars keep highest precedence (the existing escape hatch). Fallbacks = RP6 values.
+# Precedence: POCKNIX_ROTATE/_SCALE env > /etc/pocknix/device.conf > BSP /usr/lib > RP6 fallbacks.
 for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
   [ -r "${_dc}" ] && . "${_dc}"
 done
@@ -44,10 +18,9 @@ have kscreen-doctor || { echo "pocknix-desktop-rotate: kscreen-doctor not found 
 
 log() { echo "pocknix-desktop-rotate: $*" >&2; }
 
-# kscreen kded can take a moment after login to register outputs over D-Bus. Poll briefly.
-# kscreen-doctor colorizes -o output even when piped (NO_COLOR is ignored), so strip ANSI SGR
-# escapes or the ^Output: anchor below never matches — this silently broke output detection
-# (and therefore the 2.5x scale) on every session until 2026-07-07.
+# kscreen kded can take a moment after login to register outputs over D-Bus, hence the poll.
+# kscreen-doctor colorizes -o even when piped (ignores NO_COLOR): strip SGR escapes or the
+# ^Output: anchor below silently never matches.
 outputs=""
 for _ in $(seq 1 30); do
   outputs="$(kscreen-doctor -o 2>/dev/null | sed $'s/\x1b\\[[0-9;]*m//g')" || outputs=""
@@ -59,9 +32,8 @@ if [ -z "${outputs}" ]; then
   exit 1
 fi
 
-# Autodetect the output if not pinned. `kscreen-doctor -o` prints one "Output: <id> <name> …" line
-# per output (the "enabled"/"connected" tokens are on SEPARATE following lines, so they can't be
-# matched on the same line). Field $3 is the connector name. Prefer the DSI panel; else first output.
+# `kscreen-doctor -o` puts the connector name in field $3 of each "Output:" line; the
+# enabled/connected tokens sit on FOLLOWING lines, so they cannot be matched on the same line.
 if [ -z "${OUTPUT}" ]; then
   OUTPUT="$(printf '%s\n' "${outputs}" | awk '/^Output:/ && /DSI/ {print $3; exit}')"
   [ -z "${OUTPUT}" ] && OUTPUT="$(printf '%s\n' "${outputs}" | awk '/^Output:/ {print $3; exit}')"

@@ -1,6 +1,5 @@
-// Non-Steam shortcut creation via SteamClient.Apps. The Steam file browser can't open a
-// new window under the Plasma Mobile X11 session, so Decky's in-UI file picker plus this
-// module replace the stock "Add a Non-Steam Game" flow.
+// Replaces the stock "Add a Non-Steam Game" flow: Steam's file browser cannot open a new
+// window under the Plasma Mobile X11 session, so Decky's in-UI picker feeds this instead.
 
 const WINDOWS_EXE = /\.(exe|bat|msi)$/i;
 

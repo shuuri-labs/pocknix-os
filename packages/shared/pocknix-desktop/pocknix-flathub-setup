@@ -1,8 +1,7 @@
 #!/bin/bash
-# pocknix-flathub-setup — register the Flathub remote and seed the apps shipped
-# as flatpaks instead of frozen-base packages (browser CVEs can't wait for a
-# pocknix release). NM-dispatched on every real link-up, so failed or offline
-# attempts heal on the next connect; every step is an idempotent no-op once done.
+# pocknix-flathub-setup — register the Flathub remote and seed the apps shipped as flatpaks
+# rather than frozen-base packages (browser CVEs cannot wait for a pocknix release).
+# NM-dispatched on every link-up, so offline or failed attempts heal on the next connect.
 set -e
 # Stamp, not a "present?" test, so a deliberate uninstall survives reboots. Stamped
 # only after a confirmed seed, or an offline first boot would give up browserless.
@@ -19,10 +18,9 @@ flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.f
 # A reboot mid-seed (Steam's OOBE forces one on first boot) leaves a ref that looks
 # installed but cannot be read; only repair drops it, so a plain retry fails forever.
 seed_firefox || { flatpak repair --system; seed_firefox; }
-# pre-flatpak installs: retire the pacman browsers ONLY once the flatpak is present
-# (never leave a device browserless). Failing hard is what makes the retry real: with
-# RemainAfterExit=yes a swallowed error leaves the unit active(exited), so the dispatcher's
-# `systemctl start` becomes a no-op and a db-locked removal would wait for a reboot.
+# Retire the pacman browsers only once the flatpak is present, never leaving a device
+# browserless. Fail hard: under RemainAfterExit=yes a swallowed error leaves the unit
+# active(exited), so the dispatcher's `systemctl start` no-ops and the retry never happens.
 if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
   stale="$(pacman -Qq firefox angelfish 2>/dev/null || true)"
   if [ -n "${stale}" ]; then

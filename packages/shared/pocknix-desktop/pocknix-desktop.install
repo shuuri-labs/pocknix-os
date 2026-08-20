@@ -1,5 +1,4 @@
-# pocknix-flathub.service is static now (the NM dispatcher starts it), but dropping [Install] does
-# not remove an existing enable symlink and systemd still honours it. Drop it on upgrade.
+# Dropping [Install] does not remove an existing enable symlink and systemd still honours it.
 # rm, not `systemctl disable`: this also runs in the image-build chroot.
 _drop_stale_flathub_wants() {
   rm -f /etc/systemd/system/multi-user.target.wants/pocknix-flathub.service

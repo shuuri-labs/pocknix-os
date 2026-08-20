@@ -1,28 +1,15 @@
 <?xml version="1.0"?>
 <!--
-  pocknix ES-DE custom emulator find-rules. Seeded to ~/ES-DE/custom_systems/es_find_rules.xml by
-  pocknix-roms-init. This does NOT redefine systems — ES-DE already ships definitions + launch
-  commands for every console on the pocknix list (incl. Switch/PS2/PS3). It only tells ES-DE WHERE
-  our emulator binaries live, so the stock launch commands resolve.
-
-  RetroArch + libretro cores need NO rule here: ES-DE's bundled rules already search /usr/bin for
-  `retroarch` and /usr/lib/libretro for cores, which is exactly where our packages install them.
-
-  This file therefore covers the STANDALONE emulators, which we vendor as aarch64 AppImages under
-  /opt/pocknix/emulators/<name>/ (with an optional /usr/bin/<name> for native builds). Two notes:
-    * PS2 is intentionally mapped to ARMSX2 (a native-ARM64 PCSX2 fork, Adreno/Turnip-tuned) via
-      the stock "PCSX2" emulator name — ES-DE's PS2 launch command then drives ARMSX2. Its CLI args
-      vs upstream PCSX2 must be VERIFIED on-device; if they differ, add a custom es_systems.xml PS2
-      entry with the right command instead of relying on the PCSX2 mapping.
-    * Every path/binary-name below is a CONVENTION to confirm as each emulator is actually vendored;
-      staticpath lists both the AppImage and a /usr/bin fallback so either packaging choice resolves.
+  pocknix ES-DE emulator find-rules, seeded to ~/ES-DE/custom_systems/ by pocknix-roms-init.
+  This does NOT redefine systems: it only tells ES-DE where our binaries live so the bundled
+  launch commands resolve. Each staticpath lists the AppImage and a /usr/bin fallback, first
+  match wins. PS2 rides the stock "PCSX2" emulator name to reach ARMSX2.
 -->
 <ruleList>
 
-  <!-- RetroArch: ES-DE's bundled rule is systempath-only (PATH lookup), which fails under the
-       Steam-launched ES-DE environment on-device while /usr/bin/retroarch exists (RP5
-       2026-07-22: %EMULATOR_RETROARCH% unresolved -> "couldn't find emulator" for every
-       RetroArch system; favorites via pocknix-play masked it). Pin the absolute path. -->
+  <!-- The bundled rule is systempath-only, and that PATH lookup comes up empty under the
+       Steam-launched ES-DE environment: every RetroArch system then fails to find an
+       emulator. The absolute path is what makes it resolve. -->
   <emulator name="RETROARCH">
     <rule type="systempath">
       <entry>retroarch</entry>
@@ -40,8 +27,7 @@
     </rule>
   </emulator>
 
-  <!-- PS2 -> ARMSX2 (native ARM64 PCSX2 fork). Stock PS2 command uses the PCSX2 emulator name.
-       First entry is the big-core pin wrapper (es-armsx2); raw AppImage kept as fallback. -->
+  <!-- PS2 -> ARMSX2, via the stock PCSX2 name. First entry is the big-core pin wrapper. -->
   <emulator name="PCSX2">
     <rule type="staticpath">
       <entry>/usr/lib/pocknix/es-armsx2</entry>
@@ -58,7 +44,7 @@
     </rule>
   </emulator>
 
-  <!-- PSP (standalone from ALARM; a libretro PPSSPP core is also shipped) -->
+  <!-- PSP -->
   <emulator name="PPSSPP">
     <rule type="staticpath">
       <entry>/usr/bin/ppsspp</entry>
@@ -74,14 +60,14 @@
     </rule>
   </emulator>
 
-  <!-- Wii U: native aarch64 Cemu (source build, packages/cemu) -->
+  <!-- Wii U -->
   <emulator name="CEMU">
     <rule type="staticpath">
       <entry>/usr/bin/Cemu</entry>
     </rule>
   </emulator>
 
-  <!-- 3DS: Azahar (the maintained Citra successor; built from source — packages/azahar) -->
+  <!-- 3DS -->
   <emulator name="AZAHAR">
     <rule type="staticpath">
       <entry>/usr/bin/azahar</entry>
@@ -96,10 +82,7 @@
     </rule>
   </emulator>
 
-  <!-- Nintendo Switch: Eden (pocknix default — Snapdragon-committed, aarch64 clang-PGO build;
-       see packages/eden-bin). If ES-DE's switch system doesn't know the EDEN emulator name on
-       this version, add a custom es_systems.xml switch entry on-device.
-       First entry is the big-core pin wrapper (es-eden); raw AppImage kept as fallback. -->
+  <!-- Switch. First entry is the big-core pin wrapper. -->
   <emulator name="EDEN">
     <rule type="staticpath">
       <entry>/usr/lib/pocknix/es-eden</entry>

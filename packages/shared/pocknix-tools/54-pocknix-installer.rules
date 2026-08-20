@@ -1,5 +1,4 @@
-// Promptless by the same trust as 50-pocknix-deck.rules; both CLIs self-guard
-// (refuse removable disks and the disk / is on).
+// Promptless for wheel by the same trust as 50-pocknix-deck.rules.
 polkit.addRule(function(action, subject) {
     if (!subject.isInGroup("wheel")) { return; }
     if (action.id == "org.freedesktop.policykit.exec" &&

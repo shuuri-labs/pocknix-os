@@ -1,15 +1,10 @@
 #!/bin/bash
-# pocknix-build-bootimg — (re)assemble the qcom-abl /flash/KERNEL from the installed kernel.
-#
-# Run by the linux-pocknix alpm hook after a kernel install/upgrade (and runnable by hand). Mirrors
-# scripts/build-kernel.sh's assemble_bootimg: gzip(/boot/Image) with all /boot/dtbs appended, an
-# empty ramdisk, then mkbootimg (header v0, offsets 0) with the baked cmdline -> /flash/KERNEL. Keeps
-# a /flash/KERNEL.bak and writes /flash/KERNEL.md5 (the RP6 ABL verifies KERNEL against its md5).
-#
-# SRCROOT (default /): alternate root tree to build FROM — pocknix-rollback passes the target
-# snapshot so the deployed kernel matches the rolled-back modules. OUT_SUFFIX (default empty):
-# stage the result as KERNEL${OUT_SUFFIX} without touching KERNEL/KERNEL.bak (rollback renames
-# after its atomic commit). Defaults keep the hook path byte-identical to before.
+# pocknix-build-bootimg — (re)assemble the qcom-abl /flash/KERNEL from the installed kernel:
+# gzip(/boot/Image) with every dtb appended, empty ramdisk, mkbootimg header v0 with zero offsets.
+# The ABL verifies KERNEL against /flash/KERNEL.md5, so the two are always written together.
+# SRCROOT builds from another root tree (pocknix-rollback passes the target snapshot, so kernel and
+# modules match); OUT_SUFFIX stages beside the live files, which rollback renames after its commit.
+# Same assembly as scripts/build-kernel.sh's assemble_bootimg — the two must stay in step.
 set -euo pipefail
 
 FLASH="${FLASH:-/flash}"
@@ -20,8 +15,7 @@ CMDLINE_FILE="${SRCROOT}/usr/lib/pocknix/kernel-cmdline"
 
 [ -f "${SRCROOT}/boot/Image" ] || { echo "pocknix-build-bootimg: no ${SRCROOT}/boot/Image — nothing to do"; exit 0; }
 [ -f "$MKBOOTIMG" ] && [ -f "$CMDLINE_FILE" ] || { echo "pocknix-build-bootimg: mkbootimg/cmdline missing"; exit 0; }
-# In the image-build chroot /flash isn't a real mount; build-sd-image.sh/install.sh assemble KERNEL
-# there instead, so skip. On the device /flash is the FAT boot partition (fstab) -> rebuild.
+# In the image-build chroot /flash is not a mount; build-sd-image.sh/install.sh assemble KERNEL.
 mountpoint -q "$FLASH" || { echo "pocknix-build-bootimg: $FLASH not mounted — skipping (build chroot?)"; exit 0; }
 
 cmdline="$(cat "$CMDLINE_FILE")"
@@ -29,7 +23,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 gzip -c "${SRCROOT}/boot/Image" > "$tmp/kernel.gz"
 for d in "${SRCROOT}"/boot/dtbs/*.dtb; do [ -f "$d" ] && cat "$d" >> "$tmp/kernel.gz"; done
-# valid empty cpio ramdisk (no initramfs; UFS/ext4 are built-in) so the kernel unpacks it cleanly
+# a VALID empty cpio, not an empty file: nothing needs an initramfs, but the kernel still unpacks it
 if command -v cpio >/dev/null 2>&1; then printf '' | cpio -o -H newc --quiet > "$tmp/ramdisk" 2>/dev/null
 else printf 'dummy' > "$tmp/ramdisk"; fi
 

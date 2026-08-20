@@ -1,6 +1,5 @@
 from pathlib import Path
 
-# Ported from armada-control's steam.py (HOME swap, resolution helpers dropped).
 STEAM_ROOT = Path("/home/deck/.local/share/Steam")
 STEAM_APPS_DIR = STEAM_ROOT / "steamapps"
 

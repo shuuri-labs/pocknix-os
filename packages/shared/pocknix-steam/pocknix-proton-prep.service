@@ -1,9 +1,7 @@
 [Unit]
 Description=pocknix: keep the ARM Proton compat tools registered + usable (no reboot after Steam downloads/updates them)
-# User service (runs as the session user, e.g. deck) so it can read/write ~/.local/share/Steam.
-# Enabled globally in build-sd-image.sh (systemctl --global enable). pocknix-steam ALSO runs
-# pocknix-proton-prep synchronously at game-session start to guarantee the registration exists
-# before that session's Steam launches; this service covers mid-session downloads + desktop-mode.
+# Must stay a USER service: it reads/writes ~/.local/share/Steam. It covers mid-session downloads
+# and desktop mode only; pocknix-steam runs prep synchronously before the game session's Steam.
 
 [Service]
 Type=simple

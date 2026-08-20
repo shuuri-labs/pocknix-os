@@ -12,9 +12,8 @@ function cardSummary(card: SdcardInfo | null) {
   return [card.label || "unlabeled", size, card.fstype || "no filesystem", state].filter(Boolean).join(" · ");
 }
 
-// showModal injects closeModal into this wrapper. We deliberately do NOT forward it to
-// ConfirmModal: its internal OK handler would close the dialog immediately, and we want
-// it held open (with the confirm button greyed out) until the format finishes.
+// closeModal must not be forwarded to ConfirmModal: its OK handler would close the dialog
+// at once, and it has to stay open until the format finishes.
 function FormatConfirmModal({ summary, onConfirm, closeModal }: { summary: string; onConfirm: () => Promise<void>; closeModal?: () => void }) {
   const [text, setText] = useState("");
   const [running, setRunning] = useState(false);

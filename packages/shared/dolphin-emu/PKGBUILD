@@ -1,13 +1,5 @@
-# dolphin-emu — GameCube/Wii emulator, built from source for aarch64.
-#
-# WHY SOURCE: Arch has dolphin-emu in [extra] but ALARM does NOT carry it for aarch64 (checked the
-# mirror 2026-07-05), and upstream's Linux binaries are x86_64-only. AArch64 is nonetheless a
-# first-class Dolphin architecture (the Android + Apple-Silicon JIT), so a straight build works.
-# Modeled on Arch's official PKGBUILD (tag 2606) but using the repo's usual git+submodules pattern
-# (like packages/soc/gamescope) instead of Arch's hand-pinned external repos. Only the GUI/emulator is
-# packaged (Arch splits a dolphin-emu-tool subpackage; we don't need it).
-#
-# HEAVY BUILD (~Qt6, ~30-60 min in the VM) — same league as gamescope/mesa.
+# dolphin-emu — GameCube/Wii emulator, built from source because ALARM carries no aarch64
+# build and upstream's Linux binaries are x86_64-only. Qt6 build, 30-60 min in the VM.
 pkgname=dolphin-emu
 pkgver=2606
 pkgrel=2
@@ -26,7 +18,6 @@ sha256sums=('SKIP')
 
 prepare() {
   cd dolphin
-  # Bundled externals (fmt, cubeb, cpp-optparse, …) are git submodules at this tag.
   git submodule update --init --recursive
 }
 
