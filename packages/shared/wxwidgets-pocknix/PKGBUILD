@@ -1,6 +1,6 @@
 # wxwidgets-pocknix — wxWidgets 3.3 (gtk3), built because Cemu requires >=3.3 and ALARM ships
 # 3.2.11 (cemu configure died on it, 2026-07-06). Nothing else on the image uses wxWidgets, so
-# this exists solely for packages/cemu.
+# this exists solely for packages/shared/cemu.
 #
 # Single lean package (Arch splits common/gtk3/qt5; we merge base+gtk3 and skip qt5 entirely) with
 # webview + mediactrl OFF — Cemu's find_package needs only: base core gl propgrid xrc. That drops

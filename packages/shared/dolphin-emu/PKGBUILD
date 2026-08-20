@@ -4,7 +4,7 @@
 # mirror 2026-07-05), and upstream's Linux binaries are x86_64-only. AArch64 is nonetheless a
 # first-class Dolphin architecture (the Android + Apple-Silicon JIT), so a straight build works.
 # Modeled on Arch's official PKGBUILD (tag 2606) but using the repo's usual git+submodules pattern
-# (like packages/gamescope) instead of Arch's hand-pinned external repos. Only the GUI/emulator is
+# (like packages/soc/gamescope) instead of Arch's hand-pinned external repos. Only the GUI/emulator is
 # packaged (Arch splits a dolphin-emu-tool subpackage; we don't need it).
 #
 # HEAVY BUILD (~Qt6, ~30-60 min in the VM) — same league as gamescope/mesa.

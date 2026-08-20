@@ -1,6 +1,6 @@
 # mangohud — Vulkan/GL performance overlay + the `mangoapp` binary that gamescope --mangoapp
 # spawns for Steam's built-in performance overlay. NOT in ALARM for aarch64, so we build it from
-# source (same pattern as packages/gamescope). The heavy deps (imgui, implot, spdlog, vk-bootstrap,
+# source (same pattern as packages/soc/gamescope). The heavy deps (imgui, implot, spdlog, vk-bootstrap,
 # vkroots, vulkan-headers, vulkan-utility-libraries) are meson WRAPS — downloaded during
 # `meson setup` (the build chroot has network, as gamescope's git build does). mangoapp itself
 # links system glfw3 (src meson: dependency('glfw3')).

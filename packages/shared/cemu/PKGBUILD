@@ -20,7 +20,7 @@ url="https://cemu.info"
 license=('MPL2')
 options=('!strip')
 # wxwidgets-gtk3>=3.3: satisfied by wxwidgets-pocknix (ALARM's 3.2 fails the constraint — that's
-# the resolution trick; see packages/wxwidgets-pocknix). sdl3: the pinned commit post-dates the
+# the resolution trick; see packages/shared/wxwidgets-pocknix). sdl3: the pinned commit post-dates the
 # SDL2->SDL3 migration.
 depends=('boost-libs' 'fmt' 'libzip' 'libpng' 'pugixml' 'sdl3' 'wxwidgets-gtk3>=3.3'
          'wayland' 'bluez-libs' 'libsodium' 'hidapi')

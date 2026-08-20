@@ -29,20 +29,20 @@ not and cannot relicense them. The main ones:
 
 | Component | Where | Upstream license |
 |---|---|---|
-| Linux kernel + patch series | `kernel/`, `packages/linux-pocknix-*` | GPL-2.0-only |
+| Linux kernel + patch series | `kernel/`, `packages/soc/linux-pocknix-*` | GPL-2.0-only |
 | ROCKNIX patches, scripts, BSP material | `kernel/*/patches`, various packages | GPL-2.0 |
-| ROCKNIX-built GRUB binary | `vendor/`, `packages/pocknix-bootloader-sm8250` | GPL-3.0-or-later (GRUB) |
-| gamescope + patch set | `packages/gamescope` | BSD-2-Clause (patches: GPL-2.0, from ROCKNIX) |
-| Mesa | `packages/mesa` | MIT |
-| MangoHud | `packages/mangohud` | MIT |
-| FEX-Emu | `packages/fex-emu` | MIT |
+| ROCKNIX-built GRUB binary | `vendor/`, `packages/soc/pocknix-bootloader-sm8250` | GPL-3.0-or-later (GRUB) |
+| gamescope + patch set | `packages/soc/gamescope` | BSD-2-Clause (patches: GPL-2.0, from ROCKNIX) |
+| Mesa | `packages/soc/mesa` | MIT |
+| MangoHud | `packages/soc/mangohud` | MIT |
+| FEX-Emu | `packages/soc/fex-emu` | MIT |
 | alsa-ucm-conf material | `devices/sm8250` BSP | BSD-3-Clause |
 | Packaged emulators, tools, and libraries | `packages/*` | each project's own license |
 
 PKGBUILDs in `packages/` fetch pinned upstream sources; the resulting binary packages and
 OS images contain those projects under their own licenses. Provenance for vendored
 binaries is recorded next to them (for example
-`packages/pocknix-bootloader-sm8250/README.provenance`) and in [PATCHES.md](../PATCHES.md).
+`packages/soc/pocknix-bootloader-sm8250/README.provenance`) and in [PATCHES.md](../PATCHES.md).
 
 ROCKNIX additionally licenses its distribution branding and artwork under CC BY-NC-SA.
 pocknix-os does not ship ROCKNIX branding; only their GPL-licensed software, scripts, and

@@ -11,10 +11,10 @@
 /packages/**/src/
 /packages/**/pkg/
 # the makepkg srcdir rule above must not swallow the plugin's TypeScript sources
-!/packages/pocknix-decky/pocknix-control/src/
+!/packages/shared/pocknix-decky/pocknix-control/src/
 
 # decky plugin frontend build deps (dist/ IS committed — built on the dev Mac, needed by PKGBUILD)
-/packages/pocknix-decky/pocknix-control/node_modules/
+/packages/shared/pocknix-decky/pocknix-control/node_modules/
 
 # local Claude Code settings + context (recreate from pocknix-notes/dev/claude-setup.md)
 /.claude/

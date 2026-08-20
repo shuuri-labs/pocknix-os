@@ -51,11 +51,11 @@ devices/<soc>/
 
 If the family brings a **new SoC**, also create `kernel/<soc>/` (`kernel.conf` with the
 source pins + `config/ patches/ dts/ bootloader/` — populated by `make sync` against the
-ROCKNIX device dir named in `ROCKNIX_SOC`), a thin `packages/linux-pocknix-<soc>/`
+ROCKNIX device dir named in `ROCKNIX_SOC`), a thin `packages/soc/linux-pocknix-<soc>/`
 (copy an existing one; it only packages `make kernel` output — note the qcom-abl vs
 arm-efi difference in its /flash hook), a `config/tuning/<soc>.conf` (ROCKNIX's
 TARGET_CPU/FLAGS composed as -march/-mtune; FEX TUNE_CPU per their fex package.mk
-mapping), and a `packages/pocknix-bootloader-<soc>/` — on arm-efi SoCs the GRUB payload
+mapping), and a `packages/soc/pocknix-bootloader-<soc>/` — on arm-efi SoCs the GRUB payload
 + grub.cfg (see pocknix-bootloader-sm8250); on qcom-abl SoCs the ROCKNIX ABL install
 kit copied to the SD boot FAT (see pocknix-bootloader-sm8550). Each SoC gets its own pacman repo tree
 (`build/localrepo/<soc>`, published at `POCKNIX_REPO_URL/<soc>`): the tuned packages
@@ -72,7 +72,7 @@ binaries, so the repos must not mix.
   pocknix never flashes it itself.
 * `arm-efi` (sm8250): the ABL chainloads GRUB (`EFI/BOOT/bootaa64.efi`); `/KERNEL` is
   a RAW Image; the board dtb is a separate `/boot/grub/<board>.dtb`; the cmdline lives
-  in grub.cfg (`packages/pocknix-bootloader-<soc>/grub.cfg` — build-packages.sh
+  in grub.cfg (`packages/soc/pocknix-bootloader-<soc>/grub.cfg` — build-packages.sh
   enforces it matches the profile's `KERNEL_CMDLINE`). Board selection at the boot
   level is the GRUB menuentry; at the OS level it's the dispatcher + model gates.
   (The RP5's STOCK ABL SD-boots this chain; do not flash the ROCKNIX ABL there.)

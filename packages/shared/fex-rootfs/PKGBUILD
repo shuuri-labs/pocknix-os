@@ -16,7 +16,7 @@
 # We use the *Arch* x86_64 rootfs (its glibc matches our build sysroot, like ROCKNIX), as squashfs,
 # baked into the package (no first-boot fetch — same reasoning as the build-time Steam bake).
 #
-# The matching base Config.json (RootFS + thunk wiring + ThunksDB) ships from packages/fex-emu.
+# The matching base Config.json (RootFS + thunk wiring + ThunksDB) ships from packages/soc/fex-emu.
 
 pkgname=fex-rootfs
 _rootfsdate=2026-01-08             # pinned dated image from FEX's rootfs CDN (immutable path)

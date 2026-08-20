@@ -58,11 +58,12 @@ for b in "${BUILD_DIR}"/pkgbuild-root-*; do
 done
 log "harvest sources: ${sources[*]#"${BUILD_DIR}/"}"
 
-# Names owned by [pocknix] (all SoCs' localrepos): ours, never part of the ALARM
-# base — mesa/gamescope replace ALARM copies under the same name, so filter by
-# NAME, not version.
+# Names owned by [pocknix]/[pocknix-shared] (all SoCs' localrepos + the shared
+# one): ours, never part of the ALARM base — mesa/gamescope replace ALARM
+# copies under the same name, so filter by NAME, not version.
 declare -A ours
-for db in "${BUILD_DIR}"/localrepo/*/pocknix.db.tar.gz; do
+for db in "${BUILD_DIR}"/localrepo/*/pocknix.db.tar.gz \
+          "${BUILD_DIR}"/localrepo/shared/pocknix-shared.db.tar.gz; do
   [ -f "${db}" ] || continue
   while IFS= read -r d; do
     d="${d%%/*}"; [ -n "${d}" ] || continue

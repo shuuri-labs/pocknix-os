@@ -38,11 +38,29 @@ source "${POCKNIX_ROOT}/config/tuning/${SOC}.conf"
 : "${BOOTLOADER:=qcom-abl}"
 # Per-SoC pacman repo: tuned packages (mesa etc.) share pkgnames across SoCs
 # with different binaries, so each SoC gets its own localrepo/published tree.
+# packages/shared/* are byte-identical across SoCs: built once into the shared
+# localrepo, published once as [pocknix-shared] (repo membership doubles as
+# delivery targeting — see pocknix-notes dev/pacman-repo.md).
 : "${LOCALREPO_DIR:=${BUILD_DIR}/localrepo/${SOC}}"
+: "${LOCALREPO_SHARED_DIR:=${BUILD_DIR}/localrepo/shared}"
 # Publish staging area (stage-repo.sh): a mirror of the LIVE repo with only the
 # intended packages swapped in — publish-repo.sh publishes THIS, never the
 # shared localrepo (which parallel sessions fill with unvalidated builds).
 : "${STAGE_DIR:=${BUILD_DIR}/stage/${SOC}}"
+# Which repo tree stage-repo.sh/publish-repo.sh operate on: the per-SoC
+# [pocknix] tree (default) or the SoC-neutral [pocknix-shared] tree
+# (make stage-shared / publish-shared). The db filename must equal the repo
+# tag, hence REPO_NAME drives both the stanza and the *.db names.
+: "${POCKNIX_REPO_SCOPE:=soc}"
+if [ "${POCKNIX_REPO_SCOPE}" = "shared" ]; then
+  REPO_NAME="pocknix-shared"; REPO_SEG="shared"
+  REPO_LOCALREPO_DIR="${LOCALREPO_SHARED_DIR}"
+  REPO_STAGE_DIR="${BUILD_DIR}/stage/shared"
+else
+  REPO_NAME="pocknix"; REPO_SEG="${SOC}"
+  REPO_LOCALREPO_DIR="${LOCALREPO_DIR}"
+  REPO_STAGE_DIR="${STAGE_DIR}"
+fi
 # Per-SoC kernel + image outputs: with one family per SoC, a shared build/kernel
 # and build/image/KERNEL meant "whatever family built last" — switching families
 # forced a full kernel rebuild just to regenerate an unchanged image, and the

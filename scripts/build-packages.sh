@@ -13,18 +13,29 @@ need_linux
 need_root build-packages
 for t in curl tar rsync; do need_tool "$t"; done
 
-# Both are PER-SoC: tuned packages (mesa/gamescope/mangohud/fex-emu) share
-# pkgnames across SoCs with different binaries, so each SoC gets its own repo;
-# the chroot is split too so one SoC's tuned makedepends (mesa installed as a
-# dep) can never leak into another SoC's builds.
+# Two repo trees: packages/soc/* are PER-SoC (tuned packages share pkgnames
+# across SoCs with different binaries; each SoC gets its own repo, and the
+# chroot is split too so one SoC's tuned makedepends can never leak into
+# another SoC's builds). packages/shared/* are byte-identical across SoCs:
+# built ONCE into the shared localrepo ([pocknix-shared]) — whichever SoC runs
+# first builds them, the other run's incremental skip sees them up to date.
 BROOT="${BUILD_DIR}/pkgbuild-root-${SOC}"   # the makepkg build chroot (reused across runs)
 LOCALREPO="${LOCALREPO_DIR}"                # build/localrepo/${SOC} (set in lib.sh)
+LOCALREPO_SHARED="${LOCALREPO_SHARED_DIR}"  # build/localrepo/shared (set in lib.sh)
 TARBALL="${CACHE_DIR}/${ALARM_TARBALL}"
 REPO_DB="pocknix.db.tar.gz"
+SHARED_REPO_DB="pocknix-shared.db.tar.gz"
 
 cleanup() { chroot_umount "${BROOT}" 2>/dev/null || true
-            mountpoint -q "${BROOT}/localrepo" && umount "${BROOT}/localrepo" 2>/dev/null || true; }
+            mountpoint -q "${BROOT}/localrepo" && umount "${BROOT}/localrepo" 2>/dev/null || true
+            mountpoint -q "${BROOT}/localrepo-shared" && umount "${BROOT}/localrepo-shared" 2>/dev/null || true; }
 trap cleanup EXIT
+
+# Which repo a package dir builds into: shared packages target the shared
+# localrepo, everything else (packages/soc + device packages) the per-SoC one.
+pkg_repo_dir()   { case "$1" in */packages/shared/*) printf '%s' "${LOCALREPO_SHARED}" ;; *) printf '%s' "${LOCALREPO}" ;; esac; }
+pkg_repo_db()    { case "$1" in */packages/shared/*) printf '%s' "${SHARED_REPO_DB}" ;; *) printf '%s' "${REPO_DB}" ;; esac; }
+pkg_repo_mount() { case "$1" in */packages/shared/*) printf '/localrepo-shared' ;; *) printf '/localrepo' ;; esac; }
 
 setup_chroot() {
   # Base fingerprint: the chroot is built FROM a base (pinned snapshot id, or
@@ -105,10 +116,20 @@ setup_chroot() {
     sed -i '/^\[pocknix\]/,/^\[/{s/^SigLevel = Optional TrustAll$/SigLevel = Never/;}' \
       "${BROOT}/etc/pacman.conf"
   fi
+  # Same for [pocknix-shared]: makepkg -s must resolve shared siblings too
+  # (e.g. cemu -> wxwidgets-pocknix now lands in the shared repo).
+  if ! grep -q '^\[pocknix-shared\]' "${BROOT}/etc/pacman.conf"; then
+    printf '\n[pocknix-shared]\nSigLevel = Never\nServer = file:///localrepo-shared\n' \
+      >> "${BROOT}/etc/pacman.conf"
+  fi
 }
 
 build_one() {
   local pkgdir="$1" force="${2:-0}" name; name="$(basename "${pkgdir}")"
+  local repo_dir repo_db repo_mount
+  repo_dir="$(pkg_repo_dir "${pkgdir}")"
+  repo_db="$(pkg_repo_db "${pkgdir}")"
+  repo_mount="$(pkg_repo_mount "${pkgdir}")"
   rm -rf "${BROOT}/build/${name}"
   mkdir -p "${BROOT}/build"
   cp -r "${pkgdir}" "${BROOT}/build/${name}"
@@ -125,7 +146,7 @@ build_one() {
     local uptodate=1 nlist=0 p f
     while IFS= read -r p; do
       nlist=$((nlist+1))
-      f="${LOCALREPO}/$(basename "${p}")"
+      f="${repo_dir}/$(basename "${p}")"
       if [ ! -f "${f}" ] || [ -n "$(find "${pkgdir}" -newer "${f}" -print -quit)" ]; then
         uptodate=0; break
       fi
@@ -228,22 +249,31 @@ Update one to match the other."
   # with -s makepkg would install their RUNTIME dependency closure into the build chroot
   # (the kernel package, the Steam stack, the ~1.1 GB fex-rootfs) just to lay out a few
   # files, which is slow and was the failure mode for pocknix-device-rp6. Their depends=
-  # still ships in the .pkg metadata; -d only skips build-time resolution.
+  # still ships in the .pkg metadata; -d only skips build-time resolution. A ./nodeps
+  # marker opts other packages into the same treatment (the layer metapackages).
   # Per-SoC tuning (config/tuning/${SOC}.conf via lib.sh) rides the makepkg
   # environment: the tuned PKGBUILDs read POCKNIX_TUNE_CFLAGS/POCKNIX_FEX_TUNE_CPU
   # (falling back to their sm8550 strings when unset, e.g. standalone makepkg).
   local mkflags="-s" tune_env
   case "${pkgdir}" in */devices/*/packages/*) mkflags="-d" ;; esac
+  [ -f "${pkgdir}/nodeps" ] && mkflags="-d"
   # POCKNIX_BASE_*: pocknix-lock-migrate stamps the target snapshot URL into its
   # script at build time, so snapshot bumps re-target the migrator on rebuild.
-  tune_env="POCKNIX_SOC=$(printf %q "${SOC}") POCKNIX_TUNE_CFLAGS=$(printf %q "${POCKNIX_TUNE_CFLAGS}") POCKNIX_FEX_TUNE_CPU=$(printf %q "${POCKNIX_FEX_TUNE_CPU}") POCKNIX_BASE_URL=$(printf %q "${POCKNIX_BASE_URL}") POCKNIX_BASE_SNAPSHOT=$(printf %q "${POCKNIX_BASE_SNAPSHOT}")"
+  # Shared packages get NO SoC/tuning env: they must be byte-stable regardless of
+  # which SoC's run builds them (a tuned shared build would silently fork bytes).
+  case "${pkgdir}" in
+    */packages/shared/*)
+      tune_env="POCKNIX_BASE_URL=$(printf %q "${POCKNIX_BASE_URL}") POCKNIX_BASE_SNAPSHOT=$(printf %q "${POCKNIX_BASE_SNAPSHOT}")" ;;
+    *)
+      tune_env="POCKNIX_SOC=$(printf %q "${SOC}") POCKNIX_TUNE_CFLAGS=$(printf %q "${POCKNIX_TUNE_CFLAGS}") POCKNIX_FEX_TUNE_CPU=$(printf %q "${POCKNIX_FEX_TUNE_CPU}") POCKNIX_BASE_URL=$(printf %q "${POCKNIX_BASE_URL}") POCKNIX_BASE_SNAPSHOT=$(printf %q "${POCKNIX_BASE_SNAPSHOT}")" ;;
+  esac
   if ! chroot "${BROOT}" runuser -u builder -- \
       bash -lc "cd /build/${name} && LC_ALL=C SRCDEST=/build/srccache ${tune_env} makepkg ${mkflags} -f --noconfirm --nocheck --skippgpcheck"; then
-    warn "makepkg failed for ${name} — keeping any previous build in ${LOCALREPO##*/}"
+    warn "makepkg failed for ${name} — keeping any previous build in ${repo_dir##*/}"
     return 1
   fi
   # Collect what makepkg ACTUALLY produced via `makepkg --packagelist`: a split PKGBUILD
-  # (packages/mesa -> mesa + vulkan-freedreno) emits sibling packages a "${name}-*" glob
+  # (packages/soc/mesa -> mesa + vulkan-freedreno) emits sibling packages a "${name}-*" glob
   # misses (bitten by mesa: only the mesa half reached localrepo), while a bare *.pkg.tar.*
   # sweep would grab .pkg.tar.* files that are makepkg *sources* symlinked into the build
   # dir (e.g. fex-emu's pinned x86 sysroot pkgs). --packagelist names exactly the built
@@ -268,15 +298,15 @@ Update one to match the other."
   for p in "${built_pkgs[@]}"; do
     base="$(basename "${p}")"
     base="${base%-*}"; base="${base%-*}"; base="${base%-*}"  # strip -<ver>-<rel>-<arch>.pkg.tar.*
-    rm -f "${LOCALREPO}/${base}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${base}"-*:*.pkg.tar.* 2>/dev/null || true
+    rm -f "${repo_dir}/${base}"-[0-9]*.pkg.tar.* "${repo_dir}/${base}"-*:*.pkg.tar.* 2>/dev/null || true
   done
-  cp "${built_pkgs[@]}" "${LOCALREPO}/"
+  cp "${built_pkgs[@]}" "${repo_dir}/"
   # Register exactly the artifacts just built (NOT *.pkg.tar.* — re-adding the whole repo
   # for every package spammed 'entry already existed' x N^2). LC_ALL=C: the build chroot
   # has no generated locales, and bsdtar warns on every tar op otherwise.
   local addlist=""
   for p in "${built_pkgs[@]}"; do addlist+=" $(basename "${p}")"; done
-  chroot "${BROOT}" bash -lc "cd /localrepo && LC_ALL=C repo-add -q ${REPO_DB}${addlist}"
+  chroot "${BROOT}" bash -lc "cd ${repo_mount} && LC_ALL=C repo-add -q ${repo_db}${addlist}"
 }
 
 main() {
@@ -284,21 +314,27 @@ main() {
   # everything, skipping packages already up-to-date in the localrepo (see build_one).
   # e.g. `make packages PKG="inputplumber pocknix-bsp-sm8550"` to force just those two.
   local want=("$@")
-  mkdir -p "${LOCALREPO}"
+  mkdir -p "${LOCALREPO}" "${LOCALREPO_SHARED}"
   setup_chroot
 
   chroot_mount "${BROOT}"
-  # Keep the local repo bind-mounted throughout so makepkg -s can resolve inter-package
-  # local deps (pocknix-steam -> gamescope, gtk2) from the [pocknix] repo as we go.
-  mkdir -p "${BROOT}/localrepo"
+  # Keep both local repos bind-mounted throughout so makepkg -s can resolve
+  # inter-package local deps (pocknix-steam -> gamescope, gtk2; cemu ->
+  # wxwidgets-pocknix) from the [pocknix]/[pocknix-shared] repos as we go.
+  mkdir -p "${BROOT}/localrepo" "${BROOT}/localrepo-shared"
   mount --bind "${LOCALREPO}" "${BROOT}/localrepo"
-  # Initialize the [pocknix] db so the repo is valid even on the first/partial run
+  mount --bind "${LOCALREPO_SHARED}" "${BROOT}/localrepo-shared"
+  # Initialize both dbs so the repos are valid even on the first/partial run
   # (one full re-add; per-package registration during the run adds only new artifacts).
-  if ls "${LOCALREPO}"/*.pkg.tar.* >/dev/null 2>&1; then
-    chroot "${BROOT}" bash -lc "cd /localrepo && LC_ALL=C repo-add -q ${REPO_DB} \$(ls *.pkg.tar.* | grep -v '\.sig\$')" >/dev/null 2>&1
-  else
-    chroot "${BROOT}" bash -lc "cd /localrepo && tar -czf ${REPO_DB} -T /dev/null && ln -sf ${REPO_DB} pocknix.db"
-  fi
+  local rmount rdb
+  for rmount in /localrepo /localrepo-shared; do
+    rdb="${REPO_DB}"; [ "${rmount}" = "/localrepo-shared" ] && rdb="${SHARED_REPO_DB}"
+    if ls "${BROOT}${rmount}"/*.pkg.tar.* >/dev/null 2>&1; then
+      chroot "${BROOT}" bash -lc "cd ${rmount} && LC_ALL=C repo-add -q ${rdb} \$(ls *.pkg.tar.* | grep -v '\.sig\$')" >/dev/null 2>&1
+    else
+      chroot "${BROOT}" bash -lc "cd ${rmount} && tar -czf ${rdb} -T /dev/null && ln -sf ${rdb} ${rdb%.tar.gz}"
+    fi
+  done
 
   # Build a package (build_one registers its artifacts in [pocknix] so later packages
   # see them; the pacman -Sy refresh happens inside build_one, only for real builds).
@@ -310,17 +346,17 @@ main() {
     return 1
   }
 
-  local built=0 name force devdir devsoc othersoc skip
+  local built=0 name force devdir devsoc pkgsocs
   local -a failed=()
-  # Shared packages (packages/*/) + device packages (devices/*/packages/*/ — the
-  # arch=any BSPs/metapackages build in seconds). Everything is scoped to the
-  # CURRENT SoC's repo: device packages whose profile declares another SOC are
-  # skipped, as are per-SoC shared packages named *-<othersoc> (linux-pocknix-*,
-  # pocknix-bootloader-*). Each SoC's repo is built with its own DEVICE, so the
-  # repo always carries all of that SoC's devices and none of another's.
-  # Up-to-date packages are skipped (see build_one); PKG= names and
-  # POCKNIX_FORCE_REBUILD=1 force.
-  for pkgdir in "${PACKAGES_DIR}"/*/ "${POCKNIX_ROOT}"/devices/*/packages/*/; do
+  # Shared packages (packages/shared/*/ — built once, into [pocknix-shared]) +
+  # per-SoC packages (packages/soc/*/ — each declares its SoCs in ./socs) +
+  # device packages (devices/*/packages/*/ — the arch=any BSPs/metapackages
+  # build in seconds). Per-SoC/device packages are scoped to the CURRENT SoC's
+  # repo: device packages via their profile's SOC, packages/soc via the socs
+  # file (which also keeps the sm8250-only dxvk2 protons — replaces= hazard —
+  # out of the sm8550 repo entirely). Up-to-date packages are skipped (see
+  # build_one); PKG= names and POCKNIX_FORCE_REBUILD=1 force.
+  for pkgdir in "${PACKAGES_DIR}"/shared/*/ "${PACKAGES_DIR}"/soc/*/ "${POCKNIX_ROOT}"/devices/*/packages/*/; do
     [ -f "${pkgdir}/PKGBUILD" ] || continue
     name="$(basename "${pkgdir}")"
     case "${pkgdir}" in */devices/*/packages/*)
@@ -328,13 +364,11 @@ main() {
       devsoc="$(unset SOC; . "${devdir}/profile.conf" >/dev/null 2>&1; printf '%s' "${SOC}")"
       [ "${devsoc}" = "${SOC}" ] || continue
     ;; esac
-    skip=0
-    for othersoc in "${POCKNIX_ROOT}"/kernel/*/; do
-      othersoc="$(basename "${othersoc}")"
-      [ "${othersoc}" = "${SOC}" ] && continue
-      case "${name}" in *"-${othersoc}") skip=1; break ;; esac
-    done
-    [ "${skip}" -eq 1 ] && continue
+    case "${pkgdir}" in */packages/soc/*)
+      [ -f "${pkgdir}/socs" ] || die "${name}: packages/soc/ package with no socs file — declare its SoC(s), one space-separated line"
+      read -r pkgsocs < "${pkgdir}/socs"
+      case " ${pkgsocs} " in *" ${SOC} "*) ;; *) continue ;; esac
+    ;; esac
     force=0
     [ "${POCKNIX_FORCE_REBUILD:-0}" = "1" ] && force=1
     if [ "${#want[@]}" -gt 0 ]; then
@@ -360,15 +394,16 @@ main() {
   # still present" (dangerous, loud) vs "no artifact" (build-image errors at install, not silent).
   if [ "${#failed[@]}" -gt 0 ]; then
     local -a stale=() gone=()
-    local fp fname base p af had line
+    local fp fname base p af had line frepo
     for fp in "${failed[@]}"; do
       fname="$(basename "${fp}")"; had=0
+      frepo="$(pkg_repo_dir "${fp}")"
       # artifact base name(s) this PKGBUILD produces (split pkgs -> several); --packagelist only
       # reads the PKGBUILD so it works even though the build failed.
       while IFS= read -r p; do
         [ -n "${p}" ] || continue
         base="$(basename "${p}")"; base="${base%-*}"; base="${base%-*}"; base="${base%-*}"
-        for af in "${LOCALREPO}/${base}"-[0-9]*.pkg.tar.* "${LOCALREPO}/${base}"-*:*.pkg.tar.*; do
+        for af in "${frepo}/${base}"-[0-9]*.pkg.tar.* "${frepo}/${base}"-*:*.pkg.tar.*; do
           [ -e "${af}" ] || continue
           stale+=("${base}  (localrepo still has $(basename "${af}"))"); had=1
         done
@@ -387,12 +422,13 @@ main() {
   fi
 
   umount "${BROOT}/localrepo"
+  umount "${BROOT}/localrepo-shared"
   chroot_umount "${BROOT}"
   trap - EXIT
 
   [ "${built}" -gt 0 ] || die "no packages built"
-  ok "local repo ready -> ${LOCALREPO}"
-  ls -1 "${LOCALREPO}"/*.pkg.tar.* 2>/dev/null | sed 's#.*/#  #'
+  ok "local repos ready -> ${LOCALREPO} + ${LOCALREPO_SHARED}"
+  ls -1 "${LOCALREPO}"/*.pkg.tar.* "${LOCALREPO_SHARED}"/*.pkg.tar.* 2>/dev/null | sed 's#.*/#  #'
 }
 
 main "$@"

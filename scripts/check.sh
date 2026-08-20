@@ -17,8 +17,36 @@ if [ "$(uname -s)" = "Linux" ]; then note "host os" "Linux ok"
 else note "host os" "$(uname -s) (image build needs Linux)"; fi
 
 # --- project layout --------------------------------------------------------
-for d in config config/packages scripts packages vendor "devices/${DEVICE}"; do
+for d in config config/packages scripts packages/shared packages/soc vendor "devices/${DEVICE}"; do
   [ -d "${POCKNIX_ROOT}/${d}" ] && note "dir: ${d}/" "ok" || { note "dir: ${d}/" "MISSING"; fail=1; }
+done
+
+# --- package placement: shared/ vs soc/ -------------------------------------
+# The split is load-bearing: shared/ builds once into [pocknix-shared], soc/
+# builds per SoC gated by ./socs. A PKGBUILD directly under packages/ is
+# invisible to the build; a soc/ package without socs (or with an unknown SoC)
+# would silently vanish from every repo; a socs file under shared/ is a
+# misplacement (shared builds must be SoC-blind).
+while IFS= read -r p; do
+  note "package: ${p#"${POCKNIX_ROOT}"/}" "OUTSIDE shared/ and soc/ — never built"; fail=1
+done < <(find "${POCKNIX_ROOT}/packages" -maxdepth 2 -name PKGBUILD \
+           ! -path "*/packages/shared/*" ! -path "*/packages/soc/*" 2>/dev/null)
+for p in "${POCKNIX_ROOT}"/packages/soc/*/; do
+  [ -d "${p}" ] || continue
+  n="$(basename "${p}")"
+  if [ ! -f "${p}/socs" ]; then
+    note "soc pkg: ${n}" "MISSING socs file"; fail=1; continue
+  fi
+  read -r _socs < "${p}/socs"
+  bad=0
+  for s in ${_socs}; do
+    [ -d "${POCKNIX_ROOT}/kernel/${s}" ] || { note "soc pkg: ${n}" "unknown SoC '${s}' in socs"; fail=1; bad=1; }
+  done
+  [ "${bad}" -eq 0 ] && [ -n "${_socs}" ] && note "soc pkg: ${n}" "socs: ${_socs}"
+done
+for p in "${POCKNIX_ROOT}"/packages/shared/*/socs; do
+  [ -e "${p}" ] || continue
+  note "shared pkg: $(basename "$(dirname "${p}")")" "has a socs file (shared builds are SoC-blind — move it to packages/soc/ or delete the file)"; fail=1
 done
 for f in config/pocknix.conf config/pacman.conf.in config/packages/base.list \
          "devices/${DEVICE}/profile.conf" "kernel/${SOC}/kernel.conf"; do

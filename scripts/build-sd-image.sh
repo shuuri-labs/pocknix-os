@@ -172,7 +172,7 @@ EOF
   chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt.service \
         pocknix-volumed.service pocknix-gamescope-rt.service pocknix-powerd.service 2>/dev/null || true
   # Decky Loader (QAM plugins, incl. Pocknix Control): seed deck's ~/homebrew at boot, then run
-  # the loader under FEX in its private-binfmt namespace (see packages/pocknix-decky).
+  # the loader under FEX in its private-binfmt namespace (see packages/shared/pocknix-decky).
   chroot "${root}" systemctl enable pocknix-decky-sync.service pocknix-decky-loader.service 2>/dev/null || true
   # pocknix-flathub.service is deliberately NOT enabled: pocknix-desktop's NM dispatcher hook
   # (50-pocknix-flathub) starts it when a link comes up. At boot it always failed (no DNS yet).

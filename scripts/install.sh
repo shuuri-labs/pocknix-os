@@ -20,4 +20,4 @@ source "$(dirname "$0")/lib.sh"
 die "Run the installer ON THE DEVICE, not the build host:
     pocknix-install-internal --dry-run     # review the plan
     pocknix-install-internal               # install
-See the header of this file (scripts/install.sh) and packages/pocknix-tools/pocknix-install-internal."
+See the header of this file (scripts/install.sh) and packages/shared/pocknix-tools/pocknix-install-internal."
