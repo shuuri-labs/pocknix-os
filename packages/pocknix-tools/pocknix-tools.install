@@ -1,8 +1,9 @@
-# Migration from the image-overlay era: prune the unowned overlay copies of the
-# installer GUI so the packaged /usr/bin one isn't shadowed by /usr/local/bin on
-# pre-package devices. No-op on fresh images.
+# PATH prefers /usr/local/bin, so a stale overlay copy would shadow the packaged
+# fix on pre-package devices (#34). No-op on fresh images.
 _prune_overlay_tools() {
   rm -f /usr/local/bin/pocknix-installer-gui \
+        /usr/local/bin/pocknix-install-internal \
+        /usr/local/bin/pocknix-uninstall-internal \
         /usr/share/applications/pocknix-installer.desktop
 }
 

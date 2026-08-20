@@ -3,9 +3,9 @@
 #
 # Installing to internal storage repartitions the device's internal UFS and clones the *running*
 # system onto it (like ROCKNIX installtointernal / armada-installer), so it cannot run on the build
-# host — it runs on the SD-booted device. The installer ships in the rootfs (via the overlay) as:
+# host — it runs on the SD-booted device. The installer ships in the rootfs (via pocknix-tools) as:
 #
-#     /usr/local/bin/pocknix-install-internal
+#     /usr/bin/pocknix-install-internal
 #
 # On the device (the SD-booted pocknix), as root:
 #     pocknix-install-internal --dry-run      # print the exact parted plan; make no changes
@@ -20,4 +20,4 @@ source "$(dirname "$0")/lib.sh"
 die "Run the installer ON THE DEVICE, not the build host:
     pocknix-install-internal --dry-run     # review the plan
     pocknix-install-internal               # install
-See the header of this file (scripts/install.sh) and overlay/usr/local/bin/pocknix-install-internal."
+See the header of this file (scripts/install.sh) and packages/pocknix-tools/pocknix-install-internal."

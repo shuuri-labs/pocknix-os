@@ -1,0 +1,10 @@
+// Promptless by the same trust as 50-pocknix-deck.rules; both CLIs self-guard
+// (refuse removable disks and the disk / is on).
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        (action.lookup("program") == "/usr/bin/pocknix-install-internal" ||
+         action.lookup("program") == "/usr/bin/pocknix-uninstall-internal")) {
+        return polkit.Result.YES;
+    }
+});

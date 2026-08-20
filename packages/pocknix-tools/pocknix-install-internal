@@ -221,7 +221,10 @@ parted -s "$DEVICE" rm "$UD_NUM"
 parted -a optimal -s "$DEVICE" mkpart primary ext4   "${UD_START_MIB}MiB"  "${NEW_UD_END_MIB}MiB"
 parted -s "$DEVICE" name "$UD_NUM" userdata
 parted -a optimal -s "$DEVICE" mkpart primary fat32  "${BOOT_START_MIB}MiB" "${BOOT_END_MIB}MiB"
-parted -s "$DEVICE" name "$BOOT_NUM" "$BOOT_GPT_NAME"   # fat32 mkpart auto-sets the msftdata type (= ROCKNIX)
+parted -s "$DEVICE" name "$BOOT_NUM" "$BOOT_GPT_NAME"
+# 'boot on' = ESP type GUID, required: the Odin 2 firmware only exposes ESP-typed
+# internal partitions to the ABL's volume scan, bootlooping msftdata installs (#34).
+parted -s "$DEVICE" set "$BOOT_NUM" boot on
 parted -a optimal -s "$DEVICE" mkpart primary "$ROOT_FS" "${ROOT_START_MIB}MiB" "${UD_END_MIB}MiB"
 parted -s "$DEVICE" name "$ROOT_NUM" "$ROOT_GPT_NAME"
 partprobe "$DEVICE"; sleep 1

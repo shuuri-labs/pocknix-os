@@ -2,13 +2,13 @@
 # pocknix-installer-gui — kdialog front-end for pocknix-install-internal /
 # pocknix-uninstall-internal (kdialog because the KDE stack is already on the
 # image — no GTK/zenity pull). Runs as the session user; every privileged step
-# goes through pkexec, wheel-authorized without a prompt in 50-pocknix-deck.rules.
+# goes through pkexec, wheel-authorized without a prompt in 54-pocknix-installer.rules.
 set -euo pipefail
 
 TITLE="Pocknix Installer"
 LOG="/tmp/pocknix-installer.log"
-INSTALL_CLI="/usr/local/bin/pocknix-install-internal"
-UNINSTALL_CLI="/usr/local/bin/pocknix-uninstall-internal"
+INSTALL_CLI="/usr/bin/pocknix-install-internal"
+UNINSTALL_CLI="/usr/bin/pocknix-uninstall-internal"
 # Internal disk from the BSP's device.conf (matches the CLIs' resolution; RP6 default).
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
