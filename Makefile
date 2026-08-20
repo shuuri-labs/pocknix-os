@@ -9,7 +9,7 @@ SCRIPTS := scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync bootstrap build kernel packages sd-image snapshot stage publish publish-image install check du trim clean distclean
+.PHONY: help sync bootstrap build kernel packages sd-image snapshot stage publish stage-shared publish-shared publish-image install check du trim clean distclean
 
 help: ## Show this help
 	@echo "pocknix-os build targets:"
@@ -42,6 +42,12 @@ stage: ## Mirror the LIVE repo into build/stage + swap in PKG="a b" (publish sou
 
 publish: ## Sign + publish the staged repo (run 'make stage' first; user, no sudo)
 	@$(SCRIPTS)/publish-repo.sh $(PUBLISH_ARGS)
+
+stage-shared: ## Stage the SoC-neutral [pocknix-shared] repo (PKG="a b" [DROP="x"]; once, not per SoC)
+	@POCKNIX_REPO_SCOPE=shared POCKNIX_STAGE_DROP="$(DROP)" $(SCRIPTS)/stage-repo.sh $(PKG)
+
+publish-shared: ## Sign + publish the staged [pocknix-shared] repo (run 'make stage-shared' first)
+	@POCKNIX_REPO_SCOPE=shared $(SCRIPTS)/publish-repo.sh $(PUBLISH_ARGS)
 
 publish-image: ## Compress + checksum + upload the SD image for download
 	@$(SCRIPTS)/publish-image.sh

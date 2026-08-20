@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# stage-repo.sh — build the publish source (build/stage/<soc>) FROM the LIVE repo.
+# stage-repo.sh — build the publish source (build/stage/<soc> or build/stage/shared) FROM the LIVE repo.
 #
 # build/localrepo is shared mutable build output: parallel sessions drop test
 # packages, downgrades, and half-finished work into it, so publishing it
@@ -30,22 +30,24 @@ done
 [ -n "${POCKNIX_REPO_RCLONE_REMOTE}" ] || die "POCKNIX_REPO_RCLONE_REMOTE unset — no live repo to stage from"
 [ "$(id -u)" -ne 0 ] || die "run as the publish user, not root (rclone + gpg config live in the user account)"
 
-REMOTE="${POCKNIX_REPO_RCLONE_REMOTE}/${SOC}"
-MARKER="${STAGE_DIR}/.staged-ok"
+# Scope (lib.sh): the per-SoC [pocknix] tree by default, the SoC-neutral
+# [pocknix-shared] tree with POCKNIX_REPO_SCOPE=shared (make stage-shared).
+REMOTE="${POCKNIX_REPO_RCLONE_REMOTE}/${REPO_SEG}"
+MARKER="${REPO_STAGE_DIR}/.staged-ok"
 
-mkdir -p "${STAGE_DIR}" 2>/dev/null \
-  || die "cannot create ${STAGE_DIR} (root-owned build/? fix once: sudo install -d -o $(id -un) ${BUILD_DIR}/stage)"
+mkdir -p "${REPO_STAGE_DIR}" 2>/dev/null \
+  || die "cannot create ${REPO_STAGE_DIR} (root-owned build/? fix once: sudo install -d -o $(id -un) ${BUILD_DIR}/stage)"
 rm -f "${MARKER}"
 
 # sync (not copy): also deletes local leftovers, so stage snaps back to
 # exactly-live before this run's swap — a previously staged-but-unpublished
 # package cannot survive into this release.
-log "refreshing staging mirror from live: ${REMOTE} -> ${STAGE_DIR}"
-rclone sync "${REMOTE}" "${STAGE_DIR}" \
-  || die "rclone sync from ${REMOTE} failed (first-ever publish of this SoC? seed with: POCKNIX_PUBLISH_FROM=localrepo make publish)"
+log "refreshing staging mirror from live: ${REMOTE} -> ${REPO_STAGE_DIR}"
+rclone sync "${REMOTE}" "${REPO_STAGE_DIR}" \
+  || die "rclone sync from ${REMOTE} failed (first-ever publish of this tree? seed with: POCKNIX_PUBLISH_FROM=localrepo make publish)"
 # drop the downloaded db/index so publish's repo-add rebuilds a FRESH database
 # containing exactly the staged package set (no ghost entries).
-rm -f "${STAGE_DIR}"/pocknix.db* "${STAGE_DIR}"/pocknix.files*
+rm -f "${REPO_STAGE_DIR}/${REPO_NAME}".db* "${REPO_STAGE_DIR}/${REPO_NAME}".files*
 
 shopt -s nullglob
 
@@ -56,31 +58,43 @@ list_pkgs() {  # non-sig package filenames in $1, sorted
   local f; for f in "$1"/*.pkg.tar.*; do [[ "$f" == *.sig ]] || basename "$f"; done | sort
 }
 
-live_list="$(list_pkgs "${STAGE_DIR}")"
+live_list="$(list_pkgs "${REPO_STAGE_DIR}")"
 
 for name in "$@"; do
   # exactly one built artifact for <name> in the localrepo (both globs match
   # epoch'd filenames, hence the dedupe; pkgbase check guards glob overreach)
   found=()
-  for f in "${LOCALREPO_DIR}/${name}"-[0-9]*.pkg.tar.* "${LOCALREPO_DIR}/${name}"-*:*.pkg.tar.*; do
+  for f in "${REPO_LOCALREPO_DIR}/${name}"-[0-9]*.pkg.tar.* "${REPO_LOCALREPO_DIR}/${name}"-*:*.pkg.tar.*; do
     [[ "$f" == *.sig ]] && continue
     [ "$(pkgbase "$f")" = "${name}" ] || continue
     case " ${found[*]-} " in *" ${f} "*) ;; *) found+=("$f") ;; esac
   done
-  [ "${#found[@]}" -gt 0 ] || die "${name}: no artifact in ${LOCALREPO_DIR} — build it first (make packages; split artifacts build from their parent PKGBUILD)"
+  # Per-SoC staging falls back to the SHARED localrepo: shared packages build
+  # only there, but during the [pocknix-shared] transition they are also staged
+  # into the per-SoC trees (same bytes) — and pocknix-base permanently so (it
+  # carries the stanza migration, so stale devices must reach it from [pocknix]).
+  if [ "${#found[@]}" -eq 0 ] && [ "${POCKNIX_REPO_SCOPE}" != "shared" ]; then
+    for f in "${LOCALREPO_SHARED_DIR}/${name}"-[0-9]*.pkg.tar.* "${LOCALREPO_SHARED_DIR}/${name}"-*:*.pkg.tar.*; do
+      [[ "$f" == *.sig ]] && continue
+      [ "$(pkgbase "$f")" = "${name}" ] || continue
+      case " ${found[*]-} " in *" ${f} "*) ;; *) found+=("$f") ;; esac
+    done
+    [ "${#found[@]}" -gt 0 ] && log "${name}: staging the SHARED artifact into ${REPO_SEG} (dual-publish)"
+  fi
+  [ "${#found[@]}" -gt 0 ] || die "${name}: no artifact in ${REPO_LOCALREPO_DIR} (or the shared localrepo) — build it first (make packages; split artifacts build from their parent PKGBUILD)"
   [ "${#found[@]}" -eq 1 ] || die "${name}: multiple versions in localrepo ($(basename "${found[0]}") ...) — remove the stale ones first"
   # swap: drop every live version of <name> (sigs match the same globs), stage the new one
-  for f in "${STAGE_DIR}/${name}"-[0-9]*.pkg.tar.* "${STAGE_DIR}/${name}"-*:*.pkg.tar.*; do
+  for f in "${REPO_STAGE_DIR}/${name}"-[0-9]*.pkg.tar.* "${REPO_STAGE_DIR}/${name}"-*:*.pkg.tar.*; do
     [ "$(pkgbase "$f")" = "${name}" ] && rm -f "$f"
   done
-  cp "${found[0]}" "${STAGE_DIR}/"
+  cp "${found[0]}" "${REPO_STAGE_DIR}/"
   log "staged: $(basename "${found[0]}")"
 done
 
 for d in "${DROPS[@]-}"; do
   [ -n "${d}" ] || continue
   hit=0
-  for f in "${STAGE_DIR}/${d}"-[0-9]*.pkg.tar.* "${STAGE_DIR}/${d}"-*:*.pkg.tar.*; do
+  for f in "${REPO_STAGE_DIR}/${d}"-[0-9]*.pkg.tar.* "${REPO_STAGE_DIR}/${d}"-*:*.pkg.tar.*; do
     [ "$(pkgbase "$f")" = "${d}" ] || continue
     rm -f "$f"; hit=1
   done
@@ -89,7 +103,7 @@ for d in "${DROPS[@]-}"; do
 done
 
 # --- delta gate: staging must differ from live by EXACTLY the named packages ---
-staged_list="$(list_pkgs "${STAGE_DIR}")"
+staged_list="$(list_pkgs "${REPO_STAGE_DIR}")"
 adds="$(comm -13 <(printf '%s' "${live_list}") <(printf '%s' "${staged_list}"))"
 dels="$(comm -23 <(printf '%s' "${live_list}") <(printf '%s' "${staged_list}"))"
 
@@ -120,10 +134,14 @@ while IFS= read -r f; do [ -n "$f" ] && printf '  - %s\n' "$f"; done <<< "${dels
 
 # marker last, so it is newer than every staged file (publish checks this)
 {
-  printf 'soc=%s\nstaged=%s\n' "${SOC}" "$(date -u +%FT%TZ)"
+  printf 'repo=%s\nstaged=%s\n' "${REPO_SEG}" "$(date -u +%FT%TZ)"
   while IFS= read -r f; do [ -n "$f" ] && printf '%s\n' "+$f"; done <<< "${adds}"
   while IFS= read -r f; do [ -n "$f" ] && printf '%s\n' "-$f"; done <<< "${dels}"
 } > "${MARKER}"
 
-ok "staged -> ${STAGE_DIR}"
-log "next: make publish DEVICE=<target of ${SOC}>  (publishes the stage dir; the marker is consumed on success)"
+ok "staged -> ${REPO_STAGE_DIR}"
+if [ "${POCKNIX_REPO_SCOPE}" = "shared" ]; then
+  log "next: make publish-shared  (publishes the shared stage dir; the marker is consumed on success)"
+else
+  log "next: make publish DEVICE=<target of ${SOC}>  (publishes the stage dir; the marker is consumed on success)"
+fi

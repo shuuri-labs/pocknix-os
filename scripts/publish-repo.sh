@@ -38,11 +38,13 @@
 
 source "$(dirname "$0")/lib.sh"
 
-REPO_DB="pocknix.db.tar.gz"
-# Per-SoC: each SoC's repo is a self-contained tree published under
-# <remote>/<soc> (tuned packages share pkgnames across SoCs with different
-# binaries). Run once per SoC: `make stage`+`make publish DEVICE=<target of that soc>`.
-RCLONE_DEST="${POCKNIX_REPO_RCLONE_REMOTE:+${POCKNIX_REPO_RCLONE_REMOTE}/${SOC}}"
+REPO_DB="${REPO_NAME}.db.tar.gz"
+# Scope (lib.sh): each SoC's [pocknix] repo is a self-contained tree published
+# under <remote>/<soc> (tuned packages share pkgnames across SoCs with
+# different binaries) — run once per SoC: `make stage` + `make publish
+# DEVICE=<target of that soc>`. The SoC-neutral [pocknix-shared] tree lives
+# under <remote>/shared — run ONCE: `make stage-shared` + `make publish-shared`.
+RCLONE_DEST="${POCKNIX_REPO_RCLONE_REMOTE:+${POCKNIX_REPO_RCLONE_REMOTE}/${REPO_SEG}}"
 unsigned=0 serve=0
 for a in "$@"; do
   case "$a" in
@@ -59,19 +61,19 @@ MARKER=""
 if [ "${serve}" -eq 1 ]; then
   # LAN testing serves the raw build output (test packages are the point) and
   # never uploads, so nothing can leak to the live repo.
-  SRC="${LOCALREPO_DIR}"
+  SRC="${REPO_LOCALREPO_DIR}"
   RCLONE_DEST=""
   [ -d "${SRC}" ] || die "no ${SRC} — run 'make packages' first"
 elif [ "${POCKNIX_PUBLISH_FROM:-stage}" = "localrepo" ]; then
-  SRC="${LOCALREPO_DIR}"
+  SRC="${REPO_LOCALREPO_DIR}"
   [ -d "${SRC}" ] || die "no ${SRC} — run 'make packages' first"
   warn "publishing the RAW localrepo (shared build output, bucket will be pruned to match it)"
   warn "diff it against the live db first if you have not already"
 elif [ "${POCKNIX_PUBLISH_FROM:-stage}" = "stage" ]; then
-  SRC="${STAGE_DIR}"
-  MARKER="${STAGE_DIR}/.staged-ok"
+  SRC="${REPO_STAGE_DIR}"
+  MARKER="${REPO_STAGE_DIR}/.staged-ok"
   [ -f "${MARKER}" ] || die "no staged release — run 'make stage PKG=\"...\"' first
-(publish sources ${STAGE_DIR}, never the shared localrepo; see scripts/stage-repo.sh)"
+(publish sources ${REPO_STAGE_DIR}, never the raw localrepo; see scripts/stage-repo.sh)"
   stale="$(find "${SRC}" -name '*.pkg.tar.*' -newer "${MARKER}" -print -quit)"
   [ -z "${stale}" ] || die "stage dir changed after staging ($(basename "${stale}")) — re-run make stage"
 else
@@ -116,7 +118,7 @@ if [ -n "${RCLONE_DEST}" ]; then
   # fetches) SYMLINKS to the .tar.gz; without -L rclone skips them and the device 404s
   # on the db. --exclude '*.old*': repo-add's local backups are not for publishing.
   rclone copy --include '*.pkg.tar.*' --exclude '*.old*' "${SRC}" "${RCLONE_DEST}"
-  rclone copy -L --include 'pocknix.db*' --include 'pocknix.files*' --include 'pocknix-repo.gpg' \
+  rclone copy -L --include "${REPO_NAME}.db*" --include "${REPO_NAME}.files*" --include 'pocknix-repo.gpg' \
     --exclude '*.old*' "${SRC}" "${RCLONE_DEST}"
   # prune package versions that no longer exist locally (keeps the bucket bounded)
   rclone sync -L --exclude '*.old*' --exclude '.staged-ok' "${SRC}" "${RCLONE_DEST}"
@@ -136,6 +138,6 @@ if [ "${serve}" -eq 1 ]; then
   # serve the PARENT dir: shipped stanzas point at <base>/<soc>, so the URL path
   # must include the SoC segment (matches images built with POCKNIX_REPO_URL=http://<vm-ip>:8000)
   log "serving ${BUILD_DIR}/localrepo on http://${ip:-<this-host>}:8000 (Ctrl-C to stop; nothing was uploaded)"
-  log "device stanza:  [pocknix]  SigLevel = Optional TrustAll  Server = http://${ip:-<vm-ip>}:8000/${SOC}"
+  log "device stanza:  [${REPO_NAME}]  SigLevel = Optional TrustAll  Server = http://${ip:-<vm-ip>}:8000/${REPO_SEG}"
   python3 -m http.server 8000 -d "${BUILD_DIR}/localrepo"
 fi
