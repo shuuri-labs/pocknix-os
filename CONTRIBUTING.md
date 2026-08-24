@@ -5,7 +5,7 @@ hardware, so the most valuable thing a PR can bring is **evidence it works on a 
 and **instructions that let me reproduce that on mine**.
 
 Questions, ideas, or "is this worth doing?" chats: the
-[pocknix Discord](https://discord.gg/vcDtuNfmC) or a GitHub issue. For anything large
+[pocknix Discord](https://discord.gg/mSSNKQg9m) or a GitHub issue. For anything large
 (a new device family, a new session, a kernel bump, a new packaging approach), open an issue
 first so we can agree the shape before you spend the time.
 
