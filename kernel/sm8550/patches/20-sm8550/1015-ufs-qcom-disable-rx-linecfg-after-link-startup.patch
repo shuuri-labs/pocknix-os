@@ -13,6 +13,8 @@ This keeps RX LineCfg enabled while the link starts, then disables host RX
 LineCfg before post-startup power-mode-change traffic.
 
 Signed-off-by: jaewun <jaewun@users.noreply.github.com>
+[pocknix: 7.2 grew its own POST_CHANGE case (auto-hibern8 HW clk ctrl);
+ the LineCfg disable now joins it.]
 
 --- a/drivers/phy/qualcomm/phy-qcom-qmp-ufs.c
 +++ b/drivers/phy/qualcomm/phy-qcom-qmp-ufs.c
@@ -146,15 +148,14 @@ Signed-off-by: jaewun <jaewun@users.noreply.github.com>
  		if (ufs_qcom_cfg_timers(hba, false, ULONG_MAX)) {
  			dev_err(hba->dev, "%s: ufs_qcom_cfg_timers() failed\n",
  				__func__);
-@@ -738,5 +746,11 @@ static int ufs_qcom_link_startup_notify(struct ufs_hba *hba,
- 		err = ufshcd_disable_host_tx_lcc(hba);
- 
+@@ -745,6 +753,10 @@ static int ufs_qcom_link_startup_notify(struct ufs_hba *hba,
  		break;
-+	case POST_CHANGE:
+ 	case POST_CHANGE:
+ 		ufs_qcom_link_startup_post_change(hba);
 +		linecfg_err = qcom_qmp_ufs_ctrl_rx_linecfg(host->generic_phy, false);
 +		if (linecfg_err && linecfg_err != -EOPNOTSUPP)
 +			dev_warn(hba->dev, "failed to disable RX LineCfg: %d\n",
 +				 linecfg_err);
-+		break;
+ 		break;
  	default:
  		break;
