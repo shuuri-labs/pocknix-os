@@ -1,6 +1,6 @@
 # pocknix-os
 
-> Questions, bug reports, or just want to hang out? Join the [pocknix Discord](https://discord.gg/vcDtuNfmC)!
+> Questions, bug reports, or just want to hang out? Join the [pocknix Discord](https://discord.gg/mSSNKQg9m)!
 
 **pocknix-os is an Arch Linux ARM (ALARM) based distro for Retroid and AYN Snapdragon handhelds.** Using the Steam ARM client, it turns these handhelds into devices that feel like a Steam Deck - power on, land in SteamOS gaming mode, pick a game, and play - but it does so on a fully mutable and performance-tuned Arch Linux base, so it's closer to something like CachyOS Handheld Edition than to real SteamOS, Bazzite, or armada.
 
