@@ -2,7 +2,7 @@
 # "Mesa Version" tweak selects by pointing VK_DRIVER_FILES at them (ARM Proton path).
 # Counterpart of pocknix-turnip-x86; same per-SoC tuning contract as packages/soc/mesa.
 pkgname=pocknix-turnip-arm
-pkgver=20260817
+pkgver=20260825
 pkgrel=1
 pkgdesc="Pinned aarch64 Turnip builds for per-game Mesa selection (SoC-tuned)"
 arch=('aarch64')
@@ -10,7 +10,9 @@ url="https://www.mesa3d.org/"
 license=("MIT AND BSD-3-Clause AND SGI-B-2.0")
 depends=(expat glibc libdrm libdisplay-info libx11 libxcb libxshmfence spirv-tools
          systemd-libs vulkan-icd-loader wayland xcb-util-keysyms zlib zstd)
-makedepends=(meson ninja python-mako python-packaging python-yaml python-ply
+# glslang: 26.2 folded freedreno into the BVH shader set, so glslangValidator is now a hard
+# requirement of any build with vulkan-drivers=freedreno.
+makedepends=(meson ninja python-mako python-packaging python-yaml python-ply glslang
              expat libdrm libglvnd libdisplay-info spirv-tools systemd-libs vulkan-icd-loader
              wayland wayland-protocols zlib zstd
              xorgproto libx11 libxcb libxext libxshmfence libxxf86vm libxrandr xcb-util-keysyms)
@@ -18,7 +20,7 @@ options=(!lto)
 # The "devel" entry is a PINNED mesa main snapshot (main carries no tag) — pinned, not floating,
 # so rebuilds reproduce; refresh _develcommit deliberately.
 _develcommit=0b1b8798d81cb4da8c181c7d81076a0541006853
-_versions=('25.0.7' '25.1.9' '25.2.8' '25.3.6' '26.0.8' '26.1.6' '26.2.0' '26.3.0devel')
+_versions=('25.0.7' '25.1.9' '25.2.8' '25.3.6' '26.0.8' '26.1.6' '26.2.1' '26.3.0devel')
 source=('0001-c11-threads-fix-build-on-c23.patch'
         'https://archive.mesa3d.org/mesa-25.0.7.tar.xz'
         'https://archive.mesa3d.org/mesa-25.1.9.tar.xz'
@@ -26,7 +28,7 @@ source=('0001-c11-threads-fix-build-on-c23.patch'
         'https://archive.mesa3d.org/mesa-25.3.6.tar.xz'
         'https://archive.mesa3d.org/mesa-26.0.8.tar.xz'
         'https://archive.mesa3d.org/mesa-26.1.6.tar.xz'
-        'https://archive.mesa3d.org/mesa-26.2.0.tar.xz'
+        'https://archive.mesa3d.org/mesa-26.2.1.tar.xz'
         "https://gitlab.freedesktop.org/mesa/mesa/-/archive/${_develcommit}/mesa-${_develcommit}.tar.gz")
 sha256sums=('SKIP'
             '592272df3cf01e85e7db300c449df5061092574d099da275d19e97ef0510f8a6'
@@ -35,7 +37,7 @@ sha256sums=('SKIP'
             '59217efeac3b64e7ced958324b9db7494f1e0741aeb22d780276514cc1b8f206'
             'caf1c0061a68e88dfa74967a7e780c0e85d65b6c4e334cd69095a5dc54ad78bc'
             '5296b88a0f1e012e2cb9ada150a2bbadf728ca81e5a4fb2ab43c83a4d2158606'
-            'efd4bb08cdb7c365a812cd4e6c9202ab55b2f22cdcd13c7d6c4f9647b799a4ef'
+            'c47e81bddc4760360a41ac3c5acec38acb81f9d750ecef47e7f3adc7021a4442'
             '9f0fb71d23005d8c2c2cea3af1a5c8768643e3b95d5fc0cf6e4e7c34db2b2ae2')
 
 # The devel snapshot extracts to mesa-<commit>, releases to mesa-<ver>; RC tarballs keep the

@@ -5,16 +5,18 @@
 pkgbase=mesa
 pkgname=(mesa vulkan-freedreno)
 epoch=2
-pkgver=26.2.0
+pkgver=26.2.1
 # differs from pkgver only for RCs: the tarball keeps the hyphen makepkg forbids in pkgver
 _srcver=${pkgver}
-pkgrel=2
+pkgrel=1
 pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (${_srcver})"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
 license=("MIT AND BSD-3-Clause AND SGI-B-2.0")
+# glslang: 26.2 folded freedreno into the BVH shader set, so glslangValidator is now a hard
+# requirement of any build with vulkan-drivers=freedreno.
 makedepends=(
-  meson ninja python-mako python-packaging python-yaml python-ply
+  meson ninja python-mako python-packaging python-yaml python-ply glslang
   expat libdrm libglvnd libdisplay-info spirv-tools systemd-libs vulkan-icd-loader
   wayland wayland-protocols zlib zstd
   xorgproto libx11 libxcb libxext libxshmfence libxxf86vm libxrandr xcb-util-keysyms
@@ -22,7 +24,7 @@ makedepends=(
 # upstream considers LTO broken until explicit notice (Arch mesa does the same)
 options=(!lto)
 source=("https://archive.mesa3d.org/mesa-${_srcver}.tar.xz")
-sha256sums=('efd4bb08cdb7c365a812cd4e6c9202ab55b2f22cdcd13c7d6c4f9647b799a4ef')
+sha256sums=('c47e81bddc4760360a41ac3c5acec38acb81f9d750ecef47e7f3adc7021a4442')
 
 prepare() {
   cd "mesa-${_srcver}"

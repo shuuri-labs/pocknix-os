@@ -6,13 +6,13 @@
 
 pkgname=fex-rootfs
 _rootfsdate=2026-01-08             # pinned dated image from FEX's rootfs CDN (immutable path)
-_mesaver=26.1.5-1                  # x86_64 turnip dropped INTO the image (see repack below)
+_mesaver=26.2.1-1                  # x86_64 turnip dropped INTO the image (see repack below)
 # Per-game Mesa Version payloads (same pins as pocknix-turnip-x86) must live INSIDE the image:
 # pressure-vessel captures graphics against this rootfs, not the host, so host-only payloads
 # are invisible to it. vk-x86-container.list ships to the host as the wrapper's SLR pin gate.
-_vkvers=('25.2.7-1' '25.3.5-1' '26.0.6-1' '26.1.6-1')
+_vkvers=('25.2.7-1' '25.3.5-1' '26.0.6-1' '26.1.6-1' "${_mesaver}")
 pkgver=${_rootfsdate//-/}          # 20260108
-pkgrel=5
+pkgrel=7
 pkgdesc="x86_64 ArchLinux RootFS for FEX (x86 game userland + native Turnip GPU passthrough)"
 arch=('aarch64')
 url="https://rootfs.fex-emu.gg/"
@@ -42,7 +42,7 @@ noextract=("ArchLinux-${_rootfsdate}.sqsh"
            "vulkan-freedreno-26.0.6-1-x86_64.pkg.tar.zst"
            "vulkan-freedreno-26.1.6-1-x86_64.pkg.tar.zst")
 sha256sums=('cb059973b7953ad9165845529655189b96f9a174b14a6a149c87ec884b0c5e90'
-            '7ed72c2c6b92c5bbca4199b7b3026bd3f42adf70805c43196dbfcead1e73665a'
+            'b4b2e6e60c385dc2f9fbc0781280adec976ccd9cb037e11c4a8ee9801ea3f619'
             '07ab1479ec5e70aea174e2d0e340bd9364b507ed74f2df3bfd51b3c6f40e5787'
             '312213911881c0742e2a825432feac761e863945b74bb3a6daca97a99778d35e'
             'b5554bb73674d6a5e7772bee71abd0e9d40929c61b5b690f79aba041ccffb5a8'
