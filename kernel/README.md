@@ -45,7 +45,7 @@ commit instead — same build, but reproducible and clone-standalone.
 
 The kernel is **not** "stock Linux + a few device patches." It reproduces ROCKNIX's recipe:
 stock kernel.org source (pinned per SoC in `kernel/<soc>/kernel.conf` — sm8550 **`7.2`**,
-sm8250 **`7.1.5`**) with the full ROCKNIX patch stack applied **in order**, then the SoC
+sm8250 **`7.2`**) with the full ROCKNIX patch stack applied **in order**, then the SoC
 config, then qcom-abl packaging. The pin can lead or lag ROCKNIX; `make sync` moves the
 patch stack, never the pin.
 
