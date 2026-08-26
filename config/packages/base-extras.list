@@ -1,0 +1,7 @@
+# ALARM packages hosted in [pocknix-base] but installed by no image (opt-in via
+# pacman -S on a locked device). The harvest only sees what a build installed, hence
+# a hand list; every dep must be hosted too or snapshot-base.sh refuses. dev/pacman-repo.md
+
+# --- VPN / remote access ---
+tailscale
+wireguard-tools      # no openresolv for wg-quick DNS: conflicts with the base's systemd-resolvconf
