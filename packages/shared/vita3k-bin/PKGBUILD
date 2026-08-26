@@ -3,7 +3,7 @@
 # vendored on; taking a newer build means bumping the date AND clearing the srccache copy.
 pkgname=vita3k-bin
 pkgver=0.2026.08.10
-pkgrel=1
+pkgrel=2
 pkgdesc="Vita3K — PS Vita emulator, native aarch64 AppImage (vendored, rolling upstream)"
 arch=('aarch64')
 url="https://vita3k.org"

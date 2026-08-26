@@ -8,7 +8,7 @@ epoch=2
 pkgver=26.2.1
 # differs from pkgver only for RCs: the tarball keeps the hyphen makepkg forbids in pkgver
 _srcver=${pkgver}
-pkgrel=1
+pkgrel=2
 pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (${_srcver})"
 arch=('aarch64')
 url="https://www.mesa3d.org/"

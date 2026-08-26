@@ -3,7 +3,7 @@
 # build chroot needs no Rust toolchain; the per-device config ships in pocknix-bsp.
 pkgname=inputplumber
 pkgver=0.75.2
-pkgrel=2
+pkgrel=3
 pkgdesc="Open source input router and remapper daemon (prebuilt aarch64 release)"
 arch=('aarch64')
 url="https://github.com/ShadowBlip/InputPlumber"

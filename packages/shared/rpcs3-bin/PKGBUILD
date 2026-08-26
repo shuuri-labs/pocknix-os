@@ -3,7 +3,7 @@
 # RPCS3/rpcs3-binaries-linux-arm64, one release per commit tagged build-<sha>.
 pkgname=rpcs3-bin
 pkgver=0.0.42.19699
-pkgrel=2
+pkgrel=3
 pkgdesc="RPCS3 — PS3 emulator, official aarch64 AppImage (vendored)"
 arch=('aarch64')
 url="https://rpcs3.net"

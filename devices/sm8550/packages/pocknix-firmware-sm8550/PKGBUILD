@@ -4,7 +4,7 @@
 # and no ALARM package touches it; the overlay rest stays with build-image's rsync.
 pkgname=pocknix-firmware-sm8550
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="SM8550 family vendor firmware overrides (ath12k wifi + VPU), immune to linux-firmware updates"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

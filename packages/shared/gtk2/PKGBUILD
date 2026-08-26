@@ -2,7 +2,7 @@
 # dlopens libgtk-x11-2.0.so.0, so the library has to exist on the image.
 pkgname=gtk2
 pkgver=2.24.33
-pkgrel=2
+pkgrel=3
 pkgdesc="GTK+ 2 GUI toolkit (built for ARM; required by Steam's native client UI)"
 arch=('aarch64')
 url="https://www.gtk.org/"

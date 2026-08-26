@@ -2,7 +2,7 @@
 # Linux AppImage.
 pkgname=xemu-bin
 pkgver=0.8.136
-pkgrel=3
+pkgrel=4
 pkgdesc="xemu — original Xbox emulator, official aarch64 AppImage (vendored)"
 arch=('aarch64')
 url="https://xemu.app"

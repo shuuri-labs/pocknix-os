@@ -3,7 +3,7 @@
 # so a bumped base never has to repoint devices.
 pkgname=pocknix-lock-migrate
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="One-shot migration of a rolling pocknix device onto the locked base snapshot"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

@@ -12,7 +12,7 @@ _mesaver=26.2.1-1                  # x86_64 turnip dropped INTO the image (see r
 # are invisible to it. vk-x86-container.list ships to the host as the wrapper's SLR pin gate.
 _vkvers=('25.2.7-1' '25.3.5-1' '26.0.6-1' '26.1.6-1' "${_mesaver}")
 pkgver=${_rootfsdate//-/}          # 20260108
-pkgrel=7
+pkgrel=8
 pkgdesc="x86_64 ArchLinux RootFS for FEX (x86 game userland + native Turnip GPU passthrough)"
 arch=('aarch64')
 url="https://rootfs.fex-emu.gg/"

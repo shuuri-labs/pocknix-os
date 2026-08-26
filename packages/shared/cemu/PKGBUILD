@@ -2,7 +2,7 @@
 # x86-only, but the tree carries a native AArch64 recompiler backend that no release includes yet.
 pkgname=cemu
 pkgver=2.6.rocknix.6f6c129
-pkgrel=2
+pkgrel=3
 _commit=6f6c1299e29fa6e1062ae283a035b4ef787cc397   # = ROCKNIX cemu-sa PKG_VERSION
 pkgdesc="Cemu — Wii U emulator (native aarch64 build with the ARM64 recompiler)"
 arch=('aarch64')

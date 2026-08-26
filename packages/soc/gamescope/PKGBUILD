@@ -7,7 +7,7 @@
 pkgname=gamescope
 epoch=1
 pkgver=3.16.0.rocknix.20260802.6644cc9
-pkgrel=2
+pkgrel=3
 _commit=6644cc9a07d8ba937003deae8bd7c28a490d0c64
 install=gamescope.install
 pkgdesc="SteamOS session compositing WM — patched (rotation-shader, for msm/rotated panels)"
