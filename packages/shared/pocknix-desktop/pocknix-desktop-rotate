@@ -43,7 +43,5 @@ if [ -z "${OUTPUT}" ]; then
   exit 1
 fi
 
-log "configuring output '${OUTPUT}': rotation=${ROTATE} scale=${SCALE}"
-# One transaction so kwin applies rotation + scale together (avoids an intermediate bad mode).
-kscreen-doctor "output.${OUTPUT}.rotation.${ROTATE}" "output.${OUTPUT}.scale.${SCALE}" \
-  || { log "kscreen-doctor failed — try POCKNIX_OUTPUT/POCKNIX_ROTATE overrides"; exit 1; }
+log "configuring output '${OUTPUT}': rotation and scale left to user/stock settings"
+# Do not force rotation or scaling via kscreen-doctor anymore
