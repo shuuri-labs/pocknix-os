@@ -4,8 +4,8 @@
 # Packaging it at all is what keeps Image and modules versioned together atomically and makes a bad
 # kernel rollback-able. The cmdline is DEVICE data and ships in each device's BSP, not here.
 pkgname=linux-pocknix-sm8550
-pkgver=7.1.5
-pkgrel=4
+pkgver=7.2
+pkgrel=1
 pkgdesc="SM8550 kernel (stock ${pkgver} + ROCKNIX patch stack, SoC board dtbs) — packaged from 'make kernel' output"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"

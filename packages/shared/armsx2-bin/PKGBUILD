@@ -3,10 +3,10 @@
 # those assets without warning, so a bump that 404s needs the release page's asset list re-read,
 # not just an edited _nightly/_gitsha. Take the 4K-page variant: our kernels use 4K pages.
 pkgname=armsx2-bin
-_nightly=20260805
-_gitsha=dd5b6616eb
+_nightly=20260825
+_gitsha=ab1df6fdd6
 pkgver=2.6.6.nightly${_nightly}
-pkgrel=2
+pkgrel=1
 pkgdesc="ARMSX2 — PS2 emulator, native-ARM64 PCSX2 fork (vendored AppImage, official nightly)"
 arch=('aarch64')
 url="https://github.com/ARMSX2/ARMSX2"
@@ -15,7 +15,7 @@ depends=('fuse2')
 options=('!strip')   # AppImage = ELF runtime + squashfs payload; strip would corrupt it
 source=("ARMSX2-${pkgver}.AppImage::https://github.com/ARMSX2/ARMSX2/releases/download/nightly-${_nightly}/ARMSX2-nightly-${_nightly}-${_gitsha}-Linux-arm64-4K-pages.AppImage"
         'pocknix-armsx2.desktop')
-sha256sums=('a77c2fb01864af1652ca462c57451aef57657f394725d06d230879a54e61e259'
+sha256sums=('01b099acb7964c76608e1d29ed83460bdd24255d13fbd01ad1a0b57ec167907e'
             'SKIP')
 noextract=("ARMSX2-${pkgver}.AppImage")
 
