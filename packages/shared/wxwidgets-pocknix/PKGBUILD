@@ -4,7 +4,7 @@
 # would NOT work: unqualified `pacman -S <name>` takes the first repo with the name, [pocknix] is last.
 pkgname=wxwidgets-pocknix
 pkgver=3.3.2
-pkgrel=2
+pkgrel=3
 pkgdesc="wxWidgets 3.3 (gtk3, lean: no webview/media) — required by cemu, ALARM only has 3.2"
 arch=('aarch64')
 url="https://wxwidgets.org"

@@ -3,7 +3,7 @@
 # entirely dead controls. The WHOLE set is vendored so Bluetooth pads work untouched too.
 pkgname=retroarch-autoconfig-pocknix
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="libretro joypad autoconfig profiles (udev) — controller bindings for RetroArch"
 arch=('any')
 url="https://github.com/libretro/retroarch-joypad-autoconfig"

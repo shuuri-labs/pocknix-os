@@ -4,7 +4,7 @@
 # ALARM python bump needs a pkgrel rebuild rather than a new pkgver.
 pkgname=python-pyxel
 pkgver=2.5.3
-pkgrel=1
+pkgrel=2
 pkgdesc="Pyxel retro game engine for Python (upstream aarch64 wheel)"
 arch=('aarch64')
 url="https://github.com/kitao/pyxel"

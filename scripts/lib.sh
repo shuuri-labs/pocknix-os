@@ -84,6 +84,13 @@ need_linux() { [ "$(uname -s)" = "Linux" ] || die "the image build must run on a
 have()     { command -v "$1" >/dev/null 2>&1; }
 need_tool(){ have "$1" || die "missing required tool: $1"; }
 
+# --- package lists ---------------------------------------------------------
+# awk $1, not sed 's/#.*//': sed keeps the whitespace before an inline comment and
+# pacman then can't match the name.
+read_pkglist() {
+  awk '{ sub(/#.*/, ""); if ($1 != "") print $1 }' "$1"
+}
+
 # --- chroot mount/teardown (idempotent) ------------------------------------
 chroot_mount() {
   local root="$1"

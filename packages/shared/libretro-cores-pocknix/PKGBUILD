@@ -5,7 +5,7 @@
 # ALARM's libretro-* packages use, so a vendored core can be replaced transparently.
 pkgname=libretro-cores-pocknix
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Curated prebuilt aarch64 libretro cores for the RP6 (vendored, ArkOS/TheRA set)"
 arch=('aarch64')
 url="https://github.com/christianhaitian/retroarch-cores"

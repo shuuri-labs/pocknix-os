@@ -11,6 +11,10 @@ pkgdesc="Manifest and version stamp of the frozen pocknix ALARM base snapshot"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('MIT')
+# Base 20260826 renamed mbedtls -> mbedtls3 with no conflicts= upstream: replaces=
+# drops the old copy in the same -Syu (default-yes under --noconfirm; conflicts= is not).
+replaces=('mbedtls')
+conflicts=('mbedtls')
 source=('pocknix-base.lock')
 sha256sums=('SKIP')
 

@@ -3,7 +3,7 @@
 # and must resolve at first boot with no Online Updater step.
 pkgname=retroarch-shaders-pocknix
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="libretro slang shader set for RetroArch (vendored; replaces the Online Updater step)"
 arch=('any')
 url="https://github.com/libretro/slang-shaders"

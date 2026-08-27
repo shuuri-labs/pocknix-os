@@ -3,7 +3,7 @@
 # Build with ./nodeps: makepkg -s would drag the whole KDE/Qt stack in to lay out nothing.
 pkgname=pocknix-desktop-full
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix optional layer: Plasma Mobile desktop session, KDE apps, Waydroid, Flatpak"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

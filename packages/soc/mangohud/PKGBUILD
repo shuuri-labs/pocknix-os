@@ -5,7 +5,7 @@
 # makepkg strips local source entries to their basename.
 pkgname=mangohud
 pkgver=0.8.3
-pkgrel=5
+pkgrel=6
 pkgdesc="Vulkan/OpenGL FPS/frametime/CPU/GPU overlay + mangoapp for the gamescope Steam session"
 arch=('aarch64')
 url="https://github.com/flightlessmango/MangoHud"

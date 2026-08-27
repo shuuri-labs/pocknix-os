@@ -3,7 +3,7 @@
 # Series start at 25.2: older ones predate Arch's per-driver x86_64 split.
 pkgname=pocknix-turnip-x86
 pkgver=20260825
-pkgrel=1
+pkgrel=2
 pkgdesc="Archived x86_64 Turnip builds for per-game Mesa selection under FEX"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"

@@ -4,7 +4,7 @@
 # release page's "ES-DE_aarch64.AppImage" link and bump the sha256 with it.
 pkgname=es-de
 pkgver=3.4.1
-pkgrel=5
+pkgrel=6
 pkgdesc="ES-DE frontend for browsing and launching games (official aarch64 AppImage)"
 arch=('aarch64')
 url="https://es-de.org"

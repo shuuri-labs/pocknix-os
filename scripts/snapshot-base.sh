@@ -3,7 +3,8 @@
 #
 # Reproducible builds need a recorded, re-fetchable input set. This harvests the
 # GROUND-TRUTH union of every ALARM package a build actually installed (the image
-# rootfs + every SoC's build chroot), collects exactly those files + their .sig
+# rootfs + every SoC's build chroot) plus the opt-in extras in
+# config/packages/base-extras.list, collects exactly those files + their .sig
 # (build caches first, ALARM mirror for the residue), builds a fresh
 # pocknix-base.db covering only them, and publishes it.
 #
@@ -43,7 +44,8 @@ OUT="${BUILD_DIR}/snapshot/${ID}"
 RCLONE_DEST="${POCKNIX_BASE_RCLONE_REMOTE}"
 RCLONE_PREV="${POCKNIX_BASE_RCLONE_REMOTE}-prev"
 DATED_TARBALL="ArchLinuxARM-aarch64-${ID}.tar.gz"
-LOCKFILE="${PACKAGES_DIR}/pocknix-base-lock/pocknix-base.lock"
+LOCKFILE="${PACKAGES_DIR}/shared/pocknix-base-lock/pocknix-base.lock"
+EXTRAS_LIST="${CONFIG_DIR}/packages/base-extras.list"
 BASE_DB="pocknix-base.db.tar.gz"
 
 # --- collect harvest sources -------------------------------------------------
@@ -119,11 +121,17 @@ ${soc_missing}
 Add them to config/packages/base.list (so EVERY build's rootfs installs them),
 rebuild, then snapshot again."
 
+# --- opt-in extras: hosted, never installed (resolved from the sync dbs) -----
+extras=()
+[ -f "${EXTRAS_LIST}" ] || die "missing ${EXTRAS_LIST} (committed; empty is fine, absent is not)"
+mapfile -t extras < <(read_pkglist "${EXTRAS_LIST}")
+[ "${#extras[@]}" -eq 0 ] || log "extras to host: ${extras[*]}"
+
 # --- map names to repo files via the sync dbs the build used -----------------
 # The sync db desc carries %FILENAME% + %SHA256SUM%, so downloads are verified
 # against what pacman itself trusted. Rootfs dbs first (freshest -Syy).
 tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT
-declare -A f_file f_sha f_repo
+declare -A f_file f_sha f_repo s_ver x_deps prov seen_repo
 for src in "${sources[@]}"; do
   for db in "${src}"/var/lib/pacman/sync/*.db; do
     [ -f "${db}" ] || continue
@@ -133,10 +141,32 @@ for src in "${sources[@]}"; do
     while IFS='|' read -r n v fn sha; do
       key="${n} ${v}"
       [ -n "${f_file[${key}]:-}" ] || { f_file["${key}"]="${fn}"; f_sha["${key}"]="${sha}"; f_repo["${key}"]="${repo}"; }
+      # extras have no installed version to key on, so record what each repo carries
+      [ -n "${s_ver[${repo}|${n}]:-}" ] || s_ver["${repo}|${n}"]="${v}"
     done < <(awk 'FNR==1{name=ver=fn=sha=""}
                   /^%NAME%$/{getline name} /^%VERSION%$/{getline ver}
                   /^%FILENAME%$/{getline fn} /^%SHA256SUM%$/{getline sha}
                   ENDFILE{if(name!="")print name"|"ver"|"fn"|"sha}' "${tmp}/${repo}"/*/desc)
+    # ALARM dbs only, once each: our repo-add'd dbs keep deps inside desc (no depends
+    # file) and ours are served via the ours map anyway. Provides matter: a dep may
+    # name a soname/virtual, and a name-only check would refuse installable extras.
+    case "${repo}" in core|extra|alarm|aur) alarm_repo=1 ;; *) alarm_repo="" ;; esac
+    if [ -n "${alarm_repo}" ] && [ -z "${seen_repo[${repo}]:-}" ] && [ "${#extras[@]}" -gt 0 ]; then
+      seen_repo["${repo}"]=1
+      for x in "${extras[@]}"; do
+        v="${s_ver[${repo}|${x}]:-}"; [ -n "${v}" ] || continue
+        [ -f "${tmp}/${repo}/${x}-${v}/depends" ] \
+          || die "sync db ${repo} has no depends entry for ${x} ${v} — the extras guard would be vacuous"
+        x_deps["${repo}|${x}"]="$(awk '/^%DEPENDS%$/{f=1;next} /^%[A-Z]+%$/{f=0} f&&NF' \
+          "${tmp}/${repo}/${x}-${v}/depends" | paste -sd' ' -)"
+      done
+      while IFS='|' read -r provider token; do
+        provider="${provider%-*-*}"
+        [ -n "${want[${provider}]:-}" ] || continue    # only hosted packages can satisfy anything
+        prov["${token%%[<>=]*}"]="${provider}"
+      done < <(awk '/^%PROVIDES%$/{f=1;next} /^%[A-Z]+%$/{f=0}
+                    f&&NF{n=split(FILENAME,a,"/"); print a[n-1]"|"$0}' "${tmp}/${repo}"/*/depends)
+    fi
     rm -rf "${tmp:?}/${repo}"
   done
 done
@@ -164,6 +194,69 @@ for src in "${sources[@]}"; do
     log "including shadowed ALARM copy: ${name} ${ver} (replaced by [pocknix] at install time)"
   done
 done
+
+# pacman's own repo precedence (pacman.conf.in order), not the glob order the dbs
+# were read in: [alarm] sorts first but loses to core/extra at install time.
+extras_unknown="" extras_deps=""
+for x in ${extras[@]+"${extras[@]}"}; do
+  if [ -n "${want[${x}]:-}" ]; then
+    warn "extra ${x} is already part of the installed base — drop it from base-extras.list"
+    continue
+  fi
+  xrepo=""
+  for r in core extra alarm aur; do
+    [ -n "${s_ver[${r}|${x}]:-}" ] && { xrepo="${r}"; break; }
+  done
+  [ -n "${xrepo}" ] || { extras_unknown+="  ${x}"$'\n'; continue; }
+  want["${x}"]="${s_ver[${xrepo}|${x}]}"
+  log "hosting extra: ${x} ${want[${x}]} (${xrepo}) — not installed by any build"
+done
+[ -z "${extras_unknown}" ] || die "base-extras.list names packages no sync db carries (typo, or ALARM renamed/dropped them):
+${extras_unknown}"
+
+# Second pass so one extra may depend on another. Served = ours (both our repos are
+# enabled on every device), hosted, or provided by something hosted.
+for x in ${extras[@]+"${extras[@]}"}; do
+  for r in core extra alarm aur; do
+    [ -n "${s_ver[${r}|${x}]:-}" ] && { xrepo="${r}"; break; }
+  done
+  for dep in ${x_deps[${xrepo}|${x}]:-}; do
+    dep="${dep%%[<>=]*}"
+    [ -n "${ours[${dep}]:-}" ] && continue
+    [ -n "${want[${dep}]:-}" ] && continue
+    [ -n "${prov[${dep}]:-}" ] && continue
+    extras_deps+="  ${dep} (needed by ${x})"$'\n'
+  done
+done
+[ -z "${extras_deps}" ] || die "extras' dependencies are not hosted — they would not install on a locked device:
+${extras_deps}
+Add them to config/packages/base-extras.list (hosted only). If the package
+belongs in the image instead, add it to base.list (ALARM bootstrap) or to a
+layer metapackage's depends= (packages/shared/pocknix-*), then re-run."
+
+# --- layer completeness ------------------------------------------------------
+# A layer's ALARM deps reach the base only because every build installs all four
+# layers; an image that drops one (#48) would silently strip them from the snapshot.
+layer_missing=""
+for _meta in "${PACKAGES_DIR}"/shared/pocknix-core/PKGBUILD \
+             "${PACKAGES_DIR}"/shared/pocknix-*-full/PKGBUILD; do
+  [ -f "${_meta}" ] || continue
+  _deps="$(bash -c 'depends=(); source "$1" >/dev/null 2>&1; printf "%s\n" "${depends[@]}"' _ "${_meta}" 2>/dev/null)"
+  [ -n "${_deps}" ] || die "cannot read depends= from ${_meta} — the layer guard would be vacuous"
+  while read -r _dep; do
+    _dep="${_dep%%[<>=]*}"
+    [ -n "${_dep}" ] || continue
+    [ -n "${ours[${_dep}]:-}" ] && continue
+    [ -n "${want[${_dep}]:-}" ] && continue
+    [ -n "${prov[${_dep}]:-}" ] && continue
+    layer_missing+="  ${_dep} (needed by $(basename "$(dirname "${_meta}")"))"$'\n'
+  done <<< "${_deps}"
+done
+[ -z "${layer_missing}" ] || die "a layer metapackage names ALARM packages the base would not host:
+${layer_missing}
+The image must have stopped installing that layer, so the harvest no longer sees
+its deps. Name them in config/packages/base-extras.list (hosted, not installed)
+so the layer stays installable, then re-run."
 
 missing=""
 for name in "${!want[@]}"; do

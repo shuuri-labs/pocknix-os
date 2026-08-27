@@ -3,7 +3,7 @@
 # The Steam-facing interface matches Valve's, so real OTA later is a drop-in body swap.
 pkgname=pocknix-steamos-shim
 pkgver=0.1.0
-pkgrel=6
+pkgrel=7
 pkgdesc="SteamOS update/branch/timezone/format helper stubs for the Steam Deck UI on a non-SteamOS base (until real OTA)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

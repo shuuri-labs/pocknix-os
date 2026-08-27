@@ -4,7 +4,7 @@
 # edge from core would make `pacman -Rs <layer>` impossible.
 pkgname=pocknix-core
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix mandatory layer: GPU stack, input, storage, base/update tooling"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

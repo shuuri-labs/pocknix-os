@@ -4,7 +4,7 @@
 pkgname=pocknix-dxvk2-donor
 _donor=dxvk-arm64-2.7.1-467-valve-proton11
 pkgver=2.7.1.467
-pkgrel=1
+pkgrel=2
 pkgdesc="Valve Proton 11 DXVK 2.7.1-467 donor dlls for a6xx (no storageBuffer8BitAccess)"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"

@@ -3,7 +3,7 @@
 # so makepkg -s does not drag all of KDE/Qt into the build chroot for this arch=any data package.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=20
+pkgrel=21
 pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

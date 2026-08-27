@@ -6,7 +6,7 @@
 # guaranteed stable, and the release tarball is 96 MB for 1 MB of app.
 pkgname=pocknix-gamepad-calibration
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix gamepad calibration (GPcal port): stick/trigger range, centre and deadzones"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
