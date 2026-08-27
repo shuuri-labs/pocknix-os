@@ -240,6 +240,12 @@ check it, which is the single biggest reason a PR stalls.
   listed in `PATCHES.md` (gamescope, mesa, mangohud, FEX, the kernels, GRUB), update its row.
 - **New dependencies** should come from the Arch Linux ARM repos or `[pocknix]`. Flag anything
   large - image size matters on a handheld.
+- **A new package name needs a `depends=` edge** from the layer metapackage that owns it
+  (`pocknix-core`, `pocknix-{steam,desktop,emulation}-full`) or from `pocknix-device-<soc>`,
+  in the same PR. `pacman -Syu` never installs a name nothing depends on, so without the edge
+  only fresh images get it. Renaming a package needs `replaces=` + `conflicts=` for the old
+  name. The maintainer's publish gate (`scripts/stage-check.sh`) rejects both omissions, so
+  fixing them up front saves a round trip.
 - **Do not touch `vendor/`.** `make sync` regenerates it.
 
 ## Commits and PR hygiene
