@@ -9,7 +9,7 @@ SCRIPTS := scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync bootstrap build kernel packages sd-image snapshot stage publish stage-shared publish-shared publish-image install check du trim clean distclean
+.PHONY: help sync bootstrap build kernel packages sd-image snapshot stage stage-check publish stage-shared stage-check-shared publish-shared publish-image install check du trim clean distclean
 
 help: ## Show this help
 	@echo "pocknix-os build targets:"
@@ -40,11 +40,17 @@ snapshot: ## Freeze the ALARM base a fresh build used -> [pocknix-base] on R2 + 
 stage: ## Mirror the LIVE repo into build/stage + swap in PKG="a b" (publish source; user, no sudo). DROP="x" removes a live package
 	@POCKNIX_STAGE_DROP="$(DROP)" $(SCRIPTS)/stage-repo.sh $(PKG)
 
+stage-check: ## Re-run the consistency gate on the staged repo (runs automatically at the end of 'make stage')
+	@$(SCRIPTS)/stage-check.sh
+
 publish: ## Sign + publish the staged repo (run 'make stage' first; user, no sudo)
 	@$(SCRIPTS)/publish-repo.sh $(PUBLISH_ARGS)
 
 stage-shared: ## Stage the SoC-neutral [pocknix-shared] repo (PKG="a b" [DROP="x"]; once, not per SoC)
 	@POCKNIX_REPO_SCOPE=shared POCKNIX_STAGE_DROP="$(DROP)" $(SCRIPTS)/stage-repo.sh $(PKG)
+
+stage-check-shared: ## Re-run the consistency gate on the staged [pocknix-shared] repo
+	@POCKNIX_REPO_SCOPE=shared $(SCRIPTS)/stage-check.sh
 
 publish-shared: ## Sign + publish the staged [pocknix-shared] repo (run 'make stage-shared' first)
 	@POCKNIX_REPO_SCOPE=shared $(SCRIPTS)/publish-repo.sh $(PUBLISH_ARGS)

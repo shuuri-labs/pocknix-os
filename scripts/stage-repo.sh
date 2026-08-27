@@ -139,6 +139,14 @@ while IFS= read -r f; do [ -n "$f" ] && printf '  - %s\n' "$f"; done <<< "${dels
   while IFS= read -r f; do [ -n "$f" ] && printf '%s\n' "-$f"; done <<< "${dels}"
 } > "${MARKER}"
 
+# A failed stage-check withdraws the marker so publish refuses the tree.
+# POCKNIX_STAGE_NOCHECK=1 is for the first publish of a new tree (no live db yet).
+if [ "${POCKNIX_STAGE_NOCHECK:-0}" = "1" ]; then
+  warn "POCKNIX_STAGE_NOCHECK=1 — skipping stage-check (publish will accept an unchecked tree)"
+else
+  "${POCKNIX_ROOT}/scripts/stage-check.sh" || { rm -f "${MARKER}"; die "stage-check failed — marker withdrawn, nothing publishable"; }
+fi
+
 ok "staged -> ${REPO_STAGE_DIR}"
 if [ "${POCKNIX_REPO_SCOPE}" = "shared" ]; then
   log "next: make publish-shared  (publishes the shared stage dir; the marker is consumed on success)"

@@ -1,0 +1,33 @@
+# plasma-mobile — Arch's 6.7.4-1 rebuilt against the base's Qt 6.11.2. Arch rebuilt
+# kwin/plasma-workspace for 6.11.2 but not plasma-mobile, whose mobileshell plugin uses
+# QtWaylandClient's private ABI: the stale build segfaults plasmashell (black desktop).
+# Drop once the base carries a plasma-mobile built against its own Qt.
+pkgname=plasma-mobile
+pkgver=6.7.4
+pkgrel=2
+pkgdesc="Plasma shell for mobile devices (rebuilt against the pocknix base's Qt)"
+arch=('aarch64')
+url="https://plasma-mobile.org/"
+license=('GPL-3.0-or-later')
+depends=('bash' 'bluez-qt' 'glibc' 'kauth' 'kcmutils' 'kconfig' 'kcoreaddons' 'kdbusaddons'
+         'kdeclarative' 'ki18n' 'kio' 'kirigami' 'kirigami-addons' 'kitemmodels' 'kjobwidgets'
+         'knewstuff' 'knotifications' 'kpackage' 'kpipewire' 'kservice' 'ksvg' 'kwayland' 'kwin'
+         'kwindowsystem' 'layer-shell-qt' 'libgcc' 'libkscreen' 'libplasma' 'libstdc++' 'milou'
+         'modemmanager-qt' 'networkmanager-qt' 'plasma-keyboard' 'plasma-nano' 'plasma-nm'
+         'plasma-pa' 'plasma-workspace' 'powerdevil' 'qcoro' 'qt6-5compat' 'qt6-base'
+         'qt6-declarative' 'qt6-sensors' 'solid' 'systemd-libs' 'wayland')
+makedepends=('cmake' 'extra-cmake-modules' 'plasma-wayland-protocols' 'vulkan-headers')
+optdepends=('bluedevil: Bluetooth management'
+            'kscreen: Screen management'
+            'plasma-settings: System settings')
+source=("https://download.kde.org/stable/plasma/${pkgver}/${pkgname}-${pkgver}.tar.xz")
+sha256sums=('378085f75cb0378a46fa12cc678a0e87f2bf9f1771eb514730da8b0a617e8bec')
+
+build() {
+  cmake -B build -S "${pkgname}-${pkgver}" -D CMAKE_INSTALL_LIBEXECDIR=lib
+  cmake --build build
+}
+
+package() {
+  DESTDIR="${pkgdir}" cmake --install build
+}
