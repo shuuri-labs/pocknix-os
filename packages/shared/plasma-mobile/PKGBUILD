@@ -4,7 +4,7 @@
 # Drop once the base carries a plasma-mobile built against its own Qt.
 pkgname=plasma-mobile
 pkgver=6.7.4
-pkgrel=2
+pkgrel=3
 pkgdesc="Plasma shell for mobile devices (rebuilt against the pocknix base's Qt)"
 arch=('aarch64')
 url="https://plasma-mobile.org/"
@@ -20,8 +20,18 @@ makedepends=('cmake' 'extra-cmake-modules' 'plasma-wayland-protocols' 'vulkan-he
 optdepends=('bluedevil: Bluetooth management'
             'kscreen: Screen management'
             'plasma-settings: System settings')
-source=("https://download.kde.org/stable/plasma/${pkgver}/${pkgname}-${pkgver}.tar.xz")
-sha256sums=('378085f75cb0378a46fa12cc678a0e87f2bf9f1771eb514730da8b0a617e8bec')
+source=("https://download.kde.org/stable/plasma/${pkgver}/${pkgname}-${pkgver}.tar.xz"
+        '0001-shell-avoid-grouped-binding-in-config-window.patch')
+sha256sums=('378085f75cb0378a46fa12cc678a0e87f2bf9f1771eb514730da8b0a617e8bec'
+            'SKIP')
+
+prepare() {
+  # Opening any containment's config page segfaults plasmashell: evaluating
+  # AppletConfiguration.qml's grouped-target Binding crashes QQmlBind::eval on our Qt.
+  # Cause unknown; assigning the window properties directly avoids QQmlBind.
+  # Drop once the crash no longer reproduces on stock QML.
+  patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0001-shell-avoid-grouped-binding-in-config-window.patch"
+}
 
 build() {
   cmake -B build -S "${pkgname}-${pkgver}" -D CMAKE_INSTALL_LIBEXECDIR=lib

@@ -1,0 +1,68 @@
+From: David Aerne <meodai@gmail.com>
+Subject: [PATCH] shell: avoid the grouped Binding form in the config window
+
+Opening a containment's configuration page segfaults plasmashell.
+
+AppletConfiguration.qml sets the config window's flags and visibility with a
+grouped-target Binding:
+
+    Binding {
+        root.Window.window.flags: Qt.FramelessWindowHint
+        root.Window.window.visibility: Window.Maximized
+    }
+
+Evaluating that form crashes inside QQmlBind on our Qt 6.11.2 build:
+
+    #1 QV4::ExecutionEngine::toVariant                     <- SEGV_MAPERR
+    #3 QQmlBind::eval
+    #4 QQmlBind::componentComplete
+    #5 QQmlObjectCreator::finalize
+    #9 PlasmaQuick::ConfigView::setSource
+    #13 Plasma::Containment::configureRequested
+
+The exact cause is unknown. A null Window.window was ruled out: that path logs
+`Unknown name "root.Window.window.flags"` and drops the binding rather than
+crashing, and no such line appears in the journal. A `when:` guard does not
+help either - componentComplete evaluates the grouped form regardless of the
+condition (verified on the device, with the patched file confirmed loaded).
+A libplasma/Qt ABI mismatch is the current suspicion.
+
+Assigning the properties directly avoids QQmlBind altogether. Flags are set
+before visibility so the window is frameless before it maps. Component.onCompleted
+covers the case where libplasma has already parented the item into its window, in
+which case onWindowChanged fired before we could connect to it.
+
+Reproduced on a Retroid Pocket 6 (aarch64, sm8550) running the folio
+homescreen: long-press the homescreen, tap Settings. Five identical
+backtraces before the change; none after, and the config page still opens
+frameless and maximized.
+---
+--- a/shell/contents/configuration/AppletConfiguration.qml
++++ b/shell/contents/configuration/AppletConfiguration.qml
+@@ -59,12 +59,22 @@
+         }
+     }
+ 
+-    Binding {
+-        // Window bindings
+-        root.Window.window.flags: Qt.FramelessWindowHint
+-        root.Window.window.visibility: Window.Maximized
++    // The grouped Binding form crashes QQmlBind::eval on our Qt build; the exact cause is
++    // unknown. Assigning directly skips QQmlBind, and sets flags before visibility so the
++    // window is frameless before it maps. onWindowChanged alone will not do: libplasma may
++    // parent this into the window before completion, so the signal has already fired.
++    function applyWindowState() {
++        const win = root.Window.window;
++        if (!win) {
++            return;
++        }
++        win.flags = Qt.FramelessWindowHint;
++        win.visibility = Window.Maximized;
+     }
+ 
++    Component.onCompleted: root.applyWindowState()
++    Window.onWindowChanged: root.applyWindowState()
++
+     Component {
+         id: configurationKcmPageComponent
+         ConfigurationKcmPage {}
