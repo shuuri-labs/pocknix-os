@@ -124,6 +124,38 @@ do_ssh() {
   kdialog --title "$TITLE" --msgbox "Remote access is on.\n\nLog in as $(id -un)${addrs:+ at ${addrs% }}.\nIt stays on until you turn it off here." || true
 }
 
+share_state()     { pocknix-share status 2>/dev/null | sed -n 's/^state=//p'; }
+share_installed() { [ "$(pocknix-share status 2>/dev/null | sed -n 's/^installed=//p')" = yes ]; }
+
+do_share() {
+  local out rc=0 addrs
+  if [ "$(share_state)" = on ]; then
+    out="$(pkexec /usr/bin/pocknix-share off 2>&1)" || rc=$?
+    [ "${rc}" -eq 0 ] || { gui_err "Could not turn file sharing off:\n\n$(printf '%s' "${out}" | tail -3)"; return 0; }
+    kdialog --title "$TITLE" --msgbox "File sharing is off. The device no longer shares any folder." || true
+    return 0
+  fi
+  # 74.5 MB installed, so it is not in any image: offer the download before the warning,
+  # otherwise the user agrees to the trade and then hits a dead end.
+  if ! share_installed; then
+    kdialog --title "$TITLE" --warningcontinuecancel \
+      "File sharing needs Samba, which is not installed (7.4 MB download).\n\nInstall it now?" \
+      || return 0
+    konsole_run "/usr/bin/pacman -S --needed --noconfirm samba"
+    share_installed || { gui_err "Samba is still not installed. File sharing cannot start."; return 0; }
+  fi
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Share this device's home folder over the network?\n\nAnyone on the same network can then read and write every file in it - your games, saves and emulator settings, but also your Steam login and SSH keys. There is no password.\n\nOnly turn this on at home. It stays on, across reboots, until you turn it off here." \
+    || return 0
+  out="$(pkexec /usr/bin/pocknix-share on 2>&1)" || rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    gui_err "Could not turn file sharing on:\n\n$(printf '%s' "${out}" | tail -3)"
+    return 0
+  fi
+  addrs="$(ssh_addrs)"
+  kdialog --title "$TITLE" --msgbox "File sharing is on.\n\nOn another computer, open:\n  smb://pocknix.local${addrs:+  (or smb://${addrs%% *})}\n\nConnect as Guest - there is no password.\nIt stays on until you turn it off here." || true
+}
+
 # terminal on purpose: pocknix-base demands a typed ROLL and streams the pacman run
 konsole_run() { konsole -e /bin/bash -c "pkexec $1; echo; read -rp 'Press Enter to close... '"; }
 
@@ -174,6 +206,8 @@ while :; do
   abl_label="$(abl_item_label "$(abl_status)")" && items+=(abl "${abl_label}")
   if [ "$(ssh_state)" = on ]; then items+=(ssh "Remote access (SSH) is ON - turn it off")
   else items+=(ssh "Remote access (SSH) is off - turn it on..."); fi
+  if [ "$(share_state)" = on ]; then items+=(share "File sharing (SMB) is ON - turn it off")
+  else items+=(share "File sharing (SMB) is off - turn it on..."); fi
   choice="$(kdialog --title "$TITLE" --menu "Pocknix maintenance tools\nMode: ${mode^^}" "${items[@]}")" || exit 0
   case "${choice}" in
     rollback)          do_rollback "" ;;
@@ -182,6 +216,7 @@ while :; do
     installer)         /usr/bin/pocknix-installer-gui || true ;;
     abl)               do_abl ;;
     ssh)               do_ssh ;;
+    share)             do_share ;;
     status)            do_status ;;
     *) exit 0 ;;
   esac

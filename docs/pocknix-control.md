@@ -12,7 +12,7 @@ tapping the icons:
 |---|---|
 | 🎮 Games | Per-game performance/audio tweaks, add non-Steam games |
 | ⚡ Power | Fan curve and CPU scheduler |
-| 💾 Storage | Format a microSD card for Steam |
+| 💾 Storage | Format a microSD card for Steam, and share your files over the network |
 | 🔄 Updater | Check for and install system updates, roll back the last update |
 
 Settings save automatically as you change them.
@@ -79,6 +79,29 @@ and press **Format SD Card**.
 The card is formatted the same way a Steam Deck would (ext4 with casefolding), mounts
 automatically, and gets added to Steam as a library folder - Steam offers it as an install
 target right away, and cards formatted here also work in a real Steam Deck (and vice versa).
+
+### File sharing
+
+The same tab can turn the device into a network share, so you can drag ROMs, BIOS files and
+emulator firmware onto it from another computer instead of moving a card back and forth. It
+needs no extra software on either end: macOS Finder, Windows Explorer and Linux file managers
+all speak SMB out of the box.
+
+Samba is not shipped in the image (74.5 MB installed), so the first time you use this the
+section offers a 7.4 MB download. After that, **Share my home folder** flips it on and off, and
+the setting survives reboots.
+
+Two shares appear on the network, both as **Guest** with no password: `deck` (your home folder,
+including `Emulation/` and every emulator's own firmware directory) and `sdcard` (the card
+slot). macOS and Linux find the device by name in their file manager's network view; on Windows
+use `\\pocknix`.
+
+> **There is no password.** Anyone on the same network can read and write everything in your
+> home folder, Steam login and SSH keys included. Sharing only answers on private home-network
+> address ranges, so public wifi cannot reach it, but turn it off when you are done.
+
+The same toggle exists in **Pocknix Tools** on the desktop side, and both drive the same
+`pocknix-share` command - flipping it in one place is reflected in the other.
 
 ## Updater
 

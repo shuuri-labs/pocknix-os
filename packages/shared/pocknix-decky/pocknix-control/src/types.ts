@@ -137,3 +137,9 @@ export interface LedConfig {
   left: LedSide;
   right: LedSide;
 }
+
+export type ShareStatus = {
+  installed: boolean;
+  on: boolean;
+  active: boolean;
+};

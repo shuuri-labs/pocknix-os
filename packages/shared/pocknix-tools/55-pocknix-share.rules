@@ -1,0 +1,8 @@
+// Promptless pkexec of pocknix-share for wheel, same trust as 53-pocknix-ssh.rules.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/pocknix-share") {
+        return polkit.Result.YES;
+    }
+});

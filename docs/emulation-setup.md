@@ -46,6 +46,41 @@ Some systems need BIOS or firmware files that pocknix cannot ship. Put them in
 If a game will not boot, the emulator's error message usually names the exact file it is missing.
 A missing or misnamed BIOS is the most common cause.
 
+## Copying files over the network
+
+Rather than shuttling a microSD card back and forth, you can turn the device into a network
+share and drag files straight onto it from another computer. It works out of the box in macOS
+Finder, Windows Explorer and Linux file managers - no extra software on either end.
+
+Turn it on in either place:
+
+- **Game Mode**: Quick Access Menu → **Pocknix Control** → **Storage** → *Share my home folder*
+- **Desktop**: **Pocknix Tools** → *File sharing (SMB) is off - turn it on...*
+
+The first time, you will be offered a 7.4 MB download (Samba is not shipped in the image, so
+devices that never share a file never pay for it). It then stays on across reboots until you
+turn it off in the same place.
+
+Once it is on, open one of these from the other computer:
+
+| | |
+|---|---|
+| macOS | Finder → the device appears in the sidebar under **Network**, or press ⌘K and enter `smb://pocknix.local` |
+| Windows | Explorer address bar: `\\pocknix` |
+| Linux | Files → *Other Locations* → `smb://pocknix.local` |
+
+**Connect as Guest - there is no password.** Two shares appear:
+
+- **deck** - your home folder, so `Emulation/` for ROMs and BIOS, and the per-emulator folders
+  described above for firmware and keys
+- **sdcard** - whatever is in the SD card slot
+
+> [!WARNING]
+> There is no password, so **anyone on the same network** can read and write everything in your
+> home folder - not just games and saves, but your Steam login and SSH keys too. Sharing is
+> limited to private home-network address ranges, so joining public wifi does not expose the
+> device, but treat it as "on while I am at home" rather than something to leave running.
+
 ## Getting games into Steam
 
 Favorite a game in ES-DE (the Favorite button), quit ES-DE, and re-enter Game Mode. The game
