@@ -1,0 +1,66 @@
+# pocknix-branding — Pocknix OS artwork: the plymouth boot theme, the Plasma splash, and
+# the desktop wallpaper. One package so the three stay in step; they share the same
+# wordmark and the same #202126 field, which is the point (boot -> splash -> desktop
+# reads as one surface instead of three unrelated screens).
+pkgname=pocknix-branding
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Pocknix OS branding: plymouth boot theme, Plasma splash, wallpaper"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('bash')
+install='pocknix-branding.install'
+# The plymouth theme is DERIVED from the stock spinner at build time rather than committed:
+# copying 66 animation frames into this repo would duplicate plymouth's own assets and let
+# them drift. Building against the installed theme keeps the spinner in step with whatever
+# plymouth version the image ships, while the OUTPUT still lands in our own directory - which
+# is what makes it survive a plymouth upgrade (the reason a custom theme dir was wanted).
+makedepends=('plymouth')
+source=('watermark.png'
+        'Splash.qml' 'splash-metadata.json' 'wordmark.png'
+        'wallpaper-1920x1080.png' 'wallpaper-metadata.json'
+        'pocknix-branding-init' 'pocknix-branding-init.service')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+_spinner=/usr/share/plymouth/themes/spinner
+
+package() {
+  # --- plymouth boot theme -------------------------------------------------------------
+  [ -d "${_spinner}" ] || { echo "pocknix-branding: ${_spinner} missing (is plymouth installed?)" >&2; return 1; }
+  local theme="${pkgdir}/usr/share/plymouth/themes/pocknix"
+  install -d "${theme}"
+  cp -a "${_spinner}/." "${theme}/"
+  mv "${theme}/spinner.plymouth" "${theme}/pocknix.plymouth"
+  # our wordmark replaces the Arch watermark; authored at 2x for DeviceScale=2
+  install -Dm644 "${srcdir}/watermark.png" "${theme}/watermark.png"
+
+  # Name/Description/ImageDir must point at OUR dir, and the field matches the wallpaper
+  # so plymouth does not flash black before handing over.
+  sed -i -e '/^Name\[[^]]*\]=/d' \
+         -e 's|^Name=.*|Name=Pocknix|' \
+         -e 's|^Description=.*|Description=Pocknix OS boot splash: the stock spinner with the Pocknix wordmark.|' \
+         -e "s|^ImageDir=.*|ImageDir=/usr/share/plymouth/themes/pocknix|" \
+         -e 's|^BackgroundStartColor=.*|BackgroundStartColor=0x202126|' \
+         -e 's|^BackgroundEndColor=.*|BackgroundEndColor=0x202126|' \
+         "${theme}/pocknix.plymouth"
+
+  # --- Plasma splash (KSplash look-and-feel) -------------------------------------------
+  local splash="${pkgdir}/usr/share/plasma/look-and-feel/com.pocknix.splash"
+  install -Dm644 "${srcdir}/splash-metadata.json" "${splash}/metadata.json"
+  install -Dm644 "${srcdir}/Splash.qml"           "${splash}/contents/splash/Splash.qml"
+  install -Dm644 "${srcdir}/wordmark.png"         "${splash}/contents/splash/images/wordmark.png"
+
+  # --- wallpaper -----------------------------------------------------------------------
+  local wall="${pkgdir}/usr/share/wallpapers/PocknixOS"
+  install -Dm644 "${srcdir}/wallpaper-metadata.json"    "${wall}/metadata.json"
+  install -Dm644 "${srcdir}/wallpaper-1920x1080.png"    "${wall}/contents/images/1920x1080.png"
+
+  # --- first-login wallpaper seed ------------------------------------------------------
+  install -Dm755 "${srcdir}/pocknix-branding-init" "${pkgdir}/usr/bin/pocknix-branding-init"
+  install -Dm644 "${srcdir}/pocknix-branding-init.service" \
+    "${pkgdir}/usr/lib/systemd/user/pocknix-branding-init.service"
+  install -d "${pkgdir}/usr/lib/systemd/user/plasma-plasmashell.service.wants"
+  ln -s ../pocknix-branding-init.service \
+    "${pkgdir}/usr/lib/systemd/user/plasma-plasmashell.service.wants/pocknix-branding-init.service"
+}

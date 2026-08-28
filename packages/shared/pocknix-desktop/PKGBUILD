@@ -3,7 +3,7 @@
 # so makepkg -s does not drag all of KDE/Qt into the build chroot for this arch=any data package.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=23
+pkgrel=24
 pkgdesc="Plasma Mobile desktop session for the RP6 + game<->desktop session switch"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -44,8 +44,7 @@ package() {
   # Dispatcher scripts must be root-owned and not group/world writable or NM refuses to run them.
   install -Dm755 "${srcdir}/pocknix-flathub-dispatcher" \
     "${pkgdir}/etc/NetworkManager/dispatcher.d/50-pocknix-flathub"
-  # Disable the 30s KSplash fallback (Plasma Mobile never dismisses it) so a session switch isn't
-  # stuck behind a splash. System-wide default; only the deck Plasma session reads it.
+  # System-wide default; only the deck Plasma session reads it.
   install -Dm644 "${srcdir}/ksplashrc"                "${pkgdir}/etc/xdg/ksplashrc"
   # power button -> NoAction in powerdevil: Plasma Mobile's ToggleScreenOnOff default turned
   # the panel back OFF on the (post-resume-delivered) wake press. pocknix-powerd owns the key.

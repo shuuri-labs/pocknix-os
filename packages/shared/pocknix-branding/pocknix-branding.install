@@ -1,0 +1,16 @@
+# Arch's plymouth package owns /etc/plymouth/plymouthd.conf, so the theme cannot ship as a
+# packaged file. The image overlay covers fresh installs; fielded ones only reach the new
+# boot splash through here on -Syu. Only spinner is rewritten, so a user's own choice stands.
+_pocknix_set_plymouth_theme() {
+  local conf=/etc/plymouth/plymouthd.conf
+  [ -f "${conf}" ] || return 0
+  sed -i 's/^Theme=spinner$/Theme=pocknix/' "${conf}"
+}
+
+post_install() {
+  _pocknix_set_plymouth_theme
+}
+
+post_upgrade() {
+  _pocknix_set_plymouth_theme
+}

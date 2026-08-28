@@ -1,0 +1,12 @@
+[Unit]
+Description=pocknix: seed the Pocknix wallpaper on first login
+PartOf=graphical-session.target
+After=plasma-plasmashell.service
+ConditionPathExists=!%h/.local/share/pocknix/branding-seeded
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pocknix-branding-init
+
+[Install]
+WantedBy=plasma-plasmashell.service

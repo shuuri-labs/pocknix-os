@@ -1,0 +1,22 @@
+#!/bin/bash
+# Plasma takes its default wallpaper from the active look-and-feel, but
+# plasma-mobile-envmanager rewrites LookAndFeelPackage[$i] (immutable) on every start, so a
+# Pocknix look-and-feel would be fighting it. Seeding the user's own config once is the same
+# shape as pocknix-roms-init seeding ~/Emulation.
+set -euo pipefail
+
+WALLPAPER=/usr/share/wallpapers/PocknixOS
+STAMP="${HOME}/.local/share/pocknix/branding-seeded"
+
+[ -d "$WALLPAPER" ] || exit 0
+[ -e "$STAMP" ] && exit 0
+command -v plasma-apply-wallpaperimage >/dev/null 2>&1 || exit 0
+
+# The tool talks to the running shell rather than editing a file, so on Plasma Mobile the
+# value lands in plasma-org.kde.plasma.mobileshell-appletsrc, not the desktop appletsrc.
+plasma-apply-wallpaperimage "$WALLPAPER" >/dev/null 2>&1 || exit 0
+
+# Stamp only after the apply succeeded: a failed run leaves no stamp and retries next login,
+# and the stamp is what keeps a wallpaper the user later picks themselves from being reimposed.
+mkdir -p "$(dirname "$STAMP")"
+: > "$STAMP"
