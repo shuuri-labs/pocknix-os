@@ -7,7 +7,7 @@
 # (matches: on the dt model). Adding an sm8250 board = a new boards/ file +
 # its inputplumber yaml(s) + a dispatcher case arm — no new package.
 #
-# Deliberately ABSENT vs the sm8550 BSPs (all verified against ROCKNIX):
+# Deliberately ABSENT vs the sm8550 BSPs:
 #   * 10-pocknix-deeponly.conf — s2idle wedging is an SM8550 quirk; ROCKNIX
 #     leaves suspend fully enabled on SM8250 (no 030-suspend_mode).
 #   * 30-pocknix-cpuidle.conf — the cpu0 state1 GMU issue is SM8550-only
@@ -16,7 +16,7 @@
 #     (pocknix-bootloader-sm8250), not in a boot-image rebuild file.
 pkgname=pocknix-bsp-sm8250
 pkgver=0.1.0
-pkgrel=13
+pkgrel=14
 pkgdesc="pocknix board support: SM8250 family (RP5, RP Flip 2) — runtime board dispatch, input maps, audio UCM, wake quirks"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -24,9 +24,7 @@ license=('GPL2')
 # swh-plugins: the LADSPA fast lookahead limiter used by the speaker loudness
 # filter-chain (60-pocknix-speaker-loudness.conf).
 depends=('pocknix-bsp-common' 'swh-plugins')
-# Exactly one device BSP may be installed: every pocknix-bsp-<target> provides and
-# conflicts 'pocknix-bsp', so pacman refuses a second target's BSP (the wrong-device
-# guard for a shared repo).
+# Exactly one device BSP may be installed (wrong-device guard for a shared repo).
 provides=('pocknix-bsp')
 conflicts=('pocknix-bsp')
 optdepends=('inputplumber: gamepad -> Steam Input mapping (01-retroid-*.yaml)'

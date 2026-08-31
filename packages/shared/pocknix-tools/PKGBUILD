@@ -2,7 +2,7 @@
 # which live here rather than in the image overlay so fixes reach fielded SDs on -Syu (#34).
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=13
+pkgrel=14
 pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH toggle"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -11,8 +11,9 @@ depends=('pocknix-snapshots' 'pocknix-base' 'kdialog')
 install=pocknix-tools.install
 source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui'
         'pocknix-install-internal' 'pocknix-uninstall-internal' '54-pocknix-installer.rules'
+        'pocknix-internal-boot-rename' 'pocknix-internal-boot-rename.service'
         'pocknix-ssh' '53-pocknix-ssh.rules' '10-pocknix-no-root-login.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 backup=('etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf')
 
 package() {
@@ -20,6 +21,13 @@ package() {
   install -Dm755 "${srcdir}/pocknix-installer-gui" "${pkgdir}/usr/bin/pocknix-installer-gui"
   install -Dm755 "${srcdir}/pocknix-install-internal" "${pkgdir}/usr/bin/pocknix-install-internal"
   install -Dm755 "${srcdir}/pocknix-uninstall-internal" "${pkgdir}/usr/bin/pocknix-uninstall-internal"
+  # ROCKNIX->POCKNIX boot-partition migration, statically enabled via wants symlink
+  install -Dm755 "${srcdir}/pocknix-internal-boot-rename" "${pkgdir}/usr/bin/pocknix-internal-boot-rename"
+  install -Dm644 "${srcdir}/pocknix-internal-boot-rename.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-internal-boot-rename.service"
+  install -d "${pkgdir}/usr/lib/systemd/system/local-fs.target.wants"
+  ln -s ../pocknix-internal-boot-rename.service \
+    "${pkgdir}/usr/lib/systemd/system/local-fs.target.wants/pocknix-internal-boot-rename.service"
   install -Dm644 "${srcdir}/54-pocknix-installer.rules" \
     "${pkgdir}/usr/share/polkit-1/rules.d/54-pocknix-installer.rules"
   install -Dm755 "${srcdir}/pocknix-ssh" "${pkgdir}/usr/bin/pocknix-ssh"

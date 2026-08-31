@@ -51,9 +51,11 @@ if [ -n "${internal}" ]; then
   [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
   disk="${POCKNIX_INTERNAL_DISK:-/dev/sda}"
   rootlbl="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}"
-  bootlbl="${POCKNIX_BOOT_GPT_NAME:-ROCKNIX}"
+  bootlbl="${POCKNIX_BOOT_GPT_NAME:-POCKNIX}"
   int_root="$(lsblk -rpno NAME,PARTLABEL "${disk}" 2>/dev/null | awk -v l="${rootlbl}" '$2==l{print $1}' | head -1)"
   int_boot="$(lsblk -rpno NAME,PARTLABEL "${disk}" 2>/dev/null | awk -v l="${bootlbl}" '$2==l{print $1}' | head -1)"
+  # pre-rename installs (pocknix-internal-boot-rename) still name the boot FAT ROCKNIX
+  [ -n "${int_boot}" ] || int_boot="$(lsblk -rpno NAME,PARTLABEL "${disk}" 2>/dev/null | awk '$2=="ROCKNIX"{print $1}' | head -1)"
   [ -n "${int_root}" ] || die "no internal pocknix root (PARTLABEL=${rootlbl}) on ${disk}"
   [ -n "${int_boot}" ] || die "no internal boot partition (PARTLABEL=${bootlbl}) on ${disk}"
   [ "$(snap_root_dev)" != "${int_root}" ] || die "this IS the internal install — run without --internal"

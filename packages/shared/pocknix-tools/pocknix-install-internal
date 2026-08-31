@@ -2,12 +2,11 @@
 # pocknix-install-internal — install the running pocknix system to internal UFS storage.
 #
 # Run ON THE DEVICE, as root, booted from the SD. Shrinks the Android `userdata` partition
-# on the internal disk, appends a FAT boot partition named ROCKNIX (the stock ABL boots the
-# partition with that name and the boot flag) plus a POCKNIX_ROOT root, copies the current
-# KERNEL onto the FAT and clones the running rootfs onto it. The internal root gets the same
-# filesystem as the running SD: btrfs with the snapshot subvol layout, or ext4 from a
-# pre-snapshot SD. Nothing before `userdata` (abl, xbl, modem, persist) is touched. When it
-# finishes: power off, remove the SD card, power on.
+# on the internal disk, appends a FAT boot partition named POCKNIX plus a POCKNIX_ROOT
+# root, copies the current KERNEL onto the FAT and clones the running rootfs onto it.
+# The internal root gets the same filesystem as the running SD: btrfs with the snapshot
+# subvol layout, or ext4 from a pre-snapshot SD. Nothing before `userdata` (abl, xbl,
+# modem, persist) is touched. When it finishes: power off, remove the SD card, power on.
 #
 # One-time gateway only. After install, update in place (pacman -U / -S a package, rsync the
 # overlay, pacman -U linux-pocknix for a kernel) — never re-run this.
@@ -37,8 +36,10 @@ BOOT_MIB=512                      # not the SD's 256: at the UFS's 4K logical se
                                   # the result as corrupt.
 ROOT_MIN_GIB=8
 ANDROID_MIN_GIB=1
-BOOT_GPT_NAME="${POCKNIX_BOOT_GPT_NAME:-ROCKNIX}"     # ROCKNIX's internal-boot name (the SD uses "system")
-BOOT_FAT_LABEL="${POCKNIX_BOOT_FAT_LABEL:-ROCKNIX}"   # FAT label the ABL looks for
+# The ABL scans ESP-typed FAT partitions for boot files and never matches the name, so these
+# are ours. Never ROCKNIX: a ROCKNIX SD boot mounts the first ROCKNIX-labelled partition it finds.
+BOOT_GPT_NAME="${POCKNIX_BOOT_GPT_NAME:-POCKNIX}"
+BOOT_FAT_LABEL="${POCKNIX_BOOT_FAT_LABEL:-POCKNIX}"
 ROOT_GPT_NAME="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}"   # matches the kernel cmdline root=PARTLABEL=...
 DRY_RUN=0; ASSUME_YES=0; UD_GIB=""; DETECT=0
 
@@ -49,7 +50,7 @@ while [ "$#" -gt 0 ]; do
     --detect)  DETECT=1 ;;
     --userdata-gib) UD_GIB="${2:-}"; shift ;;
     --device) DEVICE="${2:-}"; shift ;;
-    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
   shift
@@ -84,9 +85,10 @@ existing="$(parted -m -s "$DEVICE" print 2>/dev/null | tail -n +2 | cut -d: -f6 
 if echo "$existing" | grep -qx -e "$ROOT_GPT_NAME"; then
   if [ "$DETECT" = 1 ]; then
     echo "mode=occupied"
+    # ROCKNIX: the boot FAT's pre-rename name (pocknix-internal-boot-rename)
     parted -m -s "$DEVICE" unit B print | awk -F: -v r="$ROOT_GPT_NAME" -v b="$BOOT_GPT_NAME" '
       NR>2 { sz=$4; sub("B","",sz)
-             if ($6=="userdata") a+=sz; else if ($6==r || $6==b) p+=sz }
+             if ($6=="userdata") a+=sz; else if ($6==r || $6==b || $6=="ROCKNIX") p+=sz }
       END  { printf "android_gib=%d\npocknix_gib=%d\n", a/2^30, p/2^30 }'
     exit 0
   fi
@@ -95,7 +97,7 @@ if echo "$existing" | grep -qx -e "$ROOT_GPT_NAME"; then
   (carefully, with parted) or restore Android, then re-run."
 fi
 # A ROCKNIX/STORAGE tail without POCKNIX_ROOT is someone else's install (e.g. ROCKNIX itself).
-if [ "$DETECT" = 1 ] && echo "$existing" | grep -qx -e "$BOOT_GPT_NAME" -e "STORAGE"; then
+if [ "$DETECT" = 1 ] && echo "$existing" | grep -qx -e "$BOOT_GPT_NAME" -e "ROCKNIX" -e "STORAGE"; then
   echo "mode=foreign"; exit 0
 fi
 
@@ -241,9 +243,13 @@ else
 fi
 
 # The ABL verifies KERNEL against KERNEL.md5, so the whole boot FAT is copied — a missing
-# KERNEL.md5 reads as "installation corrupt". The SD's is the only ROCKNIX-labelled FAT off $DEVICE.
-SD_BOOT="$(blkid -t LABEL="$BOOT_FAT_LABEL" -o device 2>/dev/null | grep -v "^${DEVICE}" | head -1 || true)"
-[ -n "$SD_BOOT" ] || die "couldn't find the SD boot partition (LABEL=$BOOT_FAT_LABEL) to copy KERNEL from"
+# KERNEL.md5 reads as "installation corrupt". Older SD images label their boot FAT ROCKNIX.
+SD_BOOT=""
+for _lbl in "$BOOT_FAT_LABEL" ROCKNIX; do
+  SD_BOOT="$(blkid -t LABEL="$_lbl" -o device 2>/dev/null | grep -v "^${DEVICE}" | head -1 || true)"
+  [ -n "$SD_BOOT" ] && break
+done
+[ -n "$SD_BOOT" ] || die "couldn't find the SD boot partition (LABEL=$BOOT_FAT_LABEL or ROCKNIX) to copy KERNEL from"
 # The SD image already mounts its boot FAT on /flash, and vfat refuses a second RO mount while
 # it is mounted RW ("would change RO state"), so reuse an existing mountpoint when there is one.
 SD_SRC="$(findmnt -nro TARGET "$SD_BOOT" 2>/dev/null | head -1)"

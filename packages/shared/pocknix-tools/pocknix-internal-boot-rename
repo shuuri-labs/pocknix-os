@@ -1,0 +1,49 @@
+#!/bin/bash
+# pocknix-internal-boot-rename — rename a pre-rename internal install's boot FAT (GPT name
+# + fs label) from ROCKNIX to POCKNIX; naming rationale in pocknix-install-internal.
+# Runs every boot before flash.mount (FAT still unmounted); no-ops once renamed and only
+# touches the disk / runs from.
+set -euo pipefail
+
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+
+DISK="${POCKNIX_INTERNAL_DISK:-/dev/sda}"
+ROOT_NAME="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}"
+# Hardcoded, NOT POCKNIX_BOOT_GPT_NAME: a not-yet-upgraded device.conf still says ROCKNIX,
+# which would make this a no-op rename.
+OLD=ROCKNIX
+NEW=POCKNIX
+
+# Only the disk we booted from: on an SD boot the internal disk may hold a real ROCKNIX
+# install, or a pocknix one whose own fstab we couldn't fix from here.
+root_src="$(findmnt -no SOURCE / 2>/dev/null || true)"
+case "$root_src" in
+  "$DISK"|"$DISK"[0-9]*|"$DISK"p[0-9]*) ;;
+  *) exit 0 ;;
+esac
+
+BOOT_NUM="$(parted -m -s "$DISK" print 2>/dev/null | awk -F: -v n="$OLD" 'NR>2 && $6==n {print $1; exit}')"
+[ -n "$BOOT_NUM" ] || exit 0
+# belt and braces: only rename inside our own layout
+parted -m -s "$DISK" print 2>/dev/null | awk -F: -v n="$ROOT_NAME" 'NR>2 && $6==n {f=1} END {exit !f}' || exit 0
+
+case "$DISK" in *mmcblk*|*nvme*) PART="${DISK}p${BOOT_NUM}" ;; *) PART="${DISK}${BOOT_NUM}" ;; esac
+[ "$(blkid -s TYPE -o value "$PART" 2>/dev/null)" = vfat ] || exit 0
+if findmnt -no TARGET "$PART" >/dev/null 2>&1; then
+  echo "pocknix-internal-boot-rename: $PART is mounted, deferring to next boot" >&2
+  exit 0
+fi
+
+# FAT label first: if it fails, the GPT name still says ROCKNIX and we retry next boot.
+fatlabel "$PART" "$NEW"
+parted -s "$DISK" name "$BOOT_NUM" "$NEW"
+# qcom-abl installs mount /flash by PARTLABEL (arm-efi ones use PARTUUID — no match, no-op)
+sed -i "s|PARTLABEL=${OLD}|PARTLABEL=${NEW}|g" /etc/fstab
+
+# flash.mount has not started yet (we are Before= it); the reload regenerates it
+# from the edited fstab so /flash still mounts this boot
+udevadm trigger "$PART" 2>/dev/null || true
+udevadm settle --timeout=10 2>/dev/null || true
+systemctl daemon-reload
+echo "pocknix-internal-boot-rename: renamed internal boot partition $PART ${OLD} -> ${NEW}"

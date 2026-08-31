@@ -99,7 +99,7 @@ OUT=/var/log/pocknix-diag.txt
 
 # Copy onto the FAT boot partition (readable on macOS too).
 mp=$(mktemp -d)
-if mount /dev/disk/by-partlabel/system "$mp" 2>/dev/null || mount -L ROCKNIX "$mp" 2>/dev/null; then
+if mount /dev/disk/by-partlabel/system "$mp" 2>/dev/null || mount -L POCKNIX "$mp" 2>/dev/null || mount -L ROCKNIX "$mp" 2>/dev/null; then
   cp "$OUT" "$mp/pocknix-diag.txt" 2>/dev/null || true
   sync
   umount "$mp" 2>/dev/null || true

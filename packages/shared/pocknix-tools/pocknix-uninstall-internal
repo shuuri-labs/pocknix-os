@@ -8,7 +8,7 @@ set -euo pipefail
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 
 DEVICE="${DEVICE:-${POCKNIX_INTERNAL_DISK:-/dev/sda}}"
-BOOT_NAME="${POCKNIX_BOOT_GPT_NAME:-ROCKNIX}"     # GPT name of the boot FAT  (pocknix-install-internal)
+BOOT_NAME="${POCKNIX_BOOT_GPT_NAME:-POCKNIX}"     # GPT name of the boot FAT  (pocknix-install-internal)
 ROOT_NAME="${POCKNIX_ROOT_LABEL:-POCKNIX_ROOT}"   # GPT name of the ext4 root
 DRY_RUN=0 ; ASSUME_YES=0
 
@@ -35,6 +35,12 @@ partdev() { case "$DEVICE" in *[0-9]) echo "${DEVICE}p$1" ;; *) echo "${DEVICE}$
 
 BOOT_NUM="$(partnum "$BOOT_NAME" || true)"
 ROOT_NUM="$(partnum "$ROOT_NAME" || true)"
+# Pre-rename installs named the boot FAT ROCKNIX; only fall back when our root is
+# present too, so a genuine ROCKNIX install is never deleted by name collision.
+if [ -z "$BOOT_NUM" ] && [ -n "$ROOT_NUM" ]; then
+  BOOT_NAME=ROCKNIX
+  BOOT_NUM="$(partnum "$BOOT_NAME" || true)"
+fi
 
 root_src="$(findmnt -no SOURCE / || true)"
 case "$root_src" in
@@ -48,7 +54,7 @@ UD_NUM="$(partnum userdata || true)"
 [ -n "$UD_NUM" ] || die "no Android 'userdata' partition on $DEVICE — refusing to guess the layout"
 
 # Grow userdata back over exactly the span install took: its start, and the highest end
-# among userdata/ROCKNIX/POCKNIX_ROOT.
+# among userdata/POCKNIX/POCKNIX_ROOT.
 read_mib() { parted -m -s "$DEVICE" unit MiB print | awk -F: -v n="$1" '$1==n{gsub("MiB","");print $2" "$3}'; }
 UD_START="$(read_mib "$UD_NUM" | awk '{printf "%d", $1}')"
 END=0

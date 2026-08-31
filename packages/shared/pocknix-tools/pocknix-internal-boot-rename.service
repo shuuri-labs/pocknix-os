@@ -1,0 +1,11 @@
+[Unit]
+Description=Rename legacy ROCKNIX-named internal boot partition to POCKNIX
+DefaultDependencies=no
+Conflicts=shutdown.target
+After=systemd-remount-fs.service local-fs-pre.target
+Before=flash.mount local-fs.target shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pocknix-internal-boot-rename
+TimeoutStartSec=30
