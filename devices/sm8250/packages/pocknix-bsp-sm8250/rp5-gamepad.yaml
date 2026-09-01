@@ -5,6 +5,8 @@
 # have paddles). BTN_BACK -> QuickAccess (Steam QAM; ROCKNIX had KeyF1 for
 # their UI), BTN_MODE -> Guide. The Flip 2 used to share this map but has no
 # back button — it forks it as rpflip2-gamepad.yaml (Guide+A QAM chord).
+# Face buttons target Steam's A/B/X/Y positions for Retroid's Nintendo
+# legends: BTN_EAST=A, BTN_SOUTH=B, BTN_NORTH=X, BTN_WEST=Y.
 # Schema version number
 version: 2
 
@@ -37,7 +39,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: South
+        button: East
 
   - name: West Button
     source_events:
@@ -47,7 +49,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: West
+        button: North
 
   - name: North Button
     source_events:
@@ -57,7 +59,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: North
+        button: West
 
   - name: East Button
     source_events:
@@ -67,7 +69,7 @@ mapping:
           value_type: button
     target_event:
       gamepad:
-        button: East
+        button: South
 
   - name: Start Button
     source_events:
