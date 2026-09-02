@@ -68,6 +68,11 @@ Three rules that catch most first-time contributors:
   package with a bumped `pkgrel`. If it genuinely cannot, say so in the PR.
 - **Runtime state that a session or service can clobber must be re-asserted** where it will
   stick (a systemd unit, the session launch path), not set once at install time.
+- **A new Arch Linux ARM package is not installable on existing devices until it is hosted
+  in the frozen base.** Installs are locked to `[pocknix-base]`, so `pacman -S <name>` fails
+  until I add it. List the name in `config/packages/base-extras.list`, say so in the PR, and
+  I host it with `make extend-base` (its dependencies must already be in the base) or at the
+  next base cut.
 
 ## Building
 
