@@ -1,8 +1,22 @@
 #!/bin/bash
-# pocknix-desktop-rotate — apply the panel rotation + scale to the live Plasma Mobile session.
+# pocknix-desktop-rotate — seed the panel rotation + scale into the live Plasma Mobile session.
 # Runs from /etc/xdg/autostart, not the launcher: kscreen-doctor talks to the KScreen daemon over
-# D-Bus, so the compositor must already be up. Idempotent; kwin persists the result.
+# D-Bus, so the compositor must already be up. Seeds ONCE per user (kwin persists the result
+# in kwinoutputconfig.json); POCKNIX_ROTATE/_SCALE env re-forces past the stamp.
 set -u
+
+log() { echo "pocknix-desktop-rotate: $*" >&2; }
+
+# Capture env before sourcing device.conf: env is the force knob; the /etc admin
+# override must seed values, not re-force them every login.
+FORCE=0
+[ -n "${POCKNIX_ROTATE:-}${POCKNIX_SCALE:-}" ] && FORCE=1
+
+STAMP="${XDG_CONFIG_HOME:-${HOME}/.config}/pocknix/desktop-seeded"
+if [ "${FORCE}" = 0 ] && [ -e "${STAMP}" ]; then
+  log "already seeded (${STAMP}) — leaving rotation/scale to user settings"
+  exit 0
+fi
 
 # Precedence: POCKNIX_ROTATE/_SCALE env > /etc/pocknix/device.conf > BSP /usr/lib > RP6 fallbacks.
 for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
@@ -15,8 +29,6 @@ OUTPUT="${POCKNIX_OUTPUT:-}"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 have kscreen-doctor || { echo "pocknix-desktop-rotate: kscreen-doctor not found (install kscreen)" >&2; exit 1; }
-
-log() { echo "pocknix-desktop-rotate: $*" >&2; }
 
 # kscreen kded can take a moment after login to register outputs over D-Bus, hence the poll.
 # kscreen-doctor colorizes -o even when piped (ignores NO_COLOR): strip SGR escapes or the
@@ -43,7 +55,19 @@ if [ -z "${OUTPUT}" ]; then
   exit 1
 fi
 
-log "configuring output '${OUTPUT}': rotation=${ROTATE} scale=${SCALE}"
 # One transaction so kwin applies rotation + scale together (avoids an intermediate bad mode).
-kscreen-doctor "output.${OUTPUT}.rotation.${ROTATE}" "output.${OUTPUT}.scale.${SCALE}" \
+# Unknown boards get no rotation: kwin honours the DT panel-orientation hint and the
+# fallback token is a guess that fights it (#57).
+args=("output.${OUTPUT}.scale.${SCALE}")
+if [ "${POCKNIX_BOARD_UNKNOWN:-0}" != 1 ] || [ "${FORCE}" = 1 ]; then
+  args=("output.${OUTPUT}.rotation.${ROTATE}" "${args[@]}")
+else
+  log "unknown board — seeding scale only, rotation left to the panel-orientation hint"
+fi
+
+log "configuring output '${OUTPUT}': ${args[*]}"
+kscreen-doctor "${args[@]}" \
   || { log "kscreen-doctor failed — try POCKNIX_OUTPUT/POCKNIX_ROTATE overrides"; exit 1; }
+
+mkdir -p "$(dirname "${STAMP}")" && touch "${STAMP}" \
+  || log "could not write ${STAMP} — will re-seed next login"

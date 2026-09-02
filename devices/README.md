@@ -88,7 +88,8 @@ Sourced by shared session scripts (`pocknix-steam`, `pocknix-desktop-rotate`,
 | `POCKNIX_PANEL_W/H/REFRESH` | pocknix-steam | gamescope -W/-H/-r |
 | `POCKNIX_PANEL_ORIENT` | pocknix-steam | gamescope --force-orientation |
 | `POCKNIX_PANEL_MM` | pocknix-steam | GAMESCOPE_FAKE_OUTPUT_MM (gamepadui DPI; deliberately faked on small panels) |
-| `POCKNIX_DESKTOP_ROTATE/_SCALE` | pocknix-desktop-rotate | kscreen-doctor rotation/scale |
+| `POCKNIX_DESKTOP_ROTATE/_SCALE` | pocknix-desktop-rotate | kscreen-doctor rotation/scale (seeded once per user; env re-forces) |
+| `POCKNIX_BOARD_UNKNOWN` | pocknix-desktop-rotate | set by the device.conf fallback branch: board not in the list, do not force guessed values |
 | `POCKNIX_BIG_CORES` | pocknix-play | taskset big-core mask for emulator pinning |
 | `POCKNIX_BOOT_STYLE` | pocknix-install/uninstall-internal | qcom-abl (default) or arm-efi: selects the internal-install boot-file handling (arm-efi pins grub.cfg + fstab to internal PARTUUIDs) |
 | `POCKNIX_INTERNAL_DISK` | pocknix-install/uninstall-internal, installer-gui | internal disk (default /dev/sda) |
