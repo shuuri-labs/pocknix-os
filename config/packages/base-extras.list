@@ -5,3 +5,6 @@
 # --- VPN / remote access ---
 tailscale
 wireguard-tools      # no openresolv for wg-quick DNS: conflicts with the base's systemd-resolvconf
+
+# --- file sharing ---
+samba
