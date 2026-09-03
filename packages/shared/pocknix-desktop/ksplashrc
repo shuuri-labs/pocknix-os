@@ -1,6 +1,7 @@
-# Disable KSplash: plasmashell on Plasma Mobile never sends the "desktop ready" D-Bus signal,
-# so the splash always runs its full 30s fallback timeout, covering an already-live shell and
-# making every session switch look hung. System-wide default in /etc/xdg.
+# Previously Theme=None/Engine=none, on the concern that Plasma Mobile never sends the
+# "desktop ready" signal and the splash would sit through its full fallback timeout.
+# It does not: plasma-ksplash.service runs ksplashqml Type=oneshot and it exits on its own.
+# Deleting this file restores the old behaviour if some device does hang.
 [KSplash]
-Theme=None
-Engine=none
+Theme=com.pocknix.splash
+Engine=KSplashQML

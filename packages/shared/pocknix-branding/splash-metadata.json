@@ -1,0 +1,11 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Id": "com.pocknix.splash",
+        "Name": "Pocknix OS",
+        "Description": "Pocknix OS wordmark splash",
+        "Authors": [{ "Name": "meodai" }],
+        "License": "GPL-2.0-or-later",
+        "Version": "1.0"
+    }
+}
