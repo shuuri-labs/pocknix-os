@@ -6,7 +6,7 @@
 set -euo pipefail
 
 WALLPAPER=/usr/share/wallpapers/PocknixOS
-STAMP="${HOME}/.local/share/pocknix/branding-seeded"
+STAMP="${XDG_CONFIG_HOME:-${HOME}/.config}/pocknix/branding-seeded"
 
 [ -d "$WALLPAPER" ] || exit 0
 [ -e "$STAMP" ] && exit 0
