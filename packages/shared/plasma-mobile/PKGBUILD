@@ -1,11 +1,10 @@
-# plasma-mobile — Arch's 6.7.4-1 rebuilt against the base's Qt 6.11.2. Arch rebuilt
-# kwin/plasma-workspace for 6.11.2 but not plasma-mobile, whose mobileshell plugin uses
-# QtWaylandClient's private ABI: the stale build segfaults plasmashell (black desktop).
-# Drop once the base carries a plasma-mobile built against its own Qt AND the
-# config-page crash (0001 patch) no longer reproduces on the base's stock QML.
+# plasma-mobile — Arch's 6.7.4-1 rebuilt against the base's Qt 6.11.2 (Arch never rebuilt
+# it; the mobileshell plugin uses QtWaylandClient's private ABI, so the stale build
+# segfaults plasmashell). Drop once the base carries a plasma-mobile built against its
+# own Qt AND the 0001 config-page crash no longer reproduces on the base's stock QML.
 pkgname=plasma-mobile
 pkgver=6.7.4
-pkgrel=3
+pkgrel=4
 pkgdesc="Plasma shell for mobile devices (rebuilt against the pocknix base's Qt)"
 arch=('aarch64')
 url="https://plasma-mobile.org/"
@@ -27,10 +26,7 @@ sha256sums=('378085f75cb0378a46fa12cc678a0e87f2bf9f1771eb514730da8b0a617e8bec'
             'SKIP')
 
 prepare() {
-  # Opening any containment's config page segfaults plasmashell: evaluating
-  # AppletConfiguration.qml's grouped-target Binding crashes QQmlBind::eval on our Qt.
-  # Cause unknown; assigning the window properties directly avoids QQmlBind.
-  # Drop once the crash no longer reproduces on stock QML.
+  # config-page segfault workaround; mechanism and drop condition in the patch header.
   patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0001-shell-avoid-grouped-binding-in-config-window.patch"
 }
 
