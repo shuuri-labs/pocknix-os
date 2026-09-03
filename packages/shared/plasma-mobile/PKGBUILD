@@ -1,7 +1,8 @@
 # plasma-mobile — Arch's 6.7.4-1 rebuilt against the base's Qt 6.11.2. Arch rebuilt
 # kwin/plasma-workspace for 6.11.2 but not plasma-mobile, whose mobileshell plugin uses
 # QtWaylandClient's private ABI: the stale build segfaults plasmashell (black desktop).
-# Drop once the base carries a plasma-mobile built against its own Qt.
+# Drop once the base carries a plasma-mobile built against its own Qt AND the
+# config-page crash (0001 patch) no longer reproduces on the base's stock QML.
 pkgname=plasma-mobile
 pkgver=6.7.4
 pkgrel=3
