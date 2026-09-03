@@ -9,7 +9,6 @@ import { styles } from "./styles";
 import { Games } from "./tabs/Games";
 import { Library } from "./tabs/Library";
 import { Lighting } from "./tabs/Lighting";
-import { Storage } from "./tabs/Storage";
 import { Updater } from "./tabs/Updater";
 import type { Config } from "./types";
 
@@ -68,7 +67,6 @@ export function Content() {
     ...(config.led.available
       ? [{ id: "Lighting", title: tabIcons.Lighting, content: tabContent(<Lighting config={config} setConfig={setConfig} reload={load} />) }]
       : []),
-    { id: "Storage", title: tabIcons.Storage, content: tabContent(<Storage />) },
     { id: "Updater", title: tabIcons.Updater, content: tabContent(<Updater />) },
   ];
   return (

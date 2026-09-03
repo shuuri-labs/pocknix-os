@@ -10,9 +10,9 @@ tapping the icons:
 
 | Tab | What it does |
 |---|---|
-| 🎮 Games | Per-game performance/audio tweaks, add non-Steam games |
+| 🎮 Games | Per-game performance/audio tweaks |
+| 📚 Library | Add non-Steam games, share your files over the network, format a microSD card for Steam |
 | ⚡ Power | Fan curve and CPU scheduler |
-| 💾 Storage | Format a microSD card for Steam, and share your files over the network |
 | 🔄 Updater | Check for and install system updates, roll back the last update |
 
 Settings save automatically as you change them.
@@ -37,6 +37,8 @@ Changes apply on the **next game launch**.
   on Game default) for timing-sensitive titles - rhythm games, fighting games, anything where
   you play to the beat or need tight audio cues.
 
+## Library
+
 ### Adding non-Steam games
 
 ![Add Non-Steam Game in Pocknix Control](images/pocknix-control-add-game.jpeg)
@@ -48,7 +50,7 @@ windows for it - the file-browser dialog never appears on screen.
 
 Pocknix Control provides the same feature natively in game mode instead:
 
-1. In the **Games** tab, scroll to **Library** and press **Add Non-Steam Game**.
+1. In the **Library** tab, press **Add Non-Steam Game**.
 2. A file picker opens in your home directory. Navigate to the executable you want
    (a Linux binary, script, or Windows `.exe`) and select it.
 3. Give it a name, and choose whether to **Launch with Proton**. This switches on
@@ -56,36 +58,12 @@ Pocknix Control provides the same feature natively in game mode instead:
 4. Press **Add to Library**. The game appears in your Steam library right away, and also
    shows up in the tweaks dropdown above so you can give it its own FEX/audio settings.
 
-## Power
-
-- **Fan Curve**: **Quiet**, **Moderate**, or **Performance**. Applies live, no restart.
-- **CPU Scheduler**: **Autopilot** (the `scx_lavd` default - adapts to load on the fly) or
-  **Performance** (keeps the CPU aggressive at the cost of battery and heat).
-
-## Storage
-
-Formats a microSD card so Steam can use it as game storage.
-
-On a Steam Deck this lives in Steam itself (**Settings → Storage → Format SD Card**). Steam's
-native format button can work on these devices too, but I have not figured out how to wire it
-up yet, so Pocknix Control provides the option here in the meantime.
-
-The tab shows the detected card (label, size, current filesystem); set a label if you like
-and press **Format SD Card**.
-
-> **Formatting erases everything on the card.** The confirmation dialog makes you type
-> `format` before it will run, so you cannot trigger it by accident.
-
-The card is formatted the same way a Steam Deck would (ext4 with casefolding), mounts
-automatically, and gets added to Steam as a library folder - Steam offers it as an install
-target right away, and cards formatted here also work in a real Steam Deck (and vice versa).
-
 ### File sharing
 
-The same tab can turn the device into a network share, so you can drag ROMs, BIOS files and
-emulator firmware onto it from another computer instead of moving a card back and forth. It
-needs no extra software on either end: macOS Finder, Windows Explorer and Linux file managers
-all speak SMB out of the box.
+The same tab can also turn the device into a network share, so you can drag ROMs, BIOS files
+and emulator firmware onto it from another computer instead of moving a card back and forth.
+It needs no extra software on either end: macOS Finder, Windows Explorer and Linux file
+managers all speak SMB out of the box.
 
 Samba is not shipped in the image (74.5 MB installed), so the first time you use this the
 section offers a 7.4 MB download. After that, **Share my home folder** flips it on and off, and
@@ -102,6 +80,30 @@ use `\\pocknix`.
 
 The same toggle exists in **Pocknix Tools** on the desktop side, and both drive the same
 `pocknix-share` command - flipping it in one place is reflected in the other.
+
+### SD card
+
+Formats a microSD card so Steam can use it as game storage.
+
+On a Steam Deck this lives in Steam itself (**Settings → Storage → Format SD Card**). Steam's
+native format button can work on these devices too, but I have not figured out how to wire it
+up yet, so Pocknix Control provides the option here in the meantime.
+
+The section shows the detected card (label, size, current filesystem); set a label if you like
+and press **Format SD Card**.
+
+> **Formatting erases everything on the card.** The confirmation dialog makes you type
+> `format` before it will run, so you cannot trigger it by accident.
+
+The card is formatted the same way a Steam Deck would (ext4 with casefolding), mounts
+automatically, and gets added to Steam as a library folder - Steam offers it as an install
+target right away, and cards formatted here also work in a real Steam Deck (and vice versa).
+
+## Power
+
+- **Fan Curve**: **Quiet**, **Moderate**, or **Performance**. Applies live, no restart.
+- **CPU Scheduler**: **Autopilot** (the `scx_lavd` default - adapts to load on the fly) or
+  **Performance** (keeps the CPU aggressive at the cost of battery and heat).
 
 ## Updater
 

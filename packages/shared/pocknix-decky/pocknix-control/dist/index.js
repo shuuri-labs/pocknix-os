@@ -99,7 +99,6 @@ const tabIcons = {
     Games: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("line", { x1: "6", x2: "10", y1: "11", y2: "11" }), SP_JSX.jsx("line", { x1: "8", x2: "8", y1: "9", y2: "13" }), SP_JSX.jsx("line", { x1: "15", x2: "15.01", y1: "12", y2: "12" }), SP_JSX.jsx("line", { x1: "18", x2: "18.01", y1: "10", y2: "10" }), SP_JSX.jsx("path", { d: "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z" })] }) })),
     Library: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }), SP_JSX.jsx("path", { d: "M8 12h8" }), SP_JSX.jsx("path", { d: "M12 8v8" })] }) })),
     Updater: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }), SP_JSX.jsx("polyline", { points: "7 10 12 15 17 10" }), SP_JSX.jsx("line", { x1: "12", x2: "12", y1: "15", y2: "3" })] }) })),
-    Storage: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("line", { x1: "22", x2: "2", y1: "12", y2: "12" }), SP_JSX.jsx("path", { d: "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" }), SP_JSX.jsx("line", { x1: "6", x2: "6.01", y1: "16", y2: "16" }), SP_JSX.jsx("line", { x1: "10", x2: "10.01", y1: "16", y2: "16" })] }) })),
     Lighting: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("path", { d: "M9 18h6" }), SP_JSX.jsx("path", { d: "M10 22h4" }), SP_JSX.jsx("path", { d: "M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14" })] }) })),
 };
 
@@ -689,8 +688,179 @@ function AddGameSection() {
     return (SP_JSX.jsxs(DFL.PanelSection, { title: "LIBRARY", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: pick, children: "Add Non-Steam Game" }) }), SP_JSX.jsx("div", { className: "pocknix-note", children: "Pick an executable to add it to your Steam library" })] }));
 }
 
+// The share is guest-writable and covers the whole home folder, so the trade is spelled out
+// rather than buried: same warning the Pocknix Tools menu shows before it flips the switch.
+function ShareConfirmModal({ onConfirm, closeModal }) {
+    const [running, setRunning] = SP_REACT.useState(false);
+    const runningRef = SP_REACT.useRef(false);
+    runningRef.current = running;
+    const start = async () => {
+        if (runningRef.current)
+            return;
+        setRunning(true);
+        await onConfirm();
+        closeModal?.();
+    };
+    return (SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Share Files Over The Network", strDescription: running
+            ? "Starting…"
+            : "Anyone on the same network can read and write every file in your home folder - games, saves and emulator settings, but also your Steam login and SSH keys. There is no password. Only turn this on at home.", strOKButtonText: running ? "Starting…" : "Turn On Sharing", bDestructiveWarning: true, bOKDisabled: running, bCancelDisabled: running, bDisableBackgroundDismiss: true, onCancel: () => {
+            if (!runningRef.current)
+                closeModal?.();
+        }, onOK: start }));
+}
+function FileSharing() {
+    const [share, setShareState] = SP_REACT.useState(null);
+    const [busy, setBusy] = SP_REACT.useState(false);
+    const [status, setStatus] = SP_REACT.useState("");
+    const busyRef = SP_REACT.useRef(false);
+    busyRef.current = busy;
+    SP_REACT.useEffect(() => {
+        let cancelled = false;
+        const refresh = async () => {
+            if (busyRef.current)
+                return;
+            try {
+                const next = await shareStatus();
+                if (!cancelled && !busyRef.current)
+                    setShareState(next);
+            }
+            catch (error) {
+                if (!cancelled)
+                    setStatus(String(error));
+            }
+        };
+        refresh();
+        const timer = window.setInterval(refresh, 5000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, []);
+    const run = async (action) => {
+        if (busyRef.current)
+            return;
+        setBusy(true);
+        setStatus("");
+        try {
+            setShareState(await action());
+        }
+        catch (error) {
+            setStatus(String(error));
+        }
+        finally {
+            setBusy(false);
+        }
+    };
+    const summary = () => {
+        if (status)
+            return status;
+        if (!share)
+            return "Checking…";
+        if (!share.installed)
+            return "Samba is not installed (7.4 MB download)";
+        if (share.on)
+            return "On - open smb://pocknix.local and connect as Guest";
+        return "Off - your home folder is not shared";
+    };
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "FILE SHARING", children: [SP_JSX.jsx(DFL.Field, { label: "Network share", description: summary() }), share && !share.installed ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: busy, onClick: () => run(installSamba), children: busy ? "Installing…" : "Install Samba" }) })) : (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Share my home folder", description: "Drag files straight onto the device from another computer", checked: !!share?.on, disabled: busy || !share?.installed, onChange: (on) => {
+                        if (busyRef.current)
+                            return;
+                        if (on)
+                            DFL.showModal(SP_JSX.jsx(ShareConfirmModal, { onConfirm: () => run(() => setShare(true)) }));
+                        else
+                            run(() => setShare(false));
+                    } }) }))] }));
+}
+
+function cardSummary(card) {
+    if (!card)
+        return "Checking…";
+    if (!card.present)
+        return "No SD card detected";
+    if (card.bootDisk)
+        return "Booted from this card - formatting disabled";
+    const size = card.sizeBytes ? `${(card.sizeBytes / 1e9).toFixed(1)} GB` : "";
+    const state = card.fstype === "ext4" ? (card.mountpoint ? "mounted" : "") : "not formatted for Steam";
+    return [card.label || "unlabeled", size, card.fstype || "no filesystem", state].filter(Boolean).join(" · ");
+}
+// closeModal must not be forwarded to ConfirmModal: its OK handler would close the dialog
+// at once, and it has to stay open until the format finishes.
+function FormatConfirmModal({ summary, onConfirm, closeModal }) {
+    const [text, setText] = SP_REACT.useState("");
+    const [running, setRunning] = SP_REACT.useState(false);
+    const armedRef = SP_REACT.useRef(false);
+    const runningRef = SP_REACT.useRef(false);
+    armedRef.current = text.trim().toLowerCase() === "format";
+    runningRef.current = running;
+    const start = async () => {
+        if (!armedRef.current || runningRef.current)
+            return;
+        setRunning(true);
+        await onConfirm();
+        closeModal?.();
+    };
+    return (SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Format SD Card", strDescription: running
+            ? "Formatting… This can take a minute. Do not remove the card."
+            : `This erases ALL data on the card (${summary}) and formats it for Steam. Type "format" and press Enter to confirm.`, strOKButtonText: running ? "Formatting…" : "Erase and Format", bDestructiveWarning: true, bOKDisabled: !armedRef.current || running, bCancelDisabled: running, bDisableBackgroundDismiss: true, bHideCloseIcon: true, onCancel: () => {
+            if (!runningRef.current)
+                closeModal?.();
+        }, onOK: start, children: !running ? (SP_JSX.jsx(DFL.TextField, { value: text, focusOnMount: true, onChange: (event) => setText(event.target.value), onKeyDown: (event) => {
+                if (event.key === "Enter")
+                    start();
+            } })) : null }));
+}
+function SdCard() {
+    const [card, setCard] = SP_REACT.useState(null);
+    const [label, setLabel] = SP_REACT.useState("SDCARD");
+    const [busy, setBusy] = SP_REACT.useState(false);
+    const [status, setStatus] = SP_REACT.useState("");
+    const busyRef = SP_REACT.useRef(false);
+    busyRef.current = busy;
+    SP_REACT.useEffect(() => {
+        let cancelled = false;
+        const refresh = async () => {
+            if (busyRef.current)
+                return;
+            try {
+                const next = await detectSdcard();
+                if (!cancelled && !busyRef.current)
+                    setCard(next);
+            }
+            catch (error) {
+                if (!cancelled)
+                    setStatus(String(error));
+            }
+        };
+        refresh();
+        const timer = window.setInterval(refresh, 5000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, []);
+    const runFormat = async () => {
+        if (busyRef.current)
+            return;
+        setBusy(true);
+        setStatus("");
+        try {
+            const next = await formatSdcard(label);
+            setCard(next);
+        }
+        catch (error) {
+            setStatus(String(error));
+        }
+        finally {
+            setBusy(false);
+        }
+    };
+    const confirmFormat = () => DFL.showModal(SP_JSX.jsx(FormatConfirmModal, { summary: cardSummary(card), onConfirm: runFormat }));
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "SD CARD", children: [SP_JSX.jsx(DFL.Field, { label: "Card", description: cardSummary(card) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Label", value: label, disabled: busy || !!card?.bootDisk, onChange: (event) => setLabel(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16)) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: !card?.present || busy || !!card?.bootDisk, onClick: confirmFormat, children: busy ? "Formatting…" : "Format SD Card" }) }), status ? SP_JSX.jsx(DFL.Field, { label: "", description: status }) : null] }));
+}
+
+// SD card last: the only destructive action, kept away from the casual toggles
 function Library() {
-    return SP_JSX.jsx(AddGameSection, {});
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(AddGameSection, {}), SP_JSX.jsx(FileSharing, {}), SP_JSX.jsx(SdCard, {})] }));
 }
 
 // SliderField has only onChange, so commits are debounced. The pending value lives in
@@ -833,175 +1003,6 @@ function Lighting({ config, setConfig, reload }) {
                                 .catch(() => reload()) }) }), led.sidesAvailable && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Side Lights", description: "Match the side lighting to the sticks.", checked: led.sides, disabled: !led.enabled, onChange: (value) => setLedSides(value)
                                 .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
                                 .catch(() => reload()) }) }))] }), led.enabled && (led.linked ? (SP_JSX.jsx(DFL.PanelSection, { title: "BOTH STICKS", children: SP_JSX.jsx(ColorControls, { zone: "both", hsv: leftHsv, brightness: led.left.brightness, onCommit: commitBoth }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "LEFT STICK", children: SP_JSX.jsx(ColorControls, { zone: "left", hsv: leftHsv, brightness: led.left.brightness, onCommit: commitLeft }) }), SP_JSX.jsx(DFL.PanelSection, { title: "RIGHT STICK", children: SP_JSX.jsx(ColorControls, { zone: "right", hsv: rightHsv, brightness: led.right.brightness, onCommit: commitRight }) })] })))] }));
-}
-
-function cardSummary(card) {
-    if (!card)
-        return "Checking…";
-    if (!card.present)
-        return "No SD card detected";
-    if (card.bootDisk)
-        return "Booted from this card - formatting disabled";
-    const size = card.sizeBytes ? `${(card.sizeBytes / 1e9).toFixed(1)} GB` : "";
-    const state = card.fstype === "ext4" ? (card.mountpoint ? "mounted" : "") : "not formatted for Steam";
-    return [card.label || "unlabeled", size, card.fstype || "no filesystem", state].filter(Boolean).join(" · ");
-}
-// closeModal must not be forwarded to ConfirmModal: its OK handler would close the dialog
-// at once, and it has to stay open until the format finishes.
-function FormatConfirmModal({ summary, onConfirm, closeModal }) {
-    const [text, setText] = SP_REACT.useState("");
-    const [running, setRunning] = SP_REACT.useState(false);
-    const armedRef = SP_REACT.useRef(false);
-    const runningRef = SP_REACT.useRef(false);
-    armedRef.current = text.trim().toLowerCase() === "format";
-    runningRef.current = running;
-    const start = async () => {
-        if (!armedRef.current || runningRef.current)
-            return;
-        setRunning(true);
-        await onConfirm();
-        closeModal?.();
-    };
-    return (SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Format SD Card", strDescription: running
-            ? "Formatting… This can take a minute. Do not remove the card."
-            : `This erases ALL data on the card (${summary}) and formats it for Steam. Type "format" and press Enter to confirm.`, strOKButtonText: running ? "Formatting…" : "Erase and Format", bDestructiveWarning: true, bOKDisabled: !armedRef.current || running, bCancelDisabled: running, bDisableBackgroundDismiss: true, bHideCloseIcon: true, onCancel: () => {
-            if (!runningRef.current)
-                closeModal?.();
-        }, onOK: start, children: !running ? (SP_JSX.jsx(DFL.TextField, { value: text, focusOnMount: true, onChange: (event) => setText(event.target.value), onKeyDown: (event) => {
-                if (event.key === "Enter")
-                    start();
-            } })) : null }));
-}
-// The share is guest-writable and covers the whole home folder, so the trade is spelled out
-// rather than buried: same warning the Pocknix Tools menu shows before it flips the switch.
-function ShareConfirmModal({ onConfirm, closeModal }) {
-    const [running, setRunning] = SP_REACT.useState(false);
-    const runningRef = SP_REACT.useRef(false);
-    runningRef.current = running;
-    const start = async () => {
-        if (runningRef.current)
-            return;
-        setRunning(true);
-        await onConfirm();
-        closeModal?.();
-    };
-    return (SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Share Files Over The Network", strDescription: running
-            ? "Starting…"
-            : "Anyone on the same network can read and write every file in your home folder - games, saves and emulator settings, but also your Steam login and SSH keys. There is no password. Only turn this on at home.", strOKButtonText: running ? "Starting…" : "Turn On Sharing", bDestructiveWarning: true, bOKDisabled: running, bCancelDisabled: running, bDisableBackgroundDismiss: true, onCancel: () => {
-            if (!runningRef.current)
-                closeModal?.();
-        }, onOK: start }));
-}
-function FileSharing() {
-    const [share, setShareState] = SP_REACT.useState(null);
-    const [busy, setBusy] = SP_REACT.useState(false);
-    const [status, setStatus] = SP_REACT.useState("");
-    const busyRef = SP_REACT.useRef(false);
-    busyRef.current = busy;
-    SP_REACT.useEffect(() => {
-        let cancelled = false;
-        const refresh = async () => {
-            if (busyRef.current)
-                return;
-            try {
-                const next = await shareStatus();
-                if (!cancelled && !busyRef.current)
-                    setShareState(next);
-            }
-            catch (error) {
-                if (!cancelled)
-                    setStatus(String(error));
-            }
-        };
-        refresh();
-        const timer = window.setInterval(refresh, 5000);
-        return () => {
-            cancelled = true;
-            window.clearInterval(timer);
-        };
-    }, []);
-    const run = async (action) => {
-        if (busyRef.current)
-            return;
-        setBusy(true);
-        setStatus("");
-        try {
-            setShareState(await action());
-        }
-        catch (error) {
-            setStatus(String(error));
-        }
-        finally {
-            setBusy(false);
-        }
-    };
-    const summary = () => {
-        if (status)
-            return status;
-        if (!share)
-            return "Checking…";
-        if (!share.installed)
-            return "Samba is not installed (7.4 MB download)";
-        if (share.on)
-            return "On - open smb://pocknix.local and connect as Guest";
-        return "Off - your home folder is not shared";
-    };
-    return (SP_JSX.jsxs(DFL.PanelSection, { title: "FILE SHARING", children: [SP_JSX.jsx(DFL.Field, { label: "Network share", description: summary() }), share && !share.installed ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: busy, onClick: () => run(installSamba), children: busy ? "Installing…" : "Install Samba" }) })) : (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Share my home folder", description: "Drag files straight onto the device from another computer", checked: !!share?.on, disabled: busy || !share?.installed, onChange: (on) => {
-                        if (busyRef.current)
-                            return;
-                        if (on)
-                            DFL.showModal(SP_JSX.jsx(ShareConfirmModal, { onConfirm: () => run(() => setShare(true)) }));
-                        else
-                            run(() => setShare(false));
-                    } }) }))] }));
-}
-function Storage() {
-    const [card, setCard] = SP_REACT.useState(null);
-    const [label, setLabel] = SP_REACT.useState("SDCARD");
-    const [busy, setBusy] = SP_REACT.useState(false);
-    const [status, setStatus] = SP_REACT.useState("");
-    const busyRef = SP_REACT.useRef(false);
-    busyRef.current = busy;
-    SP_REACT.useEffect(() => {
-        let cancelled = false;
-        const refresh = async () => {
-            if (busyRef.current)
-                return;
-            try {
-                const next = await detectSdcard();
-                if (!cancelled && !busyRef.current)
-                    setCard(next);
-            }
-            catch (error) {
-                if (!cancelled)
-                    setStatus(String(error));
-            }
-        };
-        refresh();
-        const timer = window.setInterval(refresh, 5000);
-        return () => {
-            cancelled = true;
-            window.clearInterval(timer);
-        };
-    }, []);
-    const runFormat = async () => {
-        if (busyRef.current)
-            return;
-        setBusy(true);
-        setStatus("");
-        try {
-            const next = await formatSdcard(label);
-            setCard(next);
-        }
-        catch (error) {
-            setStatus(String(error));
-        }
-        finally {
-            setBusy(false);
-        }
-    };
-    const confirmFormat = () => DFL.showModal(SP_JSX.jsx(FormatConfirmModal, { summary: cardSummary(card), onConfirm: runFormat }));
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "SD CARD", children: [SP_JSX.jsx(DFL.Field, { label: "Card", description: cardSummary(card) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Label", value: label, disabled: busy || !!card?.bootDisk, onChange: (event) => setLabel(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16)) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: !card?.present || busy || !!card?.bootDisk, onClick: confirmFormat, children: busy ? "Formatting…" : "Format SD Card" }) }), status ? SP_JSX.jsx(DFL.Field, { label: "", description: status }) : null] }), SP_JSX.jsx(FileSharing, {})] }));
 }
 
 const SHOWN_UPDATES = 8;
@@ -1184,7 +1185,6 @@ function Content() {
         ...(config.led.available
             ? [{ id: "Lighting", title: tabIcons.Lighting, content: tabContent(SP_JSX.jsx(Lighting, { config: config, setConfig: setConfig, reload: load })) }]
             : []),
-        { id: "Storage", title: tabIcons.Storage, content: tabContent(SP_JSX.jsx(Storage, {})) },
         { id: "Updater", title: tabIcons.Updater, content: tabContent(SP_JSX.jsx(Updater, {})) },
     ];
     return (SP_JSX.jsxs("div", { className: "pocknix-control-tabs", children: [SP_JSX.jsx("style", { children: styles }), SP_JSX.jsx(DFL.Tabs, { activeTab: tab, onShowTab: setTab, tabs: tabs })] }));

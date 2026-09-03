@@ -54,7 +54,7 @@ Finder, Windows Explorer and Linux file managers - no extra software on either e
 
 Turn it on in either place:
 
-- **Game Mode**: Quick Access Menu → **Pocknix Control** → **Storage** → *Share my home folder*
+- **Game Mode**: Quick Access Menu → **Pocknix Control** → **Library** → *Share my home folder*
 - **Desktop**: **Pocknix Tools** → *File sharing (SMB) is off - turn it on...*
 
 The first time, you will be offered a 7.4 MB download (Samba is not shipped in the image, so

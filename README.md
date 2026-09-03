@@ -93,7 +93,7 @@ pocknix-os ships **ES-DE** (EmulationStation Desktop Edition) with a set of prec
 
 **Star a game as a favorite in ES-DE and it appears in your Steam library**, so you can launch it straight from Big Picture / game mode alongside your Steam titles.
 
-**Copying files over the network:** turn on file sharing (Pocknix Control → Storage, or Pocknix Tools) and the device appears in Finder / Explorer / your Linux file manager, so you can drag ROMs, BIOS files and emulator firmware straight onto it. See [copying files over the network](docs/emulation-setup.md#copying-files-over-the-network).
+**Copying files over the network:** turn on file sharing (Pocknix Control → Library, or Pocknix Tools) and the device appears in Finder / Explorer / your Linux file manager, so you can drag ROMs, BIOS files and emulator firmware straight onto it. See [copying files over the network](docs/emulation-setup.md#copying-files-over-the-network).
 
 See the [emulation docs](docs/emulation-setup.md) for where ROMs and BIOS files go, and how to tweak per-emulator settings.
 
@@ -126,7 +126,8 @@ Supported systems:
 - **Add Non-Steam Game**: Steam's own "Add a Non-Steam Game" dialog does not work on pocknix-os (Steam is an X11 app and Plasma Mobile cannot summon new windows for it), so Pocknix Control provides the feature natively in game mode instead.
 - **Power**: fan curve (Quiet / Moderate / Performance) and CPU scheduler mode, applied live.
 - **LED Control**: adjust the stick RGB LED colours and brightness.
-- **Storage**: format a microSD card for Steam, Deck-compatible, straight from game mode, and toggle network file sharing so you can drag files onto the device from another computer.
+- **File Sharing** (same tab as Add Non-Steam Game): toggle network file sharing so you can drag files onto the device from another computer.
+- **SD Card** (same tab): format a microSD card for Steam, Deck-compatible, straight from game mode.
 - **Updater**: check for and install system updates from the Quick Access Menu.
 
 See the [Pocknix Control docs](docs/pocknix-control.md) for the full tour.
