@@ -2,8 +2,8 @@
 # which live here rather than in the image overlay so fixes reach fielded SDs on -Syu (#34).
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=14
-pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH toggle"
+pkgrel=15
+pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH + file sharing toggles"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('MIT')
@@ -12,9 +12,12 @@ install=pocknix-tools.install
 source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui'
         'pocknix-install-internal' 'pocknix-uninstall-internal' '54-pocknix-installer.rules'
         'pocknix-internal-boot-rename' 'pocknix-internal-boot-rename.service'
-        'pocknix-ssh' '53-pocknix-ssh.rules' '10-pocknix-no-root-login.conf')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
-backup=('etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf')
+        'pocknix-ssh' '53-pocknix-ssh.rules' '10-pocknix-no-root-login.conf'
+        'pocknix-share' '55-pocknix-share.rules' 'smb.conf' 'pocknix-smb.service')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+backup=('etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf'
+        'etc/samba/smb.conf')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-tools" "${pkgdir}/usr/bin/pocknix-tools"
@@ -37,4 +40,12 @@ package() {
     "${pkgdir}/usr/share/polkit-1/rules.d/53-pocknix-ssh.rules"
   install -Dm644 "${srcdir}/10-pocknix-no-root-login.conf" \
     "${pkgdir}/etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf"
+
+  install -Dm755 "${srcdir}/pocknix-share" "${pkgdir}/usr/bin/pocknix-share"
+  install -Dm644 "${srcdir}/55-pocknix-share.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/55-pocknix-share.rules"
+  # samba ships no default smb.conf (only empty /etc/samba), so this is the whole config
+  install -Dm644 "${srcdir}/smb.conf" "${pkgdir}/etc/samba/smb.conf"
+  install -Dm644 "${srcdir}/pocknix-smb.service" \
+    "${pkgdir}/etc/avahi/services/pocknix-smb.service"
 }

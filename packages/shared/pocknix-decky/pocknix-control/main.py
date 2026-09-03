@@ -5,6 +5,7 @@ from pocknix_control.configio import apply_config, config_dir, export_config, re
 from pocknix_control.led import restore_led, set_led, set_led_enabled, set_led_linked, set_led_sides
 from pocknix_control.modes import set_fan_mode, set_lavd_mode
 from pocknix_control.sdcard import detect_sdcard, format_sdcard
+from pocknix_control.sharing import install_samba, set_share, share_status
 from pocknix_control.snapshots import reboot_system, snapshot_status, start_rollback
 from pocknix_control.tweaks import save_tweaks
 from pocknix_control.updates import check_updates, start_update, update_status
@@ -23,6 +24,15 @@ class Plugin:
 
     async def format_sdcard(self, label):
         return await asyncio.to_thread(format_sdcard, label)
+
+    async def share_status(self):
+        return await asyncio.to_thread(share_status)
+
+    async def set_share(self, on):
+        return await asyncio.to_thread(set_share, on)
+
+    async def install_samba(self):
+        return await asyncio.to_thread(install_samba)
 
     async def set_fan_mode(self, mode):
         await asyncio.to_thread(set_fan_mode, mode)

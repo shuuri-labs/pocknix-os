@@ -38,6 +38,9 @@ const setLedEnabled = (enabled) => call("set_led_enabled", enabled);
 const setLedSides = (sides) => call("set_led_sides", sides);
 const detectSdcard = () => call("detect_sdcard");
 const formatSdcard = (label) => call("format_sdcard", label);
+const shareStatus = () => call("share_status");
+const setShare = (on) => call("set_share", on);
+const installSamba = () => call("install_samba");
 const checkUpdates = () => call("check_updates");
 const startUpdate = () => call("start_update");
 const updateStatus = () => call("update_status");
@@ -84,9 +87,8 @@ function useDebouncedSave(options) {
         const timer = window.setTimeout(() => flushRef.current(), delay);
         return () => window.clearTimeout(timer);
     }, [value]);
-    // QAM panels unmount the moment the menu closes. The cleanup above clears the only
-    // pending timer, so without this unmount flush any edit made <delay ms before closing
-    // was silently dropped (how the first on-device Audio Buffer edit got lost, 2026-07-05).
+    // QAM panels unmount the moment the menu closes, and the cleanup above clears the only
+    // pending timer: without this flush, any edit made <delay ms before closing is dropped.
     SP_REACT.useEffect(() => () => void flushRef.current(), []);
 }
 
@@ -106,9 +108,8 @@ function gameDisplayName(game) {
         return "";
     return game.name || `App ${game.appid}`;
 }
-// The backend lists every appmanifest in steamapps, which includes tools (Proton, Steam Linux
-// Runtime, Steamworks Common Redistributables, …). Steam's own appStore overview knows the type
-// (app_type 1 = game, 4 = tool); fall back to name patterns when the overview isn't available.
+// The backend lists every appmanifest in steamapps, tools included. app_type 4 = tool in
+// Steam's appStore overview; this name pattern is the fallback when no overview exists.
 const NON_GAME_NAME = /^(Proton[ 0-9]|Proton (Hotfix|EasyAntiCheat|BattlEye)|Steam Linux Runtime|Steamworks Common)/i;
 function isGame(appid, name) {
     try {
@@ -120,9 +121,8 @@ function isGame(appid, name) {
     }
     return !NON_GAME_NAME.test(name);
 }
-// Non-Steam shortcuts have no appmanifest, so the backend scan can't see them; Steam's
-// deckDesktopApps collection holds their appids (unsigned; force with >>> in case a build
-// hands out the signed-int32 form) and appStore resolves the names.
+// Non-Steam shortcuts have no appmanifest, so only deckDesktopApps sees them. Their appids are
+// unsigned and above 2^31, hence the >>> 0: some builds hand out the signed-int32 form.
 function nonSteamShortcuts() {
     try {
         const ids = window.collectionStore?.deckDesktopApps?.apps;
@@ -157,8 +157,8 @@ function availableGames(config) {
     for (const shortcut of nonSteamShortcuts()) {
         games.set(shortcut.appid, shortcut);
     }
-    // Games with saved tweaks stay listed even if the lookups above miss them —
-    // existing per-game config must remain reachable. Shortcut appids sit above 2^31.
+    // Saved tweaks keep a game listed even when the lookups above miss it, so existing
+    // per-game config can never become unreachable.
     for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
         if (game && typeof game === "object" && !games.has(String(appid))) {
             games.set(String(appid), { appid: String(appid), name: game.name || `App ${appid}`, nonSteam: Number(appid) >= 0x80000000 });
@@ -232,9 +232,8 @@ const styles = `
       }
     `;
 
-// Per-game Proton selection via SteamClient.Apps. This drives the SAME state as Steam's own
-// per-game compatibility dropdown (SpecifyCompatTool + app details), so the two UIs stay in
-// sync by construction — we never store a shadow copy.
+// Drives the same state as Steam's own per-game compatibility dropdown (SpecifyCompatTool +
+// app details), so never store a shadow copy: the two UIs stay in sync by construction.
 async function availableCompatTools(appid) {
     const apps = window.SteamClient?.Apps;
     if (!apps?.GetAvailableCompatTools)
@@ -625,9 +624,8 @@ function Games({ config, setConfig, reload }) {
                                 } }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) }), SP_JSX.jsx(EnvVarsButton, { value: String(values.envVars ?? ""), onSave: (next) => patchSettings({ envVars: next }) })] })) : (SP_JSX.jsx(TweakFields, { config: config, appid: game.appid, values: values, patch: patchSettings }))] })) : null, !editingDefault && perGameEnabled ? (SP_JSX.jsx(ConfigSection, { game: { appid: game.appid, name: game.name || "" }, reload: reload })) : null] }));
 }
 
-// Non-Steam shortcut creation via SteamClient.Apps. The Steam file browser can't open a
-// new window under the Plasma Mobile X11 session, so Decky's in-UI file picker plus this
-// module replace the stock "Add a Non-Steam Game" flow.
+// Replaces the stock "Add a Non-Steam Game" flow: Steam's file browser cannot open a new
+// window under the Plasma Mobile X11 session, so Decky's in-UI picker feeds this instead.
 const WINDOWS_EXE = /\.(exe|bat|msi)$/i;
 // Constant internal name from proton-cachyos' compatibilitytool.vdf; survives version bumps.
 const PROTON_TOOL = "proton-cachyos";
@@ -764,7 +762,6 @@ function ColorControls({ zone, hsv, brightness, onCommit }) {
       ` })] }));
 }
 
-// HSV <-> RGB conversion for the stick-light color picker.
 function hsvToRgb(h, s, v) {
     const hh = ((h % 360) + 360) % 360;
     const ss = Math.max(0, Math.min(100, s)) / 100;
@@ -849,9 +846,8 @@ function cardSummary(card) {
     const state = card.fstype === "ext4" ? (card.mountpoint ? "mounted" : "") : "not formatted for Steam";
     return [card.label || "unlabeled", size, card.fstype || "no filesystem", state].filter(Boolean).join(" · ");
 }
-// showModal injects closeModal into this wrapper. We deliberately do NOT forward it to
-// ConfirmModal: its internal OK handler would close the dialog immediately, and we want
-// it held open (with the confirm button greyed out) until the format finishes.
+// closeModal must not be forwarded to ConfirmModal: its OK handler would close the dialog
+// at once, and it has to stay open until the format finishes.
 function FormatConfirmModal({ summary, onConfirm, closeModal }) {
     const [text, setText] = SP_REACT.useState("");
     const [running, setRunning] = SP_REACT.useState(false);
@@ -875,6 +871,89 @@ function FormatConfirmModal({ summary, onConfirm, closeModal }) {
                 if (event.key === "Enter")
                     start();
             } })) : null }));
+}
+// The share is guest-writable and covers the whole home folder, so the trade is spelled out
+// rather than buried: same warning the Pocknix Tools menu shows before it flips the switch.
+function ShareConfirmModal({ onConfirm, closeModal }) {
+    const [running, setRunning] = SP_REACT.useState(false);
+    const runningRef = SP_REACT.useRef(false);
+    runningRef.current = running;
+    const start = async () => {
+        if (runningRef.current)
+            return;
+        setRunning(true);
+        await onConfirm();
+        closeModal?.();
+    };
+    return (SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Share Files Over The Network", strDescription: running
+            ? "Starting…"
+            : "Anyone on the same network can read and write every file in your home folder - games, saves and emulator settings, but also your Steam login and SSH keys. There is no password. Only turn this on at home.", strOKButtonText: running ? "Starting…" : "Turn On Sharing", bDestructiveWarning: true, bOKDisabled: running, bCancelDisabled: running, bDisableBackgroundDismiss: true, onCancel: () => {
+            if (!runningRef.current)
+                closeModal?.();
+        }, onOK: start }));
+}
+function FileSharing() {
+    const [share, setShareState] = SP_REACT.useState(null);
+    const [busy, setBusy] = SP_REACT.useState(false);
+    const [status, setStatus] = SP_REACT.useState("");
+    const busyRef = SP_REACT.useRef(false);
+    busyRef.current = busy;
+    SP_REACT.useEffect(() => {
+        let cancelled = false;
+        const refresh = async () => {
+            if (busyRef.current)
+                return;
+            try {
+                const next = await shareStatus();
+                if (!cancelled && !busyRef.current)
+                    setShareState(next);
+            }
+            catch (error) {
+                if (!cancelled)
+                    setStatus(String(error));
+            }
+        };
+        refresh();
+        const timer = window.setInterval(refresh, 5000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, []);
+    const run = async (action) => {
+        if (busyRef.current)
+            return;
+        setBusy(true);
+        setStatus("");
+        try {
+            setShareState(await action());
+        }
+        catch (error) {
+            setStatus(String(error));
+        }
+        finally {
+            setBusy(false);
+        }
+    };
+    const summary = () => {
+        if (status)
+            return status;
+        if (!share)
+            return "Checking…";
+        if (!share.installed)
+            return "Samba is not installed (7.4 MB download)";
+        if (share.on)
+            return "On - open smb://pocknix.local and connect as Guest";
+        return "Off - your home folder is not shared";
+    };
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "FILE SHARING", children: [SP_JSX.jsx(DFL.Field, { label: "Network share", description: summary() }), share && !share.installed ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: busy, onClick: () => run(installSamba), children: busy ? "Installing…" : "Install Samba" }) })) : (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Share my home folder", description: "Drag files straight onto the device from another computer", checked: !!share?.on, disabled: busy || !share?.installed, onChange: (on) => {
+                        if (busyRef.current)
+                            return;
+                        if (on)
+                            DFL.showModal(SP_JSX.jsx(ShareConfirmModal, { onConfirm: () => run(() => setShare(true)) }));
+                        else
+                            run(() => setShare(false));
+                    } }) }))] }));
 }
 function Storage() {
     const [card, setCard] = SP_REACT.useState(null);
@@ -922,7 +1001,7 @@ function Storage() {
         }
     };
     const confirmFormat = () => DFL.showModal(SP_JSX.jsx(FormatConfirmModal, { summary: cardSummary(card), onConfirm: runFormat }));
-    return (SP_JSX.jsxs(DFL.PanelSection, { title: "SD CARD", children: [SP_JSX.jsx(DFL.Field, { label: "Card", description: cardSummary(card) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Label", value: label, disabled: busy || !!card?.bootDisk, onChange: (event) => setLabel(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16)) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: !card?.present || busy || !!card?.bootDisk, onClick: confirmFormat, children: busy ? "Formatting…" : "Format SD Card" }) }), status ? SP_JSX.jsx(DFL.Field, { label: "", description: status }) : null] }));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "SD CARD", children: [SP_JSX.jsx(DFL.Field, { label: "Card", description: cardSummary(card) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.TextField, { label: "Label", value: label, disabled: busy || !!card?.bootDisk, onChange: (event) => setLabel(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16)) }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", disabled: !card?.present || busy || !!card?.bootDisk, onClick: confirmFormat, children: busy ? "Formatting…" : "Format SD Card" }) }), status ? SP_JSX.jsx(DFL.Field, { label: "", description: status }) : null] }), SP_JSX.jsx(FileSharing, {})] }));
 }
 
 const SHOWN_UPDATES = 8;
@@ -1144,12 +1223,10 @@ function GameSettingsModal({ appid, name, closeModal }) {
                 } }), enabled ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(PerfFields, { values: values, patch: patch }), SP_JSX.jsx(TweakFields, { config: config, appid: appid, values: values, patch: patch }), SP_JSX.jsx(ConfigSection, { game: { appid, name }, reload: () => getConfig().then(setConfig).catch(() => { }) })] })) : null] }));
 }
 
-// Adds "Pocknix Settings" to the library entry context menu (the Start-button menu).
-// The menu class is no longer a module export: locate its module by the
-// "().LibraryContextMenu" classname marker, take the wrapper member (the one injecting
-// `navigator:` via the jsx runtime), and fake-render it — the element's type is the real
-// class. Steam UI internals are unversioned, so every step is guarded: if the shape
-// changes we lose the menu item, never the plugin.
+// LibraryContextMenu is not a module export, so it is reached by classname marker ->
+// `navigator:` wrapper -> fake-render, whose element type is the real class.
+// Steam UI internals are unversioned: every step is guarded so a shape change costs the
+// menu item, never the plugin.
 function patchLibraryContextMenu() {
     try {
         const menuModule = DFL.findModuleChild((mod) => {
@@ -1179,9 +1256,7 @@ function patchLibraryContextMenu() {
         const LibraryContextMenu = DFL.fakeRenderComponent(wrapper)?.type;
         if (!LibraryContextMenu?.prototype?.BuildManageSubmenu)
             return () => { };
-        // Patch the Manage submenu builder rather than the top-level render, so the entry
-        // lands under Manage. The builder's return shape is guarded both ways (plain item
-        // array vs element with children).
+        // The builder returns either a plain item array or an element with children.
         const patch = DFL.afterPatch(LibraryContextMenu.prototype, "BuildManageSubmenu", function (_args, ret) {
             try {
                 const overview = this.props?.overview;
