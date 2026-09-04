@@ -15,7 +15,7 @@ current() {
 
 # Per-game override record; format and lifetime documented in pocknix-fancontrol.
 effective() {
-  if read -r pid _ lavd < "${GAME_MODE_FILE}" 2>/dev/null; then
+  if read -r pid _ lavd 2>/dev/null < "${GAME_MODE_FILE}"; then
     case "${lavd}" in
       autopilot|performance|balanced|powersave)
         if [ -n "${pid}" ] && [ -d "/proc/${pid}" ]; then
