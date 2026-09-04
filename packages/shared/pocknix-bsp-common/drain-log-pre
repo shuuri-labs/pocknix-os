@@ -1,0 +1,7 @@
+#!/bin/sh
+# Realtime, not monotonic: the monotonic clock stops during s2idle.
+mkdir -p /run/pocknix
+printf '%s %s\n' "$(date +%s)" \
+  "$(cat /sys/class/power_supply/battery/charge_counter 2>/dev/null)" \
+  > /run/pocknix/drain-log
+exit 0

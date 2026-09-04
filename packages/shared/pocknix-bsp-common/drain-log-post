@@ -1,0 +1,18 @@
+#!/bin/sh
+s=/run/pocknix/drain-log
+[ -f "$s" ] || exit 0
+read -r t0 c0 < "$s"
+rm -f "$s"
+secs=$(( $(date +%s) - t0 ))
+c1=$(cat /sys/class/power_supply/battery/charge_counter 2>/dev/null)
+irq=$(cat /sys/power/pm_wakeup_irq 2>/dev/null)
+name=$(awk -v i="${irq}:" '$1 == i { print $NF }' /proc/interrupts 2>/dev/null)
+if [ -n "$c0" ] && [ -n "$c1" ]; then
+  mah=$(( (c0 - c1) / 1000 ))
+  ma=0; [ "$secs" -gt 0 ] && ma=$(( mah * 3600 / secs ))
+  used="${mah} mAh (${ma} mA avg)"
+else
+  used="charge_counter unavailable"
+fi
+echo "004-drain-log: slept ${secs}s, ${used}, woke by irq ${irq:-none} ${name}" > /dev/kmsg
+exit 0
