@@ -1,0 +1,9 @@
+[Unit]
+Description=pocknix second-screen touch policy (bottom touchscreen live)
+# Not enabled: the session launchers start it (desktop) and stop it (Steam).
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/pocknix-second-screen on
+ExecStop=/usr/bin/pocknix-second-screen off

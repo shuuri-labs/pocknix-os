@@ -1,0 +1,28 @@
+#!/bin/sh
+# pocknix-second-screen — bottom-touchscreen policy on dual-screen boards. Compositors read
+# libinput's udev properties once at device add, so the flag must flip and the touchscreen
+# re-trigger BEFORE a session starts: the desktop launcher starts the unit, the Steam one stops it.
+set -u
+
+FLAG=/run/pocknix/second-screen
+
+for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
+  [ -r "${_dc}" ] && . "${_dc}"
+done
+[ -n "${POCKNIX_TOUCH2_NAME:-}" ] || exit 0
+
+case "${1:-}" in
+  on)  mkdir -p /run/pocknix && : > "${FLAG}" ;;
+  off) rm -f "${FLAG}" ;;
+  *)   echo "usage: pocknix-second-screen on|off" >&2; exit 2 ;;
+esac
+
+# Only that event node: a blanket input retrigger makes InputPlumber re-examine the gamepad mid-switch.
+for d in /sys/class/input/input*; do
+  [ "$(cat "${d}/name" 2>/dev/null)" = "${POCKNIX_TOUCH2_NAME}" ] || continue
+  for ev in "${d}"/event*; do
+    [ -e "${ev}" ] && udevadm trigger --action=change "$(readlink -f "${ev}")" 2>/dev/null
+  done
+done
+udevadm settle --timeout=5 2>/dev/null || true
+exit 0

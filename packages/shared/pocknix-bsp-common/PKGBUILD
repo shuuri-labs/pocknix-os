@@ -3,8 +3,8 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=15
-pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater"
+pkgrel=16
+pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
@@ -26,10 +26,11 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'pocknix-update-abl' '52-pocknix-abl.rules' 'pocknix-gpt-abl'
         'pocknix-refresh-abl-kit'
         'pocknix-gamepad-target' 'pocknix-gamepad-target.service'
+        'pocknix-second-screen' 'pocknix-second-screen.service'
         'iwd-wait-wlan0.conf')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -89,6 +90,11 @@ package() {
   install -d "${pkgdir}/usr/lib/systemd/system/inputplumber.service.wants"
   ln -sf "../pocknix-gamepad-target.service" \
     "${pkgdir}/usr/lib/systemd/system/inputplumber.service.wants/pocknix-gamepad-target.service"
+
+  # Dual-screen boards (device.conf POCKNIX_TOUCH2_NAME): a no-op everywhere else.
+  install -Dm755 "${srcdir}/pocknix-second-screen" "${pkgdir}/usr/bin/pocknix-second-screen"
+  install -Dm644 "${srcdir}/pocknix-second-screen.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-second-screen.service"
 
   install -Dm644 "${srcdir}/iwd-wait-wlan0.conf" \
     "${pkgdir}/usr/lib/systemd/system/iwd.service.d/10-pocknix-wait-wlan0.conf"
