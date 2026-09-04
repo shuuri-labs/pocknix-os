@@ -25,7 +25,9 @@ done
 
 ROTATE="${POCKNIX_ROTATE:-${POCKNIX_DESKTOP_ROTATE:-left}}"
 SCALE="${POCKNIX_SCALE:-${POCKNIX_DESKTOP_SCALE:-2.5}}"
-OUTPUT="${POCKNIX_OUTPUT:-}"
+OUTPUT="${POCKNIX_OUTPUT:-${POCKNIX_PANEL_OUTPUT:-}}"
+OUTPUT2="${POCKNIX_PANEL2_OUTPUT:-}"
+SCALE2="${POCKNIX_DESKTOP2_SCALE:-${SCALE}}"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 have kscreen-doctor || { echo "pocknix-desktop-rotate: kscreen-doctor not found (install kscreen)" >&2; exit 1; }
@@ -46,9 +48,18 @@ fi
 
 # `kscreen-doctor -o` puts the connector name in field $3 of each "Output:" line; the
 # enabled/connected tokens sit on FOLLOWING lines, so they cannot be matched on the same line.
+has_output() { printf '%s\n' "${outputs}" | awk -v n="$1" '/^Output:/ && $3 == n {f = 1} END {exit !f}'; }
+if [ -n "${OUTPUT}" ] && ! has_output "${OUTPUT}"; then
+  log "configured output '${OUTPUT}' not present — falling back to the first DSI output"
+  OUTPUT=""
+fi
 if [ -z "${OUTPUT}" ]; then
   OUTPUT="$(printf '%s\n' "${outputs}" | awk '/^Output:/ && /DSI/ {print $3; exit}')"
   [ -z "${OUTPUT}" ] && OUTPUT="$(printf '%s\n' "${outputs}" | awk '/^Output:/ {print $3; exit}')"
+fi
+if [ -n "${OUTPUT2}" ] && { [ "${OUTPUT2}" = "${OUTPUT}" ] || ! has_output "${OUTPUT2}"; }; then
+  log "second output '${OUTPUT2}' not present — single-output seed"
+  OUTPUT2=""
 fi
 if [ -z "${OUTPUT}" ]; then
   log "could not determine a connected output from:"; printf '%s\n' "${outputs}" >&2
@@ -59,8 +70,10 @@ fi
 # Unknown boards get no rotation: kwin honours the DT panel-orientation hint and the
 # fallback token is a guess that fights it (#57).
 args=("output.${OUTPUT}.scale.${SCALE}")
+[ -n "${OUTPUT2}" ] && args+=("output.${OUTPUT2}.enable" "output.${OUTPUT2}.scale.${SCALE2}")
 if [ "${POCKNIX_BOARD_UNKNOWN:-0}" != 1 ] || [ "${FORCE}" = 1 ]; then
   args=("output.${OUTPUT}.rotation.${ROTATE}" "${args[@]}")
+  [ -n "${OUTPUT2}" ] && args+=("output.${OUTPUT2}.rotation.${ROTATE}")
 else
   log "unknown board — seeding scale only, rotation left to the panel-orientation hint"
 fi
@@ -68,6 +81,25 @@ fi
 log "configuring output '${OUTPUT}': ${args[*]}"
 kscreen-doctor "${args[@]}" \
   || { log "kscreen-doctor failed — try POCKNIX_OUTPUT/POCKNIX_ROTATE overrides"; exit 1; }
+
+# Layout pass reads the geometry back, so the unit kscreen reports is never assumed.
+if [ -n "${OUTPUT2}" ]; then
+  sleep 1
+  outputs="$(kscreen-doctor -o 2>/dev/null | sed $'s/\x1b\\[[0-9;]*m//g')" || outputs=""
+  # "Geometry: x,y WxH" sits inside the Output: block; $3 of that line is the size.
+  geom() { printf '%s\n' "${outputs}" | awk -v n="$1" '/^Output:/ {cur = $3} cur == n && /Geometry:/ {print $3; exit}'; }
+  g1="$(geom "${OUTPUT}")"; g2="$(geom "${OUTPUT2}")"
+  if [ -n "${g1}" ] && [ -n "${g2}" ]; then
+    w1="${g1%x*}"; h1="${g1#*x}"; w2="${g2%x*}"
+    x2=$(( (w1 - w2) / 2 )); [ "${x2}" -lt 0 ] && x2=0
+    args=("output.${OUTPUT}.priority.1" "output.${OUTPUT}.position.0,0"
+          "output.${OUTPUT2}.priority.2" "output.${OUTPUT2}.position.${x2},${h1}")
+    log "placing '${OUTPUT2}' below '${OUTPUT}': ${args[*]}"
+    kscreen-doctor "${args[@]}" || log "kscreen-doctor layout failed — outputs left where kwin put them"
+  else
+    log "could not read geometry for both outputs — layout not seeded"
+  fi
+fi
 
 mkdir -p "$(dirname "${STAMP}")" && touch "${STAMP}" \
   || log "could not write ${STAMP} — will re-seed next login"

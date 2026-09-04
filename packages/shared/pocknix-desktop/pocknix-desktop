@@ -38,4 +38,29 @@ fi
 # PRIORITY_USER, the one level a bundled DB cannot overwrite.
 export SDL_GAMECONTROLLERCONFIG='030000005e0400008e02000001000000,Microsoft X-Box 360 pad,a:b0,b:b1,back:b6,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,guide:b8,leftshoulder:b4,leftstick:b9,lefttrigger:a2,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b10,righttrigger:a5,rightx:a3,righty:a4,start:b7,x:b2,y:b3,platform:Linux,'
 
+# Dual-screen boards, before kwin enumerates input: kwin's fallback puts every touch device on
+# the FIRST internal output, so pin each to its output (kcminputrc [Libinput][vendor][product][name]).
+for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
+  [ -r "${_dc}" ] && . "${_dc}"
+done
+if [ -n "${POCKNIX_TOUCH2_NAME:-}" ]; then
+  systemctl start pocknix-second-screen.service 2>/dev/null || true
+  map_touch() {  # <evdev name> <output>
+    local d vendor product
+    for d in /sys/class/input/input*; do
+      [ "$(cat "${d}/name" 2>/dev/null)" = "$1" ] || continue
+      vendor=$(( 16#$(cat "${d}/id/vendor" 2>/dev/null || echo 0) ))
+      product=$(( 16#$(cat "${d}/id/product" 2>/dev/null || echo 0) ))
+      kwriteconfig6 --file kcminputrc --group Libinput --group "${vendor}" --group "${product}" \
+        --group "$1" --key OutputName "$2" 2>/dev/null || true
+      return
+    done
+    echo "pocknix-desktop: touchscreen '$1' not found — not mapped to $2" >&2
+  }
+  if command -v kwriteconfig6 >/dev/null 2>&1; then
+    [ -n "${POCKNIX_TOUCH_NAME:-}" ]   && map_touch "${POCKNIX_TOUCH_NAME}"  "${POCKNIX_PANEL_OUTPUT:-}"
+    map_touch "${POCKNIX_TOUCH2_NAME}" "${POCKNIX_PANEL2_OUTPUT:-}"
+  fi
+fi
+
 exec startplasmamobile
