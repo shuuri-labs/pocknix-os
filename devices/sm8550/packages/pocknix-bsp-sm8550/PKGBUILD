@@ -1,22 +1,7 @@
-# pocknix-bsp-sm8550 — board support for the SM8550 FAMILY: Retroid Pocket 6
-# (+TOP-DPAD), AYN Odin 2 / Mini / Portal, AYN Thor. ONE package serves every board on
-# the SoC (same shape as pocknix-bsp-sm8250): runtime board facts live in
-# /usr/lib/pocknix/boards/<board>.conf, /usr/lib/pocknix/device.conf is a
-# sourced DISPATCHER picking one by devicetree model, and the InputPlumber
-# config is dt-model gated. Successor to the retired per-device BSPs
-# (pocknix-bsp-{rp6,odin2,odin2mini,odin2portal}), whose contents were
-# identical apart from the board facts — 'replaces' migrates installed
-# devices on their next pacman -Syu.
-#
-# SoC-wide quirks (identical on every board):
-#   * 10-pocknix-s2idle.conf   — pin s2idle suspend (the cluster-sleep kernel stack
-#                                is s2idle-only; deep wedges with its rail constraints)
-#   * 30-pocknix-cpuidle.conf  — disable cpu0 idle state1 (GMU issues; ROCKNIX 096-cpuidle)
-#   * 99-pocknix-sm8550-usb-autosuspend.rules — runtime-PM the idle DWC3 controller
-#   * 71-pocknix-thor-touch.rules — Thor's bottom touchscreen follows pocknix-second-screen
-#   * kernel-cmdline           — the family cmdline for the on-device /flash/KERNEL
-#                                rebuild (qcom-abl); build-packages.sh asserts it
-#                                matches devices/sm8550/profile.conf
+# pocknix-bsp-sm8550 — board support for the SM8550 FAMILY (RP6 +TOP-DPAD, Odin 2 / Mini /
+# Portal, Thor). One package per SoC: board facts in /usr/lib/pocknix/boards/<board>.conf,
+# device.conf is a sourced dispatcher keyed on the DT model, InputPlumber configs are
+# dt-model gated.
 pkgname=pocknix-bsp-sm8550
 pkgver=0.2.0
 pkgrel=9
@@ -27,15 +12,13 @@ license=('GPL2')
 # pocknix-firmware-sm8550 rides this dep edge to the fleet: -Syu never installs
 # a new package name without one
 depends=('pocknix-bsp-common' 'pocknix-firmware-sm8550')
-# Exactly one device BSP may be installed (wrong-device guard for a shared repo).
-# 'replaces' migrates installs of the retired per-device BSPs (and the ancient
-# unified 'pocknix-bsp', carried over from the rp6 lineage).
+# Exactly one device BSP may be installed (wrong-device guard for a shared repo);
+# 'replaces' migrates the retired per-device BSPs.
 provides=('pocknix-bsp')
 conflicts=('pocknix-bsp')
 replaces=('pocknix-bsp' 'pocknix-bsp-rp6' 'pocknix-bsp-odin2' 'pocknix-bsp-odin2mini' 'pocknix-bsp-odin2portal')
 optdepends=('inputplumber: gamepad -> Steam Input mapping (01-rsinput-controller.yaml, 02-ayn-thor-controller.yaml)'
             'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin2 / AYN-Thor UCMs)')
-# spurious deep-sleep wake: fixed in kernel patch 0502 (docs/archive/sm8550-suspend-wake-report.md)
 source=('device.conf'
         '01-rsinput-controller.yaml' 'sm8550-gamepad.yaml'
         '02-ayn-thor-controller.yaml' 'thor-gamepad.yaml'
@@ -49,8 +32,7 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
-  # Runtime device facts: the model dispatcher + per-board files. boards/ is
-  # not in source= (makepkg local sources are flat); taken from startdir,
+  # boards/ is not in source= (makepkg local sources are flat): taken from startdir,
   # which build-packages.sh populates with the whole package dir.
   install -Dm644 "${srcdir}/device.conf" "${pkgdir}/usr/lib/pocknix/device.conf"
   local b
@@ -62,8 +44,7 @@ package() {
   # entry wedges). systemd reads sleep.conf drop-ins from this vendor dir.
   install -Dm644 "${srcdir}/10-pocknix-s2idle.conf" \
     "${pkgdir}/usr/lib/systemd/sleep.conf.d/10-pocknix-s2idle.conf"
-  # cpuidle quirk: disable cpu0 idle state1 (GMU issues) — ROCKNIX SM8550 096-cpuidle,
-  # re-asserted every boot via systemd-tmpfiles.
+  # Disable cpu0 idle state1 (GMU issues; ROCKNIX 096-cpuidle), re-asserted every boot.
   install -Dm644 "${srcdir}/30-pocknix-cpuidle.conf" \
     "${pkgdir}/usr/lib/tmpfiles.d/30-pocknix-cpuidle.conf"
   # Autosuspend the idle DWC3 controller so it drops its USB-to-DDR
@@ -80,8 +61,6 @@ package() {
   install -Dm755 "${srcdir}/cpuidle-state1-sleep-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/010-cpuidle-state1"
 
-  # InputPlumber composite-device config (dt-model gated, one for the family) +
-  # the shared capability_map for the RSInput MCU + gpio-keys paddles.
   install -Dm644 "${srcdir}/01-rsinput-controller.yaml" \
     "${pkgdir}/usr/share/inputplumber/devices/01-rsinput-controller.yaml"
   install -Dm644 "${srcdir}/sm8550-gamepad.yaml" \
@@ -103,8 +82,7 @@ package() {
   install -Dm644 "${srcdir}/HiFi-Thor.conf" "${ucm}/AYN/Thor/HiFi.conf"
   ln -sf "../../AYN/Thor/AYN-Thor.conf" "${ucm}/conf.d/sm8550/AYN-Thor.conf"
 
-  # Kernel command line for the on-device /flash/KERNEL rebuild (pocknix-build-bootimg,
-  # shipped by linux-pocknix-sm8550). One family cmdline (the retired per-device ones
-  # were byte-identical); build-packages.sh asserts it matches the family profile.
+  # One family cmdline for the on-device /flash/KERNEL rebuild (pocknix-build-bootimg);
+  # build-packages.sh asserts it matches devices/sm8550/profile.conf.
   install -Dm644 "${srcdir}/kernel-cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
 }

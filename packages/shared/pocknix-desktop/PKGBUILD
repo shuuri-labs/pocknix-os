@@ -25,7 +25,6 @@ package() {
   install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
   install -Dm755 "${srcdir}/pocknix-desktop-rotate"   "${pkgdir}/usr/bin/pocknix-desktop-rotate"
   install -Dm755 "${srcdir}/steamos-session-select"   "${pkgdir}/usr/bin/steamos-session-select"
-  # Autostart the rotation transform once the Plasma session (and kscreen kded) is up.
   install -Dm644 "${srcdir}/pocknix-desktop-rotate.desktop" \
     "${pkgdir}/etc/xdg/autostart/pocknix-desktop-rotate.desktop"
   # Remove the leftover gesture-bar taskpanel every session (see the script header for why).
@@ -33,7 +32,6 @@ package() {
     "${pkgdir}/usr/bin/pocknix-desktop-remove-taskpanel"
   install -Dm644 "${srcdir}/pocknix-desktop-remove-taskpanel.desktop" \
     "${pkgdir}/etc/xdg/autostart/pocknix-desktop-remove-taskpanel.desktop"
-  # "Return to Game Mode" tile in the Plasma app grid.
   install -Dm644 "${srcdir}/return-to-gamemode.desktop" \
     "${pkgdir}/usr/share/applications/return-to-gamemode.desktop"
   # Flathub remote setup for Discover/flatpak. NOT enabled at boot: the service is started by the
@@ -44,16 +42,14 @@ package() {
   # Dispatcher scripts must be root-owned and not group/world writable or NM refuses to run them.
   install -Dm755 "${srcdir}/pocknix-flathub-dispatcher" \
     "${pkgdir}/etc/NetworkManager/dispatcher.d/50-pocknix-flathub"
-  # System-wide default; only the deck Plasma session reads it.
   install -Dm644 "${srcdir}/ksplashrc"                "${pkgdir}/etc/xdg/ksplashrc"
   # power button -> NoAction in powerdevil: Plasma Mobile's ToggleScreenOnOff default turned
   # the panel back OFF on the (post-resume-delivered) wake press. pocknix-powerd owns the key.
   install -Dm644 "${srcdir}/powerdevilrc"             "${pkgdir}/etc/xdg/powerdevilrc"
   # No PIN lock screen: disable kscreenlocker's idle autolock + lock-on-resume (see file header).
   install -Dm644 "${srcdir}/kscreenlockerrc"          "${pkgdir}/etc/xdg/kscreenlockerrc"
-  # tmpfiles rule to create /tmp/.X11-unix at boot so kwin can start XWayland (X11 apps like Steam
-  # in desktop mode). kwin expects the dir to exist; the minimal ALARM base ships no xorg-server
-  # to provide it. See pocknix-x11.conf.
+  # kwin needs /tmp/.X11-unix to exist for XWayland; the minimal ALARM base ships no
+  # xorg-server to create it.
   install -Dm644 "${srcdir}/pocknix-x11.conf"         "${pkgdir}/usr/lib/tmpfiles.d/pocknix-x11.conf"
   install -Dm755 "${srcdir}/pocknix-fontcache-prune" "${pkgdir}/usr/bin/pocknix-fontcache-prune"
   install -Dm644 "${srcdir}/99-pocknix-fontcache.hook" \

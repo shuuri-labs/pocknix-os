@@ -60,7 +60,6 @@ if command -v pocknix-steam-sync >/dev/null 2>&1; then
   pocknix-steam-sync || echo "[pocknix-steam] Steam-library sync failed (non-fatal)"
 fi
 
-# /etc override is sourced last so it wins.
 for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
   [ -r "${_dc}" ] && . "${_dc}"
 done
