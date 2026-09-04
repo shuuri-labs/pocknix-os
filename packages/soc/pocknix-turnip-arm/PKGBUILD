@@ -2,8 +2,8 @@
 # "Mesa Version" tweak selects by pointing VK_DRIVER_FILES at them (ARM Proton path).
 # Counterpart of pocknix-turnip-x86; same per-SoC tuning contract as packages/soc/mesa.
 pkgname=pocknix-turnip-arm
-pkgver=20260825
-pkgrel=2
+pkgver=20260904
+pkgrel=1
 pkgdesc="Pinned aarch64 Turnip builds for per-game Mesa selection (SoC-tuned)"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
@@ -19,8 +19,9 @@ makedepends=(meson ninja python-mako python-packaging python-yaml python-ply gls
 options=(!lto)
 # The "devel" entry is a PINNED mesa main snapshot (main carries no tag) — pinned, not floating,
 # so rebuilds reproduce; refresh _develcommit deliberately.
-_develcommit=0b1b8798d81cb4da8c181c7d81076a0541006853
-_versions=('25.0.7' '25.1.9' '25.2.8' '25.3.6' '26.0.8' '26.1.6' '26.2.1' '26.3.0devel')
+_develcommit=dc886f34eb1764770ca448b967b0879b1bf4bf51
+# 26.2 comes from mesa's own vk-arm payload; pinning mesa's pkgver here = file conflict.
+_versions=('25.0.7' '25.1.9' '25.2.8' '25.3.6' '26.0.8' '26.1.6' '26.3.0devel')
 source=('0001-c11-threads-fix-build-on-c23.patch'
         'https://archive.mesa3d.org/mesa-25.0.7.tar.xz'
         'https://archive.mesa3d.org/mesa-25.1.9.tar.xz'
@@ -28,7 +29,6 @@ source=('0001-c11-threads-fix-build-on-c23.patch'
         'https://archive.mesa3d.org/mesa-25.3.6.tar.xz'
         'https://archive.mesa3d.org/mesa-26.0.8.tar.xz'
         'https://archive.mesa3d.org/mesa-26.1.6.tar.xz'
-        'https://archive.mesa3d.org/mesa-26.2.1.tar.xz'
         "https://gitlab.freedesktop.org/mesa/mesa/-/archive/${_develcommit}/mesa-${_develcommit}.tar.gz")
 sha256sums=('SKIP'
             '592272df3cf01e85e7db300c449df5061092574d099da275d19e97ef0510f8a6'
@@ -37,8 +37,7 @@ sha256sums=('SKIP'
             '59217efeac3b64e7ced958324b9db7494f1e0741aeb22d780276514cc1b8f206'
             'caf1c0061a68e88dfa74967a7e780c0e85d65b6c4e334cd69095a5dc54ad78bc'
             '5296b88a0f1e012e2cb9ada150a2bbadf728ca81e5a4fb2ab43c83a4d2158606'
-            'c47e81bddc4760360a41ac3c5acec38acb81f9d750ecef47e7f3adc7021a4442'
-            '9f0fb71d23005d8c2c2cea3af1a5c8768643e3b95d5fc0cf6e4e7c34db2b2ae2')
+            '9f5bf9a8081b0b54a9c76a1f5c815608b46791f502e97d23575d487427e9aa12')
 
 # The devel snapshot extracts to mesa-<commit>, releases to mesa-<ver>; RC tarballs keep the
 # hyphen that makepkg forbids in a version string, so our entries strip it and this restores it.
@@ -100,7 +99,7 @@ package() {
     meson install -C "build-${v}" --destdir "${stage}" --no-rebuild
     dir="${pkgdir}/usr/share/pocknix/vk-arm/${v}"
     install -Dm755 "${stage}/usr/lib/libvulkan_freedreno.so" "${dir}/libvulkan_freedreno.so"
-    # ICD manifest name is arch-suffixed pre-26 (freedreno_icd.aarch64.json), bare after — glob it.
+    # ICD manifest name has varied across releases (freedreno_icd.aarch64.json at 26.2) — glob it.
     sed -E "s|\"library_path\": *\"[^\"]*\"|\"library_path\": \"/usr/share/pocknix/vk-arm/${v}/libvulkan_freedreno.so\"|" \
       "${stage}"/usr/share/vulkan/icd.d/freedreno_icd*.json > "${dir}/icd.json"
     chmod 0644 "${dir}/icd.json"

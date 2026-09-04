@@ -1,26 +1,27 @@
 # pocknix-turnip-x86 — archived x86_64 Turnip builds the "Mesa Version" tweak points
-# VK_DRIVER_FILES at. Works because FEX guests resolve host paths the rootfs does not shadow.
+# VK_DRIVER_FILES at. FEX resolves rootfs-first, so these .so bytes are inert; what this
+# package actually provides is the host-side catalog the wrapper and Decky dropdown enumerate.
 # Series start at 25.2: older ones predate Arch's per-driver x86_64 split.
 pkgname=pocknix-turnip-x86
-pkgver=20260825
-pkgrel=2
+pkgver=20260904
+pkgrel=1
 pkgdesc="Archived x86_64 Turnip builds for per-game Mesa selection under FEX"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('MIT')
 depends=('fex-rootfs')
-_versions=('25.2.7-1' '25.3.5-1' '26.0.6-1' '26.1.6-1' '26.2.1-1')
+_versions=('25.2.7-1' '25.3.5-1' '26.0.6-1' '26.1.6-1' '26.2.2-1')
 source=("vulkan-freedreno-25.2.7-1-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/v/vulkan-freedreno/vulkan-freedreno-1%3A25.2.7-1-x86_64.pkg.tar.zst"
         "vulkan-freedreno-25.3.5-1-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/v/vulkan-freedreno/vulkan-freedreno-1%3A25.3.5-1-x86_64.pkg.tar.zst"
         "vulkan-freedreno-26.0.6-1-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/v/vulkan-freedreno/vulkan-freedreno-1%3A26.0.6-1-x86_64.pkg.tar.zst"
         "vulkan-freedreno-26.1.6-1-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/v/vulkan-freedreno/vulkan-freedreno-1%3A26.1.6-1-x86_64.pkg.tar.zst"
-        "vulkan-freedreno-26.2.1-1-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/v/vulkan-freedreno/vulkan-freedreno-1%3A26.2.1-1-x86_64.pkg.tar.zst")
+        "vulkan-freedreno-26.2.2-1-x86_64.pkg.tar.zst::https://archive.archlinux.org/packages/v/vulkan-freedreno/vulkan-freedreno-1%3A26.2.2-1-x86_64.pkg.tar.zst")
 noextract=("${source[@]%%::*}")
 sha256sums=('b5554bb73674d6a5e7772bee71abd0e9d40929c61b5b690f79aba041ccffb5a8'
             '6eecca2a8b639458371eca29e93605f83d7dc5ee7a3dab5980beddb758e90331'
             '3d0c11b665b3409c8b6372f0369192355743d821727248115f973bd2c15bbbde'
             '6b5785d7b7d7993a828d3f79c6c0e369a619d6e786dd2cfdfd8ac4ab1ad8a2d2'
-            'b4b2e6e60c385dc2f9fbc0781280adec976ccd9cb037e11c4a8ee9801ea3f619')
+            '1aca8f23896177c157a0e1b0752171c10ee4fca832f44c09e3d37635b36288e2')
 
 package() {
   local full ver dir
