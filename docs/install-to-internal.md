@@ -35,6 +35,15 @@ in a terminal.
 
 You must be **booted from a Pocknix SD** (the installer clones the *running* system to internal).
 
+**Everything on the SD's Pocknix partition has to fit on internal storage.** The installer copies
+the whole running system - Steam games, ROMs, home directory included - into the space left after
+the Android userdata reservation (internal storage minus Android minus the system partitions). It
+measures the SD's used space up front and only offers Android sizes that leave room for it, with a
+small margin; if the SD holds more than internal storage can take even with Android at its minimum,
+it refuses before touching anything and tells you how much to free. A 512 GB card full of games will
+not clone onto a 128 GB device: uninstall games or move ROMs off the card first, then reinstall
+them onto internal storage afterwards (that also gives Android more room).
+
 Desktop mode: **Pocknix Tools → Install or remove internal Pocknix…**, pick how much internal
 storage Android keeps, and let it run. Or from a terminal:
 
@@ -50,6 +59,11 @@ pocknix-install-internal
 #   pocknix-install-internal --yes --userdata-gib 16
 ```
 Flags: `--dry-run`, `--yes`/`-y`, `--userdata-gib N`, `--device /dev/sdX` (default `/dev/sda`).
+The dry run prints how much the SD holds and the largest Android size that still fits it.
+
+If an install fails part-way (the log ends in an error after "Repartitioning"), do **not** boot
+internal storage: run `pocknix-uninstall-internal` (or **Remove, restore Android** in Pocknix
+Tools) to clear the half-written install, fix the cause, and install again.
 
 ### Then point the bootloader at it
 

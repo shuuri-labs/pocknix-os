@@ -51,9 +51,9 @@ choose_android_size() {
 }
 
 install_flow() {
-  local info="$1" amin amax acur ud
+  local info="$1" amin amax acur used ud
   amin=$(val "$info" android_min_gib); amax=$(val "$info" android_max_gib)
-  acur=$(val "$info" android_current_gib)
+  acur=$(val "$info" android_current_gib); used=$(val "$info" sd_used_gib)
 
   kdialog --title "$TITLE" --warningcontinuecancel \
     "<b>Install Pocknix to internal storage, alongside Android?</b><br/><br/>This <b>factory-resets Android</b>: installed Android apps and their data are lost (the Android system itself is kept). The SD card is not touched.<br/><br/>Nothing before the Android data partition is modified, so the bootloader stays safe." \
@@ -63,12 +63,12 @@ install_flow() {
   [ -n "$ud" ] || exit 0
 
   kdialog --title "$TITLE" --warningcontinuecancel \
-    "<b>Ready to install.</b><br/><br/>Android: <b>${ud} GB</b><br/>Pocknix: <b>$((acur - ud)) GB</b><br/><br/>Resizing <b>factory-resets Android</b>. Continue?" \
+    "<b>Ready to install.</b><br/><br/>Android: <b>${ud} GB</b><br/>Pocknix: <b>$((acur - ud)) GB</b> (${used:-?} GB to copy from the SD card)<br/><br/>Resizing <b>factory-resets Android</b>. Continue?" \
     || exit 0
 
   run_busy "Installing Pocknix to internal storage — do not power off…" \
       "$INSTALL_CLI" --yes --userdata-gib "$ud" \
-    || gui_die "Install failed (details in ${LOG}).<br/><br/>If internal storage was modified, do NOT boot it — re-run this installer from the SD card to finish."
+    || gui_die "Install failed (details in ${LOG}).<br/><br/>If internal storage was modified, do NOT boot it — relaunch this tool from the SD card, choose <b>Remove, restore Android</b>, fix the cause, then install again."
   offer_poweroff "<b>Install complete.</b><br/><br/>Power off and remove the SD card, then boot holding <b>Volume&nbsp;-</b> to open the ROCKNIX boot menu and set <b>Switch boot source</b> to <b>Internal</b> — Pocknix then boots from internal storage."
 }
 
@@ -115,6 +115,7 @@ case "$(val "$info" mode)" in
   fresh)    install_flow "$info" ;;
   occupied) manage_flow "$info" ;;
   toosmall) gui_die "Internal storage is too small: Pocknix needs about $(val "$info" needed_gib) GB and Android's data partition is only $(val "$info" android_current_gib) GB." ;;
+  nofit)    gui_die "The SD card holds <b>$(val "$info" sd_used_gib) GB</b> of Pocknix data, but internal storage has room for at most <b>$(val "$info" pocknix_max_gib) GB</b>.<br/><br/>Free at least <b>$(val "$info" free_gib) GB</b> on the SD card (uninstall Steam games, remove ROMs), then try again. Games can be reinstalled onto internal storage afterwards." ;;
   foreign)  gui_die "Internal storage has a Linux install this tool did not create (e.g. ROCKNIX).<br/><br/>Remove it first (boot menu → <b>Uninstall CFW</b>, or manually with parted), then relaunch." ;;
   *)        gui_die "Unexpected internal-storage state (details in ${LOG})." ;;
 esac

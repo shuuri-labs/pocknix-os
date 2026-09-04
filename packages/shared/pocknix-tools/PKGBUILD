@@ -2,7 +2,7 @@
 # which live here rather than in the image overlay so fixes reach fielded SDs on -Syu (#34).
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=15
+pkgrel=16
 pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH + file sharing toggles"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

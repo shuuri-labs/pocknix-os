@@ -71,6 +71,8 @@ Running from the SD card works, but the OS and your games load much faster from 
 - **Pocknix Tools**: switch to desktop mode, launch **Pocknix Tools**, and pick *Install or remove internal Pocknix…*.
 - **Terminal**: run `pocknix-install-internal` (do a `--dry-run` first and read the plan).
 
+Everything on the SD card's Pocknix partition (games and ROMs included) is copied and must fit in the internal space left after Android's share; the installer checks this up front and says how much to free if it does not.
+
 Installing does not change what boots. Afterwards, power off and hold **Volume −** to open the ABL menu, then set **Boot source** to **Internal** - switch it back to **SD Card** any time you want to boot the SD card again.
 
 See [Install to internal storage](docs/install-to-internal.md) for the full walkthrough, including how to uninstall, how to give the space back to Android, and how to restore the factory bootloader.

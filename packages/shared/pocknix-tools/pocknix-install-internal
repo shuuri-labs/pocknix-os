@@ -130,15 +130,45 @@ if [ "$MAX_UD_GIB" -lt "$MIN_UD_GIB" ]; then
   die "not enough space on $DEVICE (userdata is only ${ORIG_GIB} GiB)"
 fi
 
+# The clone is the SD root's used space (df is instant; a du walk would take as long as the
+# rsync). On btrfs df spans every subvol, so the uncopied @pacman-cache is taken back off;
+# @snapshots share their extents with @ and stay counted, erring on the safe side.
+SD_USED=$(df -B1 --output=used / | tail -1)
+if [ "$ROOT_FS" = btrfs ] && findmnt -no FSTYPE /var/cache/pacman 2>/dev/null | grep -q btrfs; then
+  _cache=$(du -sxB1 /var/cache/pacman 2>/dev/null | cut -f1); _cache=${_cache:-0}
+  SD_USED=$(( SD_USED - _cache )); [ "$SD_USED" -lt 0 ] && SD_USED=0
+fi
+SD_USED_GIB=$(( (SD_USED + GiB - 1) / GiB ))
+# headroom: fs metadata + room to boot and update afterwards; 5% or 2 GiB, whichever is more
+_head=$(( SD_USED / 20 )); [ "$_head" -lt $(( 2*GiB )) ] && _head=$(( 2*GiB ))
+ROOT_NEED_MIB=$(( (SD_USED + _head + MiB - 1) / MiB ))
+[ "$ROOT_NEED_MIB" -lt $(( ROOT_MIN_GIB*1024 )) ] && ROOT_NEED_MIB=$(( ROOT_MIN_GIB*1024 ))
+POCKNIX_MAX_GIB=$(( (ORIG_MIB - BOOT_MIB - MIN_UD_GIB*1024) / 1024 ))
+FIT_UD_GIB=$(( (ORIG_MIB - BOOT_MIB - ROOT_NEED_MIB) / 1024 ))
+[ "$FIT_UD_GIB" -lt "$MAX_UD_GIB" ] && MAX_UD_GIB=$FIT_UD_GIB
+if [ "$MAX_UD_GIB" -lt "$MIN_UD_GIB" ]; then
+  FREE_GIB=$(( (ROOT_NEED_MIB - (ORIG_MIB - BOOT_MIB - MIN_UD_GIB*1024) + 1023) / 1024 ))
+  if [ "$DETECT" = 1 ]; then
+    echo "mode=nofit"; echo "sd_used_gib=${SD_USED_GIB}"; echo "pocknix_max_gib=${POCKNIX_MAX_GIB}"
+    echo "free_gib=${FREE_GIB}"; exit 0
+  fi
+  die "the SD card's pocknix data (${SD_USED_GIB} GiB in use) does not fit on internal storage:
+  with Android at its ${MIN_UD_GIB} GiB minimum, pocknix can get at most ${POCKNIX_MAX_GIB} GiB.
+  Free at least ${FREE_GIB} GiB on the SD (uninstall Steam games, remove ROMs; they can be
+  reinstalled onto internal afterwards) and re-run."
+fi
+
 if [ "$DETECT" = 1 ]; then
   echo "mode=fresh"
   echo "android_min_gib=${MIN_UD_GIB}"
   echo "android_max_gib=${MAX_UD_GIB}"
   echo "android_current_gib=${ORIG_GIB}"
+  echo "sd_used_gib=${SD_USED_GIB}"
   exit 0
 fi
 
 say "Internal disk $DEVICE: Android userdata #$UD_NUM is ${ORIG_GIB} GiB."
+say "The SD's pocknix data is ${SD_USED_GIB} GiB, so Android can keep at most ${MAX_UD_GIB} GiB."
 say "You can shrink it to between ${MIN_UD_GIB} and ${MAX_UD_GIB} GiB; pocknix gets the rest."
 
 if [ -n "$UD_GIB" ]; then
@@ -165,7 +195,7 @@ cat <<EOF
   PLAN for $DEVICE (nothing before userdata #$UD_NUM is touched: abl/xbl/modem/persist all safe):
     #$UD_NUM  userdata               ${UD_START_MIB}..${NEW_UD_END_MIB} MiB    (Android, ${UD_GIB} GiB — RESET)
     #$BOOT_NUM  ${BOOT_GPT_NAME}           ${BOOT_START_MIB}..${BOOT_END_MIB} MiB    (FAT, 4K-sector — pocknix KERNEL+KERNEL.md5)
-    #$ROOT_NUM  $ROOT_GPT_NAME           ${ROOT_START_MIB}..${UD_END_MIB} MiB    (ext4, ~${ROOT_GIB} GiB — pocknix rootfs)
+    #$ROOT_NUM  $ROOT_GPT_NAME           ${ROOT_START_MIB}..${UD_END_MIB} MiB    (${ROOT_FS}, ~${ROOT_GIB} GiB — pocknix rootfs, ${SD_USED_GIB} GiB to clone)
 EOF
 
 if [ "$DRY_RUN" = 1 ]; then say "--dry-run: no changes made."; exit 0; fi
@@ -184,7 +214,8 @@ on_err() {
   [ "$DESTRUCTIVE" = 1 ] && cat >&2 <<EOF
 
 [install] ERROR: install did not finish after internal storage was modified.
-  Do NOT boot internal storage. Re-run this installer from the SD card to finish.
+  Do NOT boot internal storage. From the SD, run pocknix-uninstall-internal to clear the
+  half-written install, fix the cause above, then re-run this installer.
   Only if the device won't boot the SD at all: recover with a PC (fastboot erase / re-flash userdata).
 EOF
 }
