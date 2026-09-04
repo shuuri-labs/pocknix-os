@@ -90,6 +90,9 @@ Sourced by shared session scripts (`pocknix-steam`, `pocknix-desktop-rotate`,
 | `POCKNIX_PANEL_MM` | pocknix-steam | GAMESCOPE_FAKE_OUTPUT_MM (gamepadui DPI; deliberately faked on small panels) |
 | `POCKNIX_DESKTOP_ROTATE/_SCALE` | pocknix-desktop-rotate | kscreen-doctor rotation/scale (seeded once per user; env re-forces) |
 | `POCKNIX_BOARD_UNKNOWN` | pocknix-desktop-rotate | set by the device.conf fallback branch: board not in the list, do not force guessed values |
+| `POCKNIX_PANEL_OUTPUT` | pocknix-steam, pocknix-desktop-rotate | DRM connector of the main panel (`DSI-2`); gamescope `--prefer-output`, the desktop seed's output. Absent = single panel, first DSI |
+| `POCKNIX_PANEL2_OUTPUT`, `POCKNIX_PANEL2_W/H`, `POCKNIX_DESKTOP2_SCALE` | pocknix-desktop-rotate | second panel (dual-screen boards): enabled, rotated like the main one, scaled, placed below it |
+| `POCKNIX_TOUCH_NAME` / `POCKNIX_TOUCH2_NAME` | pocknix-desktop, pocknix-second-screen | evdev names of the main/second touchscreen: kwin maps each to its output (kcminputrc); the second is libinput-ignored outside the desktop session (udev rule in the board BSP + pocknix-second-screen) |
 | `POCKNIX_BIG_CORES` | pocknix-play | taskset big-core mask for emulator pinning |
 | `POCKNIX_BOOT_STYLE` | pocknix-install/uninstall-internal | qcom-abl (default) or arm-efi: selects the internal-install boot-file handling (arm-efi pins grub.cfg + fstab to internal PARTUUIDs) |
 | `POCKNIX_INTERNAL_DISK` | pocknix-install/uninstall-internal, installer-gui | internal disk (default /dev/sda) |
@@ -110,6 +113,9 @@ on an arm-efi board's internal storage.)
    controller, or add a new model-gated yaml + capability map if it differs.
 4. UCM if the sound card name differs; udev quirks as needed. arm-efi: add the board's
    grub.cfg menuentry.
+   Dual-screen board: the `POCKNIX_PANEL2_*`/`POCKNIX_TOUCH*` keys plus a udev rule
+   ignoring the second touchscreen unless `/run/pocknix/second-screen` exists (see
+   the sm8550 BSP's Thor rule); gamescope blanks the second panel by itself.
 5. Bump pkgrels; `make build DEVICE=<soc>` — no shared file should need editing; if one
    does, the boundary has a hole: fix the boundary, not the device.
 6. On-device checklist: pocknix-notes dev/device-smoke-checklist.md.

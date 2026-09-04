@@ -1,5 +1,5 @@
 # pocknix-bsp-sm8550 — board support for the SM8550 FAMILY: Retroid Pocket 6
-# (+TOP-DPAD), AYN Odin 2 / Mini / Portal. ONE package serves every board on
+# (+TOP-DPAD), AYN Odin 2 / Mini / Portal, AYN Thor. ONE package serves every board on
 # the SoC (same shape as pocknix-bsp-sm8250): runtime board facts live in
 # /usr/lib/pocknix/boards/<board>.conf, /usr/lib/pocknix/device.conf is a
 # sourced DISPATCHER picking one by devicetree model, and the InputPlumber
@@ -13,13 +13,14 @@
 #                                is s2idle-only; deep wedges with its rail constraints)
 #   * 30-pocknix-cpuidle.conf  — disable cpu0 idle state1 (GMU issues; ROCKNIX 096-cpuidle)
 #   * 99-pocknix-sm8550-usb-autosuspend.rules — runtime-PM the idle DWC3 controller
+#   * 71-pocknix-thor-touch.rules — Thor's bottom touchscreen follows pocknix-second-screen
 #   * kernel-cmdline           — the family cmdline for the on-device /flash/KERNEL
 #                                rebuild (qcom-abl); build-packages.sh asserts it
 #                                matches devices/sm8550/profile.conf
 pkgname=pocknix-bsp-sm8550
 pkgver=0.2.0
-pkgrel=8
-pkgdesc="pocknix board support: SM8550 family (RP6, Odin 2 family) — runtime board dispatch, input map, suspend quirks, audio UCM"
+pkgrel=9
+pkgdesc="pocknix board support: SM8550 family (RP6, Odin 2 family, Thor) — runtime board dispatch, input maps, suspend quirks, audio UCM, dual-screen touch policy"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
@@ -32,17 +33,20 @@ depends=('pocknix-bsp-common' 'pocknix-firmware-sm8550')
 provides=('pocknix-bsp')
 conflicts=('pocknix-bsp')
 replaces=('pocknix-bsp' 'pocknix-bsp-rp6' 'pocknix-bsp-odin2' 'pocknix-bsp-odin2mini' 'pocknix-bsp-odin2portal')
-optdepends=('inputplumber: gamepad -> Steam Input mapping (01-rsinput-controller.yaml)'
-            'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin2 UCM)')
+optdepends=('inputplumber: gamepad -> Steam Input mapping (01-rsinput-controller.yaml, 02-ayn-thor-controller.yaml)'
+            'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin2 / AYN-Thor UCMs)')
 # spurious deep-sleep wake: fixed in kernel patch 0502 (docs/archive/sm8550-suspend-wake-report.md)
 source=('device.conf'
         '01-rsinput-controller.yaml' 'sm8550-gamepad.yaml'
-        'AYN-Odin2.conf' 'HiFi.conf'
+        '02-ayn-thor-controller.yaml' 'thor-gamepad.yaml'
+        'AYN-Odin2.conf' 'HiFi.conf' 'AYN-Thor.conf' 'HiFi-Thor.conf'
+        '71-pocknix-thor-touch.rules'
         '10-pocknix-s2idle.conf' '30-pocknix-cpuidle.conf'
         '99-pocknix-sm8550-usb-autosuspend.rules'
         'cpuidle-state1-sleep-pre' 'cpuidle-state1-sleep-post'
         'kernel-cmdline')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # Runtime device facts: the model dispatcher + per-board files. boards/ is
@@ -66,6 +70,8 @@ package() {
   # interconnect vote while awake.
   install -Dm644 "${srcdir}/99-pocknix-sm8550-usb-autosuspend.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/99-pocknix-sm8550-usb-autosuspend.rules"
+  install -Dm644 "${srcdir}/71-pocknix-thor-touch.rules" \
+    "${pkgdir}/usr/lib/udev/rules.d/71-pocknix-thor-touch.rules"
   # 010-cpuidle-state1: enable cpu0 silver power collapse across the suspend
   # window only, so s2idle reaches cluster sleep while the awake-time GMU
   # workaround (30-pocknix-cpuidle.conf) stays untouched.
@@ -80,16 +86,22 @@ package() {
     "${pkgdir}/usr/share/inputplumber/devices/01-rsinput-controller.yaml"
   install -Dm644 "${srcdir}/sm8550-gamepad.yaml" \
     "${pkgdir}/usr/share/inputplumber/capability_maps/sm8550-gamepad.yaml"
+  install -Dm644 "${srcdir}/02-ayn-thor-controller.yaml" \
+    "${pkgdir}/usr/share/inputplumber/devices/02-ayn-thor-controller.yaml"
+  install -Dm644 "${srcdir}/thor-gamepad.yaml" \
+    "${pkgdir}/usr/share/inputplumber/capability_maps/thor-gamepad.yaml"
 
-  # ALSA UCM: every family board's sound card reports as "AYN-Odin2". The codec
-  # include sequences (/lib, /codecs/wcd938x, /codecs/qcom-lpass) come from base
-  # alsa-ucm-conf.
+  # ALSA UCM: family boards report "AYN-Odin2", the Thor "AYN-Thor". The codec include
+  # sequences (/lib, /codecs/wcd938x, /codecs/qcom-lpass) come from base alsa-ucm-conf.
   local ucm="${pkgdir}/usr/share/alsa/ucm2"
   install -Dm644 "${srcdir}/AYN-Odin2.conf" "${ucm}/AYN/Odin2/AYN-Odin2.conf"
   install -Dm644 "${srcdir}/HiFi.conf"      "${ucm}/AYN/Odin2/HiFi.conf"
   # card-match file (matched by card longname under the sm8550 driver dir)
   install -d "${ucm}/conf.d/sm8550"
   ln -sf "../../AYN/Odin2/AYN-Odin2.conf" "${ucm}/conf.d/sm8550/AYN-Odin2.conf"
+  install -Dm644 "${srcdir}/AYN-Thor.conf" "${ucm}/AYN/Thor/AYN-Thor.conf"
+  install -Dm644 "${srcdir}/HiFi-Thor.conf" "${ucm}/AYN/Thor/HiFi.conf"
+  ln -sf "../../AYN/Thor/AYN-Thor.conf" "${ucm}/conf.d/sm8550/AYN-Thor.conf"
 
   # Kernel command line for the on-device /flash/KERNEL rebuild (pocknix-build-bootimg,
   # shipped by linux-pocknix-sm8550). One family cmdline (the retired per-device ones

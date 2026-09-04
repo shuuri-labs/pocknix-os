@@ -1,0 +1,3 @@
+# gamescope maps every touch device onto its single output, so the bottom touchscreen
+# stays off libinput unless pocknix-second-screen (desktop session) raised the flag.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="bottom_touchscreen", TEST!="/run/pocknix/second-screen", ENV{LIBINPUT_IGNORE_DEVICE}="1"

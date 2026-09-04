@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/composite_device_v1.json
+# AYN Thor: the family RSInput MCU + volume-up node, plus the AYN key on its own
+# gpio-keys-ayn node. gpio-keys-lid (SW_LID) is deliberately not grabbed: logind owns the lid.
+version: 1
+kind: CompositeDevice
+name: AYN Thor (RSInput)
+
+matches:
+  - udev:
+      sys_path: /sys/firmware/devicetree/base
+      attributes:
+        - name: model
+          value: AYN Thor
+
+single_source: false
+
+source_devices:
+  - group: gamepad
+    evdev:
+      phys_path: rsinput-gamepad/input0
+      handler: event*
+    capability_map_id: thor_gamepad
+
+  - group: gamepad
+    evdev:
+      name: gpio-keys
+      phys_path: gpio-keys/input0
+      handler: event*
+    capability_map_id: thor_gamepad
+
+  - group: gamepad
+    evdev:
+      name: gpio-keys-ayn
+      phys_path: gpio-keys-ayn/input0
+      handler: event*
+    capability_map_id: thor_gamepad
+
+options:
+  auto_manage: true
+
+target_devices:
+  - deck
+  - keyboard
