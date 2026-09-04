@@ -4,17 +4,17 @@
 # The plugin frontend (dist/index.js) is prebuilt and committed — no node at package build time.
 pkgname=pocknix-decky
 pkgver=0.1.0
-pkgrel=32
+pkgrel=33
 pkgdesc="Decky Loader (under FEX, namespaced binfmt) + Pocknix Control QAM plugin"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=('fex-emu' 'fex-rootfs')
 _loaderver=v3.2.8-pre1
-source=('pocknix-decky-run' 'pocknix-decky-sync' 'pocknix-decky-sync.service'
+source=('pocknix-decky-run' 'pocknix-decky-sync' 'pocknix-decky-killall' 'pocknix-decky-sync.service'
         'pocknix-decky-loader.service' 'PluginLoader.json'
         "PluginLoader-${_loaderver}::https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${_loaderver}/PluginLoader")
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             '9df160a81df3fc49c96e5665a1d1b3ba5c79de5bf271adc266d6bfedfda399d8')
 
 package() {
@@ -24,8 +24,11 @@ package() {
 
   install -Dm755 "${srcdir}/pocknix-decky-run"       "${pkgdir}/usr/lib/pocknix/pocknix-decky-run"
   install -Dm755 "${srcdir}/pocknix-decky-sync"      "${pkgdir}/usr/lib/pocknix/pocknix-decky-sync"
+  install -Dm755 "${srcdir}/pocknix-decky-killall"   "${pkgdir}/usr/lib/pocknix/decky-bin/killall"
   install -Dm644 "${srcdir}/pocknix-decky-sync.service"   "${pkgdir}/usr/lib/systemd/system/pocknix-decky-sync.service"
   install -Dm644 "${srcdir}/pocknix-decky-loader.service" "${pkgdir}/usr/lib/systemd/system/pocknix-decky-loader.service"
+  # Decky's self-updater restarts plugin_loader.service; the symlink aliases it to ours.
+  ln -s pocknix-decky-loader.service "${pkgdir}/usr/lib/systemd/system/plugin_loader.service"
   install -Dm644 "${srcdir}/PluginLoader.json"       "${pkgdir}/usr/share/fex-emu/AppConfig/PluginLoader.json"
 
   local plug="${startdir}/pocknix-control" dest="${pkgdir}/usr/share/decky-plugins/PocknixControl"

@@ -14,6 +14,7 @@ KillMode=mixed
 TimeoutStopSec=15
 WorkingDirectory=/home/deck/homebrew/services
 ExecStart=/usr/lib/pocknix/pocknix-decky-run
+Environment=PATH=/usr/lib/pocknix/decky-bin:/usr/local/sbin:/usr/local/bin:/usr/bin
 Environment=UNPRIVILEGED_PATH=/home/deck/homebrew
 Environment=PRIVILEGED_PATH=/home/deck/homebrew
 Environment=PLUGIN_PATH=/home/deck/homebrew/plugins

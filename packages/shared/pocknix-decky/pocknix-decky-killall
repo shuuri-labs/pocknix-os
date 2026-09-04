@@ -1,0 +1,4 @@
+#!/bin/bash
+# Decky kicks steamwebhelper with killall; from the loader's userns that kill is EPERM,
+# so PID 1 runs it in the init namespace.
+exec systemd-run --quiet --collect --wait /usr/bin/killall "$@"

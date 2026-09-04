@@ -28,8 +28,12 @@ install -d -m 0755 "${homebrew}/services"
 install -d -m 0755 "${homebrew}/plugins"
 install -d -m 0755 "${homebrew}/settings"
 
-# Decky's own installer unit would race pocknix-decky-loader.service for the loader.
-systemctl disable --now plugin_loader.service >/dev/null 2>&1 || true
+# A regular file here is Decky's own installer unit: it shadows our alias and races the loader.
+foreign_unit=/etc/systemd/system/plugin_loader.service
+if [[ -f "${foreign_unit}" && ! -L "${foreign_unit}" ]]; then
+    systemctl disable --now plugin_loader.service >/dev/null 2>&1 || true
+    rm -f "${foreign_unit}"
+fi
 
 if loader_needs_seed && [[ -x "${loader_src}" ]]; then
     install -Dpm 0755 "${loader_src}" "${homebrew}/services/PluginLoader"
