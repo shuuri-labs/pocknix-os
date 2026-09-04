@@ -16,9 +16,10 @@ loader_needs_seed() {
     [[ -f "${loader_version_src}" ]] || return 1
     [[ -f "${homebrew}/services/.loader.version" ]] || return 0
 
+    # sort -V ranks -pre1 above the release; ~pre1 sorts below it.
     local bundled current newest
-    bundled=$(<"${loader_version_src}")
-    current=$(<"${homebrew}/services/.loader.version")
+    bundled=$(<"${loader_version_src}"); bundled=${bundled//-/\~}
+    current=$(<"${homebrew}/services/.loader.version"); current=${current//-/\~}
     newest=$(printf '%s\n%s\n' "${current}" "${bundled}" | sort -V | tail -n1)
     [[ "${newest}" == "${bundled}" && "${bundled}" != "${current}" ]]
 }
