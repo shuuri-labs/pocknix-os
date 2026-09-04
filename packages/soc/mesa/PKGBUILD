@@ -5,10 +5,10 @@
 pkgbase=mesa
 pkgname=(mesa vulkan-freedreno)
 epoch=2
-pkgver=26.2.1
+pkgver=26.2.2
 # differs from pkgver only for RCs: the tarball keeps the hyphen makepkg forbids in pkgver
 _srcver=${pkgver}
-pkgrel=2
+pkgrel=1
 pkgdesc="Mesa trimmed for the RP6/SM8550: freedreno GL + turnip Vulkan, cortex-x3 tuned (${_srcver})"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
@@ -24,7 +24,7 @@ makedepends=(
 # upstream considers LTO broken until explicit notice (Arch mesa does the same)
 options=(!lto)
 source=("https://archive.mesa3d.org/mesa-${_srcver}.tar.xz")
-sha256sums=('c47e81bddc4760360a41ac3c5acec38acb81f9d750ecef47e7f3adc7021a4442')
+sha256sums=('eeb29ca7e56cfaa8e8a79538dcf834e3b18e501c31bef5145e959ea437cc4216')
 
 prepare() {
   cd "mesa-${_srcver}"
@@ -97,7 +97,7 @@ package_mesa() {
 
   (
     cd "${pkgdir}"
-    # ICD manifest is arch-suffixed before mesa 26 (freedreno_icd.aarch64.json), plain after,
+    # ICD manifest name has varied across releases (freedreno_icd.aarch64.json at 26.2.2),
     # hence the glob; the loader scans the whole icd.d dir so either name works at runtime.
     _pick vkfdreno usr/lib/libvulkan_freedreno.so
     _pick vkfdreno usr/share/vulkan/icd.d/freedreno_icd*.json
@@ -117,6 +117,13 @@ package_vulkan-freedreno() {
   provides=(vulkan-driver)
 
   mv "${srcdir}/vkfdreno"/* "${pkgdir}"
+
+  # Saves pocknix-turnip-arm from duplicating the series mesa is on; the pickers need
+  # only <dir>/icd.json, so no library belongs here.
+  install -d "${pkgdir}/usr/share/pocknix/vk-arm/${pkgver}"
+  sed -E "s|\"library_path\": *\"[^\"]*\"|\"library_path\": \"/usr/lib/libvulkan_freedreno.so\"|" \
+    "${pkgdir}"/usr/share/vulkan/icd.d/freedreno_icd*.json > "${pkgdir}/usr/share/pocknix/vk-arm/${pkgver}/icd.json"
+  chmod 0644 "${pkgdir}/usr/share/pocknix/vk-arm/${pkgver}/icd.json"
 
   install -Dm644 "mesa-${_srcver}/docs/license.rst" -t "${pkgdir}/usr/share/licenses/${pkgname}"
 }
