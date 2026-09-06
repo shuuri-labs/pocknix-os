@@ -49,11 +49,26 @@ def boot_mono_delta():
     return time.clock_gettime(time.CLOCK_BOOTTIME) - time.clock_gettime(time.CLOCK_MONOTONIC)
 
 def screen_is_on():
+    # The internal panel backlight may be powered down while an external DP
+    # display is active, so a DP output that is both connected AND lit counts
+    # as an active screen. "connected" alone is not enough: gamescope/Plasma
+    # idle-blank turns the sink's DPMS off while the cable stays plugged, and
+    # that press is "wake the display", not "sleep".
+    import glob
+
+    for st in glob.glob("/sys/class/drm/card*-DP-*/status"):
+        try:
+            if open(st).read().strip() != "connected":
+                continue
+            if open(st[:-len("status")] + "dpms").read().strip() == "On":
+                return True
+        except OSError:
+            continue
+
     # bl_power uses FB_BLANK_* (0 = FB_BLANK_UNBLANK = on; 4 = FB_BLANK_POWERDOWN). The panel is
     # "on" iff SOME backlight reports 0 — the RP6 has a real ae94000.dsi.0 node (tracks DPMS) plus
     # a legacy 'backlight' node stuck at 4, so we OR across all and only treat all-non-zero as off.
     # If we can't read any node, assume ON (fail toward the normal press=suspend behavior).
-    import glob
     found = False
     for p in glob.glob(BACKLIGHT_GLOB):
         found = True
@@ -62,6 +77,7 @@ def screen_is_on():
                 return True
         except (OSError, ValueError):
             continue
+
     return not found   # nodes exist and none were 0 -> off; no nodes at all -> assume on
 
 def do_suspend():

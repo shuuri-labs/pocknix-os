@@ -98,3 +98,12 @@
 		rotation = <270>;
 	};
 };
+
+&mdss_dp_out {
+	data-lanes = <0 1 2 3>;
+};
+
+&usb_1_qmpphy {
+	mode-switch;
+	orientation-switch;
+};

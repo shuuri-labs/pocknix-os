@@ -1,0 +1,29 @@
+Residual of "phy: qcom: qmp-combo: Move pipe_clk on/off to common" for 7.2.
+
+Linux 7.2 already carries Val Packett's mainline change (lkml.org/lkml/2026/2/28/1653):
+pipe_clk prepare/enable moved into qmp_combo_com_init(), disable/unprepare into
+qmp_combo_com_exit(). The only piece still missing is the USB power-on timeout
+path, which keeps a `goto err_disable_pipe_clk` that disables a clock this
+function no longer enables -> the gcc_usb3_prim_phy_pipe_clk double-unprepare
+seen on DP hotplug / mode transitions. Drop that error path; com_exit() owns the
+clock now.
+
+--- a/drivers/phy/qualcomm/phy-qcom-qmp-combo.c
++++ b/drivers/phy/qualcomm/phy-qcom-qmp-combo.c
+@@ -3910,15 +3910,10 @@
+ 			PHY_INIT_COMPLETE_TIMEOUT);
+ 	if (ret) {
+ 		dev_err(qmp->dev, "phy initialization timed-out\n");
+-		goto err_disable_pipe_clk;
++		return ret;
+ 	}
+
+ 	return 0;
+-
+-err_disable_pipe_clk:
+-	clk_disable_unprepare(qmp->pipe_clk);
+-
+-	return ret;
+ }
+
+ static int qmp_combo_usb_power_off(struct phy *phy)
