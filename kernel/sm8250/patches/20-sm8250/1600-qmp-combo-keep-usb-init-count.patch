@@ -1,0 +1,35 @@
+phy: qcom: qmp-combo: keep usb_init_count across the DP-only mux switch
+
+The Type-C mux transition path decrements qmp->usb_init_count whenever it
+switches the combo PHY to QMPPHY_MODE_DP_ONLY:
+
+	if (new_mode == QMPPHY_MODE_DP_ONLY) {
+		if (qmp->usb_init_count)
+			qmp->usb_init_count--;
+	}
+
+but no USB PHY consumer has called .exit() here. The mux going DP-only is
+not the same event as dwc3 releasing the USB PHY. usb_init_count is owned
+by qmp_combo_usb_init() / qmp_combo_usb_exit(); adjusting it from the mux
+path desyncs the software refcount from actual consumer ownership, so a
+later mode transition or a suspend/resume cycle powers the USB PHY on or
+off out of step (or skips it via the `if (!qmp->usb_init_count)` guard a
+few lines further down this same function).
+
+Drop the DP-only decrement. Requested PHY mode is independent of consumer
+reference ownership.
+
+--- a/drivers/phy/qualcomm/phy-qcom-qmp-combo.c
++++ b/drivers/phy/qualcomm/phy-qcom-qmp-combo.c
+@@ -4512,11 +4512,6 @@
+ 		/* Now everything's powered down, power up the right PHYs */
+ 		qmp_combo_com_init(qmp, true);
+ 
+-		if (new_mode == QMPPHY_MODE_DP_ONLY) {
+-			if (qmp->usb_init_count)
+-				qmp->usb_init_count--;
+-		}
+-
+ 		if (new_mode == QMPPHY_MODE_USB3DP || new_mode == QMPPHY_MODE_USB3_ONLY) {
+ 			qmp_combo_usb_power_on(qmp->usb_phy);
+ 			if (!qmp->usb_init_count)

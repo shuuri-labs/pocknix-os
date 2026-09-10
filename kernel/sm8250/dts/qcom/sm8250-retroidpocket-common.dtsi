@@ -1000,6 +1000,7 @@
 
 	connector {
 		compatible = "usb-c-connector";
+		vbus-supply = <&pm8150b_vbus>;
 
 		power-role = "dual";
 		data-role = "dual";

@@ -1,0 +1,74 @@
+phy: qcom: qmp-combo: skip USB3 power on/off while already in DP-only
+
+qmp_combo_usb_init(), qmp_combo_usb_exit() and qmp_combo_typec_switch_set()
+call qmp_combo_usb_power_on() / qmp_combo_usb_power_off() without checking
+the combo PHY mode. Once the PHY has been switched to QMPPHY_MODE_DP_ONLY
+(4-lane DP on pin assignment C, no USB3 SS lanes), the USB3 PHY blocks are
+not the active configuration and power_on() polls to
+PHY_INIT_COMPLETE_TIMEOUT, logging "phy initialization timed-out".
+
+qmp_combo_typec_mux_set() already gates its USB power ops on the mode
+(USB3DP / USB3_ONLY only). Do the same in the other three call sites.
+
+For qmp_combo_usb_init/exit this matters on the USB3DP -> DP-only mode
+transition. For qmp_combo_typec_switch_set it matters on a flipped
+re-plug after a DP session: tcpm sets orientation before mode on attach,
+so the switch runs while qmpphy_mode is still DP_ONLY from the previous
+session and usb_init_count is still held, and the unguarded
+qmp_combo_usb_power_on() times out. On the RP5 that timeout leaves the
+PHY wedged: the reconnected DP sink never trains and USB does not come
+back until the cable is re-inserted in the original orientation. The
+same path runs when the typec stack re-asserts role/orientation after a
+long suspend.
+
+The logical init/exit bookkeeping (usb_init_count++/--) is unchanged;
+only the physical USB3 lane power toggle is skipped. A DP-only consumer
+reference is not gone, the unused USB3 PHY just does not need cycling.
+
+--- a/drivers/phy/qualcomm/phy-qcom-qmp-combo.c
++++ b/drivers/phy/qualcomm/phy-qcom-qmp-combo.c
+@@ -3948,10 +3948,12 @@
+ 	if (ret)
+ 		goto out_unlock;
+ 
+-	ret = qmp_combo_usb_power_on(phy);
+-	if (ret) {
+-		qmp_combo_com_exit(qmp, false);
+-		goto out_unlock;
++	if (qmp->qmpphy_mode != QMPPHY_MODE_DP_ONLY) {
++		ret = qmp_combo_usb_power_on(phy);
++		if (ret) {
++			qmp_combo_com_exit(qmp, false);
++			goto out_unlock;
++		}
+ 	}
+ 
+ 	qmp->usb_init_count++;
+@@ -3967,9 +3969,11 @@
+ 	int ret;
+ 
+ 	mutex_lock(&qmp->phy_mutex);
+-	ret = qmp_combo_usb_power_off(phy);
+-	if (ret)
+-		goto out_unlock;
++	if (qmp->qmpphy_mode != QMPPHY_MODE_DP_ONLY) {
++		ret = qmp_combo_usb_power_off(phy);
++		if (ret)
++			goto out_unlock;
++	}
+ 
+ 	ret = qmp_combo_com_exit(qmp, false);
+ 	if (ret)
+@@ -4437,10 +4437,10 @@ static int qmp_combo_typec_switch_set(struct typec_switch_dev *sw,
+ 	if (qmp->init_count) {
+-		if (qmp->usb_init_count)
++		if (qmp->usb_init_count && qmp->qmpphy_mode != QMPPHY_MODE_DP_ONLY)
+ 			qmp_combo_usb_power_off(qmp->usb_phy);
+ 		qmp_combo_com_exit(qmp, true);
+ 
+ 		qmp_combo_com_init(qmp, true);
+-		if (qmp->usb_init_count)
++		if (qmp->usb_init_count && qmp->qmpphy_mode != QMPPHY_MODE_DP_ONLY)
+ 			qmp_combo_usb_power_on(qmp->usb_phy);
+ 		if (qmp->dp_init_count)
+ 			cfg->dp_aux_init(qmp);
