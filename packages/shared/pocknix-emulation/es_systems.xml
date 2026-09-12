@@ -5,7 +5,9 @@
   FULL definition, not a delta. Each one exists because the bundled launch commands name cores or
   standalones we do not ship: ps2 offers only the LRPS2 core, psx names a DuckStation standalone
   that has no arm64 build (ours is the libretro core), gc/wii default to the RetroArch dolphin
-  core. All commands go through the /usr/lib/pocknix/es-* wrappers for the big-core pin.
+  core; cps1/cps2/cps3/arcade/mame all default to mame_libretro, which we do not ship.
+  The console entries go through the /usr/lib/pocknix/es-* wrappers for the big-core pin;
+  the arcade ones are libretro cores, so they use RetroArch directly.
 -->
 <systemList>
     <system>
@@ -108,5 +110,60 @@
         <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
         <platform>psvita</platform>
         <theme>psvita</theme>
+    </system>
+    <system>
+        <name>cps1</name>
+        <fullname>Capcom Play System I</fullname>
+        <path>%ROMPATH%/cps1</path>
+        <extension>.7z .7Z .zip .ZIP</extension>
+        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>arcade</platform>
+        <theme>cps1</theme>
+    </system>
+    <system>
+        <name>cps2</name>
+        <fullname>Capcom Play System II</fullname>
+        <path>%ROMPATH%/cps2</path>
+        <extension>.7z .7Z .zip .ZIP</extension>
+        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>arcade</platform>
+        <theme>cps2</theme>
+    </system>
+    <system>
+        <name>cps3</name>
+        <fullname>Capcom Play System III</fullname>
+        <path>%ROMPATH%/cps3</path>
+        <extension>.7z .7Z .zip .ZIP</extension>
+        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>arcade</platform>
+        <theme>cps3</theme>
+    </system>
+    <system>
+        <name>arcade</name>
+        <fullname>Arcade</fullname>
+        <path>%ROMPATH%/arcade</path>
+        <extension>.cmd .CMD .desktop .gam .GAM .neo .NEO .sh .7z .7Z .zip .ZIP</extension>
+        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>arcade</platform>
+        <theme>arcade</theme>
+    </system>
+    <system>
+        <name>mame</name>
+        <fullname>Multiple Arcade Machine Emulator</fullname>
+        <path>%ROMPATH%/mame</path>
+        <extension>.cmd .CMD .desktop .gam .GAM .neo .NEO .sh .7z .7Z .zip .ZIP</extension>
+        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>arcade</platform>
+        <theme>mame</theme>
     </system>
 </systemList>
