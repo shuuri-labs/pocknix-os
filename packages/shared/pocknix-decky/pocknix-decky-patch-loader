@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""Apply decky-loader PR #962 to a release PluginLoader binary.
+
+usage: pocknix-decky-patch-loader <PluginLoader> <output>
+
+Steam's September 2026 beta client minifies its router module with multi-character
+identifiers. Decky 3.2.8's matchers assume single characters, so it never finds Steam's Route
+component (nor the error-reporting store) and every Decky page renders empty. The fix is two
+regex literals in the frontend bundle, which PyInstaller stores as a plain data entry in the
+binary's `pydata` ELF section: blobs, a table of contents, an 88-byte cookie. The archive is
+rebuilt with only that one blob replaced, every other blob copied byte for byte, and the ELF
+section headers that follow it are shifted to match, so the file stays a well-formed ELF.
+"""
+import struct
+import sys
+import zlib
+
+MAGIC = b"MEI\x0c\x0b\n\x0b\x0e"
+COOKIE, COOKIE_LEN = "!8sIIII64s", 88   # magic, archive length, toc offset, toc length, pyvers, pylib
+ENTRY, ENTRY_LEN = "!IIIIBc", 18        # entry length, data offset, stored length, real length, zlib?, typecode
+
+# frontend/src/router-hook.tsx and errorboundary-hook.tsx, exactly as in the PR, plus the same
+# change to @decky/ui's useParams matcher (src/deck-hooks/useParams.ts, bundled into the same
+# frontend): it is what plugin pages such as SteamGridDB's read their route parameters with, and
+# it fails on the same client for the same reason (`return P1?P1.params:{}`).
+REPLACEMENTS = [
+    (rb"/routePath:.\.match\?\.path./",
+     rb"/routePath:[\w$]+\.match\?\.path./"),
+    (rb"/^\(\)=>\(.\|\|(?:.\(|\(.=)new .\),.\)$/",
+     rb"/^\(\)=>\([\w$]+\|\|(?:[\w$]+\(|\([\w$]+=)new [\w$]+\),[\w$]+\)$/"),
+    (rb"/return (\w)\?\1\.params:{}/",
+     rb"/return ([\w$]+)\?\1\.params:{}/"),
+]
+
+
+def main(src_path, dst_path):
+    data = open(src_path, "rb").read()
+    cookie_at = data.rfind(MAGIC)
+    if data[:4] != b"\x7fELF" or data[4] != 2 or data[5] != 1 or cookie_at < 0:
+        sys.exit("not a PyInstaller onefile ELF64 binary")
+    _, archive_len, toc_off, toc_len, pyvers, pylib = struct.unpack(COOKIE, data[cookie_at:cookie_at + COOKIE_LEN])
+    start, end = cookie_at + COOKIE_LEN - archive_len, cookie_at + COOKIE_LEN
+
+    entries, pos, toc_end = [], start + toc_off, start + toc_off + toc_len
+    while pos < toc_end:
+        entry_len, off, stored, real, compressed, typecode = struct.unpack(ENTRY, data[pos:pos + ENTRY_LEN])
+        name = data[pos + ENTRY_LEN:pos + entry_len].rstrip(b"\0")
+        entries.append([name, compressed, typecode, data[start + off:start + off + stored], real])
+        pos += entry_len
+
+    hits = {old: 0 for old, _ in REPLACEMENTS}
+    for entry in entries:
+        name, compressed, typecode, blob, _ = entry
+        if typecode != b"x" or not name.endswith(b".js"):
+            continue
+        text = zlib.decompress(blob) if compressed else blob
+        patched = text
+        for old, new in REPLACEMENTS:
+            hits[old] += patched.count(old)
+            patched = patched.replace(old, new)
+        if patched != text:
+            entry[3] = zlib.compress(patched, 9) if compressed else patched
+            entry[4] = len(patched)
+            print(f"patched {name.decode()}", file=sys.stderr)
+    for old, n in hits.items():
+        if n != 1:
+            sys.exit(f"expected exactly one match for {old!r}, found {n}: not the binary this patch was written for")
+
+    body, toc = bytearray(), bytearray()
+    for name, compressed, typecode, blob, real in entries:
+        off = len(body)
+        body += blob
+        name_len = len(name) + 1
+        if (ENTRY_LEN + name_len) % 16:
+            name_len += 16 - (ENTRY_LEN + name_len) % 16
+        toc += struct.pack(ENTRY + f"{name_len}s", ENTRY_LEN + name_len, off, len(blob), real,
+                           compressed, typecode, name)
+    cookie = struct.pack(COOKIE, MAGIC, len(body) + len(toc) + COOKIE_LEN, len(body), len(toc), pyvers, pylib)
+    archive = bytes(body) + bytes(toc) + cookie
+
+    # ELF64: the archive is the `pydata` section; whatever follows it (the section name table)
+    # and the section header table itself move by the size difference.
+    e_shoff, = struct.unpack_from("<Q", data, 0x28)
+    e_shentsize, e_shnum = struct.unpack_from("<HH", data, 0x3A)
+    between = data[end:e_shoff]
+    new_shoff = start + len(archive) + len(between)
+    pad = b"\0" * (-new_shoff % 8)
+    new_shoff += len(pad)
+    headers = bytearray(data[e_shoff:e_shoff + e_shentsize * e_shnum])
+    grown = len(archive) - archive_len
+    for i in range(e_shnum):
+        sh_offset, sh_size = struct.unpack_from("<QQ", headers, i * e_shentsize + 24)
+        if sh_offset == start and sh_size == archive_len:
+            struct.pack_into("<Q", headers, i * e_shentsize + 32, len(archive))
+        elif sh_offset >= end:
+            struct.pack_into("<Q", headers, i * e_shentsize + 24, sh_offset + grown)
+    head = bytearray(data[:start])
+    struct.pack_into("<Q", head, 0x28, new_shoff)
+    with open(dst_path, "wb") as out:
+        out.write(bytes(head) + archive + between + pad + bytes(headers))
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        sys.exit(__doc__.strip().splitlines()[2])
+    main(sys.argv[1], sys.argv[2])
