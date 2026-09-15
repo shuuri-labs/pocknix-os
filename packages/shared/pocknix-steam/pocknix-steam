@@ -64,8 +64,8 @@ done
 W="${POCKNIX_PANEL_W:-1080}"; H="${POCKNIX_PANEL_H:-1920}"
 REFRESH="${POCKNIX_PANEL_REFRESH:-120}"; ORIENT="${POCKNIX_PANEL_ORIENT:-left}"
 PANEL_MM="${POCKNIX_PANEL_MM:-177x100}"
-# device.conf carries the panel's NATIVE portrait geometry; composite rotation wants
-# -W/-H in LOGICAL landscape, so transpose for 90/270.
+# device.conf carries the panel's NATIVE portrait geometry; gamescope wants -W/-H in
+# LOGICAL landscape, so transpose for 90/270.
 case "${ORIENT}" in
   left|right) GS_W="${H}"; GS_H="${W}" ;;
   *)          GS_W="${W}"; GS_H="${H}" ;;
@@ -81,6 +81,13 @@ if [ -n "${POCKNIX_TOUCH2_NAME:-}" ]; then
   systemctl stop pocknix-second-screen.service 2>/dev/null || true
 fi
 
+# Rotation autodetects (scanout when the plane can, else composited; dev/graphics.md).
+# Panels past the DPU rotator's 1088-line cap must opt in here or scan out black.
+GS_ROTATE=()
+if [ "${POCKNIX_PANEL_ROTATE_SHADER:-0}" = "1" ]; then
+  GS_ROTATE=(--force-composition-rotation)
+fi
+
 # Do NOT add a core pin here: scx_lavd places the bursty threads itself and needs the littles free
 # for batch work; a hard taskset fights it.
 
@@ -92,6 +99,6 @@ GS_LOG="${HOME}/pocknix-steam.log"
 env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM="${PANEL_MM}" \
   gamescope "${GS_OUTPUT[@]}" -W "${GS_W}" -H "${GS_H}" -r "${REFRESH}" --xwayland-count 2 --mangoapp --backend drm \
-    --force-orientation "${ORIENT}" --force-composition-rotation -e -- \
+    --force-orientation "${ORIENT}" "${GS_ROTATE[@]}" -e -- \
     env LD_LIBRARY_PATH="${LDLP}" "${CLIENT}" -gamepadui -steamos3 -steampal -steamdeck -noverifyfiles -noshaders \
   >"${GS_LOG}" 2>&1
