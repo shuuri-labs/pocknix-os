@@ -1,0 +1,15 @@
+[Unit]
+Description=pocknix: unlock and seed the homescreen on first login
+PartOf=graphical-session.target
+After=plasma-plasmashell.service
+# The wallpaper seed talks to the shell this unit is about to restart; let it finish first.
+After=pocknix-branding-init.service
+ConditionPathExists=!%E/pocknix/homescreen-seeded
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pocknix-homescreen-init
+TimeoutStartSec=120
+
+[Install]
+WantedBy=plasma-plasmashell.service
