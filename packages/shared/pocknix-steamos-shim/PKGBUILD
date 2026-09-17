@@ -1,18 +1,21 @@
 # pocknix-steamos-shim — stubs for the SteamOS update/branch/BIOS helpers the Deck UI
 # (-steamos3 -steamdeck) shells out to; without them the OOBE "required update" step dead-ends.
 # The Steam-facing interface matches Valve's, so real OTA later is a drop-in body swap.
+# Also ships /etc/steamos-oobe-image: the Steam client checks for that file to decide whether to
+# show the first-run OOBE (language/timezone/WiFi) instead of jumping straight to login.
 pkgname=pocknix-steamos-shim
 pkgver=0.1.0
-pkgrel=7
-pkgdesc="SteamOS update/branch/timezone/format helper stubs for the Steam Deck UI on a non-SteamOS base (until real OTA)"
+pkgrel=9
+pkgdesc="SteamOS update/branch/timezone/format helper stubs + OOBE marker for the Steam Deck UI on a non-SteamOS base (until real OTA)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 # The format shims pkexec /usr/lib/hwsupport/format-device.sh, shipped by pocknix-sdcard-automount.
 depends=('pocknix-sdcard-automount' 'polkit')
 source=('steamos-update' 'steamos-select-branch' 'steamos-set-timezone'
-        'steamos-format-device' 'steamos-format-sdcard' 'jupiter-biosupdate')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'steamos-format-device' 'steamos-format-sdcard' 'jupiter-biosupdate'
+        'steamos-mandatory-update' 'jupiter-initial-firmware-update' 'steamos-oobe-image')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # Steam calls these helpers by their FULL /usr/bin/steamos-polkit-helpers/ path, not via PATH,
@@ -32,6 +35,15 @@ package() {
   # and prompts spuriously, while a missing helper (127) reads as a check failure.
   install -Dm755 "${srcdir}/jupiter-biosupdate"    "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-biosupdate"
   install -Dm755 "${srcdir}/jupiter-biosupdate"    "${pkgdir}/usr/bin/jupiter-biosupdate"
+  # steamos-mandatory-update + jupiter-initial-firmware-update: the OOBE runs both before the
+  # language/WiFi step; a missing helper (127) fails the check and the session requests a reboot.
+  install -Dm755 "${srcdir}/steamos-mandatory-update"        "${pkgdir}/usr/bin/steamos-polkit-helpers/steamos-mandatory-update"
+  install -Dm755 "${srcdir}/steamos-mandatory-update"        "${pkgdir}/usr/bin/steamos-mandatory-update"
+  install -Dm755 "${srcdir}/jupiter-initial-firmware-update" "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-initial-firmware-update"
+  install -Dm755 "${srcdir}/jupiter-initial-firmware-update" "${pkgdir}/usr/bin/jupiter-initial-firmware-update"
+  # Steam checks /etc/steamos-oobe-image to decide whether to show the first-run OOBE; without it
+  # it skips straight to login. Content is arbitrary (existence is what's tested).
+  install -Dm644 "${srcdir}/steamos-oobe-image" "${pkgdir}/etc/steamos-oobe-image"
   # Do NOT add a jupiter-dock-updater stub: its presence makes Steam believe a dock is attached
   # and prompt for a dock update.
 }

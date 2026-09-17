@@ -104,6 +104,32 @@ fi
 # Log to a file, never the tty: tty1 is what shows between compositors on a session switch and
 # must stay blank. Do NOT exec gamescope either, since the session switch pkills it by name.
 GS_LOG="${HOME}/pocknix-steam.log"
+
+# --- DRM/panel readiness gate -------------------------------------------------
+# Cold-boot race (verified on the Odin 3, clean image): the session can start before
+# the DSI panel probe completes, and gamescope then holds DRM on a BLACK screen — it
+# does NOT exit, so the supervisor's <5s fast-fail retry in ~/.bash_profile never
+# fires (killing gamescope and letting the supervisor relaunch it brought the session
+# up). Wait (bounded) for the main panel connector to report `connected` before
+# handing DRM to gamescope. On a normal boot the panel is already up and this returns
+# immediately; if it never comes up we proceed after the timeout exactly as before.
+_drm_status=""
+if [ -n "${POCKNIX_PANEL_OUTPUT:-}" ]; then
+  _drm_status="/sys/class/drm/${POCKNIX_PANEL_OUTPUT}/status"
+else
+  for _c in /sys/class/drm/card*-DSI-*/status; do
+    [ -r "${_c}" ] && { _drm_status="${_c}"; break; }   # DSI-1 = main panel (glob order)
+  done
+fi
+_drm_wait=0
+while [ -n "${_drm_status}" ] && [ -r "${_drm_status}" ] \
+      && [ "$(cat "${_drm_status}" 2>/dev/null)" != connected ] \
+      && [ "${_drm_wait}" -lt 30 ]; do
+  sleep 1
+  _drm_wait=$(( _drm_wait + 1 ))
+done
+unset _drm_status _drm_wait _c
+
 # gamescope paints black until a client presents; the splash covers that, then execs Steam.
 mark "starting gamescope"
 # gamepadui sizes its UI from the output's physical mm; the ~96 DPI default reads as a desktop

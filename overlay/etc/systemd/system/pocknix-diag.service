@@ -1,7 +1,10 @@
 [Unit]
 Description=pocknix first-boot diagnostic dump (writes pocknix-diag.txt to the boot partition)
-After=multi-user.target
-Wants=multi-user.target
+# Started by pocknix-diag.timer (OnBootSec=45s), NOT by the boot transaction. This unit
+# used to be WantedBy=multi-user.target with After=multi-user.target, which kept
+# multi-user.target in `activating` for the whole 30s sleep + dump and delayed the boot
+# and the Steam session launch. The timer fires after boot has settled, so
+# multi-user.target completes immediately.
 
 [Service]
 Type=oneshot
@@ -10,5 +13,4 @@ ExecStartPre=/bin/sh -c 'sleep 30'
 ExecStart=/usr/local/bin/pocknix-diag
 RemainAfterExit=yes
 
-[Install]
-WantedBy=multi-user.target
+# No [Install]: enabled via pocknix-diag.timer (WantedBy=timers.target).

@@ -1,0 +1,7 @@
+#!/bin/bash
+# pocknix jupiter-initial-firmware-update shim. Steam's OOBE runs this alongside
+# steamos-mandatory-update; a missing helper (127) fails the check and the session asks for a
+# reboot. exit 0 = "no initial firmware update"; do NOT reuse steamos-update here, whose 7 the
+# firmware check reads as "update available" and prompts on.
+set -u
+exit 0

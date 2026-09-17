@@ -1,0 +1,1 @@
+root=PARTLABEL=POCKNIX_ROOT rootwait loglevel=7 systemd.show_status=0 earlyprintk=ttyMSM0 console=ttyMSM0,115200n8 pstore.backend=ramoops ramoops.mem_address=0x95000000 ramoops.mem_size=0x40000 ramoops.record_size=0x20000 ramoops.dump_oops=1 ramoops.ecc=1 oops=panic panic=5 video=efifb:off irqaffinity=0-1 cgroup.memory=nokmem,nosocket nosoftlockup mem_sleep_default=s2idle

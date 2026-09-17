@@ -1,0 +1,14 @@
+# Makes a kernel pacman transaction on the device a complete deploy; no-ops in the image-build
+# chroot, where pocknix-build-bootimg finds no mounted /flash.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = boot/Image
+Target = boot/dtbs/*
+Target = usr/lib/modules/*
+
+[Action]
+Description = pocknix: rebuilding /flash/KERNEL (qcom-abl boot image)...
+When = PostTransaction
+Exec = /usr/bin/pocknix-build-bootimg

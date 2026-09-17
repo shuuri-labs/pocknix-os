@@ -1,0 +1,49 @@
+From: Fransis <arcadematicas@gmail.com>
+Subject: [PATCH] drm/msm: adreno a8xx: force GX GDSC collapse before CX in recovery
+
+On SM8750 (Adreno 830) the GX GDSC lives in the separate gxclkctl domain and
+feeds the shader cores + the CX GDSC power dependency. After a GMU hang the
+firmware leaves GX voted on in HW (RPMH), so CX cannot collapse while GX is up.
+The recovery deadlocks ("cx gdsc didn't collapse") and the next hw_init times
+out on "GMU OOB GPU_SET" -- which on gamescope/turnip surfaces as VkDeviceLost
+(VkResult -4) in the compositor.
+
+ROCKNIX's 0050 (gdsc_gx_disable under synced_poweroff) knows how to collapse GX
+but only acts when synced_poweroff is set; this is the caller that sets it in
+a8xx_recover(), before the existing CX collapse. Both are needed together.
+
+Tested on the AYN Odin 3 (pocknix-os): the gamescope compositor no longer loses
+the device (VkDeviceLost count 0).
+
+Signed-off-by: Fransis <arcadematicas@gmail.com>
+---
+ drivers/gpu/drm/msm/adreno/a8xx_gpu.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/drivers/gpu/drm/msm/adreno/a8xx_gpu.c
++++ b/drivers/gpu/drm/msm/adreno/a8xx_gpu.c
+@@ -904,6 +904,22 @@
+ 	 */
+ 	gpu->active_submits = 0;
+ 
++	/*
++	 * A8xx (SM8750/Adreno 830): the GX GDSC lives in the separate gxclkctl
++	 * domain and feeds the shader cores + the CX GDSC power dependency. On a
++	 * GMU hang the firmware leaves GX voted on in HW (RPMH), so CX cannot
++	 * collapse while GX is up: recovery deadlocks ("cx gdsc didn't
++	 * collapse") and the next hw_init times out on GMU OOB GPU_SET, which
++	 * userspace sees as VkDeviceLost. Force GX collapse BEFORE CX, mirroring
++	 * a6xx_gmu_gxpd_put() (unconditional: gx_is_on() reads false while the
++	 * GMU is hung).
++	 */
++	if (!IS_ERR_OR_NULL(gmu->gxpd)) {
++		pm_runtime_get_sync(gmu->gxpd);
++		dev_pm_genpd_synced_poweroff(gmu->gxpd);
++		pm_runtime_put_sync(gmu->gxpd);
++	}
++
+ 	reinit_completion(&gmu->pd_gate);
+ 	dev_pm_genpd_add_notifier(gmu->cxpd, &gmu->pd_nb);
+ 	dev_pm_genpd_synced_poweroff(gmu->cxpd);
+-- 
+2.46.1

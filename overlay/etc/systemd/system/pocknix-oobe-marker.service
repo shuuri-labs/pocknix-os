@@ -1,0 +1,17 @@
+[Unit]
+Description=Drop the SteamOS OOBE marker once Steam's first-run wizard has completed
+DefaultDependencies=no
+After=systemd-remount-fs.service local-fs.target
+# Must finish before the autologin getty starts the Steam session, so the marker is gone before
+# the client reads it. Same boot slot as pocknix-expand-root.service.
+Before=getty@tty1.service getty.target shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=/etc/steamos-oobe-image
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/pocknix-oobe-marker
+
+[Install]
+WantedBy=multi-user.target

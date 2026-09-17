@@ -1,0 +1,75 @@
+# pocknix-bsp-sm8750 — board support for the SM8750 FAMILY (AYN Odin 3).
+# One package per SoC: board facts in /usr/lib/pocknix/boards/<board>.conf,
+# device.conf is a sourced dispatcher keyed on the DT model, InputPlumber
+# configs are dt-model gated.
+#
+# Input map rationale (why we ship our own ayn_mcu.yaml / 01-ayn-controller.yaml
+# instead of ROCKNIX's): ROCKNIX's AYN capability map maps BTN_BACK (the physical
+# Quick Access button) to keyboard KeyF1 — a key ROCKNIX's own UI uses. On a
+# Steam Deck target that leaves Steam without a Quick Access button. Our map
+# (taken from ArmadaOS, with the MangoHud paddle delta) maps BTN_BACK ->
+# gamepad QuickAccess, BTN_MODE -> Guide, and the composite device targets
+# `deck` + `keyboard` so Steam Input sees a Steam-native pad. Reference copies
+# live in pocknix-odin3-support/config/inputplumber/.
+#
+# No suspend quirk ships here: the SM8750 family pins s2idle in the kernel
+# cmdline (mem_sleep_default=s2idle, see kernel-cmdline) — the only safe
+# suspend mode on this SoC (deep wedges it) — so no sleep.conf.d drop-in is
+# needed (unlike sm8550, whose s2idle pin lives in the BSP).
+#
+# No pocknix-firmware-sm8750 dep: the Odin 3's proprietary firmware blobs
+# (adsp.mbn / adsp_dtb.mbn charger firmware, etc.) are NOT in this repo — they
+# are applied to the image rootfs by build-image.sh's install_firmware() from
+# devices/sm8750/firmware/ (see its README), so there is no firmware package to
+# depend on. The sm8550 BSP's pocknix-firmware-sm8550 dep edge exists because
+# that package ships ALARM-overridden wifi/VPU blobs; nothing equivalent is
+# packaged for sm8750.
+pkgname=pocknix-bsp-sm8750
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="pocknix board support: SM8750 family (AYN Odin 3) — runtime board dispatch, input maps, audio UCM"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('pocknix-bsp-common')
+# Exactly one device BSP may be installed (wrong-device guard for a shared repo).
+# No retired per-device BSPs exist for the SM8750 family, so no 'replaces'.
+provides=('pocknix-bsp')
+conflicts=('pocknix-bsp')
+optdepends=('inputplumber: gamepad -> Steam Input mapping (01-ayn-controller.yaml)'
+            'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin3 UCM)')
+source=('device.conf'
+        'ayn_mcu.yaml' '01-ayn-controller.yaml'
+        'AYN-Odin3.conf' 'HiFi.conf'
+        'kernel-cmdline')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  # boards/ is not in source= (makepkg local sources are flat): taken from startdir,
+  # which build-packages.sh populates with the whole package dir.
+  install -Dm644 "${srcdir}/device.conf" "${pkgdir}/usr/lib/pocknix/device.conf"
+  local b
+  for b in "${startdir}/boards/"*.conf; do
+    install -Dm644 "${b}" "${pkgdir}/usr/lib/pocknix/boards/$(basename "${b}")"
+  done
+
+  install -Dm644 "${srcdir}/01-ayn-controller.yaml" \
+    "${pkgdir}/usr/share/inputplumber/devices/01-ayn-controller.yaml"
+  install -Dm644 "${srcdir}/ayn_mcu.yaml" \
+    "${pkgdir}/usr/share/inputplumber/capability_maps/ayn_mcu.yaml"
+
+  # ALSA UCM: the Odin 3 card reports longname "SM8750-AYN". The codec include
+  # sequences (/lib, /codecs/wcd939x, /codecs/qcom-lpass) come from base
+  # alsa-ucm-conf. (ArmadaOS also ships a legacy `ayn-AYNOdin3-` match name for
+  # older kernels; our longname is SM8750-AYN, so only that match is installed.)
+  local ucm="${pkgdir}/usr/share/alsa/ucm2"
+  install -Dm644 "${srcdir}/AYN-Odin3.conf" "${ucm}/AYN/Odin3/AYN-Odin3.conf"
+  install -Dm644 "${srcdir}/HiFi.conf"      "${ucm}/AYN/Odin3/HiFi.conf"
+  # card-match file (matched by card longname under the sm8750 driver dir)
+  install -d "${ucm}/conf.d/sm8750"
+  ln -sf "../../AYN/Odin3/AYN-Odin3.conf" "${ucm}/conf.d/sm8750/SM8750-AYN.conf"
+
+  # One family cmdline for the on-device /flash/KERNEL rebuild (pocknix-build-bootimg);
+  # build-packages.sh asserts it matches devices/sm8750/profile.conf.
+  install -Dm644 "${srcdir}/kernel-cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
+}

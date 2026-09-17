@@ -1,8 +1,11 @@
 [Unit]
 Description=pocknix: register the Flathub remote for Discover/flatpak
 # remote-add fetches flathub.flatpakrepo, so the first run needs the network; later runs no-op.
-After=network-online.target
-Wants=network-online.target
+# Deliberately NOT ordered after network-online.target and NOT WantedBy anything: the NM
+# dispatcher hook (50-pocknix-flathub) is the only thing that may start this, once a link is
+# really up. A boot-transaction start would stall multi-user.target for the whole >300 MB
+# flatpak seed (and network-online.target lands before wlan0 has DNS anyway) — see
+# pocknix-flathub-dispatcher.
 
 [Service]
 Type=oneshot

@@ -1,0 +1,49 @@
+# linux-pocknix-sm8750 — the SM8750 kernel as a pacman package. Per-SoC, not per-device:
+# /boot/dtbs carries every board under kernel/sm8750/dts and the ABL model menu lists what it finds.
+# THIN by design — it compiles nothing; build-packages.sh stages `make kernel` output into ./staged.
+# Packaging it at all is what keeps Image and modules versioned together atomically and makes a bad
+# kernel rollback-able. The cmdline is DEVICE data and ships in each device's BSP, not here.
+pkgname=linux-pocknix-sm8750
+pkgver=7.2.4
+pkgrel=2
+pkgdesc="SM8750 kernel (stock ${pkgver} + ROCKNIX patch stack, SoC board dtbs) — packaged from 'make kernel' output"
+arch=('aarch64')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-only')
+# ALARM's generic linux-aarch64 is pre-installed in the base tarball and must go;
+# 'linux-pocknix' is the retired per-device name this lineage migrates.
+provides=("linux=${pkgver}" 'linux-pocknix')
+conflicts=('linux-aarch64' 'linux-pocknix')
+replaces=('linux-aarch64' 'linux-pocknix')
+# python + cpio are for the on-device /flash/KERNEL rebuild hook, not for the build.
+depends=('python' 'cpio')
+install=linux-pocknix.install
+options=('!strip')          # the kernel Image and DTBs must not be stripped
+source=('pocknix-build-bootimg' '90-linux-pocknix.hook')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  local out="${startdir}/staged"     # = build/kernel/out, copied in by scripts/build-packages.sh
+  if [ ! -f "${out}/Image" ] || [ ! -f "${out}/kernelrelease" ]; then
+    echo "${pkgname}: no staged kernel at ${out}." >&2
+    echo "  Run 'make kernel' first (it produces build/kernel/out), then rebuild this package." >&2
+    return 1
+  fi
+  local kver; kver="$(cat "${out}/kernelrelease")"
+
+  install -Dm644 "${out}/Image" "${pkgdir}/boot/Image"
+  install -d "${pkgdir}/boot/dtbs"
+  cp "${out}/dtbs/"*.dtb "${pkgdir}/boot/dtbs/"
+
+  install -d "${pkgdir}/usr/lib/modules"
+  cp -a "${out}/modroot/lib/modules/${kver}" "${pkgdir}/usr/lib/modules/${kver}"
+
+  # the install scriptlet and the /flash/KERNEL hook read this to find the modules dir
+  install -Dm644 /dev/stdin "${pkgdir}/usr/lib/pocknix/kernelrelease" <<<"${kver}"
+
+  # On-device /flash/KERNEL rebuild path; the cmdline it reads comes from the device's BSP.
+  [ -d "${out}/mkbootimg" ] || { echo "${pkgname}: ${out}/mkbootimg missing — re-run 'make kernel'"; return 1; }
+  cp -r "${out}/mkbootimg" "${pkgdir}/usr/lib/pocknix/mkbootimg"
+  install -Dm755 "${srcdir}/pocknix-build-bootimg"  "${pkgdir}/usr/bin/pocknix-build-bootimg"
+  install -Dm644 "${srcdir}/90-linux-pocknix.hook"  "${pkgdir}/usr/share/libalpm/hooks/90-linux-pocknix.hook"
+}
