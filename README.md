@@ -141,6 +141,7 @@ under Other Settings, Alternative Emulators.
 - **File Sharing** (same tab as Add Non-Steam Game): toggle network file sharing so you can drag files onto the device from another computer.
 - **SD Card** (same tab): format a microSD card for Steam, Deck-compatible, straight from game mode.
 - **Updater**: check for and install system updates from the Quick Access Menu.
+- **Retro Game Corps shader presets** (Pocknix Tools, desktop mode): install or remove the shader setup from the *My Favorite Retroid Pocket Nova Shaders* video for the RetroArch systems, one switch.
 
 See the [Pocknix Control docs](docs/pocknix-control.md) for the full tour.
 

@@ -126,6 +126,12 @@ seed_retroarch() {
     mkdir -p "${HOME}/.config/retroarch/shaders"
     ln -s /usr/share/libretro/shaders/shaders_slang "${shaders}" 2>/dev/null || true
   fi
+  # same for the GLSL set, used by presets for cores stuck on the gl driver (see es-retroarch)
+  local shaders="${HOME}/.config/retroarch/shaders/shaders_glsl"
+  if [ -d /usr/share/libretro/shaders/shaders_glsl ] && [ ! -e "${shaders}" ]; then
+    mkdir -p "${HOME}/.config/retroarch/shaders"
+    ln -s /usr/share/libretro/shaders/shaders_glsl "${shaders}" 2>/dev/null || true
+  fi
   [ -d "${SHARE}/retroarch-config" ] && seed_a retroarch-config "${HOME}/.config/retroarch/config"
 }
 

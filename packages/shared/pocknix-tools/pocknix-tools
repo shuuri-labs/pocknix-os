@@ -176,6 +176,29 @@ do_layer() {
 
 emulators_present() { pocknix-roms-init --list 2>/dev/null || true; }
 
+rgc_available() { command -v pocknix-rgc-shaders >/dev/null 2>&1 && [ -d "${HOME}/.config/retroarch/shaders/shaders_slang" ]; }
+rgc_installed() { [ "$(pocknix-rgc-shaders status 2>/dev/null | sed -n 's/^installed=//p')" = yes ]; }
+
+# user-level files only, so no pkexec; the CLI refuses while RetroArch runs
+do_rgc() {
+  local out rc=0
+  if rgc_installed; then
+    kdialog --title "$TITLE" --warningcontinuecancel \
+      "Remove the Retro Game Corps shader presets?\n\nThe presets are removed and any preset they replaced is put back. Shaders stay enabled in RetroArch only if they were before.\n\nClose RetroArch and ES-DE first." \
+      || return 0
+    out="$(pocknix-rgc-shaders uninstall 2>&1)" || rc=$?
+    [ "${rc}" -eq 0 ] || { gui_err "Could not remove the presets:\n\n$(printf '%s' "${out}" | tail -3)"; return 0; }
+    kdialog --title "$TITLE" --msgbox "The Retro Game Corps shader presets are removed." || true
+    return 0
+  fi
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Install the Retro Game Corps shader presets?\n\nFrom the 'My Favorite Retroid Pocket Nova Shaders' video: a scanline CRT look for the pixel consoles, CRT Royale for PS1, Dreamcast and Saturn, and LCD grids with colour correction for Game Boy, Game Boy Color and Game Boy Advance. Shaders are switched on in RetroArch and the Game Boy palette is set to the one the video uses.\n\nAny preset you saved yourself for the same system is kept aside and comes back on removal. Close RetroArch and ES-DE first." \
+    || return 0
+  out="$(pocknix-rgc-shaders install 2>&1)" || rc=$?
+  [ "${rc}" -eq 0 ] || { gui_err "Could not install the presets:\n\n$(printf '%s' "${out}" | tail -3)"; return 0; }
+  kdialog --title "$TITLE" --msgbox "The Retro Game Corps shader presets are installed. They apply the next time a game starts." || true
+}
+
 do_defaults() {
   local rows args=() name label choice out rc=0
   rows="$(emulators_present)"
@@ -244,6 +267,10 @@ while :; do
   if layer_installed; then items+=(emulation "Emulation layer is installed - remove it...")
   else items+=(emulation "Install the emulation layer (ES-DE + emulators)..."); fi
   [ -n "$(emulators_present)" ] && items+=(defaults "Restore emulator default settings...")
+  if rgc_available; then
+    if rgc_installed; then items+=(rgc "Retro Game Corps shader presets are installed - remove them...")
+    else items+=(rgc "Install the Retro Game Corps shader presets..."); fi
+  fi
   choice="$(kdialog --title "$TITLE" --menu "Pocknix maintenance tools\nMode: ${mode^^}" "${items[@]}")" || exit 0
   case "${choice}" in
     rollback)          do_rollback "" ;;
@@ -255,6 +282,7 @@ while :; do
     share)             do_share ;;
     emulation)         do_layer ;;
     defaults)          do_defaults ;;
+    rgc)               do_rgc ;;
     status)            do_status ;;
     *) exit 0 ;;
   esac

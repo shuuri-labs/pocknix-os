@@ -1,0 +1,26 @@
+# retroarch-glsl-shaders-pocknix — the official libretro GLSL shader set, next to the slang one.
+# Needed because some cores (flycast, yabasanshiro: GLES-only builds) force RetroArch onto the
+# legacy "gl" driver, which loads GLSL presets only; a slang preset on that path silently falls
+# back to stock shaders. Vendored for the same reason as retroarch-shaders-pocknix: presets we
+# seed reference these files by relative path and must resolve with no Online Updater step.
+pkgname=retroarch-glsl-shaders-pocknix
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="libretro GLSL shader set for RetroArch's gl driver (vendored; replaces the Online Updater step)"
+arch=('any')
+url="https://github.com/libretro/glsl-shaders"
+license=('GPL3')  # umbrella; individual shaders vary (GPL/MIT/public domain)
+depends=()
+_commit=1bf3eb49bf3aa3268861f5883077db7e2a369149
+source=("glsl-shaders-${_commit}.tar.gz::https://github.com/libretro/glsl-shaders/archive/${_commit}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  install -dm755 "${pkgdir}/usr/share/libretro/shaders"
+  cp -r "${srcdir}/glsl-shaders-${_commit}" \
+        "${pkgdir}/usr/share/libretro/shaders/shaders_glsl"
+  rm -rf "${pkgdir}/usr/share/libretro/shaders/shaders_glsl/.git"* \
+         "${pkgdir}/usr/share/libretro/shaders/shaders_glsl/.github" 2>/dev/null || true
+  find "${pkgdir}/usr/share/libretro/shaders" -type f -exec chmod 644 {} +
+  find "${pkgdir}/usr/share/libretro/shaders" -type d -exec chmod 755 {} +
+}

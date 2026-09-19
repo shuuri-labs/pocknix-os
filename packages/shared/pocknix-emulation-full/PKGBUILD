@@ -3,7 +3,7 @@
 # are optdepends instead, so a failed optional build cannot block the layer.
 pkgname=pocknix-emulation-full
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="pocknix optional layer: ES-DE frontend, RetroArch cores, standalone emulators (Switch: bring your own)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -15,6 +15,7 @@ depends=('pocknix-emulation'
          'libretro-core-info'
          'retroarch-autoconfig-pocknix'
          'retroarch-shaders-pocknix'
+         'retroarch-glsl-shaders-pocknix'
          'ppsspp'
          'fuse2'
          'armsx2-bin'

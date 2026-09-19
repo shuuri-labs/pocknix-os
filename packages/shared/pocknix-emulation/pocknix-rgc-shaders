@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+# pocknix-rgc-shaders install|uninstall|status — Retro Game Corps' Retroid Pocket Nova shader
+# recipes (youtube U2Lu8rsTDSw, 2026-09-06) as RetroArch automatic presets, plus the two settings
+# they depend on: shaders enabled globally, and the Game Boy palette the Game Boy recipe assumes.
+#
+# Why a tool and not a seed: the seeder applies templates once and keeps every later user edit;
+# these presets are a taste choice a user wants to put on and take off, and they replace files the
+# user may have written through RetroArch's own "Save preset" menu. So every file written here
+# carries a marker line, anything it displaces is kept as <file>.pre-rgc, and uninstall removes
+# only marked files and puts the backups back. Presets are built from the installed shader tree
+# rather than shipped as files so the pass list follows the shader package.
+#
+# Refuses to run while RetroArch is open: it rewrites retroarch.cfg and the core option files on
+# exit and would undo the change.
+import json, os, re, shutil, subprocess, sys
+
+HOME = os.path.expanduser("~")
+TREE = os.path.join(HOME, ".config/retroarch/shaders/shaders_slang")
+GLSL_TREE = os.path.join(HOME, ".config/retroarch/shaders/shaders_glsl")
+CFG = os.path.join(HOME, ".config/retroarch/config")
+RACFG = os.path.join(HOME, ".config/retroarch/retroarch.cfg")
+GAMBATTE_OPT = os.path.join(CFG, "Gambatte/Gambatte.opt")
+STATE = os.path.join(HOME, ".config/pocknix/rgc-shaders.json")
+MARK = "# pocknix-rgc-shaders"
+BACKUP = ".pre-rgc"
+
+GDV = "crt/crt-gdv-mini-ultra-trinitron.slangp"
+ROYALE = ["misc/color-mangler.slangp", "crt/crt-royale.slangp"]
+SIMPLETEX = "handheld/simpletex_lcd.slangp"
+SHARP = "pixel-art-scaling/sharp-shimmerless.slangp"
+
+# target (relative to CFG) -> (preset chain bottom-up, parameter overrides). The video's stated
+# favourites: GDV mini ultra without curvature for pixel consoles, colour mangler under CRT Royale
+# for the 3D ones, and the three handheld recipes.
+RECIPES = {
+    "global.slangp": ([GDV], {"warpY": "0.0", "sat": "0.95"}),
+    "DuckStation/DuckStation.slangp": (ROYALE, {"sat": "0.95"}),
+    "Flycast/Flycast.slangp": (ROYALE, {"sat": "0.95"}),
+    "YabaSanshiro/YabaSanshiro.slangp": (ROYALE, {"sat": "0.95"}),
+    # content-directory preset: outranks the seeded lcd3x gba.slangp at the same level
+    "mGBA/gba.slangp": (["handheld/color-mod/gba-color.slangp", SHARP, SIMPLETEX],
+                        {"profile": "2.0", "darken_screen": "0.4", "BACKGROUND_INTENSITY": "0.8",
+                         "DARKEN_COLOUR": "0.25", "DARKEN_GRID": "0.15", "GRID_INTENSITY": "0.65"}),
+    "Gambatte/gb.slangp": ([SHARP, SIMPLETEX],
+                           {"GRID_INTENSITY": "0.9", "DARKEN_GRID": "0.15",
+                            "BACKGROUND_INTENSITY": "0.8", "DARKEN_COLOUR": "0.25"}),
+    "Gambatte/gbc.slangp": (["handheld/authentic_gbc.slangp"], {}),
+}
+# flycast and yabasanshiro are GLES-only builds: RetroArch puts them on the legacy gl driver,
+# which loads GLSL presets only, and CRT Royale's GLSL does not compile on GLES 3.2 (non-constant
+# global initialisers). RetroArch picks the preset extension its driver can load, so these sit
+# next to the slang ones: the video's other favourite, GDV mini, at the same saturation.
+GLSL_RECIPES = {
+    "DuckStation/DuckStation.glslp": (["crt/crt-gdv-mini.glslp"], {"sat": "0.95", "warpY": "0.0"}),
+    "Flycast/Flycast.glslp": (["crt/crt-gdv-mini.glslp"], {"sat": "0.95", "warpY": "0.0"}),
+    "YabaSanshiro/YabaSanshiro.glslp": (["crt/crt-gdv-mini.glslp"], {"sat": "0.95", "warpY": "0.0"}),
+}
+GAMBATTE = {
+    "gambatte_gb_colorization": "internal",
+    "gambatte_gb_internal_palette": "TWB64 - Pack 1",
+    "gambatte_gb_palette_twb64_1": "TWB64 028 - Game.com Ver.",
+}
+RA_KEYS = {"video_shader_enable": "true"}
+
+PASS_KEY = re.compile(r"^(shader|filter_linear|wrap_mode|mipmap_input|alias|float_framebuffer|"
+                      r"srgb_framebuffer|scale_type|scale_type_x|scale_type_y|scale|scale_x|scale_y|"
+                      r"frame_count_mod)(\d+)$")
+NOT_PARAMS = {"shaders", "textures", "parameters", "feedback_pass"}
+
+
+def die(msg):
+    print(f"pocknix-rgc-shaders: {msg}", file=sys.stderr); sys.exit(1)
+
+
+def retroarch_running():
+    return subprocess.run(["pgrep", "-x", "retroarch"], capture_output=True).returncode == 0
+
+
+def parse_preset(path):
+    kv = []
+    for line in open(path, encoding="utf-8", errors="replace"):
+        line = line.split("#", 1)[0].strip()
+        if "=" in line:
+            k, v = line.split("=", 1); kv.append((k.strip(), v.strip().strip('"')))
+    return kv
+
+
+def load_preset(rel, tree):
+    """(passes, textures, params) of one preset, shader and texture paths made absolute."""
+    path = os.path.join(tree, rel); base = os.path.dirname(path)
+    if not os.path.isfile(path):
+        die(f"shader preset missing: {path} (is the shader package installed?)")
+    kv = parse_preset(path); d = dict(kv)
+    passes = [dict() for _ in range(int(d["shaders"]))]
+    texnames = [t for t in d.get("textures", "").split(";") if t]
+    textures, params = {}, {}
+    for k, v in kv:
+        m = PASS_KEY.match(k)
+        if m:
+            key, i = m.group(1), int(m.group(2))
+            passes[i][key] = os.path.normpath(os.path.join(base, v)) if key == "shader" else v
+        elif k in texnames:
+            textures.setdefault(k, {})["path"] = os.path.normpath(os.path.join(base, v))
+        elif any(k == t + s for t in texnames for s in ("_linear", "_wrap_mode", "_mipmap")):
+            t = next(t for t in texnames if k.startswith(t + "_")); textures.setdefault(t, {})[k[len(t) + 1:]] = v
+        elif k not in NOT_PARAMS:
+            params[k] = v
+    return passes, [(t, textures[t]) for t in texnames], params
+
+
+def render(out_path, chain, overrides, tree=TREE):
+    out_dir = os.path.dirname(out_path)
+    passes, textures, params = [], [], {}
+    for rel in chain:
+        p, t, pr = load_preset(rel, tree); passes += p; textures += t; params.update(pr)
+    params.update(overrides)
+    lines = [MARK, f"shaders = {len(passes)}"]
+    for i, p in enumerate(passes):
+        for key, v in p.items():
+            if key == "shader":
+                if not os.path.isfile(v): die(f"shader missing: {v}")
+                v = os.path.relpath(v, out_dir)
+            lines.append(f'{key}{i} = "{v}"')
+    if textures:
+        lines.append('textures = "' + ";".join(t for t, _ in textures) + '"')
+        for t, spec in textures:
+            if not os.path.isfile(spec["path"]): die(f"texture missing: {spec['path']}")
+            lines.append(f'{t} = "{os.path.relpath(spec["path"], out_dir)}"')
+            for s in ("linear", "wrap_mode", "mipmap"):
+                if s in spec: lines.append(f'{t}_{s} = "{spec[s]}"')
+    if params:
+        lines.append('parameters = "' + ";".join(params) + '"')
+        lines += [f'{k} = "{v}"' for k, v in params.items()]
+    return "\n".join(lines) + "\n"
+
+
+def is_marked(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f: return f.readline().rstrip("\n") == MARK
+    except OSError: return False
+
+
+def set_keys(path, wanted):
+    """Set key = "value" lines in a RetroArch-style file; returns the previous values (None = absent)."""
+    prev = {k: None for k in wanted}
+    lines = open(path).read().splitlines() if os.path.isfile(path) else []
+    out = []
+    for line in lines:
+        m = re.match(r'^(\w+)\s*=\s*"?(.*?)"?\s*$', line)
+        if m and m.group(1) in wanted:
+            prev[m.group(1)] = m.group(2); out.append(f'{m.group(1)} = "{wanted[m.group(1)]}"')
+        else:
+            out.append(line)
+    for k, v in wanted.items():
+        if prev[k] is None and f'{k} = "{v}"' not in out: out.append(f'{k} = "{v}"')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w").write("\n".join(out) + "\n")
+    return prev
+
+
+def restore_keys(path, prev):
+    if not os.path.isfile(path): return
+    lines = open(path).read().splitlines(); out = []
+    for line in lines:
+        m = re.match(r'^(\w+)\s*=', line)
+        k = m.group(1) if m else None
+        if k in prev:
+            if prev[k] is None: continue          # we added it: drop it
+            out.append(f'{k} = "{prev[k]}"')
+        else:
+            out.append(line)
+    open(path, "w").write("\n".join(out) + "\n")
+
+
+def load_state():
+    try: return json.load(open(STATE))
+    except (OSError, ValueError): return None
+
+
+def status():
+    st = load_state()
+    ok = bool(st) and all(is_marked(os.path.join(CFG, f)) for f in st.get("files", []))
+    print(f"installed={'yes' if ok else 'no'}")
+    return 0
+
+
+def install():
+    if retroarch_running(): die("close RetroArch (and the game) first; it rewrites its config on exit")
+    if load_state(): die("already installed; run uninstall first")
+    if not os.path.isdir(TREE): die(f"shader tree missing: {TREE}")
+    rendered = {f: render(os.path.join(CFG, f), chain, ov) for f, (chain, ov) in RECIPES.items()}
+    if os.path.isdir(GLSL_TREE):
+        rendered.update({f: render(os.path.join(CFG, f), chain, ov, GLSL_TREE)
+                         for f, (chain, ov) in GLSL_RECIPES.items()})
+    written = []
+    for rel, text in rendered.items():
+        path = os.path.join(CFG, rel); os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path) and not is_marked(path) and not os.path.exists(path + BACKUP):
+            shutil.copy2(path, path + BACKUP)
+        open(path, "w").write(text); written.append(rel)
+    ra_prev = set_keys(RACFG, RA_KEYS)
+    gb_prev = set_keys(GAMBATTE_OPT, GAMBATTE)
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    json.dump({"files": written, "retroarch_cfg": ra_prev, "gambatte_opt": gb_prev}, open(STATE, "w"), indent=1)
+    print(f"installed {len(written)} presets")
+    return 0
+
+
+def uninstall():
+    if retroarch_running(): die("close RetroArch (and the game) first; it rewrites its config on exit")
+    st = load_state()
+    if not st: die("not installed")
+    for rel in st.get("files", []):
+        path = os.path.join(CFG, rel)
+        if is_marked(path): os.remove(path)
+        if os.path.exists(path + BACKUP): os.replace(path + BACKUP, path)
+    restore_keys(RACFG, st.get("retroarch_cfg", {}))
+    restore_keys(GAMBATTE_OPT, st.get("gambatte_opt", {}))
+    os.remove(STATE)
+    print("uninstalled")
+    return 0
+
+
+if __name__ == "__main__":
+    cmd = sys.argv[1] if len(sys.argv) == 2 else ""
+    if cmd not in ("install", "uninstall", "status"):
+        print("usage: pocknix-rgc-shaders install|uninstall|status", file=sys.stderr); sys.exit(2)
+    sys.exit({"install": install, "uninstall": uninstall, "status": status}[cmd]())
