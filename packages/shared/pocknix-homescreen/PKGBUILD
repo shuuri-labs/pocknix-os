@@ -1,0 +1,27 @@
+# pocknix-homescreen — Plasma Mobile boots to an empty homescreen with every app buried in the
+# swipe-up drawer, and the containment ships user-immutable so nothing can be arranged. This
+# files the installed apps into four folders on every login and unlocks the homescreen once.
+pkgname=pocknix-homescreen
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Plasma Mobile homescreen folders, rebuilt from the installed apps at every login"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('bash' 'python')
+source=('pocknix-homescreen-folders' 'pocknix-homescreen-folders.service'
+        'pocknix-homescreen-init' 'pocknix-homescreen-init.service')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-homescreen-folders" "${pkgdir}/usr/bin/pocknix-homescreen-folders"
+  install -Dm755 "${srcdir}/pocknix-homescreen-init"    "${pkgdir}/usr/bin/pocknix-homescreen-init"
+  local units="${pkgdir}/usr/lib/systemd/user"
+  install -Dm644 "${srcdir}/pocknix-homescreen-folders.service" "${units}/pocknix-homescreen-folders.service"
+  install -Dm644 "${srcdir}/pocknix-homescreen-init.service"    "${units}/pocknix-homescreen-init.service"
+  # Pulled in by the shell's own unit, as pocknix-branding does: --user units cannot be
+  # enabled at install time, there is no user yet.
+  install -d "${units}/plasma-plasmashell.service.wants"
+  ln -s ../pocknix-homescreen-folders.service "${units}/plasma-plasmashell.service.wants/pocknix-homescreen-folders.service"
+  ln -s ../pocknix-homescreen-init.service    "${units}/plasma-plasmashell.service.wants/pocknix-homescreen-init.service"
+}

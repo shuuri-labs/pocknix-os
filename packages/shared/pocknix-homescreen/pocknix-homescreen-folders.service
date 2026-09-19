@@ -1,0 +1,13 @@
+[Unit]
+Description=pocknix: file installed apps into the homescreen folders
+# plasmashell holds this config in memory and rewrites it on exit, so a write while it runs
+# is lost. Before= puts the write in the gap before the shell reads the file.
+Before=plasma-plasmashell.service
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pocknix-homescreen-folders
+
+[Install]
+WantedBy=plasma-plasmashell.service
