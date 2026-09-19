@@ -1,6 +1,6 @@
 import { PanelSection, PanelSectionRow, ToggleField } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
-import { setLed, setLedEnabled, setLedLinked, setLedSides } from "../backend";
+import { setBootPulse, setLed, setLedEnabled, setLedLinked, setLedSides } from "../backend";
 import { ColorControls } from "../components/ColorControls";
 import { hsvToRgb, rgbToHsv } from "../lib/rgb";
 import type { Config, LedSide, LedSideKey } from "../types";
@@ -40,6 +40,18 @@ export function Lighting({ config, setConfig, reload }: {
             checked={led.enabled}
             onChange={(value) =>
               setLedEnabled(value)
+                .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
+                .catch(() => reload())
+            }
+          />
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <ToggleField
+            label="Boot Pulse"
+            description="Pulse the sticks white while Steam loads, then apply your lighting settings."
+            checked={led.bootPulse}
+            onChange={(value) =>
+              setBootPulse(value)
                 .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
                 .catch(() => reload())
             }
