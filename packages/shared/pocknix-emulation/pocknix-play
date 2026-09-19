@@ -23,7 +23,8 @@ CORES=/usr/lib/libretro
 run_core() {
   local core="${CORES}/$1_libretro.so"
   [ -f "${core}" ] || { echo "pocknix-play: core missing: ${core} (libretro-cores-pocknix not installed?)" >&2; exit 1; }
-  exec retroarch -f -L "${core}" "${rom}"
+  # es-retroarch adds -f and the frame-pacing --appendconfig; ES-DE launches use the same wrapper.
+  exec /usr/lib/pocknix/es-retroarch -L "${core}" "${rom}"
 }
 
 run_emu() {  # $1 = emulator name; remaining args = emulator flags (rom appended by caller)

@@ -6,10 +6,10 @@
   standalones we do not ship: ps2 offers only the LRPS2 core, psx names a DuckStation standalone
   that has no arm64 build (ours is the libretro core), gc/wii default to the RetroArch dolphin
   core; cps1/cps2/cps3/arcade/mame all default to mame_libretro, which we do not ship.
-  Standalone emulators go through the /usr/lib/pocknix/es-* wrappers for the big-core pin;
-  libretro cores (psx and the arcade systems) run RetroArch directly, with -f because
-  fullscreen lives on the command line, not in retroarch.cfg. pocknix-play mirrors these
-  defaults for the Steam tiles.
+  All commands go through the /usr/lib/pocknix/es-* wrappers: the big-core pin for the
+  standalones, the frame-pacing pin (es-retroarch) for the libretro cores (psx and the
+  arcade systems). dreamcast and saturn are here only for that pin: the bundled entries
+  launch RetroArch bare. pocknix-play mirrors these defaults for the Steam tiles.
 -->
 <systemList>
     <system>
@@ -37,8 +37,8 @@
         <fullname>Sony PlayStation</fullname>
         <path>%ROMPATH%/psx</path>
         <extension>.bin .BIN .cbn .CBN .ccd .CCD .chd .CHD .cue .CUE .ecm .ECM .exe .EXE .img .IMG .iso .ISO .m3u .M3U .mdf .MDF .mds .MDS .minipsf .MINIPSF .pbp .PBP .psexe .PSEXE .psf .PSF .toc .TOC .z .Z .znx .ZNX .7z .7Z .zip .ZIP</extension>
-        <command label="DuckStation">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/duckstation_libretro.so %ROM%</command>
-        <command label="PCSX ReARMed">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>
+        <command label="DuckStation">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/duckstation_libretro.so %ROM%</command>
+        <command label="PCSX ReARMed">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/pcsx_rearmed_libretro.so %ROM%</command>
         <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
         <platform>psx</platform>
         <theme>psx</theme>
@@ -118,8 +118,8 @@
         <fullname>Capcom Play System I</fullname>
         <path>%ROMPATH%/cps1</path>
         <extension>.7z .7Z .zip .ZIP</extension>
-        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
-        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="FinalBurn Neo">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
         <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
         <platform>arcade</platform>
         <theme>cps1</theme>
@@ -129,8 +129,8 @@
         <fullname>Capcom Play System II</fullname>
         <path>%ROMPATH%/cps2</path>
         <extension>.7z .7Z .zip .ZIP</extension>
-        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
-        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="FinalBurn Neo">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
         <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
         <platform>arcade</platform>
         <theme>cps2</theme>
@@ -140,8 +140,8 @@
         <fullname>Capcom Play System III</fullname>
         <path>%ROMPATH%/cps3</path>
         <extension>.7z .7Z .zip .ZIP</extension>
-        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
-        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="FinalBurn Neo">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
         <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
         <platform>arcade</platform>
         <theme>cps3</theme>
@@ -151,8 +151,8 @@
         <fullname>Arcade</fullname>
         <path>%ROMPATH%/arcade</path>
         <extension>.cmd .CMD .desktop .gam .GAM .neo .NEO .sh .7z .7Z .zip .ZIP</extension>
-        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
-        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="FinalBurn Neo">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
         <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
         <platform>arcade</platform>
         <theme>arcade</theme>
@@ -162,10 +162,30 @@
         <fullname>Multiple Arcade Machine Emulator</fullname>
         <path>%ROMPATH%/mame</path>
         <extension>.cmd .CMD .desktop .gam .GAM .neo .NEO .sh .7z .7Z .zip .ZIP</extension>
-        <command label="FinalBurn Neo">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
-        <command label="MAME 2003-Plus">%EMULATOR_RETROARCH% -f -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
+        <command label="FinalBurn Neo">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/fbneo_libretro.so %ROM%</command>
+        <command label="MAME 2003-Plus">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/mame2003_plus_libretro.so %ROM%</command>
         <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
         <platform>arcade</platform>
         <theme>mame</theme>
+    </system>
+    <system>
+        <name>dreamcast</name>
+        <fullname>Sega Dreamcast</fullname>
+        <path>%ROMPATH%/dreamcast</path>
+        <extension>.cdi .CDI .chd .CHD .cue .CUE .dat .DAT .elf .ELF .gdi .GDI .iso .ISO .lst .LST .m3u .M3U .7z .7Z .zip .ZIP</extension>
+        <command label="Flycast">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/flycast_libretro.so %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>dreamcast</platform>
+        <theme>dreamcast</theme>
+    </system>
+    <system>
+        <name>saturn</name>
+        <fullname>Sega Saturn</fullname>
+        <path>%ROMPATH%/saturn</path>
+        <extension>.bin .BIN .ccd .CCD .chd .CHD .cue .CUE .iso .ISO .m3u .M3U .mds .MDS .toc .TOC .7z .7Z .zip .ZIP</extension>
+        <command label="YabaSanshiro">/usr/lib/pocknix/es-retroarch -L %CORE_RETROARCH%/yabasanshiro_libretro.so %ROM%</command>
+        <command label="Shortcut or script">%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%</command>
+        <platform>saturn</platform>
+        <theme>saturn</theme>
     </system>
 </systemList>

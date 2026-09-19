@@ -1,0 +1,66 @@
+#!/bin/bash
+# es-retroarch — every RetroArch launch, ES-DE command or pocknix-play tile, goes through here.
+#
+# It pins the frame-pacing contract on top of the user's retroarch.cfg via --appendconfig. RetroArch
+# saves its config on exit, so a single launch that fell back to the GL driver (or one menu change)
+# sticks for good, and under gamescope GL+vsync paces at an irregular ~47fps with the audio, which
+# is slaved to frame timing, wobbling after it. The login seeder cannot undo that drift: its merge
+# keeps any value that differs from the last baseline as a deliberate user edit. --appendconfig
+# wins every launch, and RetroArch writes the effective values back on exit, so the file self-heals.
+# A user who picked GL on purpose is overridden; under gamescope GL is exactly the broken case.
+#
+# The values mirror the pacing block in retroarch.cfg; the two per-panel ones use the same formula
+# as pocknix-roms-init, so the seed and this fragment never disagree.
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+refresh="${POCKNIX_PANEL_REFRESH:-120}"
+si=$(( refresh / 60 )); [ "${si}" -lt 1 ] && si=1
+# Black frame insertion and shader subframes are the user's call (RetroArch menu, Settings >
+# Video > Synchronization); both want every vblank, so the swap interval drops to 1 when either
+# is on. On a 120Hz panel one black frame per game frame is exactly the panel's spare vblank.
+racfg="${HOME}/.config/retroarch/retroarch.cfg"
+bfi="$(sed -n 's/^video_black_frame_insertion = "\([0-9]*\)"/\1/p' "${racfg}" 2>/dev/null)"
+sub="$(sed -n 's/^video_shader_subframes = "\([0-9]*\)"/\1/p' "${racfg}" 2>/dev/null)"
+if [ "${bfi:-0}" -gt 0 ] 2>/dev/null || [ "${sub:-1}" -gt 1 ] 2>/dev/null; then si=1; fi
+
+# Cores that cannot render through Vulkan get glcore with vsync OFF: GL under gamescope paces at
+# an irregular ~47fps once vsynced (the jitter this file exists for), while audio-paced GL runs a
+# clean 60. glcore, not gl: the legacy driver only loads GLSL presets, so every slang preset (all
+# of ours) silently falls back to stock shaders on it. Detected from the core's info file (required_hw_api without Vulkan: yabasanshiro,
+# mupen64plus_next, melonds); flycast is listed by name because our build carries no Vulkan
+# backend while its info file claims one, and it fails to load content when offered a Vulkan context.
+driver=vulkan; vsync=true
+core=""; prev=""
+for a in "$@"; do [ "${prev}" = "-L" ] && core="${a}"; prev="${a}"; done
+if [ -n "${core}" ]; then
+  name="$(basename "${core}" .so)"; info="/usr/share/libretro/info/${name}.info"
+  if grep -q '^required_hw_api' "${info}" 2>/dev/null && ! grep -q '^required_hw_api.*Vulkan' "${info}"; then
+    driver=glcore; vsync=false
+  fi
+  case "${name}" in
+    flycast_libretro) driver=glcore; vsync=false ;;
+    # DuckStation picks its own backend from a core option, and "OpenGL" drags the whole session
+    # onto GL (RetroArch switches driver to match the core's context). Only that value is healed:
+    # "Auto" follows the frontend's Vulkan and "Software" is a deliberate choice.
+    duckstation_libretro)
+      opt="${HOME}/.config/retroarch/config/DuckStation/DuckStation.opt"
+      [ -w "${opt}" ] && sed -i 's/^duckstation_GPU\.Renderer = "OpenGL"$/duckstation_GPU.Renderer = "Vulkan"/' "${opt}" ;;
+  esac
+fi
+
+frag="${XDG_RUNTIME_DIR:-/tmp}/pocknix-retroarch-pacing.cfg"
+cat > "${frag}" <<CFG
+video_driver = "${driver}"
+video_vsync = "${vsync}"
+video_refresh_rate = "${refresh}.000000"
+video_swap_interval = "${si}"
+video_max_swapchain_images = "2"
+CFG
+# The GL path runs without vsync, and black frame insertion / shader subframes need a vblank to
+# hang on: without one they degrade into flicker or half speed. Off for this launch only; the
+# user's setting stays in retroarch.cfg for the Vulkan cores.
+if [ "${vsync}" = false ]; then
+  printf 'video_black_frame_insertion = "0"\nvideo_shader_subframes = "1"\n' >> "${frag}"
+fi
+
+exec retroarch -f --appendconfig "${frag}" "$@"

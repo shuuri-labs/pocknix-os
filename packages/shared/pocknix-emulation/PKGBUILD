@@ -2,7 +2,7 @@
 # configs, shipped as an arch=any data/scripts package.
 pkgname=pocknix-emulation
 pkgver=0.1.0
-pkgrel=17
+pkgrel=18
 pkgdesc="ES-DE + preconfigured emulators: drop ROMs into ~/Emulation and play; star -> Steam"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -13,7 +13,8 @@ license=('GPL2')
 depends=('bash')
 install=pocknix-emulation.install
 source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-seed-merge' 'pocknix-play'
-        'emu-resolve.sh' 'es-eden' 'es-ryujinx' 'es-armsx2' 'es-dolphin' 'es-psp' 'es-xemu'
+        'emu-resolve.sh' 'es-eden' 'es-ryujinx' 'es-armsx2' 'es-dolphin' 'es-psp' 'es-xemu' 'es-retroarch'
+        'retroarch-DuckStation-DuckStation.opt'
         'es-azahar' 'es-rpcs3' 'es-cemu' 'es-vita3k'
         'es_find_rules.xml' 'es_systems.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
         'eden-qt-config.ini.in' 'ppsspp.ini.in' 'ryujinx-Config.json.in'
@@ -24,7 +25,7 @@ source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-seed-merge' 'po
         # FLAT names: makepkg cannot retrieve local sources from subdirectory paths, so
         # package() maps retroarch-<Core>-<file> back into the retroarch-config/<Core>/ tree.
         'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
@@ -36,6 +37,7 @@ package() {
   install -Dm755 "${srcdir}/es-ryujinx" "${pkgdir}/usr/lib/pocknix/es-ryujinx"
   install -Dm755 "${srcdir}/es-armsx2"  "${pkgdir}/usr/lib/pocknix/es-armsx2"
   install -Dm755 "${srcdir}/es-psp"     "${pkgdir}/usr/lib/pocknix/es-psp"
+  install -Dm755 "${srcdir}/es-retroarch" "${pkgdir}/usr/lib/pocknix/es-retroarch"
   install -Dm755 "${srcdir}/es-xemu"    "${pkgdir}/usr/lib/pocknix/es-xemu"
   install -Dm755 "${srcdir}/es-azahar"  "${pkgdir}/usr/lib/pocknix/es-azahar"
   install -Dm755 "${srcdir}/es-rpcs3"   "${pkgdir}/usr/lib/pocknix/es-rpcs3"
@@ -83,4 +85,6 @@ package() {
     "${pkgdir}/usr/share/pocknix-emulation/dolphin-GCPadNew.ini.in"
   install -Dm644 "${srcdir}/retroarch-mGBA-gba.cfg"    "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.cfg"
   install -Dm644 "${srcdir}/retroarch-mGBA-gba.slangp" "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.slangp"
+  # DuckStation's own renderer option; "OpenGL" drags the session onto GL (see es-retroarch).
+  install -Dm644 "${srcdir}/retroarch-DuckStation-DuckStation.opt" "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/DuckStation/DuckStation.opt"
 }
