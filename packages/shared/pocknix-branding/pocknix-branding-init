@@ -12,11 +12,47 @@ STAMP="${XDG_CONFIG_HOME:-${HOME}/.config}/pocknix/branding-seeded"
 [ -e "$STAMP" ] && exit 0
 command -v plasma-apply-wallpaperimage >/dev/null 2>&1 || exit 0
 
-# The tool talks to the running shell rather than editing a file, so on Plasma Mobile the
-# value lands in plasma-org.kde.plasma.mobileshell-appletsrc, not the desktop appletsrc.
-plasma-apply-wallpaperimage "$WALLPAPER" >/dev/null 2>&1 || exit 0
+# Run a script in the shell and return what it print()ed. busctl rather than qdbus6: systemd
+# is always there, and the reply is a single "s" line.
+shell() {
+  busctl --user --timeout=5 call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell \
+    evaluateScript s "$1" 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p' || true
+}
 
-# Stamp only after the apply succeeded: a failed run leaves no stamp and retries next login,
+# plasmashell owns org.kde.plasmashell (the point at which systemd calls it started and runs
+# this unit) before it has loaded a single containment: 1.9s of desktops().length == 0 was
+# measured on an RP6 in Plasma 6.7, and the seed used to finish 93ms in. The apply tool loops
+# over desktops() and reports success on an empty list, so it wrote nothing and got stamped.
+wait_for_desktop() {
+  while n=$(shell 'print(desktops().length)'); [ "${n:-0}" = 0 ]; do
+    [ "$SECONDS" -lt "$deadline" ] || return 1
+    sleep 0.5
+  done
+}
+
+# Read the value back from every desktop: the tool's exit status only says the script ran.
+applied() {
+  [ "$(shell "var ds = desktops(); var n = 0;
+for (var k in ds) { var d = ds[k]; d.currentConfigGroup = ['Wallpaper', 'org.kde.image', 'General'];
+  if (d.readConfig('Image') == 'file://${WALLPAPER}') n++; }
+print(n > 0 && n == ds.length)")" = true ]
+}
+
+# On a first-ever start (no config yet) the first desktop the shell reports is not the one it
+# keeps: measured on the RP6, a desktop at +60ms took the wallpaper and verified, then the real
+# Folio containment replaced it at +800ms with no wallpaper. So the readback has to hold across
+# a pause, and a lost apply is simply done again.
+deadline=$(( SECONDS + 60 ))
+until applied; do
+  [ "$SECONDS" -lt "$deadline" ] || exit 0
+  wait_for_desktop || exit 0
+  # The tool talks to the running shell rather than editing a file, so on Plasma Mobile the
+  # value lands in plasma-org.kde.plasma.mobileshell-appletsrc, not the desktop appletsrc.
+  plasma-apply-wallpaperimage "$WALLPAPER" >/dev/null 2>&1 || exit 0
+  sleep 2
+done
+
+# Stamp only after the apply is confirmed: a failed run leaves no stamp and retries next login,
 # and the stamp is what keeps a wallpaper the user later picks themselves from being reimposed.
 mkdir -p "$(dirname "$STAMP")"
 : > "$STAMP"
