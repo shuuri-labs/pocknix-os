@@ -5,7 +5,7 @@
 pkgbase=mesa
 pkgname=(mesa vulkan-freedreno)
 epoch=2
-pkgver=26.2.2
+pkgver=26.2.3
 # differs from pkgver only for RCs: the tarball keeps the hyphen makepkg forbids in pkgver
 _srcver=${pkgver}
 pkgrel=1
@@ -24,7 +24,7 @@ makedepends=(
 # upstream considers LTO broken until explicit notice (Arch mesa does the same)
 options=(!lto)
 source=("https://archive.mesa3d.org/mesa-${_srcver}.tar.xz")
-sha256sums=('eeb29ca7e56cfaa8e8a79538dcf834e3b18e501c31bef5145e959ea437cc4216')
+sha256sums=('1628058a8d2c0615975de5a15ab7bbb9638c50000b5bed9456ff423ea034a81f')
 
 prepare() {
   cd "mesa-${_srcver}"
@@ -97,7 +97,7 @@ package_mesa() {
 
   (
     cd "${pkgdir}"
-    # ICD manifest name has varied across releases (freedreno_icd.aarch64.json at 26.2.2),
+    # ICD manifest name has varied across releases (freedreno_icd.aarch64.json at 26.2.3),
     # hence the glob; the loader scans the whole icd.d dir so either name works at runtime.
     _pick vkfdreno usr/lib/libvulkan_freedreno.so
     _pick vkfdreno usr/share/vulkan/icd.d/freedreno_icd*.json
