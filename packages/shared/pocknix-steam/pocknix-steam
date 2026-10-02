@@ -106,6 +106,21 @@ fi
 # Log to a file, never the tty: tty1 is what shows between compositors on a session switch and
 # must stay blank. Do NOT exec gamescope either, since the session switch pkills it by name.
 GS_LOG="${HOME}/pocknix-steam.log"
+
+# Boards whose panel probes late (POCKNIX_PANEL_WAIT, seconds) get a bounded wait for the
+# connector: gamescope started before it holds a black screen without exiting, so the
+# supervisor's fast-fail retry never fires.
+if [ "${POCKNIX_PANEL_WAIT:-0}" -gt 0 ] 2>/dev/null; then
+  _w=0
+  while [ "${_w}" -lt "${POCKNIX_PANEL_WAIT}" ]; do
+    # Re-globbed each pass: the connector itself only appears once the panel driver probes.
+    for _st in /sys/class/drm/card*-"${POCKNIX_PANEL_OUTPUT:-DSI-1}"/status; do break; done
+    [ "$(cat "${_st}" 2>/dev/null)" = connected ] && break
+    sleep 1; _w=$((_w + 1))
+  done
+  unset _st _w
+fi
+
 # gamescope paints black until a client presents; the splash covers that, then execs Steam.
 mark "starting gamescope"
 # gamepadui sizes its UI from the output's physical mm; the ~96 DPI default reads as a desktop
