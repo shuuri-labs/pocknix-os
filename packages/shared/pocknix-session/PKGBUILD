@@ -9,11 +9,12 @@ url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=('bash' 'systemd')
 backup=('etc/pam.d/pocknix-session')
-source=('pocknix-session' 'pocknix-session.service' 'pocknix-session.pam')
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+source=('pocknix-session' 'pocknix-session.service' 'pocknix-session.pam' 'pocknix-plymouth-handoff')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-session" "${pkgdir}/usr/lib/pocknix/pocknix-session"
+  install -Dm755 "${srcdir}/pocknix-plymouth-handoff" "${pkgdir}/usr/lib/pocknix/pocknix-plymouth-handoff"
   install -Dm644 "${srcdir}/pocknix-session.service" \
     "${pkgdir}/usr/lib/systemd/system/pocknix-session.service"
   install -Dm644 "${srcdir}/pocknix-session.pam" "${pkgdir}/etc/pam.d/pocknix-session"
