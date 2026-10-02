@@ -5,17 +5,18 @@ Subject: [PATCH 1/7] drm/msm/dpu: release topology on reservation failure to
  avoid persistent failure due to partial reservation
 
 ---
- drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c | 9 ++++++++-
- 1 file changed, 8 insertions(+), 1 deletion(-)
+ drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c b/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c
 index 0f4921b1a892..f8d8c2d7f9d6 100644
 --- a/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c
 +++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c
-@@ -1442,6 +1442,7 @@ static int dpu_crtc_assign_resources(struct drm_crtc *crtc,
+@@ -1442,6 +1442,8 @@ static int dpu_crtc_assign_resources(struct drm_crtc *crtc,
  		return PTR_ERR(global_state);
  
  	dpu_rm_release(global_state, crtc);
++	cstate = to_dpu_crtc_state(crtc_state);
 +	cstate->num_mixers = 0;
  
  	if (!crtc_state->enable)

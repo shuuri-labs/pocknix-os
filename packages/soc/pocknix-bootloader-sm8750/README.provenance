@@ -3,16 +3,16 @@
 abl_signed-SM8750.elf is NOT committed here — the PKGBUILD fetches it from the
 official ROCKNIX ABL release, pinned by tag + sha512:
 
-  release:  https://github.com/ROCKNIX/abl/releases/tag/v1.1.7
-  asset:    rocknix-abl-v1.1.7.tar.gz
-  tarball sha512: fa1d213bec97661942b8083be1f2eb6b65cc200b4f3f76dd84261ba92a01ac92
-                  61ed6834350f2f647a5ed82fcabadf5011b9ba6769f471abeaf06210ae9221c1
+  release:  https://github.com/ROCKNIX/abl/releases/tag/v1.2
+  asset:    rocknix-abl-v1.2.tar.gz
+  tarball sha512: b2d897b4f681f22d416201e332a5c27efc00b0139c3b0806126f8913182285e8
+                  03b8a3726a7c9a1609956049d4b6d054b3529bd0f508d1a86ab9ab3bf79dca01
   abl_signed-SM8750.elf sha256 (release's own sidecar, re-checked in prepare()):
-                  79e822791bcf088f72ef90601da02bfb8e8b268bf0489965f0213e95de45c311
+                  48441f738a598feca19f30d009d3fc67c52776d5a1b58ff0fdfc331af15798a0
 
 It is ROCKNIX's patched, test-key-signed build of the Qualcomm ABL (edk2
 LinuxLoader, BSD-3-Clause) for the SM8750 family — the bootloader that scans
-for the FAT labeled ROCKNIX and boots /KERNEL (an Android boot image, board
+FAT partitions for /KERNEL and boots it (an Android boot image, board
 dtb selected by board id). One elf serves every SM8750 board (AYN Odin 3,
 KONKR Pocket FIT Elite); ROCKNIX keys the artifact by SoC.
 
@@ -28,12 +28,9 @@ Version coupling: the ABL version ROCKNIX pins for the SoC lives in their
 packages/tools/rocknix-abl/package.mk (PKG_VERSION). Ours (_ablver in the
 PKGBUILD) should track it — the ABL defines the boot contract the sm8750
 profile assumes (FAT label, /KERNEL boot image, board-id dtb select), so a
-mismatched pair is the thing to avoid. v1.1.7 = their pin AND the latest
-release as of 2026-08-11 (v1.1.7 adds USB boot and a standalone USB-only menu,
-gates Internal boot mode to internal installs, drops the external boot mode and
-the nuke-cfw option, and extends RawFat to the EFI boot path — the qcom-abl
-boot contract is unchanged; kit scripts unchanged, diffed against their tree at
-this bump).
+mismatched pair is the thing to avoid. v1.2 changes vs v1.1.7: new logo, a
+message on an incompatible SoC, stats labels; the qcom-abl boot contract and
+the kit scripts are unchanged (diffed against their tree at this bump).
 
 The kit's job is FIRST INSTALL from stock Android: the user copies
 rocknix_abl/ off the SD's boot FAT to Android internal storage, runs

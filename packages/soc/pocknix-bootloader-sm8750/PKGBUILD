@@ -1,14 +1,14 @@
 # pocknix-bootloader-sm8750 — the ROCKNIX ABL install kit for SM8750 boards.
-# Boot contract (qcom-abl): XBL -> ABL -> /KERNEL (Android boot image) off the FAT labeled ROCKNIX.
+# Boot contract (qcom-abl): XBL -> ABL -> /KERNEL (Android boot image) off any FAT partition.
 # The factory ABL boots only Android, so the ROCKNIX ABL must be flashed to abl_a/abl_b ONCE before
 # any SD boots — unlike sm8250, whose factory ABL chainloads UEFI GRUB. One elf covers the whole
 # SM8750 family: ROCKNIX keys it by SoC, not board.
 # Nothing here flashes at build or install time; both flashing paths (the kit by hand from rooted
 # Android, pocknix-update-abl afterwards) are deliberate user actions.
 pkgname=pocknix-bootloader-sm8750
-_ablver=1.1.7
+_ablver=1.2
 pkgver=${_ablver}
-pkgrel=4
+pkgrel=1
 pkgdesc="SM8750 qcom-abl boot payload: ROCKNIX ABL install kit (rocknix_abl)"
 arch=('aarch64')
 # !strip: a stripped bootloader is an unbootable one.
@@ -21,7 +21,7 @@ source=("https://github.com/ROCKNIX/abl/releases/download/v${_ablver}/rocknix-ab
         'backup_abl.sh'
         'restore_backup_abl.sh'
         '95-pocknix-abl-kit.hook')
-sha512sums=('fa1d213bec97661942b8083be1f2eb6b65cc200b4f3f76dd84261ba92a01ac9261ed6834350f2f647a5ed82fcabadf5011b9ba6769f471abeaf06210ae9221c1'
+sha512sums=('b2d897b4f681f22d416201e332a5c27efc00b0139c3b0806126f8913182285e803b8a3726a7c9a1609956049d4b6d054b3529bd0f508d1a86ab9ab3bf79dca01'
             'SKIP'
             'SKIP'
             'SKIP'
