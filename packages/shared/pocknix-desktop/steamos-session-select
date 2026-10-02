@@ -1,8 +1,8 @@
 #!/bin/bash
 # steamos-session-select — the SteamOS-contract name Steam and the Plasma tile both invoke to
-# switch sessions. There is no display manager: ~deck/.bash_profile supervises, so switching means
-# rewriting the choice file and SIGTERMing the compositor. Never restart getty to do this — the
-# same logind session must stay active on seat0 or kwin cannot take DRM master afterwards.
+# switch sessions. pocknix-session's supervisor relaunches on compositor exit, so switching means
+# rewriting the choice file and SIGTERMing the compositor. Never restart the session to do this:
+# the same logind session must stay active on seat0 or kwin cannot take DRM master afterwards.
 set -u
 
 STATE_HOME="${XDG_STATE_HOME:-${HOME:-/home/deck}/.local/state}"

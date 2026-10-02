@@ -14,8 +14,8 @@ plymouth             # spinner splash over the silent boot (cmdline: quiet logle
                      #   We boot with NO initramfs, so this is plymouth's late mode: its systemd
                      #   units start plymouthd from the rootfs at sysinit; DRM_MSM=y means the
                      #   display is already up by then. Theme/config in overlay
-                     #   /etc/plymouth/plymouthd.conf. getty@tty1 waits on plymouth-quit-wait
-                     #   (upstream systemd ordering), so the spinner hands off to the session.
+                     #   /etc/plymouth/plymouthd.conf. pocknix-session hands the splash
+                     #   to the compositor itself (deactivate, quit once it owns the panel).
 
 # --- package management ---
 pacman-contrib       # paccache — overlay hook 95-pocknix-paccache prunes /var/cache/pacman/pkg,

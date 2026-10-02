@@ -91,7 +91,7 @@ EOF
   chroot "${root}" ln -sfn "/usr/share/zoneinfo/${SD_TIMEZONE:-UTC}" /etc/localtime
 
   if [ -d "${POCKNIX_ROOT}/overlay" ]; then
-    log "installing overlay (diag + autologin + helpers)"
+    log "installing overlay (diag + helpers)"
     # --chown is REQUIRED: rsync -a would stamp / and /etc with the host user's uid 1000, and
     # capability-bounded services (timedated) then cannot write there. The gate in main catches it.
     rsync -a --chown=root:root "${POCKNIX_ROOT}/overlay/" "${root}/"
@@ -112,6 +112,8 @@ EOF
   for d in Desktop Documents Downloads Music Pictures Videos; do
     mkdir -p "${root}/home/deck/${d}"
   done
+  # useradd -m skips /etc/skel when the home already exists (the overlay made it).
+  chroot "${root}" cp -n /etc/skel/.bash_profile /etc/skel/.bashrc /home/deck/ 2>/dev/null || true
   # also owns the Steam tree build-image.sh pre-extracted here (root-owned until now)
   chroot "${root}" chown -R deck:deck /home/deck
   # The on-device launcher has no network fallback: a rootfs without the baked client would
@@ -195,7 +197,7 @@ EOF
   # (dev/building.md).
   chroot "${root}" systemctl enable iwd NetworkManager systemd-resolved seatd inputplumber \
         bluetooth upower udisks2 fstrim.timer \
-        pocknix-diag.service pocknix-expand-root.service \
+        pocknix-diag.service pocknix-expand-root.service pocknix-session.service \
         pocknix-lavd.service pocknix-gamescope-rt.service \
         >/dev/null 2>&1 || true
   # A well-known password is baked in, so sshd ships off. ALARM enables it: disable, not skip.

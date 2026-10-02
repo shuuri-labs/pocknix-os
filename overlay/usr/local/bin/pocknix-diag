@@ -69,6 +69,8 @@ OUT=/var/log/pocknix-diag.txt
   loginctl 2>/dev/null || echo "(loginctl n/a)"
   loginctl session-status 2>/dev/null | head -25 || true
   echo "seatd: $(systemctl is-active seatd 2>/dev/null)  systemd-logind: $(systemctl is-active systemd-logind 2>/dev/null)"
+  echo "pocknix-session: $(systemctl is-enabled pocknix-session 2>/dev/null)/$(systemctl is-active pocknix-session 2>/dev/null)  getty@tty1: $(systemctl is-active getty@tty1 2>/dev/null)"
+  journalctl -b -u pocknix-session --no-pager 2>/dev/null | tail -n 15 || true
   printf '\n## graphical session: processes (etimes = seconds alive; STAT D/Z = stuck; tar/zstd = seed extract)\n'
   ps -eo pid,ppid,stat,etimes,comm 2>/dev/null | grep -iE 'gamescope|steam|Xwayland|kwin|seatd|plasma|tar|zstd|cpio' | grep -v grep || echo "(no gamescope/steam/kwin/tar running)"
   printf '\n## seed extract: Steam dir size (re-run the diag; growing = extract in progress, not hung)\n'

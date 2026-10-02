@@ -9,6 +9,7 @@ url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=('bash' 'systemd')
 backup=('etc/pam.d/pocknix-session')
+install='pocknix-session.install'
 source=('pocknix-session' 'pocknix-session.service' 'pocknix-session.pam' 'pocknix-plymouth-handoff')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # pocknix-desktop — launch the Plasma Mobile desktop session.
-# Exec'd by ~deck/.bash_profile on tty1 so the session inherits the deck PAM session
+# Run by pocknix-session's supervisor on tty1 so the session inherits the deck PAM session
 # (XDG_RUNTIME_DIR + per-user PipeWire). startplasmamobile handles its own D-Bus session.
 set -e
 
@@ -10,10 +10,6 @@ if ! command -v startplasmamobile >/dev/null 2>&1; then
   echo "pocknix-desktop: startplasmamobile not found — is the plasma-mobile stack installed?" >&2
   exit 1
 fi
-
-# The getty autologin session is not reliably "active" on seat0, so libseat's default logind
-# backend leaves kwin unable to take DRM master or open input. seatd is what gamescope uses.
-export LIBSEAT_BACKEND=seatd
 
 # kwin starts XWayland only if /tmp/.X11-unix is sticky; a prior gamescope session leaves it
 # deck:0755, so XWayland is refused and the X11 Steam client cannot connect. Re-assert per launch.

@@ -1,0 +1,45 @@
+# Fielded devices meet this package via post_install (a new name on -Syu). It moves tty1 from the
+# image's getty autologin to pocknix-session on the NEXT boot. Never start the unit here: -Syu runs
+# inside the live session, and Conflicts= would stop the getty under it.
+
+_unit=/usr/lib/systemd/system/pocknix-session.service
+_dm=/etc/systemd/system/display-manager.service
+_autologin=/etc/systemd/system/getty@tty1.service.d/autologin.conf
+# sha256 of every version the image overlay shipped; a file matching none was edited, keep it.
+_autologin_shipped="00aabb8d3f6d04e00dc67feda77066555ac367badff25be891a7366ddfcf6e36
+6c6d790aea836ceb4dfa1f306be486f410a8b55e4f1db045b989d2c209a7ab16"
+_profile_shipped="57ea48ad6d0c3507681ce249b3e53991dd7c66518379f915a6e3ca9dbeae7124
+98bb25f0af470cdbabdbe2218c30a12dbb283429bd81269f96d158ccf59b476b
+a28510f6609a7c26f48d12d3d8c75f19a2f5cfd29e58e1eabecd6d1737518cb4
+f11f0f9c433d25a7a72e32e4ea8e61b087db896c5b1eb3e295254b3101f64428"
+
+_shipped() {  # <file> <hashes>
+  [ -f "$1" ] || return 1
+  printf '%s\n' "$2" | grep -qx "$(sha256sum "$1" | cut -d' ' -f1)"
+}
+
+post_install() {
+  # Another display manager owns the slot: leave tty1 as it is.
+  if [ -e "${_dm}" ] && [ "$(readlink -f "${_dm}")" != "${_unit}" ]; then
+    echo ">>> pocknix-session: ${_dm} belongs to another display manager, not enabling"
+    return 0
+  fi
+  systemctl enable pocknix-session.service >/dev/null 2>&1 || true
+
+  if _shipped "${_autologin}" "${_autologin_shipped}"; then
+    rm -f "${_autologin}"
+    rmdir "${_autologin%/*}" 2>/dev/null || true
+  fi
+  local home
+  home="$(getent passwd deck | cut -d: -f6)"
+  if [ -n "${home}" ] && [ -f /etc/skel/.bash_profile ] \
+     && _shipped "${home}/.bash_profile" "${_profile_shipped}"; then
+    # New inode via mv: never rewrite a file a running shell may still be reading.
+    install -m644 -o deck -g deck /etc/skel/.bash_profile "${home}/.bash_profile.pocknix-new" \
+      && mv -f "${home}/.bash_profile.pocknix-new" "${home}/.bash_profile"
+  fi
+}
+
+post_remove() {
+  systemctl disable pocknix-session.service >/dev/null 2>&1 || true
+}

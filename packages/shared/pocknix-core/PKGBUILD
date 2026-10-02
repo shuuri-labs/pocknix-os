@@ -4,7 +4,7 @@
 # edge from core would make `pacman -Rs <layer>` impossible.
 pkgname=pocknix-core
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="pocknix mandatory layer: GPU stack, input, storage, base/update tooling"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -18,7 +18,8 @@ depends=('mesa'                     # epoch-2 trimmed/tuned freedreno build ([po
          'pocknix-base-lock'
          'pocknix-lock-migrate'
          'pocknix-tools'
-         'pocknix-branding')   # plymouthd.conf names its theme on every device
+         'pocknix-branding'         # plymouthd.conf names its theme on every device
+         'pocknix-session')         # owns tty1: game/desktop supervisor + plymouth handoff
 
 package() {
   :   # pure metapackage
