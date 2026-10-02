@@ -1,0 +1,12 @@
+# Sorts after the kernel's 90-linux-pocknix.hook, so a kernel upgrade has already rebuilt
+# with the new cmdline and the sync finds nothing to do.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/lib/pocknix/kernel-cmdline
+
+[Action]
+Description = pocknix: syncing the boot image cmdline...
+When = PostTransaction
+Exec = /usr/lib/pocknix/pocknix-cmdline-sync

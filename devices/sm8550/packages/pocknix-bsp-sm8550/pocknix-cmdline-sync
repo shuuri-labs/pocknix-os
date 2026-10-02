@@ -1,0 +1,13 @@
+#!/bin/bash
+# pocknix-cmdline-sync — rebuild /flash/KERNEL when the packaged cmdline differs from the one
+# baked into it. The kernel's own hook only fires on kernel files, so a BSP-only cmdline change
+# would never reach the boot image. Comparing first avoids a second rebuild in a transaction
+# that also upgraded the kernel (that would overwrite KERNEL.bak with the new image).
+set -euo pipefail
+
+want="$(cat /usr/lib/pocknix/kernel-cmdline 2>/dev/null)" || exit 0
+[ -f /flash/KERNEL ] && [ -x /usr/bin/pocknix-build-bootimg ] || exit 0
+# boot image header v0: cmdline is a NUL-padded 512-byte field at offset 64.
+have="$(dd if=/flash/KERNEL bs=1 skip=64 count=512 2>/dev/null | tr -d '\0')"
+[ "${have}" = "${want}" ] && exit 0
+exec /usr/bin/pocknix-build-bootimg

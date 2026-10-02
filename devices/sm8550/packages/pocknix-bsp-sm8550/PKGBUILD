@@ -4,7 +4,7 @@
 # dt-model gated.
 pkgname=pocknix-bsp-sm8550
 pkgver=0.2.0
-pkgrel=12
+pkgrel=13
 pkgdesc="pocknix board support: SM8550 family (RP6, Nova, Odin 2 family, Thor) — runtime board dispatch, input maps, suspend quirks, audio UCM, dual-screen touch policy"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -27,9 +27,9 @@ source=('device.conf'
         '10-pocknix-s2idle.conf' '30-pocknix-cpuidle.conf'
         '99-pocknix-sm8550-usb-autosuspend.rules'
         'cpuidle-state1-sleep-pre' 'cpuidle-state1-sleep-post'
-        'kernel-cmdline')
+        'kernel-cmdline' 'pocknix-cmdline-sync' '91-pocknix-cmdline.hook')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # boards/ is not in source= (makepkg local sources are flat): taken from startdir,
@@ -85,4 +85,7 @@ package() {
   # One family cmdline for the on-device /flash/KERNEL rebuild (pocknix-build-bootimg);
   # build-packages.sh asserts it matches devices/sm8550/profile.conf.
   install -Dm644 "${srcdir}/kernel-cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
+  install -Dm755 "${srcdir}/pocknix-cmdline-sync" "${pkgdir}/usr/lib/pocknix/pocknix-cmdline-sync"
+  install -Dm644 "${srcdir}/91-pocknix-cmdline.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/91-pocknix-cmdline.hook"
 }
