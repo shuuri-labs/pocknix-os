@@ -27,7 +27,8 @@ pkill -u "${uid}" -TERM kwin_wayland 2>/dev/null || true
 # gamescope dying does not take Steam with it: it re-parents and keeps its single-instance lock,
 # so the next game-mode launch would bail "Steam is already running". pocknix-steam clears survivors.
 if [ "${sel}" = plasma ]; then
-  pkill -u "${uid}" -TERM steam          2>/dev/null || true
+  # -x: a bare "steam" pattern also matches this script ("steamos-session") and kills it here.
+  pkill -u "${uid}" -TERM -x steam       2>/dev/null || true
   pkill -u "${uid}" -TERM steamwebhelper 2>/dev/null || true
 fi
 exit 0
