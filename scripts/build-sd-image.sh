@@ -100,9 +100,8 @@ EOF
              "${root}/usr/local/bin/pocknix-volumed" "${root}/usr/local/bin/pocknix-powerd" 2>/dev/null || true
   fi
 
-  # PipeWire refuses to run as root and Proton's bwrap wants a normal user. uid 1001 stays:
-  # installed devices carry it (1000 was ALARM's login) and the SD idmap keys on it.
-  # The overlay already placed /home/deck, so useradd -m reuses it and the chown below owns it.
+  # PipeWire refuses root and Proton's bwrap wants a normal user. uid 1001 stays: installed
+  # devices carry it and the SD idmap keys on it.
   log "creating non-root 'deck' session user (audio + Proton need a normal user)"
   chroot "${root}" useradd -m -u 1001 -U -s /bin/bash -G video,render,input,audio,seat,wheel deck 2>/dev/null || true
   echo "deck:${SD_DECK_PASSWORD:-${SD_ROOT_PASSWORD}}" | chroot "${root}" chpasswd
@@ -114,10 +113,9 @@ EOF
   done
   # useradd -m skips /etc/skel when the home already exists (the overlay made it).
   chroot "${root}" cp -n /etc/skel/.bash_profile /etc/skel/.bashrc /home/deck/ 2>/dev/null || true
-  # also owns the Steam tree build-image.sh pre-extracted here (root-owned until now)
+  # includes the Steam tree build-image.sh pre-extracted as root
   chroot "${root}" chown -R deck:deck /home/deck
-  # The on-device launcher has no network fallback: a rootfs without the baked client would
-  # ship a Steam session that fails on first launch.
+  # The launcher has no network fallback: without the baked client, first boot fails.
   [ -x "${root}/home/deck/.local/share/Steam/steamrtarm64/steam" ] \
     || die "Steam client not pre-extracted in the rootfs (/home/deck/.local/share/Steam) — run 'sudo make build' first."
 
@@ -126,13 +124,10 @@ EOF
   chroot "${root}" systemctl enable pocknix-fancontrol.service pocknix-fex-binfmt.service \
         pocknix-volumed.service pocknix-gamescope-rt.service pocknix-powerd.service 2>/dev/null || true
   chroot "${root}" systemctl enable pocknix-decky-sync.service pocknix-decky-loader.service 2>/dev/null || true
-  # pocknix-flathub.service is deliberately absent: the NM dispatcher starts it once a link is
-  # up; at boot it always failed on DNS.
+  # pocknix-flathub.service deliberately absent: at boot it fails on DNS (the NM dispatcher starts it).
   chroot "${root}" systemctl enable pocknix-waydroid-tuning.service 2>/dev/null || true
 
-  # Steam manages Wi-Fi only through NetworkManager; iwd is its backend and must not run its
-  # own netconfig or it fights NM for DHCP (dev/steam.md "Wi-Fi"). The static NM conf is in
-  # the overlay; only the build-variable bits are written here.
+  # iwd must not run its own netconfig or it fights NM for DHCP (dev/steam.md "Wi-Fi").
   install -d -m 755 "${root}/etc/NetworkManager/conf.d"
   # Country stays for 5 GHz regdom
   install -d -m 755 "${root}/etc/iwd"
@@ -141,7 +136,6 @@ EOF
     [ -n "${SD_WIFI_COUNTRY}" ] && echo "Country=${SD_WIFI_COUNTRY}"
     echo "EnableNetworkConfiguration=false"
   } > "${root}/etc/iwd/main.conf"
-  # NM hands DNS to systemd-resolved
   ln -sf /run/systemd/resolve/stub-resolv.conf "${root}/etc/resolv.conf"
 
   # ALARM enables networkd; managing no interface here, its wait-online holds
@@ -191,10 +185,8 @@ EOF
     [ -z "${SD_WIFI_COUNTRY}" ] && warn "SD_WIFI_COUNTRY unset — world regdom; 5 GHz won't associate"
   fi
 
-  # seatd: gamescope's DRM backend needs a seat. upower + udisks2 are D-Bus-activatable but
-  # Steam queries battery and enumerates drives once at startup and never retries, so they
-  # must already be running. fstrim: root is mounted without discard. No USB gadget on purpose
-  # (dev/building.md).
+  # upower + udisks2 are D-Bus-activatable, but Steam queries them once at startup and never
+  # retries. fstrim: root is mounted without discard. No USB gadget on purpose (dev/building.md).
   chroot "${root}" systemctl enable iwd NetworkManager systemd-resolved seatd inputplumber \
         bluetooth upower udisks2 fstrim.timer \
         pocknix-diag.service pocknix-expand-root.service pocknix-session.service \
@@ -264,7 +256,6 @@ main() {
   done
   btrfs subvolume set-default "$(btrfs inspect-internal rootid "${MNT}/@")" "${MNT}"
   umount "${MNT}"
-  # one rsync below lands each path in its subvol
   mount -o compress=zstd:3,subvol=@ "${LOOP}p2" "${MNT}"
   mkdir -p "${MNT}/home" "${MNT}/.snapshots" "${MNT}/var/cache/pacman" "${MNT}/var/log"
   for sv in @home:home @snapshots:.snapshots @pacman-cache:var/cache/pacman @var-log:var/log; do

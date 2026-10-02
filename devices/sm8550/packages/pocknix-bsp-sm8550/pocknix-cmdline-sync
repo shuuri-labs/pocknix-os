@@ -1,8 +1,6 @@
 #!/bin/bash
-# pocknix-cmdline-sync — rebuild /flash/KERNEL when the packaged cmdline differs from the one
-# baked into it. The kernel's own hook only fires on kernel files, so a BSP-only cmdline change
-# would never reach the boot image. Comparing first avoids a second rebuild in a transaction
-# that also upgraded the kernel (that would overwrite KERNEL.bak with the new image).
+# The kernel's hook only fires on kernel files, so a cmdline-only change needs this. Compare
+# first: a second rebuild after a kernel upgrade would overwrite KERNEL.bak with the new image.
 set -euo pipefail
 
 want="$(cat /usr/lib/pocknix/kernel-cmdline 2>/dev/null)" || exit 0

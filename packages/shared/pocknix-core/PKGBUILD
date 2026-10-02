@@ -1,7 +1,5 @@
-# pocknix-core — the mandatory layer on every device. Its depends= IS the manifest:
-# pacman never installs a new package NAME on its own (#49), so a line here is what
-# reaches fielded devices on -Syu. Optional layers (pocknix-*-full) stay out: a hard
-# edge from core would make `pacman -Rs <layer>` impossible.
+# depends= IS the manifest: pacman never installs a new name on its own (#49). Optional
+# layers stay out, or `pacman -Rs <layer>` becomes impossible.
 pkgname=pocknix-core
 pkgver=0.1.0
 pkgrel=4
@@ -11,7 +9,7 @@ url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 depends=('mesa'                     # epoch-2 trimmed/tuned freedreno build ([pocknix] outranks ALARM)
          'vulkan-freedreno'
-         'inputplumber'             # gamepad -> Steam Input; BSP device configs target it
+         'inputplumber'             # BSP device configs target it
          'pocknix-sdcard-automount'
          'pocknix-snapshots'
          'pocknix-base'
@@ -19,8 +17,8 @@ depends=('mesa'                     # epoch-2 trimmed/tuned freedreno build ([po
          'pocknix-lock-migrate'
          'pocknix-tools'
          'pocknix-branding'         # plymouthd.conf names its theme on every device
-         'pocknix-session')         # owns tty1: game/desktop supervisor + plymouth handoff
+         'pocknix-session')
 
 package() {
-  :   # pure metapackage
+  :
 }

@@ -1,5 +1,4 @@
-# Sorts after the kernel's 90-linux-pocknix.hook, so a kernel upgrade has already rebuilt
-# with the new cmdline and the sync finds nothing to do.
+# Must sort after 90-linux-pocknix.hook, so a kernel upgrade already carries the new cmdline.
 [Trigger]
 Operation = Install
 Operation = Upgrade

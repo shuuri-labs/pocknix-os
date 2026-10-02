@@ -1,5 +1,3 @@
-# pocknix-session — the DE-neutral session: a systemd unit owning tty1 as deck, running the
-# supervisor that launches game mode or the desktop. Replaces the image's getty@tty1 autologin.
 pkgname=pocknix-session
 pkgver=0.1.0
 pkgrel=1

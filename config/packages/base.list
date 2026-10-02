@@ -1,6 +1,4 @@
-# Base userland for pocknix-os (Arch Linux ARM repos)
-# One package per line; '#' comments and blank lines ignored.
-# Phase 0 ships a minimal, bootable base. Session stacks live in their own lists.
+# One package per line; '#' comments and blank lines ignored. Rationale: dev/building.md.
 
 # --- core system ---
 base
@@ -10,16 +8,10 @@ dbus-broker
 mkinitcpio
 
 # --- boot splash ---
-plymouth             # spinner splash over the silent boot (cmdline: quiet loglevel=3 ... splash).
-                     #   We boot with NO initramfs, so this is plymouth's late mode: its systemd
-                     #   units start plymouthd from the rootfs at sysinit; DRM_MSM=y means the
-                     #   display is already up by then. Theme/config in overlay
-                     #   /etc/plymouth/plymouthd.conf. pocknix-session hands the splash
-                     #   to the compositor itself (deactivate, quit once it owns the panel).
+plymouth
 
 # --- package management ---
-pacman-contrib       # paccache — overlay hook 95-pocknix-paccache prunes /var/cache/pacman/pkg,
-                     #   which stock pacman grows without bound on the one rw filesystem.
+pacman-contrib       # paccache: stock pacman grows its cache without bound on the one rw fs
 
 # --- networking ---
 networkmanager
@@ -30,29 +22,23 @@ openssh
 # --- filesystem / storage ---
 e2fsprogs
 dosfstools
-btrfs-progs         # btrfs root: subvolume/snapshot management (pocknix-snapshots hooks,
-                    #   pocknix-rollback) + `btrfs filesystem resize` in pocknix-expand-root
+btrfs-progs
 util-linux
-parted              # pocknix-install-internal repartitions the internal UFS (+ partprobe)
-rsync               # pocknix-install-internal clones the running rootfs to the internal ext4
-cloud-guest-utils   # growpart — pocknix-expand-root grows the root partition to fill the SD on first boot
+parted
+rsync
+cloud-guest-utils
 
 # --- graphics stack ---
-# mesa + vulkan-freedreno install from ALARM here to satisfy bootstrap deps, then
-# install_local_packages REPLACES both with our epoch-2 pocknix builds (packages/soc/mesa:
-# freedreno/turnip-only, CPU-tuned per SoC).
+# Bootstrap only: install_local_packages replaces both with our epoch-2 builds.
 mesa
 vulkan-freedreno
 vulkan-icd-loader
 libdrm
 mesa-utils
-vulkan-tools        # vulkaninfo + vkcube — confirm Turnip/GPU and test gamescope
+vulkan-tools
 
 # --- GPU firmware (Adreno 740) ---
-# a740_sqe.fw + qcom/sm8550/a740_zap.mbn are NOT in the ROCKNIX overlay; they live
-# in linux-firmware-qcom (shipped as .zst, so the kernel needs FW_LOADER_COMPRESS_ZSTD
-# — enabled in build-kernel.sh). Required for Vulkan/GPU -> gamescope (Phase 3).
-# (wifi/audio/video firmware still comes from the ROCKNIX overlay via install_firmware.)
+# a740 sqe/zap ship .zst here: the kernel needs FW_LOADER_COMPRESS_ZSTD.
 linux-firmware-qcom
 
 # --- audio ---
@@ -60,19 +46,11 @@ pipewire
 pipewire-pulse
 pipewire-alsa
 wireplumber
-rtkit               # RT broker: PipeWire/WirePlumber get bounded realtime via rtkit (SteamOS
-                    #   model). The deck session has NO blanket rtprio grant (see
-                    #   limits.d/60-pocknix-gaming.conf) so module-rt's direct path fails -> rtkit.
-alsa-utils          # aplay/amixer/alsaucm/speaker-test — card inspection + UCM testing
-alsa-ucm-conf       # ALSA Use Case Manager configs (card routing); RP6 UCM may need adding
-swh-plugins         # LADSPA limiter, a hard depends= of pocknix-bsp-sm8250. Listed in the SHARED
-                    #   base though only sm8250 needs it: `make snapshot` harvests the runtime
-                    #   closure from the one build/rootfs (whichever SoC built last), so a
-                    #   per-SoC dep goes missing. Base-listed = installed by every build.
-
-# --- handheld input / quirks deps ---
-# inputplumber config is shipped by pocknix-bsp (Phase 2); the daemon itself:
-# inputplumber            # uncomment once available in repo/AUR build
+rtkit               # deck has no blanket rtprio, so PipeWire's realtime goes through rtkit
+alsa-utils
+alsa-ucm-conf
+swh-plugins         # sm8250-only dep, listed here: `make snapshot` harvests from whichever SoC
+                    #   built last, so a per-SoC dep would go missing from the base
 
 # --- utilities ---
 sudo
@@ -82,41 +60,19 @@ htop
 jq
 zstd
 python-evdev
-bluez                # Bluetooth stack (bluetoothd) — controllers, audio, KDE/Steam BT
-bluez-utils          # bluetoothctl + rfkill helpers
-sbc                  # SBC codec — PipeWire BT audio A2DP baseline + HFP/mSBC mic. Without a codec
-                     #   lib, BT headphones pair but produce no audio sink.
-libfreeaptx          # AptX / AptX-HD / AptX-LL (low-latency) codecs for PipeWire BT audio.
-                     #   LDAC needs ldacbt-libs (AUR); AAC needs libfdk-aac (extra) — add if wanted.
+bluez
+bluez-utils
+sbc                  # without a codec lib, BT headphones pair but give no audio sink
+libfreeaptx
 
 # --- power / battery ---
-upower               # battery %/time-to-empty estimate for Steam's gamepadui + Plasma. Steam reads
-                     #   battery ONLY via the UPower D-Bus API (like SteamOS/armada); without it the
-                     #   deck UI shows no battery. UPower derives the time-remaining estimate from
-                     #   discharge history, so it works even though the SM8550 psy exposes just
-                     #   capacity/current/voltage (qcom_battmgr `/sys/class/power_supply/battery`).
-                     #   Was only pulled transitively by powerdevil (pocknix-desktop-full) + never enabled;
-                     #   make it explicit + enabled (build-sd-image.sh) so the GAME session has it too.
+upower               # Steam reads battery only via UPower, once at startup: keep it enabled
 
 # --- storage ---
-udisks2              # Steam's Storage page enumerates FORMATTABLE external drives (microSD "Format"
-                     #   flow) over the UDisks2 D-Bus API. Steam's storage manager enumerates once at
-                     #   startup and doesn't recover if udisks2 starts late, so it must be running
-                     #   before Steam inits -> enabled in build-sd-image.sh. Was only pulled
-                     #   transitively; make it explicit so the format list is never empty. Mounted
-                     #   ext4 libraries still show via pocknix-sdcard-automount; this is the raw-drive
-                     #   list. Polkit grant for the deck session is in 50-pocknix-deck.rules.
+udisks2              # Steam lists formattable drives only via UDisks2, once at startup: keep it enabled
 
 # --- memory / swap ---
-zram-generator       # compressed-RAM swap (zram0, zstd) via /etc/systemd/zram-generator.conf.
-                     #   Memory headroom for big games + Waydroid + in-game Steam downloads on a
-                     #   RAM-limited handheld (armada/SteamOS/ROCKNIX all run zram). Kernel has
-                     #   ZRAM=m + zstd backend. Pairs with vm.swappiness=180 (sysctl). No flash swap
-                     #   wear. (Optional follow-up: enable systemd-oomd — ships with systemd — for
-                     #   earlier/cleaner kills under pressure instead of the kernel OOM backstop.)
+zram-generator
 
 # --- CPU scheduler (gaming) ---
-scx-scheds           # sched_ext schedulers incl. scx_lavd (big.LITTLE / latency-aware).
-                     #   pocknix-lavd.service runs `scx_lavd --autopilot`. Needs the
-                     #   SCHED_CLASS_EXT + DEBUG_INFO_BTF kernel (build-kernel.sh) and the
-                     #   schedutil governor (kernel default) for LAVD's per-core DVFS.
+scx-scheds           # needs the SCHED_CLASS_EXT + DEBUG_INFO_BTF kernel (build-kernel.sh)

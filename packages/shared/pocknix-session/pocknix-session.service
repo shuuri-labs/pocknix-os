@@ -1,15 +1,13 @@
 [Unit]
 Description=pocknix session on tty1
-# The display-manager slot (cage's documented unit is the model). Owning tty1 directly instead
-# of borrowing getty drops getty's Type=idle wait, which costs 5s of black every boot.
+# Not getty: its Type=idle wait costs 5s of black every boot.
 After=systemd-user-sessions.service plymouth-start.service
-# We hand plymouth off ourselves (GDM's order): deactivate keeps its frame on the panel, and
-# it is quit only after the compositor owns the scanout, so the console never shows.
+# Plymouth is handed off by ExecStartPre/Post (see pocknix-plymouth-handoff), never quit early.
 Conflicts=plymouth-quit.service
 After=plymouth-quit.service
 Wants=systemd-logind.service dbus.socket
 After=systemd-logind.service dbus.socket
-# The image's first-boot oneshots order Before=getty@tty1; ordering on an absent unit is a no-op.
+# Older images' first-boot oneshots only order themselves Before=getty@tty1.
 After=pocknix-expand-root.service pocknix-oobe-marker.service
 Conflicts=getty@tty1.service
 After=getty@tty1.service
@@ -27,14 +25,13 @@ StandardOutput=journal
 StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
-# pam_systemd reads these from the unit; a non-graphical type can demote the class to
-# user-light, which starts no user manager (no PipeWire, no user bus).
+# A non-graphical type can demote the class to user-light: no user manager, so no PipeWire.
 Environment=XDG_SESSION_TYPE=wayland XDG_SESSION_CLASS=user
 ExecStartPre=+-/usr/bin/plymouth deactivate
 ExecStart=/usr/lib/pocknix/pocknix-session
 ExecStartPost=+-/usr/lib/pocknix/pocknix-plymouth-handoff
 Restart=on-failure
-# 3 = the supervisor chose to stop (escape hatch or crash loop): fall through to OnFailure's getty.
+# 3 = the supervisor stopped on purpose: no restart, OnFailure puts a login prompt on tty1.
 RestartPreventExitStatus=3
 
 [Install]

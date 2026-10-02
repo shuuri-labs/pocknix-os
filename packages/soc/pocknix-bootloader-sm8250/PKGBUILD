@@ -1,11 +1,5 @@
-# pocknix-bootloader-sm8250 — the arm-efi boot chain payload for SM8250 boards.
-# Boot contract: XBL -> an ABL providing UEFI -> GRUB (EFI/BOOT/bootaa64.efi) -> boot/grub/grub.cfg
-# -> "linux /KERNEL" + "devicetree /boot/grub/<board>.dtb". Factory RP5/Flip 2 ABLs already satisfy
-# it, so the ABL kit ships INERT: only the user-run pocknix-update-abl ever flashes, unlike sm8550
-# where the ABL must be flashed before anything boots.
-# grub.cfg is the single source of truth for the runtime cmdline; build-packages.sh enforces that it
-# byte-matches the profile's KERNEL_CMDLINE. grubenv carries the user's saved menu choice, so it is
-# installed to /flash only when missing.
+# The ABL kit ships INERT: factory ABLs already provide UEFI, only pocknix-update-abl flashes
+# (boot chain: dev/kernel.md). grubenv holds the user's menu choice: installed only when missing.
 pkgname=pocknix-bootloader-sm8250
 pkgver=20260701          # the ROCKNIX release bootaa64.efi was extracted from
 pkgrel=13
@@ -40,7 +34,6 @@ sha512sums=('SKIP'
             'SKIP')
 
 prepare() {
-  # the release ships a .sha256 sidecar per elf
   ( cd "rocknix-abl-v${_ablver}" && sha256sum -c "abl_signed-SM8250.elf.sha256" )
   sed 's/%DEVICE%/SM8250/g' flash_abl.sh.template > flash_abl.sh
   # pocknix-update-abl reports the shipped version; the elf itself carries none

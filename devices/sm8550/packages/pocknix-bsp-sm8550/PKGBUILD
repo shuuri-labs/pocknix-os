@@ -1,7 +1,3 @@
-# pocknix-bsp-sm8550 â€” board support for the SM8550 FAMILY (RP6 +TOP-DPAD, Nova, Odin 2 / Mini /
-# Portal, Thor). One package per SoC: board facts in /usr/lib/pocknix/boards/<board>.conf,
-# device.conf is a sourced dispatcher keyed on the DT model, InputPlumber configs are
-# dt-model gated.
 pkgname=pocknix-bsp-sm8550
 pkgver=0.2.0
 pkgrel=13
@@ -9,11 +5,9 @@ pkgdesc="pocknix board support: SM8550 family (RP6, Nova, Odin 2 family, Thor) â
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
-# pocknix-firmware-sm8550 rides this dep edge to the fleet: -Syu never installs
-# a new package name without one
+# The firmware reaches the fleet through this edge: -Syu never installs a new name alone.
 depends=('pocknix-bsp-common' 'pocknix-firmware-sm8550')
-# Exactly one device BSP may be installed (wrong-device guard for a shared repo);
-# 'replaces' migrates the retired per-device BSPs.
+# One BSP per device (wrong-device guard); replaces= migrates the retired per-device BSPs.
 provides=('pocknix-bsp')
 conflicts=('pocknix-bsp')
 replaces=('pocknix-bsp' 'pocknix-bsp-rp6' 'pocknix-bsp-odin2' 'pocknix-bsp-odin2mini' 'pocknix-bsp-odin2portal')
@@ -32,30 +26,26 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
-  # boards/ is not in source= (makepkg local sources are flat): taken from startdir,
-  # which build-packages.sh populates with the whole package dir.
+  # makepkg sources are flat, so boards/ comes from startdir (build-packages.sh fills it).
   install -Dm644 "${srcdir}/device.conf" "${pkgdir}/usr/lib/pocknix/device.conf"
   local b
   for b in "${startdir}/boards/"*.conf; do
     install -Dm644 "${b}" "${pkgdir}/usr/lib/pocknix/boards/$(basename "${b}")"
   done
 
-  # Pin s2idle suspend (the cluster-sleep kernel stack is s2idle-only; a deep
-  # entry wedges). systemd reads sleep.conf drop-ins from this vendor dir.
+  # The cluster-sleep kernel stack is s2idle-only; a deep entry wedges.
   install -Dm644 "${srcdir}/10-pocknix-s2idle.conf" \
     "${pkgdir}/usr/lib/systemd/sleep.conf.d/10-pocknix-s2idle.conf"
-  # Disable cpu0 idle state1 (GMU issues; ROCKNIX 096-cpuidle), re-asserted every boot.
+  # cpu0 idle state1 off while awake: GMU issues.
   install -Dm644 "${srcdir}/30-pocknix-cpuidle.conf" \
     "${pkgdir}/usr/lib/tmpfiles.d/30-pocknix-cpuidle.conf"
-  # Autosuspend the idle DWC3 controller so it drops its USB-to-DDR
-  # interconnect vote while awake.
+  # An idle DWC3 otherwise holds its USB-to-DDR interconnect vote while awake.
   install -Dm644 "${srcdir}/99-pocknix-sm8550-usb-autosuspend.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/99-pocknix-sm8550-usb-autosuspend.rules"
   install -Dm644 "${srcdir}/71-pocknix-thor-touch.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/71-pocknix-thor-touch.rules"
-  # 010-cpuidle-state1: enable cpu0 silver power collapse across the suspend
-  # window only, so s2idle reaches cluster sleep while the awake-time GMU
-  # workaround (30-pocknix-cpuidle.conf) stays untouched.
+  # Re-enable cpu0 state1 only across suspend, so s2idle reaches cluster sleep without
+  # touching the awake-time GMU workaround.
   install -Dm755 "${srcdir}/cpuidle-state1-sleep-pre" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/010-cpuidle-state1"
   install -Dm755 "${srcdir}/cpuidle-state1-sleep-post" \
@@ -70,19 +60,16 @@ package() {
   install -Dm644 "${srcdir}/thor-gamepad.yaml" \
     "${pkgdir}/usr/share/inputplumber/capability_maps/thor-gamepad.yaml"
 
-  # ALSA UCM: family boards report "AYN-Odin2", the Thor "AYN-Thor". The codec include
-  # sequences (/lib, /codecs/wcd938x, /codecs/qcom-lpass) come from base alsa-ucm-conf.
+  # Family boards report card "AYN-Odin2", the Thor "AYN-Thor".
   local ucm="${pkgdir}/usr/share/alsa/ucm2"
   install -Dm644 "${srcdir}/AYN-Odin2.conf" "${ucm}/AYN/Odin2/AYN-Odin2.conf"
   install -Dm644 "${srcdir}/HiFi.conf"      "${ucm}/AYN/Odin2/HiFi.conf"
-  # card-match file (matched by card longname under the sm8550 driver dir)
   install -d "${ucm}/conf.d/sm8550"
   ln -sf "../../AYN/Odin2/AYN-Odin2.conf" "${ucm}/conf.d/sm8550/AYN-Odin2.conf"
   install -Dm644 "${srcdir}/AYN-Thor.conf" "${ucm}/AYN/Thor/AYN-Thor.conf"
   install -Dm644 "${srcdir}/HiFi-Thor.conf" "${ucm}/AYN/Thor/HiFi.conf"
   ln -sf "../../AYN/Thor/AYN-Thor.conf" "${ucm}/conf.d/sm8550/AYN-Thor.conf"
 
-  # One family cmdline for the on-device /flash/KERNEL rebuild (pocknix-build-bootimg);
   # build-packages.sh asserts it matches devices/sm8550/profile.conf.
   install -Dm644 "${srcdir}/kernel-cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
   install -Dm755 "${srcdir}/pocknix-cmdline-sync" "${pkgdir}/usr/lib/pocknix/pocknix-cmdline-sync"

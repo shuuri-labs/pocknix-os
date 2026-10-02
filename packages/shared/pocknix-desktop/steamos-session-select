@@ -1,8 +1,6 @@
 #!/bin/bash
-# steamos-session-select — the SteamOS-contract name Steam and the Plasma tile both invoke to
-# switch sessions. pocknix-session's supervisor relaunches on compositor exit, so switching means
-# rewriting the choice file and SIGTERMing the compositor. Never restart the session to do this:
-# the same logind session must stay active on seat0 or kwin cannot take DRM master afterwards.
+# SteamOS-contract name: Steam calls it. The supervisor relaunches when the compositor exits;
+# never restart the session to switch (see pocknix-session).
 set -u
 
 STATE_HOME="${XDG_STATE_HOME:-${HOME:-/home/deck}/.local/state}"
@@ -24,10 +22,9 @@ echo "steamos-session-select: next session = ${sel} (signalling current composit
 uid="$(id -u)"
 pkill -u "${uid}" -TERM gamescope    2>/dev/null || true
 pkill -u "${uid}" -TERM kwin_wayland 2>/dev/null || true
-# gamescope dying does not take Steam with it: it re-parents and keeps its single-instance lock,
-# so the next game-mode launch would bail "Steam is already running". pocknix-steam clears survivors.
+# Steam outlives gamescope and keeps its single-instance lock ("Steam is already running").
 if [ "${sel}" = plasma ]; then
-  # -x: a bare "steam" pattern also matches this script ("steamos-session") and kills it here.
+  # -x: a bare "steam" also matches this script ("steamos-session").
   pkill -u "${uid}" -TERM -x steam       2>/dev/null || true
   pkill -u "${uid}" -TERM steamwebhelper 2>/dev/null || true
 fi

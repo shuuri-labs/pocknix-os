@@ -1,7 +1,4 @@
 #!/bin/bash
-# pocknix-desktop — launch the Plasma Mobile desktop session.
-# Run by pocknix-session's supervisor on tty1 so the session inherits the deck PAM session
-# (XDG_RUNTIME_DIR + per-user PipeWire). startplasmamobile handles its own D-Bus session.
 set -e
 
 export HOME="${HOME:-/home/deck}"
@@ -11,14 +8,12 @@ if ! command -v startplasmamobile >/dev/null 2>&1; then
   exit 1
 fi
 
-# kwin starts XWayland only if /tmp/.X11-unix is sticky; a prior gamescope session leaves it
-# deck:0755, so XWayland is refused and the X11 Steam client cannot connect. Re-assert per launch.
+# kwin starts XWayland only if /tmp/.X11-unix is sticky, and gamescope leaves it deck:0755.
 mkdir -p /tmp/.X11-unix 2>/dev/null || true
 chmod 1777 /tmp/.X11-unix 2>/dev/null || true
 
-# pocknix-powerd owns the power key; the device also delivers the WAKING press to userspace, so
-# powerdevil's tablet-mode "Turn Off Screen" binding blanks the panel right after resume.
-# Distinct from powerButtonAction (/etc/xdg/powerdevilrc). Value is "active,default,description".
+# The waking power press also reaches userspace, and this binding blanks the panel right after
+# resume (separate from powerButtonAction). Value is "active,default,description".
 if command -v kwriteconfig6 >/dev/null 2>&1; then
   kwriteconfig6 --file kglobalshortcutsrc --group org_kde_powerdevil \
     --key "Turn Off Screen" "none,Power Off,Turn Off Screen" 2>/dev/null || true
@@ -29,13 +24,11 @@ if command -v pocknix-gamepad-target >/dev/null 2>&1; then
   pocknix-gamepad-target xb360 || true
 fi
 
-# The community controller DB every SDL app bundles maps InputPlumber's xb360 GUID
-# (045e:028e version 0001) to a 180-degree-rotated d-pad. SDL_GAMECONTROLLERCONFIG is
-# PRIORITY_USER, the one level a bundled DB cannot overwrite.
+# SDL's bundled controller DB rotates the d-pad 180 degrees for InputPlumber's xb360 GUID;
+# PRIORITY_USER is the one level a bundled DB cannot overwrite.
 export SDL_GAMECONTROLLERCONFIG='030000005e0400008e02000001000000,Microsoft X-Box 360 pad,a:b0,b:b1,back:b6,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,guide:b8,leftshoulder:b4,leftstick:b9,lefttrigger:a2,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b10,righttrigger:a5,rightx:a3,righty:a4,start:b7,x:b2,y:b3,platform:Linux,'
 
-# Dual-screen boards, before kwin enumerates input: kwin's fallback puts every touch device on
-# the FIRST internal output, so pin each to its output (kcminputrc [Libinput][vendor][product][name]).
+# Before kwin enumerates input: its fallback puts every touchscreen on the FIRST output.
 for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
   [ -r "${_dc}" ] && . "${_dc}"
 done

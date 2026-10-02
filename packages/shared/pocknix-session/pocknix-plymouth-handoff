@@ -1,8 +1,7 @@
 #!/bin/bash
-# pocknix-plymouth-handoff — quit plymouth once a compositor owns the panel (run as root).
-# --retain-splash cannot hold the image here: when plymouthd exits the kernel restores the
-# console framebuffer. So the unit only deactivates plymouth (image stays up) and this quits
-# it after the scanout has changed hands. Unreadable DRM state just waits out the cap.
+# --retain-splash cannot hold the image: the kernel restores the console framebuffer when
+# plymouthd exits. So plymouth is only deactivated at session start and quit here, once the
+# scanout has changed hands. Unreadable DRM state waits out the cap (the compositor has the panel).
 [ "${1:-}" = --wait ] || { "$0" --wait & exit 0; }
 
 start="$(date +%s%N)"

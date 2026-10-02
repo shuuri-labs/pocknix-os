@@ -2,8 +2,7 @@
 Description=Expand root partition + filesystem to fill the disk (first boot)
 DefaultDependencies=no
 After=systemd-remount-fs.service local-fs.target
-# Finish before the session starts Steam, so the client's first-run download has the full
-# card to use, not just the image's slack.
+# Steam's first-run download needs the full card, not the image's slack.
 Before=pocknix-session.service getty.target shutdown.target
 Conflicts=shutdown.target
 ConditionPathExists=!/var/lib/pocknix/expand-root.done

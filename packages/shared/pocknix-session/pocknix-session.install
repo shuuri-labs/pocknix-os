@@ -1,6 +1,5 @@
-# Fielded devices meet this package via post_install (a new name on -Syu). It moves tty1 from the
-# image's getty autologin to pocknix-session on the NEXT boot. Never start the unit here: -Syu runs
-# inside the live session, and Conflicts= would stop the getty under it.
+# Fielded devices get post_install (a new name on -Syu). Never start the unit here: -Syu runs
+# inside the live getty session, and Conflicts= would stop it.
 
 _unit=/usr/lib/systemd/system/pocknix-session.service
 _dm=/etc/systemd/system/display-manager.service
@@ -19,7 +18,6 @@ _shipped() {  # <file> <hashes>
 }
 
 post_install() {
-  # Another display manager owns the slot: leave tty1 as it is.
   if [ -e "${_dm}" ] && [ "$(readlink -f "${_dm}")" != "${_unit}" ]; then
     echo ">>> pocknix-session: ${_dm} belongs to another display manager, not enabling"
     return 0
@@ -34,7 +32,7 @@ post_install() {
   home="$(getent passwd deck | cut -d: -f6)"
   if [ -n "${home}" ] && [ -f /etc/skel/.bash_profile ] \
      && _shipped "${home}/.bash_profile" "${_profile_shipped}"; then
-    # New inode via mv: never rewrite a file a running shell may still be reading.
+    # New inode: a running shell may still be reading the old file.
     install -m644 -o deck -g deck /etc/skel/.bash_profile "${home}/.bash_profile.pocknix-new" \
       && mv -f "${home}/.bash_profile.pocknix-new" "${home}/.bash_profile"
   fi
