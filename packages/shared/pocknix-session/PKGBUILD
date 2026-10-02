@@ -1,0 +1,20 @@
+# pocknix-session — the DE-neutral session: a systemd unit owning tty1 as deck, running the
+# supervisor that launches game mode or the desktop. Replaces the image's getty@tty1 autologin.
+pkgname=pocknix-session
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix tty1 session service + game/desktop session supervisor"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('bash' 'systemd')
+backup=('etc/pam.d/pocknix-session')
+source=('pocknix-session' 'pocknix-session.service' 'pocknix-session.pam')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-session" "${pkgdir}/usr/lib/pocknix/pocknix-session"
+  install -Dm644 "${srcdir}/pocknix-session.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-session.service"
+  install -Dm644 "${srcdir}/pocknix-session.pam" "${pkgdir}/etc/pam.d/pocknix-session"
+}

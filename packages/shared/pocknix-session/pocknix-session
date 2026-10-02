@@ -1,0 +1,43 @@
+#!/bin/bash
+# pocknix-session — the tty1 session supervisor, run by pocknix-session.service as deck.
+# A loop, not an exec: this process stays the logind session leader across compositor
+# switches, so kwin always inherits a live, active session (a fresh session per switch left
+# kwin without DRM master). steamos-session-select writes the choice file and SIGTERMs the
+# compositor; the loop relaunches into the new choice.
+
+# What login's bash -l used to provide (profile.d: locale, flatpak XDG_DATA_DIRS, ...).
+[ -r /etc/profile ] && . /etc/profile
+
+STATE="${XDG_STATE_HOME:-${HOME}/.local/state}/pocknix-session"
+LOG="${HOME}/pocknix-session.log"
+
+# Exit 3 = stop on purpose: the unit does not restart and OnFailure hands tty1 to a login prompt.
+if [ -e "${HOME}/.no-steam" ]; then
+  echo "pocknix-session: ~/.no-steam present, leaving tty1 to a login prompt" >&2
+  exit 3
+fi
+
+# tty1 shows between compositors; keep it blank (cursor hidden, cleared) instead of scrollback.
+blank() { printf '\033[?25l\033[2J\033[H' >/dev/tty 2>/dev/null; }
+
+fastfails=0
+while true; do
+  session="$(cat "${STATE}" 2>/dev/null || echo gamescope)"
+  start="$(date +%s)"
+  blank
+  case "${session}" in
+    plasma|desktop) command -v pocknix-desktop >/dev/null 2>&1 && pocknix-desktop >"${LOG}" 2>&1 ;;
+    *)              command -v pocknix-steam   >/dev/null 2>&1 && pocknix-steam   >"${LOG}" 2>&1 ;;
+  esac
+  # Under 5s is a broken session, not a switch; three in a row stops the hot loop.
+  if [ "$(( $(date +%s) - start ))" -lt 5 ]; then
+    fastfails=$(( fastfails + 1 ))
+    if [ "${fastfails}" -ge 3 ]; then
+      printf '\033[?25h' >/dev/tty 2>/dev/null
+      echo "pocknix-session: '${session}' keeps exiting immediately, see ${LOG}" >&2
+      exit 3
+    fi
+  else
+    fastfails=0
+  fi
+done
