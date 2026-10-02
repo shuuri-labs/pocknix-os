@@ -6,7 +6,8 @@ hardcodes a device fact: the **build** reads `devices/<name>/profile.conf` (sour
 `/usr/lib/pocknix/device.conf`, shipped by the family's BSP package.
 
 `DEVICE` names an **image target**, and there is one FAMILY target per SoC
-(`make build DEVICE=sm8550` is the default; `DEVICE=sm8250` for the RP5 family):
+(`make build DEVICE=sm8550` is the default; `DEVICE=sm8250` for the RP5 family,
+`DEVICE=sm8750` for the Odin 3):
 each family image serves every board on its SoC, ROCKNIX-style. The BSP
 (`pocknix-bsp-<soc>`) ships per-board facts in `/usr/lib/pocknix/boards/<board>.conf`,
 each sourcing the family-wide `boards/family.conf` first, and
@@ -21,6 +22,8 @@ Current families:
 * **sm8550** (qcom-abl): Retroid Pocket 6 (+TOP-DPAD), Retroid Pocket Nova, AYN Odin 2 /
   Mini / Portal, AYN Thor. The family RSInput controller config covers every board but the
   Thor, which has its own (its extra AYN key).
+* **sm8750** (qcom-abl, community-maintained): AYN Odin 3. RSInput MCU gamepad, s2idle
+  pinned in the kernel cmdline, AYN-Odin3 audio UCM.
 * **sm8250** (arm-efi): Retroid Pocket 5, Retroid Pocket Flip 2; each also as a Visionox-panel revision (separate `-visionox` dtb + board conf, picked by the grub `visionox` marker file).
 
 The first board a bullet names is the family's fallback: it must be the first `boards/models`

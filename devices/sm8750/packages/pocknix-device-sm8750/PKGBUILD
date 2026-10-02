@@ -1,0 +1,27 @@
+# pocknix-device-sm8750 — metapackage: the per-SoC members of an SM8750 system.
+# ONLY per-SoC packages belong here (BSP, kernel, bootloader, the SoC's proton
+# choice); shared members live on pocknix-core / the pocknix-*-full layers —
+# a dep edge from here would block `pacman -Rs` of an optional layer.
+# (No retired per-device metapackages exist for the SM8750 family — the Odin 3
+# never had a devices/odin3 target — so there is nothing to 'replaces'.)
+pkgname=pocknix-device-sm8750
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="pocknix device metapackage: SM8750 family (AYN Odin 3)"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL2')
+depends=('pocknix-bsp-sm8750'
+         'linux-pocknix-sm8750'
+         'pocknix-bootloader-sm8750'
+         # sm8750 ships the stock ARM protons (same choice as sm8550)
+         'proton-cachyos'
+         'proton-ge')
+# Exactly one device metapackage per install (wrong-device guard, same pattern
+# as the BSPs).
+provides=('pocknix-device')
+conflicts=('pocknix-device')
+
+package() {
+  :   # pure metapackage
+}
