@@ -259,7 +259,6 @@ check it, which is the single biggest reason a PR stalls.
   Areas in use: `build`, `kernel`, `image`, `sd-image`, `steam`, `desktop`, `emulation`,
   `input`, `audio`, `wifi`, `suspend`, `perf`, `gamescope`, `mesa`, `fex-emu`, `bsp`,
   `devices`, `repo`, `ci`, `docs`, `cleanup`, or a package name.
-- **No em-dashes or en-dashes** in commit messages. Plain hyphens, commas, parentheses.
 - **Milestone granularity.** Squash the "try X", "revert X", "fix typo" churn before you
   submit. A commit should be a complete, verified change.
 - **Rebase on `main`** rather than merging it in, and re-test after the rebase.
