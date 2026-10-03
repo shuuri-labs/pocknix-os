@@ -1,8 +1,7 @@
 import { PanelSection, ToggleField } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
-import { setFanMode, setLavdMode } from "../backend";
 import { ConfigSection } from "../components/ConfigSection";
-import { EnvVarsButton, PerfFields, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
+import { EnvVarsButton, PerfFields, TouchField, TweakFields, XaliaToggle, audioLatencyOptions } from "../components/GameFields";
 import { SelectEdit } from "../components/widgets";
 import { availableGames, editTargetOptions } from "../lib/games";
 import { fexSteamString, syncFexLaunchOption } from "../lib/launchOptions";
@@ -64,16 +63,6 @@ export function Games({ config, setConfig, reload }: {
     setConfig((current) => (current ? { ...current, selectedGame: saved || null } : current));
   };
 
-  // Default target: FEX/audio/env edit tweaks.global; fan + scheduler are the LIVE system
-  // modes, applied immediately through the backend.
-  const applyMode = async (setter: (mode: string) => Promise<Config>, mode: string) => {
-    try {
-      const next = await setter(mode);
-      setConfig((current) => (current ? { ...current, fanMode: next.fanMode, lavdMode: next.lavdMode } : current));
-    } catch (error) {
-      reload();
-    }
-  };
   const presets = config.fexProfiles || {};
   const storedProfile = values.fexProfile as string | undefined;
   const fexValue = storedProfile && presets[storedProfile] ? storedProfile : "default";
@@ -88,16 +77,9 @@ export function Games({ config, setConfig, reload }: {
         <SelectEdit label="Game" value={game?.appid || ""} options={editTargetOptions(config)} onChange={setSelectedGame} />
         {!editingDefault ? <ToggleField label="Use Per-Game Settings" checked={perGameEnabled} onChange={setPerGameEnabled} /> : null}
       </PanelSection>
-      {showFields ? (
+      {showFields && !editingDefault ? (
         <PanelSection title="PERFORMANCE">
-          {editingDefault ? (
-            <>
-              <SelectEdit label="CPU Scheduler" value={config.lavdMode} options={lavdOptions} onChange={(mode) => applyMode(setLavdMode, mode)} />
-              <SelectEdit label="Fan Curve" value={config.fanMode} options={fanOptions} onChange={(mode) => applyMode(setFanMode, mode)} />
-            </>
-          ) : (
-            <PerfFields values={values} patch={patchSettings} />
-          )}
+          <PerfFields values={values} patch={patchSettings} />
         </PanelSection>
       ) : null}
       {showFields ? (
