@@ -14,10 +14,20 @@ _migrate_fan_lavd() {
   fi
 }
 
+# Enabled by its wants symlink; restart picks up a new daemon or profile file without a reboot.
+_perfd() {
+  [ -d /run/systemd/system ] || return 0
+  systemctl daemon-reload
+  systemctl reload dbus.service 2>/dev/null || true
+  systemctl restart pocknix-perfd.service 2>/dev/null || true
+}
+
 post_install() {
   _migrate_fan_lavd
+  _perfd
 }
 
 post_upgrade() {
   _migrate_fan_lavd
+  _perfd
 }

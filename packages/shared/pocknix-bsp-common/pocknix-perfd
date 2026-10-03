@@ -1,0 +1,371 @@
+#!/usr/bin/env python3
+# pocknix-perfd - power profiles behind Steam's QAM, served to steamos-manager over remotes.d.
+# Event-driven only (no timers), so it adds no wakeups. Fan and scheduler stay with
+# pocknix-fancontrol / pocknix-lavd-mode: a profile change only rewrites their mode files.
+import json
+import os
+import sys
+import tempfile
+
+sys.path.insert(0, "/usr/lib/pocknix")
+import pocknix_perf as pp  # noqa: E402
+
+FACTORY = "/usr/share/pocknix/power-profiles.conf"
+OVERRIDE = "/etc/pocknix/power-profiles.conf"
+STATE = "/var/lib/pocknix/perfd.state"
+FAN_FILE = "/var/lib/pocknix/fan-mode"
+LAVD_FILE = "/var/lib/pocknix/lavd-mode"
+CPUFREQ = "/sys/devices/system/cpu/cpufreq"
+DEVFREQ = "/sys/class/devfreq"
+
+BUS = "org.pocknix.Perf"
+OBJ = "/org/pocknix/Perf"
+NATIVE = "org.pocknix.Perf1"
+S = "com.steampowered.SteamOSManager1."
+IFACE_PROFILE = S + "PerformanceProfile1"
+IFACE_GPU = S + "GpuPerformanceLevel1"
+IFACE_CPU = S + "CpuScaling1"
+GOVERNOR = "schedutil"
+
+
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
+
+
+def read(path):
+    with open(path) as f:
+        return f.read().strip()
+
+
+def write(path, value):
+    with open(path, "w") as f:
+        f.write(str(value))
+
+
+def atomic_write(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+class Hardware:
+    def __init__(self):
+        self.policies = {}
+        for name in sorted(os.listdir(CPUFREQ)):
+            if not name.startswith("policy"):
+                continue
+            try:
+                freqs = [int(x) for x in read(f"{CPUFREQ}/{name}/scaling_available_frequencies").split()]
+            except (OSError, ValueError):
+                continue
+            if freqs:
+                self.policies[name] = sorted(freqs)
+        self.gpu = None
+        self.gpu_freqs = []
+        for name in sorted(os.listdir(DEVFREQ)) if os.path.isdir(DEVFREQ) else []:
+            if name.endswith(".gpu"):
+                try:
+                    self.gpu_freqs = sorted(int(x) for x in read(f"{DEVFREQ}/{name}/available_frequencies").split())
+                    self.gpu = f"{DEVFREQ}/{name}"
+                except (OSError, ValueError):
+                    pass
+                break
+        try:
+            self.soc = pp.soc_class(open("/proc/device-tree/compatible").read())
+        except OSError:
+            self.soc = ""
+
+    def set_cpu_max(self, caps):
+        for policy, khz in caps.items():
+            write(f"{CPUFREQ}/{policy}/scaling_max_freq", khz)
+
+    def set_gpu_range(self, lo, hi):
+        # min drops first so the new max is never below the current min (the write is refused).
+        write(f"{self.gpu}/min_freq", self.gpu_freqs[0])
+        write(f"{self.gpu}/max_freq", hi)
+        write(f"{self.gpu}/min_freq", lo)
+
+    def governor(self):
+        try:
+            return read(f"{CPUFREQ}/{next(iter(self.policies))}/scaling_governor")
+        except (OSError, StopIteration):
+            return ""
+
+    def reset_stock(self):
+        self.set_cpu_max({p: f[-1] for p, f in self.policies.items()})
+        if self.gpu:
+            self.set_gpu_range(self.gpu_freqs[0], self.gpu_freqs[-1])
+
+
+class Perf:
+    def __init__(self, hw):
+        self.hw = hw
+        self.conn = None
+        self.factory = None
+        self.eff = None
+        self.warnings = []
+        self.load_config()
+        self.profile = self.eff["default"] if self.eff else ""
+        self.gpu_level = "auto"
+        self.manual_mhz = self.gpu_top_mhz()
+        self.restore_state()
+
+    def load_config(self):
+        try:
+            self.factory = pp.load_factory(open(FACTORY).read())
+        except (OSError, pp.FactoryError) as e:
+            log(f"factory profiles unusable, leaving stock clocks: {e}")
+            self.factory = self.eff = None
+            return
+        try:
+            text = open(OVERRIDE).read()
+        except FileNotFoundError:
+            text = None
+        except OSError as e:
+            text = None
+            self.warnings = [f"override unreadable: {e}"]
+        self.eff, self.warnings = pp.layer_override(self.factory, text)
+        for w in self.warnings:
+            log(f"override: {w}")
+
+    def restore_state(self):
+        # No state file means Steam never picked a profile here: leave clocks and the
+        # user's fan/scheduler choices untouched.
+        try:
+            st = json.loads(read(STATE))
+        except (OSError, ValueError):
+            return
+        if self.eff and st.get("profile") in self.eff["profiles"]:
+            self.profile = st["profile"]
+        if st.get("gpu_level") in ("auto", "manual") and self.hw.gpu:
+            self.gpu_level = st["gpu_level"]
+        if isinstance(st.get("manual_mhz"), int):
+            self.manual_mhz = self.snap_mhz(st["manual_mhz"])
+        self.apply(write_modes=False)
+
+    def save_state(self):
+        atomic_write(STATE, json.dumps({"profile": self.profile, "gpu_level": self.gpu_level,
+                                        "manual_mhz": self.manual_mhz}) + "\n")
+
+    def resolved(self, eff, pid):
+        return pp.resolve(eff, pid, self.hw.soc, self.hw.policies, self.hw.gpu_freqs)
+
+    def apply(self, write_modes):
+        if not self.eff or self.profile not in self.eff["profiles"]:
+            return
+        t = self.resolved(self.eff, self.profile)
+        self.hw.set_cpu_max(t["cpu_max"])
+        if self.hw.gpu:
+            if self.gpu_level == "manual":
+                hz = self.manual_mhz * 1000000
+                self.hw.set_gpu_range(hz, hz)
+            else:
+                self.hw.set_gpu_range(t["gpu_min"], t["gpu_max"])
+        if write_modes:
+            atomic_write(FAN_FILE, t["fan"] + "\n")
+            atomic_write(LAVD_FILE, t["lavd"] + "\n")
+
+    def gpu_top_mhz(self):
+        return self.hw.gpu_freqs[-1] // 1000000 if self.hw.gpu else 0
+
+    def gpu_min_mhz(self):
+        if not self.hw.gpu:
+            return 0
+        frac = self.eff["gpu_manual_min"] if self.eff else 0.0
+        return pp.choose_at_least(self.hw.gpu_freqs, int(self.hw.gpu_freqs[-1] * frac)) // 1000000
+
+    def snap_mhz(self, mhz):
+        # Steam writes values outside Min/Max (1000 on a 680 MHz GPU): clamp, then take the
+        # nearest real OPP so the slider shows what the GPU actually runs.
+        mhz = max(self.gpu_min_mhz(), min(self.gpu_top_mhz(), mhz))
+        allowed = [f for f in self.hw.gpu_freqs if f // 1000000 >= self.gpu_min_mhz()]
+        return min(allowed, key=lambda f: abs(f // 1000000 - mhz)) // 1000000
+
+    def props(self, iface):
+        ids = self.eff["order"] if self.eff else []
+        default = self.eff["default"] if self.eff else ""
+        if iface == IFACE_PROFILE:
+            return {"AvailablePerformanceProfiles": GLib.Variant("as", ids),
+                    "PerformanceProfile": GLib.Variant("s", self.profile),
+                    "SuggestedDefaultPerformanceProfile": GLib.Variant("s", default)}
+        if iface == NATIVE:
+            return {"AvailableProfiles": GLib.Variant("as", ids),
+                    "Profile": GLib.Variant("s", self.profile),
+                    "SuggestedDefaultProfile": GLib.Variant("s", default)}
+        if iface == IFACE_GPU:
+            return {"AvailableGpuPerformanceLevels": GLib.Variant("as", ["auto", "manual"] if self.hw.gpu else []),
+                    "GpuPerformanceLevel": GLib.Variant("s", self.gpu_level),
+                    "ManualGpuClock": GLib.Variant("u", self.manual_mhz),
+                    "ManualGpuClockMin": GLib.Variant("u", self.gpu_min_mhz()),
+                    "ManualGpuClockMax": GLib.Variant("u", self.gpu_top_mhz())}
+        if iface == IFACE_CPU:
+            return {"AvailableCpuScalingGovernors": GLib.Variant("as", [GOVERNOR]),
+                    "CpuScalingGovernor": GLib.Variant("s", self.hw.governor())}
+        return {}
+
+    def emit(self, *ifaces):
+        # steamos-manager's relay proxies cache properties, so every change must be signalled.
+        if not self.conn:
+            return
+        for iface in ifaces:
+            self.conn.emit_signal(None, OBJ, "org.freedesktop.DBus.Properties", "PropertiesChanged",
+                                  GLib.Variant("(sa{sv}as)", (iface, self.props(iface), [])))
+
+    def set_profile(self, pid):
+        if not self.eff or pid not in self.eff["profiles"]:
+            return False
+        changed = pid != self.profile
+        self.profile = pid
+        self.apply(write_modes=changed)
+        self.save_state()
+        self.emit(IFACE_PROFILE, NATIVE)
+        return True
+
+    def set_prop(self, iface, name, value):
+        v = value.unpack()
+        if name in ("PerformanceProfile", "Profile"):
+            return self.set_profile(v)
+        if name == "GpuPerformanceLevel":
+            if v not in ("auto", "manual") or not self.hw.gpu:
+                return False
+            self.gpu_level = v
+        elif name == "ManualGpuClock":
+            if not self.hw.gpu:
+                return False
+            self.manual_mhz = self.snap_mhz(v)
+        elif name == "CpuScalingGovernor":
+            if v != GOVERNOR:
+                log(f"refusing governor {v!r}: only {GOVERNOR} keeps scx_lavd's frequency hints")
+                return False
+            for p in self.hw.policies:
+                write(f"{CPUFREQ}/{p}/scaling_governor", GOVERNOR)
+            self.emit(IFACE_CPU)
+            return True
+        else:
+            return False
+        self.apply(write_modes=False)
+        self.save_state()
+        self.emit(IFACE_GPU)
+        return True
+
+    def profiles_json(self, eff, warnings):
+        if not eff:
+            return {"profiles": {}, "order": [], "default": "", "warnings": warnings}
+        return {"order": eff["order"], "default": eff["default"], "gpu_manual_min": eff["gpu_manual_min"],
+                "profiles": eff["profiles"],
+                "overlays": {f"{p}.{s}": v for (p, s), v in eff["overlays"].items()},
+                "resolved": {p: self.resolved(eff, p) for p in eff["order"]},
+                "warnings": warnings}
+
+    def capabilities(self):
+        tables = (self.factory or {}).get("tables", {}).get(self.hw.soc, {})
+        return {"soc": self.hw.soc, "underclock_levels": ["none"] + sorted(tables),
+                "cpu_policies": self.hw.policies, "governors": [GOVERNOR],
+                "gpu_freqs": self.hw.gpu_freqs, "fan_modes": list(pp.FAN_MODES),
+                "lavd_modes": list(pp.LAVD_MODES)}
+
+    def status(self):
+        st = {"profile": self.profile, "gpu_level": self.gpu_level, "manual_mhz": self.manual_mhz,
+              "soc": self.hw.soc, "warnings": self.warnings}
+        try:
+            st["cpu_max"] = {p: int(read(f"{CPUFREQ}/{p}/scaling_max_freq")) for p in self.hw.policies}
+            if self.hw.gpu:
+                st["gpu"] = {k: int(read(f"{self.hw.gpu}/{k}")) for k in ("min_freq", "max_freq", "cur_freq")}
+            st["fan_mode"] = read(FAN_FILE)
+            st["lavd_mode"] = read(LAVD_FILE)
+        except (OSError, ValueError):
+            pass
+        return st
+
+    def method(self, name):
+        if name == "GetProfiles":
+            return self.profiles_json(self.eff, self.warnings)
+        if name == "GetFactoryProfiles":
+            return self.profiles_json(self.factory and pp.layer_override(self.factory, None)[0], [])
+        if name == "GetCapabilities":
+            return self.capabilities()
+        if name == "GetStatus":
+            return self.status()
+        if name == "Reload":
+            self.load_config()
+            if self.eff and self.profile not in self.eff["profiles"]:
+                self.profile = self.eff["default"]
+            if os.path.exists(STATE):
+                self.apply(write_modes=False)
+            self.emit(IFACE_PROFILE, NATIVE, IFACE_GPU)
+            return {"warnings": self.warnings, "factory_ok": self.factory is not None}
+        return None
+
+
+INTROSPECTION = f"""<node>
+<interface name="{NATIVE}">
+ <method name="GetProfiles"><arg type="s" direction="out"/></method>
+ <method name="GetFactoryProfiles"><arg type="s" direction="out"/></method>
+ <method name="GetCapabilities"><arg type="s" direction="out"/></method>
+ <method name="GetStatus"><arg type="s" direction="out"/></method>
+ <method name="Reload"><arg type="s" direction="out"/></method>
+ <property name="AvailableProfiles" type="as" access="read"/>
+ <property name="Profile" type="s" access="readwrite"/>
+ <property name="SuggestedDefaultProfile" type="s" access="read"/>
+</interface>
+<interface name="{IFACE_PROFILE}">
+ <property name="AvailablePerformanceProfiles" type="as" access="read"/>
+ <property name="PerformanceProfile" type="s" access="readwrite"/>
+ <property name="SuggestedDefaultPerformanceProfile" type="s" access="read"/>
+</interface>
+<interface name="{IFACE_GPU}">
+ <property name="AvailableGpuPerformanceLevels" type="as" access="read"/>
+ <property name="GpuPerformanceLevel" type="s" access="readwrite"/>
+ <property name="ManualGpuClock" type="u" access="readwrite"/>
+ <property name="ManualGpuClockMin" type="u" access="read"/>
+ <property name="ManualGpuClockMax" type="u" access="read"/>
+</interface>
+<interface name="{IFACE_CPU}">
+ <property name="AvailableCpuScalingGovernors" type="as" access="read"/>
+ <property name="CpuScalingGovernor" type="s" access="readwrite"/>
+</interface>
+</node>"""
+
+
+def serve(perf):
+    def on_method(conn, sender, path, iface, name, params, inv):
+        try:
+            result = perf.method(name)
+        except Exception as e:  # report, never take the daemon down with a bad call
+            inv.return_dbus_error("org.pocknix.Perf.Error.Failed", str(e))
+            return
+        if result is None:
+            inv.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", name)
+        else:
+            inv.return_value(GLib.Variant("(s)", (json.dumps(result),)))
+
+    def on_get(conn, sender, path, iface, name):
+        return perf.props(iface).get(name)
+
+    def on_set(conn, sender, path, iface, name, value):
+        try:
+            return perf.set_prop(iface, name, value)
+        except OSError as e:
+            log(f"set {name} failed: {e}")
+            return False
+
+    def on_bus(conn, _name):
+        perf.conn = conn
+        for info in Gio.DBusNodeInfo.new_for_xml(INTROSPECTION).interfaces:
+            conn.register_object(OBJ, info, on_method, on_get, on_set)
+
+    Gio.bus_own_name(Gio.BusType.SYSTEM, BUS, Gio.BusNameOwnerFlags.NONE, on_bus,
+                     None, lambda *_: sys.exit(1))
+    GLib.MainLoop().run()
+
+
+if __name__ == "__main__":
+    hw = Hardware()
+    if sys.argv[1:] == ["--reset-stock"]:
+        hw.reset_stock()
+        sys.exit(0)
+    from gi.repository import Gio, GLib  # noqa: E402
+    serve(Perf(hw))

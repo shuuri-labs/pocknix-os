@@ -1,0 +1,14 @@
+[Unit]
+Description=pocknix power profiles (Steam's QAM performance controls)
+
+[Service]
+Type=dbus
+BusName=org.pocknix.Perf
+ExecStart=/usr/lib/pocknix/pocknix-perfd
+# Runs on every stop, crash included, so caps never outlive the daemon.
+ExecStopPost=/usr/lib/pocknix/pocknix-perfd --reset-stock
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

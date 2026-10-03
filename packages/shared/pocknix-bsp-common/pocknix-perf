@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+# pocknix-perf - command-line client for pocknix-perfd.
+import json
+import sys
+
+from gi.repository import Gio, GLib
+
+USAGE = "usage: pocknix-perf status|profiles|factory|capabilities|reload|profile [id]|gpu auto|gpu <MHz>"
+BUS, OBJ, NATIVE = "org.pocknix.Perf", "/org/pocknix/Perf", "org.pocknix.Perf1"
+GPU = "com.steampowered.SteamOSManager1.GpuPerformanceLevel1"
+METHODS = {"status": "GetStatus", "profiles": "GetProfiles", "factory": "GetFactoryProfiles",
+           "capabilities": "GetCapabilities", "reload": "Reload"}
+
+bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+
+
+def call(method, iface, args=None, sig=None):
+    return bus.call_sync(BUS, OBJ, iface, method, args, sig, Gio.DBusCallFlags.NONE, 15000, None).unpack()
+
+
+def set_prop(iface, name, variant):
+    call("Set", "org.freedesktop.DBus.Properties", GLib.Variant("(ssv)", (iface, name, variant)))
+
+
+argv = sys.argv[1:]
+try:
+    if len(argv) == 1 and argv[0] in METHODS:
+        print(json.dumps(json.loads(call(METHODS[argv[0]], NATIVE, sig=GLib.VariantType("(s)"))[0]), indent=1))
+    elif argv[:1] == ["profile"] and len(argv) <= 2:
+        if len(argv) == 2:
+            set_prop(NATIVE, "Profile", GLib.Variant("s", argv[1]))
+        print(call("Get", "org.freedesktop.DBus.Properties", GLib.Variant("(ss)", (NATIVE, "Profile")))[0])
+    elif argv[:1] == ["gpu"] and len(argv) == 2:
+        if argv[1] == "auto":
+            set_prop(GPU, "GpuPerformanceLevel", GLib.Variant("s", "auto"))
+        else:
+            set_prop(GPU, "GpuPerformanceLevel", GLib.Variant("s", "manual"))
+            set_prop(GPU, "ManualGpuClock", GLib.Variant("u", int(argv[1])))
+    else:
+        sys.exit(USAGE)
+except GLib.Error as e:
+    sys.exit(f"pocknix-perf: {e.message}")
