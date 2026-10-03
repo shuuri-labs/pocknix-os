@@ -1,0 +1,11 @@
+# modules_install generated modules.dep at build time against the build root, so it is re-run
+# here against the device's live /usr/lib/modules.
+_depmod() {
+  local kver
+  kver="$(cat /usr/lib/pocknix/kernelrelease 2>/dev/null)"
+  [ -n "${kver}" ] && [ -d "/usr/lib/modules/${kver}" ] || return 0
+  depmod "${kver}" 2>/dev/null || true
+}
+
+post_install() { _depmod; }
+post_upgrade() { _depmod; }

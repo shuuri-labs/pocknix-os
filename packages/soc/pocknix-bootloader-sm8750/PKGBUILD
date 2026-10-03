@@ -1,0 +1,54 @@
+# pocknix-bootloader-sm8750 — the ROCKNIX ABL install kit for SM8750 boards.
+# Boot contract (qcom-abl): XBL -> ABL -> /KERNEL (Android boot image) off the FAT labeled ROCKNIX.
+# The factory ABL boots only Android, so the ROCKNIX ABL must be flashed to abl_a/abl_b ONCE before
+# any SD boots — unlike sm8250, whose factory ABL chainloads UEFI GRUB. One elf covers the whole
+# SM8750 family: ROCKNIX keys it by SoC, not board.
+# Nothing here flashes at build or install time; both flashing paths (the kit by hand from rooted
+# Android, pocknix-update-abl afterwards) are deliberate user actions.
+# A bump must keep the ABL matched to this contract — watch ROCKNIX's own pin in
+# packages/tools/rocknix-abl/package.mk when reviewing `make sync`.
+pkgname=pocknix-bootloader-sm8750
+_ablver=1.1.7
+pkgver=${_ablver}
+pkgrel=4
+pkgdesc="SM8750 qcom-abl boot payload: ROCKNIX ABL install kit (rocknix_abl)"
+arch=('aarch64')
+# !strip: a stripped bootloader is an unbootable one.
+options=('!strip')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('BSD-3-Clause')   # Qualcomm ABL (edk2 LinuxLoader); kit scripts GPL-2.0
+source=("https://github.com/ROCKNIX/abl/releases/download/v${_ablver}/rocknix-abl-v${_ablver}.tar.gz"
+        'README'
+        'flash_abl.sh.template'
+        'backup_abl.sh'
+        'restore_backup_abl.sh'
+        '95-pocknix-abl-kit.hook')
+sha512sums=('fa1d213bec97661942b8083be1f2eb6b65cc200b4f3f76dd84261ba92a01ac9261ed6834350f2f647a5ed82fcabadf5011b9ba6769f471abeaf06210ae9221c1'
+            'SKIP'
+            'SKIP'
+            'SKIP'
+            'SKIP'
+            'SKIP')
+
+prepare() {
+  # the release ships a .sha256 sidecar per elf
+  ( cd "rocknix-abl-v${_ablver}" && sha256sum -c "abl_signed-SM8750.elf.sha256" )
+  sed 's/%DEVICE%/SM8750/g' flash_abl.sh.template > flash_abl.sh
+  # pocknix-update-abl reports the shipped version; the elf itself carries none
+  echo "${_ablver}" > version
+}
+
+package() {
+  local kit="${pkgdir}/usr/share/pocknix/bootloader/rocknix_abl"
+
+  install -Dm644 "rocknix-abl-v${_ablver}/abl_signed-SM8750.elf" "${kit}/abl_signed-SM8750.elf"
+  install -Dm644 README                 "${kit}/README"
+  install -Dm755 flash_abl.sh           "${kit}/flash_abl.sh"
+  install -Dm755 backup_abl.sh          "${kit}/backup_abl.sh"
+  install -Dm755 restore_backup_abl.sh  "${kit}/restore_backup_abl.sh"
+  install -Dm644 version                "${kit}/version"
+
+  # pacman never touches /flash, so a hook re-copies the kit there on upgrade.
+  install -Dm644 "${srcdir}/95-pocknix-abl-kit.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/95-pocknix-abl-kit.hook"
+}

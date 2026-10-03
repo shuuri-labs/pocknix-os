@@ -16,12 +16,16 @@ depends=('pocknix-emulation'
          'retroarch-autoconfig-pocknix'
          'retroarch-shaders-pocknix'
          'ppsspp'
-         'fuse2'
-         'armsx2-bin'
-         'rpcs3-bin'
-         'xemu-bin'
-         'vita3k-bin')
-optdepends=('dolphin-emu: GameCube/Wii'
+         'fuse2')
+# Prebuilt `-bin` emulators: their pinned upstream releases go stale (404,
+# checksum drift) and a failed fetch must not block the whole layer — same
+# treatment as the source-built dolphin/azahar/cemu below.
+optdepends=('armsx2-bin: PS2'
+            'rpcs3-bin: PS3'
+            'eden-bin: Switch'
+            'xemu-bin: Xbox'
+            'vita3k-bin: PS Vita'
+            'dolphin-emu: GameCube/Wii'
             'azahar: 3DS'
             'cemu: Wii U')
 

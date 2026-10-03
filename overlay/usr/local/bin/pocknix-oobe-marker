@@ -1,0 +1,25 @@
+#!/bin/bash
+# pocknix-oobe-marker — drop the SteamOS OOBE marker once Steam's first-run wizard is done.
+#
+# The Steam client shows its first-run setup wizard (OOBE: language / timezone / Wi-Fi) only
+# when /etc/steamos-oobe-image exists. That same marker also makes the client treat the image
+# as a "Deck factory image": the wizard is then shown unconditionally AND, when it finishes,
+# the client restarts the whole console instead of just restarting Steam. On a normal install
+# nothing ever clears the marker, so the wizard reboots the console forever.
+#
+# This runs as a one-shot before the autologin getty hands off to the Steam session: once Steam
+# has recorded that stage 1 of the wizard completed, the marker is dropped, so the wizard runs
+# exactly once and the next boot goes straight to the Steam sign-in.
+set -u
+
+MARKER=/etc/steamos-oobe-image
+REGISTRY=/home/deck/.steam/registry.vdf
+
+[ -e "${MARKER}" ] || exit 0
+[ -f "${REGISTRY}" ] || exit 0
+
+# Steam writes CompletedOOBEStage1=1 to its registry when the language/Wi-Fi step is done.
+if grep -qE '"CompletedOOBEStage1"[[:space:]]+"1"' "${REGISTRY}"; then
+  rm -f "${MARKER}"
+  logger -t pocknix-oobe-marker "Steam OOBE stage 1 completed; removed ${MARKER}" 2>/dev/null || true
+fi

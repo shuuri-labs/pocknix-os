@@ -1,12 +1,35 @@
 #!/bin/bash
-# pocknix steamos-update shim — Steam's OS-update hook, always reporting "no update"; without it
-# the OOBE's required-update step dead-ends with "Updater apply error: 2".
-# Valve's exit convention, which real OTA must keep: 0 = update available / apply ok, 7 = no update.
+# pocknix steamos-update shim — Steam's OS-update hook, always reporting "no update".
+# Without it the OOBE's required-update step dead-ends with "Updater apply error: 2".
+#
+# CONTRACT (matches Valve's real script, jupiter-legacy-support /usr/bin/steamos-update,
+# renamed /usr/bin/holo-update in SteamOS 3.9; the Steam client reads ONLY the exit code):
+#   --supports-duplicate-detection      -> exit 0   (capability probe)
+#   check                               -> exit 7   (no OS update available)
+#   --enable-duplicate-detection check  -> exit 7   (no update; Valve returns 8 ONLY when an
+#                                                    update was already applied = "reboot
+#                                                    required", which we must NEVER claim)
+#   apply (no "check" arg, with or without --enable-duplicate-detection) -> exit 7
+#   anything else                       -> exit 7   (Valve: exit 1 "Unknown option"; 7 is safe)
+#
+# Exit codes Valve uses (0/1/7/8):
+#   0 = update available (check, prints buildid to stdout) / "Applied an update" (apply)
+#       => the client sets "system restart required" and reboots. MUST NOT be returned
+#          when nothing was actually applied.
+#   1 = unknown failure (check failed, bad buildid, apply failed, unknown option)
+#   7 = "No update available" — also what apply returns when there is nothing to apply.
+#   8 = "An update has already been applied, please reboot to enable it" (only with
+#       --enable-duplicate-detection check). This is the explicit "restart required" signal.
+#
+# The OOBE ALWAYS calls apply (not just check). Returning 0 there made Steam log
+# "YieldingApplyUpdateOS: OS update result: 1" -> "CSystemManagerApplyUpdateJob: system restart
+# required" -> the console rebooted right after the language/WiFi step. So apply must also
+# report 7 (nothing to apply) — verified on the Odin 3 (sessionmanager.txt).
 set -u
 for arg in "$@"; do
   case "${arg}" in
     --supports-duplicate-detection) exit 0 ;;   # capability probe
-    check) exit 7 ;;                             # no OS update available
   esac
 done
-exit 0   # apply: nothing to do, report success
+echo "No update available" >&2   # same stderr line Valve's script prints before exit 7
+exit 7   # check and apply: no update / nothing to apply -> no "restart required"

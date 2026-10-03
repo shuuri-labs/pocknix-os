@@ -1,0 +1,16 @@
+[Unit]
+Description=pocknix first-boot diagnostic dump (runs once, after boot has settled)
+# Timer, NOT a boot-transaction service. The old unit was WantedBy=multi-user.target
+# with After=multi-user.target, which kept multi-user.target in `activating` for the
+# whole 30s sleep + dump — delaying the boot AND the Steam session launch (verified
+# on the Odin 3: stopping pocknix-diag.service let the boot complete). Firing from
+# timers.target (not part of the boot transaction) lets multi-user.target complete
+# immediately; the diagnostic still runs, just after the boot has settled.
+
+[Timer]
+# 45s after boot: device probing has settled by then. The service itself still sleeps
+# 30s before dumping (wifi association settle), so the dump lands ~75s after boot.
+OnBootSec=45s
+
+[Install]
+WantedBy=timers.target

@@ -25,3 +25,8 @@
 .DS_Store
 *.swp
 __pycache__/
+
+# AYN Odin 3 ADSP charger firmware (ArmadaOS blobs) — NOT committed: maintainer
+# wants no binaries in the repo; the battery fix should come from ROCKNIX's
+# extra-firmware (qcom/sm8750/ayn/odin3/). Kept locally for testing only.
+/devices/sm8750/firmware/qcom/sm8750/ayn/odin3/*.mbn

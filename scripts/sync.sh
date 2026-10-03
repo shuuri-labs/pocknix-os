@@ -70,6 +70,32 @@ for p in \
   rsync -a --delete "${src}/" "${dst}/reference/${p}/"
 done
 
+# --- ROCKNIX extra-firmware (SM8750 blobs) -> vendor/ -----------------------
+# The Odin 3 firmware upstream linux-firmware LACKS (ath12k WCN7860 hw2.0,
+# qcom/sm8750/ayn/odin3/ ADSP/CDSP, SM8750-AYN-tplg.bin, the ADSP .jsn configs)
+# lives in ROCKNIX/extra-firmware (branch master), SM8750/ dir. Pinned to a
+# commit for reproducibility; downloaded at sync time (binaries stay out of the
+# repo — vendor/ is gitignored). build-image.sh rsyncs SM8750/ into the rootfs
+# /usr/lib/firmware for DEVICE=sm8750.
+EXTRA_FW_COMMIT="30c56e2f34af37fe372166b739d6ab277f5155b5"
+EXTRA_FW_URL="https://github.com/ROCKNIX/extra-firmware/archive/${EXTRA_FW_COMMIT}.tar.gz"
+extra_dst="${VENDOR_DIR}/rocknix-extra-firmware"
+extra_tarball="${CACHE_DIR}/extra-firmware-${EXTRA_FW_COMMIT}.tar.gz"
+if [ -d "${extra_dst}/SM8750" ] && [ -f "${extra_tarball}" ]; then
+  log "  ROCKNIX extra-firmware already present (pinned ${EXTRA_FW_COMMIT})"
+else
+  log "  downloading ROCKNIX extra-firmware (pinned ${EXTRA_FW_COMMIT}) -> vendor/ (gitignored)"
+  need_tool curl
+  need_tool tar
+  mkdir -p "${VENDOR_DIR}" "${CACHE_DIR}"
+  [ -f "${extra_tarball}" ] || curl -fL --retry 3 -o "${extra_tarball}" "${EXTRA_FW_URL}"
+  extra_tmp="$(mktemp -d)"
+  tar -xzf "${extra_tarball}" -C "${extra_tmp}"
+  rsync -a --delete "${extra_tmp}/extra-firmware-${EXTRA_FW_COMMIT}/" "${extra_dst}/"
+  rm -rf "${extra_tmp}"
+  ok "  extra-firmware populated: ${extra_dst} (SM8750/ + others)"
+fi
+
 ok "sync complete:
   kernel/${SOC}/  (committed)  $(find "${KERNEL_DIR}/patches" -name '*.patch' 2>/dev/null | wc -l | tr -d ' ') patches + dts + config
-  vendor/         (gitignored) reference scripts + firmware overlay"
+  vendor/         (gitignored) reference scripts + firmware overlay + ROCKNIX extra-firmware (SM8750)"

@@ -1,8 +1,10 @@
 #!/bin/sh
 # NM dispatcher hook (/etc/NetworkManager/dispatcher.d/50-pocknix-flathub); $1=interface, $2=action.
-# network-online.target lands ~10s before wlan0 has DNS, so a boot-time remote-add always failed;
-# the service is Before=multi-user.target, so retrying there would stall boot with no Wi-Fi around.
-# NM also fires `up` for its loopback device and connectivity-change while still NONE - both spurious.
+# The service is deliberately NOT in the boot transaction (no [Install], no network-online
+# ordering): network-online.target lands ~10s before wlan0 has DNS, so a boot-time remote-add
+# always failed, and the >300 MB flatpak seed would stall multi-user.target. The dispatcher is
+# the only thing that may start it, once a link is really up. NM also fires `up` for its loopback
+# device and connectivity-change while still NONE - both spurious.
 [ "$1" = lo ] && exit 0
 
 case "$2" in
