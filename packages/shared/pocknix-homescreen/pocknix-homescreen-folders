@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""Rebuild the Plasma Mobile (Folio) homescreen folders from the installed apps.
+
+Owns four folders in Folio's favourites bar - Games, Emulation, System, Apps -
+and regenerates them on every run, so a newly installed game is filed at the
+next login. Everything else on the homescreen belongs to the user:
+
+  * folders under any other name are never touched, loose icons stay put
+  * a managed folder the user MOVES keeps its slot; only its contents are rebuilt
+  * an app the user moved into their own folder, placed loose, or put on a page
+    is CLAIMED: it is left out of the managed folders instead of duplicated
+
+Return to game mode is the one icon a handheld must have in reach, so it goes on
+the bar loose rather than into a folder, and is claimed the same way if moved.
+
+plasmashell keeps this file in memory and rewrites it on exit, so this must run
+while the shell is stopped: the unit is ordered Before it.
+
+  --print      show the favourites JSON that would be written, change nothing
+  --first-run  also unlock the homescreen and show favourites-bar labels (once)
+"""
+import configparser
+import glob
+import json
+import os
+import re
+import sys
+
+CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+                    "plasma-org.kde.plasma.mobileshell-appletsrc")
+FOLIO_PLUGIN = "org.kde.plasma.mobile.homescreen.folio"
+GRID_WIDTH = 4
+DIRS = [
+    "/usr/share/applications",
+    os.path.expanduser("~/.local/share/applications"),
+    "/var/lib/flatpak/exports/share/applications",
+    os.path.expanduser("~/.local/share/flatpak/exports/share/applications"),
+]
+
+MANAGED = ["Games", "Emulation", "System", "Apps"]
+LOOSE = "return-to-gamemode.desktop"
+# the frontend belongs with the emulators it launches
+FORCE_EMULATION = {"es-de.desktop"}
+
+
+def blacklisted():
+    """Apps Plasma Mobile already hides from the launcher; do not resurrect them."""
+    try:
+        cp = configparser.ConfigParser(interpolation=None, strict=False)
+        cp.read(os.path.expanduser("~/.config/plasma-mobile/applications-blacklistrc"))
+        return {x.strip() for x in cp["Applications"]["blacklist"].split(",") if x.strip()}
+    except Exception:
+        return set()
+
+
+def classify():
+    bl, seen, out = blacklisted(), set(), {k: [] for k in MANAGED}
+    for directory in DIRS:
+        for path in sorted(glob.glob(os.path.join(directory, "*.desktop"))):
+            sid = os.path.basename(path)
+            if sid in seen:
+                continue
+            try:
+                text = open(path, encoding="utf-8", errors="replace").read()
+            except OSError:
+                continue
+            hidden, cats, name = False, "", ""
+            for line in text.splitlines():
+                key, _, value = line.partition("=")
+                if key in ("NoDisplay", "Hidden") and value.strip().lower() == "true":
+                    hidden = True
+                elif key == "Categories" and not cats:
+                    cats = value
+                elif key == "Name" and not name:
+                    name = value
+            if hidden or sid[:-8] in bl:
+                continue
+            seen.add(sid)
+            cat = cats.split(";")
+            if sid == LOOSE:
+                out[LOOSE] = sid
+            elif sid in FORCE_EMULATION or "Emulator" in cat:
+                out["Emulation"].append((name or sid, sid))
+            elif "System" in cat or "Settings" in cat:
+                out["System"].append((name or sid, sid))
+            elif "Game" in cat:
+                out["Games"].append((name or sid, sid))
+            else:
+                out["Apps"].append((name or sid, sid))
+    return out
+
+
+def rebuild(favorites, pages):
+    """Regenerate the managed folders inside `favorites`, leaving the rest alone."""
+    kept, claimed, where = [], set(), {}
+    for item in favorites:
+        if item.get("type") == "folder" and item.get("name") in MANAGED:
+            where[item["name"]] = (item.get("row", 0), item.get("column", 0))
+            continue
+        if item.get("type") == "folder":
+            claimed.update(item.get("apps", []))
+        elif item.get("storageId"):
+            claimed.add(item["storageId"])
+        kept.append(item)
+    for page in pages:
+        for item in page:
+            if item.get("type") == "folder":
+                claimed.update(item.get("apps", []))
+            elif item.get("storageId"):
+                claimed.add(item["storageId"])
+
+    taken = {(i.get("row"), i.get("column")) for i in kept}
+    taken.update(where.values())
+
+    def free_slot():
+        row = 0
+        while True:
+            for column in range(GRID_WIDTH):
+                if (row, column) not in taken:
+                    return row, column
+            row += 1
+
+    found = classify()
+    folders = []
+    for name in MANAGED:
+        apps = [sid for _, sid in sorted(found[name], key=lambda t: t[0].lower())
+                if sid not in claimed]
+        if not apps:
+            continue
+        row, column = where.get(name) or free_slot()
+        taken.add((row, column))
+        folders.append({"type": "folder", "name": name,
+                        "row": row, "column": column, "apps": apps})
+    if found.get(LOOSE) and LOOSE not in claimed:
+        row, column = free_slot()
+        taken.add((row, column))
+        folders.append({"type": "application", "storageId": LOOSE, "row": row, "column": column})
+    return folders + kept, folders, claimed
+
+
+class Config:
+    """Minimal editor for a KConfig ini: keeps every byte it does not touch."""
+
+    def __init__(self, text):
+        self.lines = text.splitlines()
+
+    def _span(self, group):
+        start = None
+        for i, line in enumerate(self.lines):
+            if line.startswith("["):
+                if start is not None:
+                    return start, i
+                if line.strip() == group:
+                    start = i
+        return (start, len(self.lines)) if start is not None else None
+
+    def get(self, group, key, fallback=None):
+        span = self._span(group)
+        if span is None:
+            return fallback
+        for line in self.lines[span[0] + 1:span[1]]:
+            if line.startswith(key + "="):
+                return line[len(key) + 1:]
+        return fallback
+
+    def set(self, group, key, value):
+        span = self._span(group)
+        if span is None:
+            self.lines += ["", group, key + "=" + value]
+            return
+        for i in range(span[0] + 1, span[1]):
+            if self.lines[i].startswith(key + "="):
+                self.lines[i] = key + "=" + value
+                return
+        end = span[1]
+        while end > span[0] + 1 and self.lines[end - 1] == "":
+            end -= 1
+        self.lines.insert(end, key + "=" + value)
+
+    def folio_id(self):
+        """The containment running Folio; ids are not fixed (a second screen shifts them)."""
+        current = None
+        for line in self.lines:
+            m = re.match(r"^\[Containments\]\[(\d+)\]$", line.strip())
+            if m:
+                current = m.group(1)
+            elif line.startswith("[") :
+                current = None
+            elif current and line.strip() == "plugin=" + FOLIO_PLUGIN:
+                return current
+        return None
+
+    def text(self):
+        return "\n".join(self.lines) + "\n"
+
+
+def read_json(value, fallback):
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return fallback
+
+
+def main():
+    try:
+        conf = Config(open(CONF, encoding="utf-8").read())
+    except FileNotFoundError:
+        # First desktop login: the shell has not created its config yet. Nothing to file into;
+        # pocknix-homescreen-init handles that login, this unit the ones after.
+        print("pocknix-homescreen-folders: no shell config yet, nothing to do", file=sys.stderr)
+        return
+    cid = conf.folio_id()
+    if cid is None:
+        print("pocknix-homescreen-folders: no Folio containment in the shell config", file=sys.stderr)
+        return
+    group, folio = "[Containments][%s]" % cid, "[Containments][%s][Folio]" % cid
+
+    favorites, folders, claimed = rebuild(read_json(conf.get(folio, "favorites"), []),
+                                          read_json(conf.get(folio, "pages"), [[]]))
+    payload = json.dumps(favorites, ensure_ascii=False, separators=(",", ":"))
+    if "--print" in sys.argv:
+        print(payload)
+        return
+
+    conf.set(folio, "favorites", payload)
+    if "--first-run" in sys.argv:
+        # Plasma Mobile ships the containment user-immutable: nothing can be dragged and the
+        # user cannot make folders of their own. Set once, so a later re-lock is respected.
+        conf.set(group, "immutability", "0")
+        conf.set(folio, "showFavoritesAppLabels", "true")
+
+    tmp = CONF + ".new"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write(conf.text())
+    os.replace(tmp, CONF)
+
+    for item in folders:
+        print("%-24s r%dc%d %2d apps" % (item.get("name") or item["storageId"], item["row"],
+                                          item["column"], len(item.get("apps", []))), file=sys.stderr)
+    if claimed - {LOOSE}:
+        print("left alone (yours): %s" % ", ".join(sorted(claimed - {LOOSE})), file=sys.stderr)
+
+
+main()
