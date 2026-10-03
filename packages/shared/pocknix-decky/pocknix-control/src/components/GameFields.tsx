@@ -24,7 +24,7 @@ export const lavdOptions = [
   { data: "autopilot", label: "Autopilot" },
   { data: "performance", label: "Performance" },
 ];
-const globalChoice = { data: "", label: "Use global" };
+const globalChoice = { data: "", label: "From Steam profile" };
 
 export function EnvVarsModal({ initial, onSave, closeModal }: { initial: string; onSave: (value: string) => void; closeModal?: () => void }) {
   const [value, setValue] = useState(initial);
@@ -99,6 +99,7 @@ export function PerfFields({ values, patch }: {
   const lavdValue = perGameLavd.some((option) => option.data === String(values.lavdMode ?? "")) ? String(values.lavdMode ?? "") : "";
   return (
     <>
+      <div className="pocknix-note">Overrides the Steam performance profile</div>
       <SelectEdit label="CPU Scheduler" value={lavdValue} options={perGameLavd} onChange={(id) => patch({ lavdMode: id })} />
       <SelectEdit label="Fan Curve" value={fanValue} options={perGameFan} onChange={(id) => patch({ fanMode: id })} />
     </>

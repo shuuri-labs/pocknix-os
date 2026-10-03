@@ -1,0 +1,28 @@
+From d5bf8b19b4d12aa70ad391b3c12c74e92081d52a Mon Sep 17 00:00:00 2001
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 00:57:16 +0200
+Subject: [PATCH 5/6] ds_inhibit: Default to disabled
+
+It inhibits the kernel evdev nodes of Sony pads while Steam holds their
+hidraw. InputPlumber reads those same nodes, so with it on a DualSense goes
+silent once Steam starts. It can still be enabled through state.toml.
+---
+ steamos-manager/src/daemon/root.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/steamos-manager/src/daemon/root.rs b/steamos-manager/src/daemon/root.rs
+index 7a71215..bff19a3 100644
+--- a/steamos-manager/src/daemon/root.rs
++++ b/steamos-manager/src/daemon/root.rs
+@@ -59,7 +59,7 @@ pub(crate) struct DsInhibit {
+ 
+ impl Default for DsInhibit {
+     fn default() -> DsInhibit {
+-        DsInhibit { enabled: true }
++        DsInhibit { enabled: false }
+     }
+ }
+ 
+-- 
+2.54.0 (Apple Git-157)
+

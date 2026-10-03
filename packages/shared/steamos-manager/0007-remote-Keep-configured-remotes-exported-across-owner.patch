@@ -1,0 +1,58 @@
+From 61ffe7306a1a7ada69272b579eaf73a99dcf080f Mon Sep 17 00:00:00 2001
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 01:22:21 +0200
+Subject: [PATCH 7/7] remote: Keep configured remotes exported across owner changes
+
+A remote that came up after startup was added from the NameOwnerChanged
+task while it held RemoteInterface1 for writing. ObjectServer::at then
+reads every interface at the path to build InterfacesAdded, so the daemon
+deadlocked and stopped answering any call. Remotes from remotes.d are now
+exported at startup whether or not their service is up yet, and stay
+exported when it exits: their proxies address the well-known name, so
+calls reach the next owner. Transient remotes keep the old behaviour.
+---
+ steamos-manager-macros/src/lib.rs | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/steamos-manager-macros/src/lib.rs b/steamos-manager-macros/src/lib.rs
+index 583b2d4..504b4ed 100644
+--- a/steamos-manager-macros/src/lib.rs
++++ b/steamos-manager-macros/src/lib.rs
+@@ -856,7 +856,16 @@ impl ToTokens for BaseInterface {
+                                 "/",
+                             )
+                             .await?;
+-                            peer_proxy.ping().await?;
++                            match peer_proxy.ping().await.map_err(fdo::Error::from) {
++                                Ok(()) => (),
++                                // Exported even while the service is down: adding the
++                                // interface later, from the owner-change task, deadlocks the
++                                // object server (see unload).
++                                Err(fdo::Error::ServiceUnknown(_) | fdo::Error::NameHasNoOwner(_)) => {
++                                    tracing::info!("Remote {} not running yet, exporting anyway", self.destination);
++                                }
++                                Err(e) => return Err(e),
++                            }
+                         }
+                         #[cfg(test)]
+                         {
+@@ -1200,6 +1209,16 @@ pub fn remote_manager(input: TokenStream) -> TokenStream {
+                 name: &str,
+                 ctxt: &SignalEmitter<'_>,
+             ) -> Result<()> {
++                // The owner-change task holds RemoteInterface1 for writing while it runs this,
++                // and re-adding the interface on the next owner then deadlocks: ObjectServer::at
++                // reads every interface at the path for InterfacesAdded. A configured remote
++                // keeps its interface instead; calls follow the well-known name to the new owner.
++                #(if name == <#iface as Interface>::name().as_str() {
++                    if self.#var.as_ref().is_some_and(|owner| !owner.is_transient) {
++                        tracing::debug!("Keeping configured remote {name} across owner change");
++                        return Ok(());
++                    }
++                })*
+                 self.unregister(name, None, ctxt, true).await?;
+                 Ok(())
+             }
+-- 
+2.54.0 (Apple Git-157)
+

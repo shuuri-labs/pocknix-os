@@ -1,0 +1,58 @@
+From 6af1632eaa013c29e9cb302ea7bc34e850bb6980 Mon Sep 17 00:00:00 2001
+From: Radical <radical@radical.fun>
+Date: Mon, 21 Sep 2026 20:30:16 +0200
+Subject: [PATCH 2/6] inputplumber: Only manage target devices when configured
+ to
+
+Without an [inputplumber] section DeckService still forces every composite
+device to deck-uhid, overriding whatever else owns target devices.
+
+From armada-os/armada packages/steamos-manager/patches/0011, verbatim.
+---
+ steamos-manager/src/inputplumber.rs | 21 +++++++++++++++++----
+ 1 file changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/steamos-manager/src/inputplumber.rs b/steamos-manager/src/inputplumber.rs
+index 0da1ea7..0a0a05b 100644
+--- a/steamos-manager/src/inputplumber.rs
++++ b/steamos-manager/src/inputplumber.rs
+@@ -103,12 +103,13 @@ impl DeckService {
+             .await?;
+         if !self.is_deck(&proxy).await? {
+             let config = device_config().await?;
+-            let targets: &[_] = config
++            let Some(targets) = config
+                 .as_ref()
+                 .and_then(|c| c.inputplumber.as_ref())
+-                .map_or(&[InputPlumberTargetDevice::DeckUhid], |ip| {
+-                    ip.target_devices.as_slice()
+-                });
++                .map(|ip| ip.target_devices.as_slice())
++            else {
++                return Ok(());
++            };
+             let new_targets: Vec<&str> = targets.iter().map(AsRef::as_ref).collect();
+ 
+             debug!(
+@@ -127,6 +128,18 @@ impl Service for DeckService {
+     const NAME: &'static str = "inputplumber";
+ 
+     async fn run(&mut self) -> Result<()> {
++        // Nothing asked us to manage target devices, so don't: the fallback
++        // below would override whatever else owns them on this device.
++        if device_config()
++            .await?
++            .as_ref()
++            .and_then(|config| config.inputplumber.as_ref())
++            .is_none()
++        {
++            info!("No inputplumber configuration, leaving target devices alone");
++            return Ok(());
++        }
++
+         let object_manager = ObjectManagerProxy::new(
+             &self.connection,
+             "org.shadowblip.InputPlumber",
+-- 
+2.54.0 (Apple Git-157)
+

@@ -3,14 +3,14 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=19
-pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy"
+pkgrel=20
+pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL2')
 # pocknix-core rides along so a plain -Syu delivers the mandatory layer to devices that
 # predate it: a new package name only reaches installed devices via a dep edge.
-depends=('sudo' 'pocknix-core')
+depends=('sudo' 'pocknix-core' 'python' 'python-gobject')
 optdepends=('inputplumber: the 001-inputplumber suspend hooks manage its USB/IP deck target'
             'scx-scheds: scx_lavd for pocknix-lavd.service (unit self-skips without it)')
 install=pocknix-bsp-common.install
@@ -27,10 +27,13 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'pocknix-refresh-abl-kit'
         'pocknix-gamepad-target' 'pocknix-gamepad-target.service'
         'pocknix-second-screen' 'pocknix-second-screen.service'
-        'iwd-wait-wlan0.conf')
+        'iwd-wait-wlan0.conf'
+        'pocknix-perfd' 'pocknix_perf.py' 'pocknix-perf' 'pocknix-perfd.service'
+        'org.pocknix.Perf.service' 'org.pocknix.Perf.conf' 'power-profiles.conf')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -98,4 +101,14 @@ package() {
 
   install -Dm644 "${srcdir}/iwd-wait-wlan0.conf" \
     "${pkgdir}/usr/lib/systemd/system/iwd.service.d/10-pocknix-wait-wlan0.conf"
+
+  install -Dm755 "${srcdir}/pocknix-perfd" "${pkgdir}/usr/lib/pocknix/pocknix-perfd"
+  install -Dm644 "${srcdir}/pocknix_perf.py" "${pkgdir}/usr/lib/pocknix/pocknix_perf.py"
+  install -Dm755 "${srcdir}/pocknix-perf" "${pkgdir}/usr/bin/pocknix-perf"
+  install -Dm644 "${srcdir}/power-profiles.conf" "${pkgdir}/usr/share/pocknix/power-profiles.conf"
+  install -Dm644 "${srcdir}/pocknix-perfd.service" "${pkgdir}/usr/lib/systemd/system/pocknix-perfd.service"
+  install -d "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants"
+  ln -sf "../pocknix-perfd.service" "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants/pocknix-perfd.service"
+  install -Dm644 "${srcdir}/org.pocknix.Perf.service" "${pkgdir}/usr/share/dbus-1/system-services/org.pocknix.Perf.service"
+  install -Dm644 "${srcdir}/org.pocknix.Perf.conf" "${pkgdir}/usr/share/dbus-1/system.d/org.pocknix.Perf.conf"
 }

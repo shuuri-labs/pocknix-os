@@ -1,0 +1,91 @@
+# steamos-manager - the D-Bus daemon behind Steam's QAM performance controls. The pinned
+# upstream Rust is needed because the locked base carries no rust/cargo.
+pkgname=steamos-manager
+pkgver=26.4.1.r12.g8e2883d
+pkgrel=1
+_commit=8e2883d0d7e2fc3994e822ca9853c03561ca6eec
+_rustver=1.99.0
+pkgdesc="SteamOS Manager daemon (Steam's system-integration D-Bus service)"
+arch=('aarch64')
+url="https://gitlab.steamos.cloud/holo/steamos-manager"
+license=('MIT' 'BSD-2-Clause')
+depends=('dbus' 'glib2' 'systemd-libs' 'gcc-libs' 'iw')
+makedepends=('git' 'pkgconf')
+options=('!lto' '!debug')
+source=("steamos-manager::git+https://gitlab.steamos.cloud/holo/steamos-manager.git#commit=${_commit}"
+        "https://static.rust-lang.org/dist/rust-${_rustver}-aarch64-unknown-linux-gnu.tar.xz"
+        '0001-Allow-CpuScaling1-to-be-served-by-a-remote-interface.patch'
+        '0002-inputplumber-Only-manage-target-devices-when-configu.patch'
+        '0003-wifi-Never-switch-the-backend.patch'
+        '0004-remote-Relay-property-changes-for-remotes-present-at.patch'
+        '0005-ds_inhibit-Default-to-disabled.patch'
+        '0006-screenreader-Make-speech-dispatcher-an-optional-defa.patch'
+        '0007-remote-Keep-configured-remotes-exported-across-owner.patch'
+        'platform.toml' 'pocknix.toml' 'pocknix-remotes.toml' '10-pocknix.conf')
+sha256sums=('SKIP'
+            '5a30ce742be0835d9b23fc862db5cbbbc71464e1c9b1fca22917e10e4ba32a92'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+_toolchain() {
+  export PATH="${srcdir}/rust/bin:${PATH}"
+  # Crate downloads cached beside the other sources so rebuilds stay offline.
+  export CARGO_HOME="${SRCDEST:-${srcdir}}/cargo-home"
+}
+
+prepare() {
+  "${srcdir}/rust-${_rustver}-aarch64-unknown-linux-gnu/install.sh" \
+    --prefix="${srcdir}/rust" --disable-ldconfig \
+    --components=rustc,cargo,rust-std-aarch64-unknown-linux-gnu >/dev/null
+  _toolchain
+  cd steamos-manager
+  # Patch numbers are never reused; dropped ones are listed in PATCHES.md.
+  local p
+  for p in "${srcdir}"/000[1-7]-*.patch; do
+    patch -p1 < "${p}"
+  done
+  cargo fetch --locked
+}
+
+build() {
+  _toolchain
+  cd steamos-manager
+  # Default features link libspeechd, which the base does not carry.
+  cargo build --release --frozen --no-default-features --target-dir target
+}
+
+check() {
+  # The harness builds with --nocheck: run this by hand after rebasing the series.
+  _toolchain
+  cd steamos-manager
+  cargo test --frozen --no-default-features --target-dir target
+}
+
+package() {
+  cd steamos-manager
+  # Not `make install`: it rebuilds without --no-default-features.
+  install -Dm755 target/release/steamos-manager "${pkgdir}/usr/lib/steamos-manager"
+  install -Dm755 target/release/steamosctl "${pkgdir}/usr/bin/steamosctl"
+  install -Dm644 -t "${pkgdir}/usr/share/dbus-1/interfaces" data/interfaces/*
+  install -Dm644 data/system/com.steampowered.SteamOSManager1.service \
+    "${pkgdir}/usr/share/dbus-1/system-services/com.steampowered.SteamOSManager1.service"
+  install -Dm644 data/system/steamos-manager.service "${pkgdir}/usr/lib/systemd/system/steamos-manager.service"
+  install -Dm644 data/user/com.steampowered.SteamOSManager1.service \
+    "${pkgdir}/usr/share/dbus-1/services/com.steampowered.SteamOSManager1.service"
+  install -Dm644 data/user/steamos-manager.service "${pkgdir}/usr/lib/systemd/user/steamos-manager.service"
+  install -Dm644 "${srcdir}/10-pocknix.conf" "${pkgdir}/usr/lib/systemd/system/steamos-manager.service.d/10-pocknix.conf"
+  install -Dm644 "${srcdir}/10-pocknix.conf" "${pkgdir}/usr/lib/systemd/user/steamos-manager.service.d/10-pocknix.conf"
+
+  # RootManager runs format and other root jobs for any caller, so only wheel may reach it.
+  install -Dm644 data/system/com.steampowered.SteamOSManager1.conf \
+    "${pkgdir}/usr/share/dbus-1/system.d/com.steampowered.SteamOSManager1.conf"
+  sed -i 's|<policy context="default">|<policy group="wheel">|' \
+    "${pkgdir}/usr/share/dbus-1/system.d/com.steampowered.SteamOSManager1.conf"
+  grep -q '<policy group="wheel">' "${pkgdir}/usr/share/dbus-1/system.d/com.steampowered.SteamOSManager1.conf"
+
+  install -Dm644 "${srcdir}/platform.toml" "${pkgdir}/usr/share/steamos-manager/platform.toml"
+  install -Dm644 "${srcdir}/pocknix.toml" "${pkgdir}/usr/share/steamos-manager/devices/pocknix.toml"
+  install -Dm644 "${srcdir}/pocknix-remotes.toml" "${pkgdir}/usr/share/steamos-manager/remotes.d/pocknix.toml"
+  install -dm755 "${pkgdir}/etc/steamos-manager/remotes.d"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

@@ -1,0 +1,56 @@
+From a60e0e7ae8e3c83c20fc7841e28f69595b5bee5c Mon Sep 17 00:00:00 2001
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 00:56:56 +0200
+Subject: [PATCH 4/6] remote: Relay property changes for remotes present at
+ startup
+
+The relay task only started from load(), which runs on NameOwnerChanged.
+A remote that already owned its name when the config was applied never got
+one, so its PropertiesChanged never reached the session bus and clients
+saw stale cached values. Start it on a successful register too, aborting
+any previous task so a later load() does not double it.
+---
+ steamos-manager-macros/src/lib.rs | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/steamos-manager-macros/src/lib.rs b/steamos-manager-macros/src/lib.rs
+index 3fcac6c..583b2d4 100644
+--- a/steamos-manager-macros/src/lib.rs
++++ b/steamos-manager-macros/src/lib.rs
+@@ -600,6 +600,9 @@ impl ToTokens for BaseInterface {
+         } else {
+             quote! {
+                 async fn start_signal_task(&mut self) -> Result<()> {
++                    if let Some(signal_task) = self.signal_task.take() {
++                        signal_task.abort();
++                    }
+                     let signal_task = Self::signal_task(
+                         self.destination.clone(),
+                         self.path.clone(),
+@@ -1087,7 +1090,10 @@ pub fn remote_manager(input: TokenStream) -> TokenStream {
+                     #(_ if name == <#iface as Interface>::name().as_str() => {
+                         if let Some(iface) = self.#var.as_mut() {
+                             match iface.register().await {
+-                                Ok(_) => (),
++                                // A remote already on the bus at configure time never sees the
++                                // NameOwnerChanged that starts the relay in load(), so start it here.
++                                Ok(true) => iface.start_signal_task().await.map_err(|e| fdo::Error::Failed(e.to_string()))?,
++                                Ok(false) => (),
+                                 Err(fdo::Error::ServiceUnknown(_) | fdo::Error::NameHasNoOwner(_)) => (),
+                                 Err(e) => return Err(e.into()),
+                             }
+@@ -1103,7 +1109,10 @@ pub fn remote_manager(input: TokenStream) -> TokenStream {
+                             )
+                             .await?;
+                             match iface.register().await {
+-                                Ok(_) => (),
++                                // A remote already on the bus at configure time never sees the
++                                // NameOwnerChanged that starts the relay in load(), so start it here.
++                                Ok(true) => iface.start_signal_task().await.map_err(|e| fdo::Error::Failed(e.to_string()))?,
++                                Ok(false) => (),
+                                 Err(fdo::Error::ServiceUnknown(_) | fdo::Error::NameHasNoOwner(_)) => (),
+                                 Err(e) => return Err(e.into()),
+                             }
+-- 
+2.54.0 (Apple Git-157)
+

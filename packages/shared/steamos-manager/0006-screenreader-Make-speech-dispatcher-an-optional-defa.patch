@@ -1,0 +1,92 @@
+From 84f78392c14a5e8e803ca5981e35382c54e31271 Mon Sep 17 00:00:00 2001
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 00:57:59 +0200
+Subject: [PATCH 6/6] screenreader: Make speech-dispatcher an optional default
+ feature
+
+Building without it drops the libspeechd link (and the bindgen/clang build
+dependency) for systems that ship neither orca nor speech-dispatcher. The
+screen reader interfaces are already gated on orca being present; without
+the feature the voice list is simply empty.
+---
+ steamos-manager/Cargo.toml          |  5 ++++-
+ steamos-manager/src/screenreader.rs | 22 +++++++++++++++++++---
+ 2 files changed, 23 insertions(+), 4 deletions(-)
+
+diff --git a/steamos-manager/Cargo.toml b/steamos-manager/Cargo.toml
+index a24a47d..fe46ecb 100644
+--- a/steamos-manager/Cargo.toml
++++ b/steamos-manager/Cargo.toml
+@@ -4,6 +4,9 @@ version = "26.4.1"
+ edition = "2024"
+ repository = "https://gitlab.steamos.cloud/holo/steamos-manager/"
+ 
++[features]
++default = ["speech-dispatcher"]
++
+ [dependencies]
+ anyhow = "1"
+ async-trait = "0.1"
+@@ -21,7 +24,7 @@ num_enum = "0.7"
+ regex = { version = "1", default-features = false, features = ["unicode-perl"] }
+ serde = { version = "1.0", default-features = false, features = ["derive"] }
+ serde_json = "1.0"
+-speech-dispatcher = "0.16"
++speech-dispatcher = { version = "0.16", optional = true }
+ steamos-manager-macros = { path = "../steamos-manager-macros" }
+ steamos-manager-proxy = { path = "../steamos-manager-proxy" }
+ strum = { version = "0.28", features = ["derive"] }
+diff --git a/steamos-manager/src/screenreader.rs b/steamos-manager/src/screenreader.rs
+index 1017895..603e2a7 100644
+--- a/steamos-manager/src/screenreader.rs
++++ b/steamos-manager/src/screenreader.rs
+@@ -11,12 +11,13 @@ use gio::{Settings, prelude::SettingsExt};
+ use input_linux::Key;
+ use nix::sys::signal;
+ use nix::unistd::Pid;
+-#[cfg(not(test))]
++#[cfg(all(not(test), feature = "speech-dispatcher"))]
+ use nix::unistd::{Uid, User};
+ use num_enum::TryFromPrimitive;
+ use serde_json::{Map, Value};
++#[cfg(feature = "speech-dispatcher")]
+ use speech_dispatcher::Voice;
+-#[cfg(not(test))]
++#[cfg(all(not(test), feature = "speech-dispatcher"))]
+ use speech_dispatcher::{Connection as SDConnection, Mode};
+ use std::collections::HashMap;
+ use std::io::ErrorKind;
+@@ -110,6 +111,16 @@ pub(crate) struct OrcaManager<'dbus> {
+     locale: String,
+ }
+ 
++// Same shape as speech_dispatcher::Voice, for builds without libspeechd; the
++// voice list then stays empty.
++#[cfg(not(feature = "speech-dispatcher"))]
++#[derive(Clone, Debug)]
++struct Voice {
++    name: String,
++    language: String,
++    variant: Option<String>,
++}
++
+ fn default_map() -> Value {
+     Value::Object(Map::new())
+ }
+@@ -158,7 +169,12 @@ impl<'dbus> OrcaManager<'dbus> {
+         Ok(manager)
+     }
+ 
+-    #[cfg(not(test))]
++    #[cfg(all(not(test), not(feature = "speech-dispatcher")))]
++    fn init_voice_list(&mut self) -> Result<()> {
++        Ok(())
++    }
++
++    #[cfg(all(not(test), feature = "speech-dispatcher"))]
+     fn init_voice_list(&mut self) -> Result<()> {
+         const CLIENT_NAME: &str = "steamos-manager";
+         const CONNECTION_NAME: &str = "steamos-manager";
+-- 
+2.54.0 (Apple Git-157)
+

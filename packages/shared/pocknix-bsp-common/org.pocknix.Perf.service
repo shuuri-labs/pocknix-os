@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.pocknix.Perf
+Exec=/bin/false
+User=root
+SystemdService=pocknix-perfd.service

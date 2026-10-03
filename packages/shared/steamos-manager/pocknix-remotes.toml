@@ -1,0 +1,13 @@
+# Served by pocknix-perfd (pocknix-bsp-common).
+
+[PerformanceProfile1]
+bus_name = "org.pocknix.Perf"
+object_path = "/org/pocknix/Perf"
+
+[GpuPerformanceLevel1]
+bus_name = "org.pocknix.Perf"
+object_path = "/org/pocknix/Perf"
+
+[CpuScaling1]
+bus_name = "org.pocknix.Perf"
+object_path = "/org/pocknix/Perf"

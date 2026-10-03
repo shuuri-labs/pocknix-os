@@ -1,0 +1,59 @@
+From de0ab2cbb3edbe92de0ecd59af9f06bd26990704 Mon Sep 17 00:00:00 2001
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 00:56:12 +0200
+Subject: [PATCH 3/6] wifi: Never switch the backend
+
+Changing it disables the other backend's unit and restarts NetworkManager.
+On a system that ships only one backend that leaves wifi dead, so ignore
+the request and keep reporting whatever NetworkManager is configured for.
+---
+ steamos-manager/src/wifi.rs | 26 ++++++++++++++++++++++----
+ 1 file changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/steamos-manager/src/wifi.rs b/steamos-manager/src/wifi.rs
+index 1b7dce1..2bda091 100644
+--- a/steamos-manager/src/wifi.rs
++++ b/steamos-manager/src/wifi.rs
+@@ -379,10 +379,11 @@ pub(crate) async fn get_wifi_backend() -> Result<WifiBackend> {
+     Ok(get_nm_settings().await?.backend)
+ }
+ 
+-pub(crate) async fn set_wifi_backend(backend: WifiBackend, connection: &Connection) -> Result<()> {
+-    let mut settings = get_nm_settings().await?;
+-    settings.backend = backend;
+-    set_nm_settings(settings, true, connection).await
++pub(crate) async fn set_wifi_backend(backend: WifiBackend, _connection: &Connection) -> Result<()> {
++    // The image ships iwd only. A switch disables the running backend's unit, so a
++    // stray request (Steam's force-wpa_supplicant toggle) would leave wifi dead.
++    debug!("Ignoring request to switch the wifi backend to {backend}");
++    Ok(())
+ }
+ 
+ pub(crate) async fn list_wifi_interfaces() -> Result<Vec<String>> {
+@@ -624,6 +625,23 @@ mod test {
+         );
+     }
+ 
++    #[tokio::test]
++    async fn test_set_wifi_backend_is_noop() {
++        let mut h = testing::start();
++        let connection = h.new_dbus().await.expect("dbus");
++
++        create_dir_all(path(WIFI_BACKEND_PATHS.last().unwrap()))
++            .await
++            .expect("create_dir_all");
++
++        // No systemd mocks are registered, so any unit change would fail the test.
++        set_wifi_backend(WifiBackend::WPASupplicant, &connection)
++            .await
++            .expect("set_wifi_backend");
++
++        assert!(!try_exists(path(WIFI_BACKEND_FILE)).await.unwrap());
++    }
++
+     #[tokio::test]
+     async fn test_set_nm_settings_no_restart() {
+         let mut h = testing::start();
+-- 
+2.54.0 (Apple Git-157)
+

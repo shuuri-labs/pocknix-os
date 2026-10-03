@@ -25,8 +25,6 @@ const definePlugin = (fn) => {
 };
 
 const getConfig = () => call("get_config");
-const setFanMode = (mode) => call("set_fan_mode", mode);
-const setLavdMode = (mode) => call("set_lavd_mode", mode);
 const gameLifetime = (appid, running) => call("game_lifetime", appid, running);
 const saveTweaks = (data) => call("save_tweaks", data);
 const exportConfig = (appid, name, basename, allowOverwrite) => call("export_config", appid, name, basename, allowOverwrite);
@@ -763,7 +761,7 @@ const lavdOptions = [
     { data: "autopilot", label: "Autopilot" },
     { data: "performance", label: "Performance" },
 ];
-const globalChoice = { data: "", label: "Use global" };
+const globalChoice = { data: "", label: "From Steam profile" };
 function EnvVarsModal({ initial, onSave, closeModal }) {
     const [value, setValue] = SP_REACT.useState(initial);
     return (SP_JSX.jsx(DFL.ConfirmModal, { strTitle: "Environment Variables", strDescription: 'Space-separated KEY=VALUE pairs; quote values with spaces, e.g. DXVK_CONFIG="dxgi.customDeviceDesc = GTX 480". Steam launch options win over these.', strOKButtonText: "Save", onCancel: () => closeModal?.(), onOK: () => {
@@ -787,7 +785,7 @@ function PerfFields({ values, patch }) {
     const perGameLavd = [globalChoice, ...lavdOptions];
     const fanValue = perGameFan.some((option) => option.data === String(values.fanMode ?? "")) ? String(values.fanMode ?? "") : "";
     const lavdValue = perGameLavd.some((option) => option.data === String(values.lavdMode ?? "")) ? String(values.lavdMode ?? "") : "";
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: lavdValue, options: perGameLavd, onChange: (id) => patch({ lavdMode: id }) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: fanValue, options: perGameFan, onChange: (id) => patch({ fanMode: id }) })] }));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("div", { className: "pocknix-note", children: "Overrides the Steam performance profile" }), SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: lavdValue, options: perGameLavd, onChange: (id) => patch({ lavdMode: id }) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: fanValue, options: perGameFan, onChange: (id) => patch({ fanMode: id }) })] }));
 }
 /** The per-game tweak controls, shared by the Games tab and the library context-menu modal. */
 function TweakFields({ config, appid, values, patch }) {
@@ -895,17 +893,6 @@ function Games({ config, setConfig, reload }) {
         const saved = games.find((candidate) => candidate.appid === id);
         setConfig((current) => (current ? { ...current, selectedGame: saved || null } : current));
     };
-    // Default target: FEX/audio/env edit tweaks.global; fan + scheduler are the LIVE system
-    // modes, applied immediately through the backend.
-    const applyMode = async (setter, mode) => {
-        try {
-            const next = await setter(mode);
-            setConfig((current) => (current ? { ...current, fanMode: next.fanMode, lavdMode: next.lavdMode } : current));
-        }
-        catch (error) {
-            reload();
-        }
-    };
     const presets = config.fexProfiles || {};
     const storedProfile = values.fexProfile;
     const fexValue = storedProfile && presets[storedProfile] ? storedProfile : "default";
@@ -913,7 +900,7 @@ function Games({ config, setConfig, reload }) {
     const storedLatency = String(values.audioLatency ?? "");
     const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
     const showFields = editingDefault || perGameEnabled;
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), showFields ? (SP_JSX.jsx(DFL.PanelSection, { title: "PERFORMANCE", children: editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) })] })) : (SP_JSX.jsx(PerfFields, { values: values, patch: patchSettings })) })) : null, showFields ? (SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx("div", { className: "pocknix-note", children: "Changes apply on next game launch" }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => {
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), showFields && !editingDefault ? (SP_JSX.jsx(DFL.PanelSection, { title: "PERFORMANCE", children: SP_JSX.jsx(PerfFields, { values: values, patch: patchSettings }) })) : null, showFields ? (SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx("div", { className: "pocknix-note", children: "Changes apply on next game launch" }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => {
                                     patchSettings({ fexProfile: id });
                                     // Enabled games without their own profile inherit this pick; resync their tokens.
                                     for (const [appid, entry] of Object.entries(tweaks.games)) {
