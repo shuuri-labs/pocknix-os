@@ -32,3 +32,9 @@ pugixml
 sfml
 soundtouch
 zlib-ng
+
+# --- desktop Plasma flavour (opt-in: pacman -S pocknix-desktop-plasma) ---
+plasma-desktop
+systemsettings
+kmenuedit
+polkit-kde-agent
