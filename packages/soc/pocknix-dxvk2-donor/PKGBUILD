@@ -1,20 +1,32 @@
-# DXVK 2.7 donor that pocknix-proton-prep swaps into downloaded Valve ARM Protons on
-# POCKNIX_GPU_DXVK3=no boards. Publish to the sm8250 repo ONLY; it reaches devices via the
-# pocknix-device-sm8250 dep edge.
+# DXVK 2.7 donor plus the swap that puts it into a downloaded Valve ARM Proton whose DXVK needs
+# 8-bit storage (a6xx has none). Publish to the sm8250 repo ONLY; it reaches devices via the
+# pocknix-device-sm8250 dep edge, and the swap ships and leaves with the dlls it needs.
 pkgname=pocknix-dxvk2-donor
-_donor=dxvk-arm64-2.7.1-467-valve-proton11
-pkgver=2.7.1.467
-pkgrel=2
-pkgdesc="Valve Proton 11 DXVK 2.7.1-467 donor dlls for a6xx (no storageBuffer8BitAccess)"
+_donor=dxvk-arm64-2.7.1-498-valve-proton11
+pkgver=2.7.1.498
+pkgrel=1
+pkgdesc="Valve Proton 11 DXVK 2.7.1-498 donor dlls for a6xx (no storageBuffer8BitAccess)"
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('zlib')
-depends=('pocknix-steam')
+depends=('pocknix-steam' 'python')
 options=('!strip')
-source=("https://pocknix.shuuri.net/mirror/${_donor}.tar.xz")
-sha512sums=('0360fd5c00c16381be4380ea3f7b1f4c4afe6721fef483ad092bfd538bc57b2b4a869a17c084fbc2a795fc99c9dba10cf1a0258910fbb83afbe1a0257cf24962')
+source=("https://pocknix.shuuri.net/mirror/${_donor}.tar.xz"
+        'pocknix-dxvk2-swap' 'pocknix-dxvk2-swap.service')
+sha512sums=('0b87a6efbf21cde53477b2852713a43d905e23387bdc4a507a020993f6835df53cac7fd5cb32083cc1561e3be93d673df86f57073d1d0b7ca706e0ec33b318c0'
+            'SKIP' 'SKIP')
 
 package() {
   mkdir -p "${pkgdir}/usr/share/pocknix-steam"
   cp -a "${srcdir}/dxvk" "${pkgdir}/usr/share/pocknix-steam/dxvk2-donor"
+  install -Dm755 "${srcdir}/pocknix-dxvk2-swap" "${pkgdir}/usr/lib/pocknix/pocknix-dxvk2-swap"
+  # pocknix-proton-prep runs proton-prep.d before Steam starts: the boot-time pass
+  install -d "${pkgdir}/usr/lib/pocknix/proton-prep.d"
+  ln -s ../pocknix-dxvk2-swap "${pkgdir}/usr/lib/pocknix/proton-prep.d/dxvk2-swap"
+  install -Dm644 "${srcdir}/pocknix-dxvk2-swap.service" \
+    "${pkgdir}/usr/lib/systemd/user/pocknix-dxvk2-swap.service"
+  # enabled by a packaged wants link, so removing the package removes the autostart with it
+  install -d "${pkgdir}/usr/lib/systemd/user/default.target.wants"
+  ln -s ../pocknix-dxvk2-swap.service \
+    "${pkgdir}/usr/lib/systemd/user/default.target.wants/pocknix-dxvk2-swap.service"
 }

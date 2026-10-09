@@ -1,0 +1,14 @@
+# dxvk-arm64-2.7.1-498-valve-proton11.tar.xz (pocknix mirror)
+
+The complete `files/lib/wine/dxvk/` directory from Valve's "Proton 11.0 (ARM64)" Steam depot
+(app 4628740, build 25833186, version stamp `1791559733 proton-11.0-2e-arm64`), containing DXVK
+`v2.7.1-498-ga6764047e` (aarch64-windows arm64ec + x86_64/i386 builds, stripped, no .debug).
+Its d3d11.dll does not contain `storageBuffer8BitAccess`, so it runs on a6xx.
+
+Captured 2026-10-10 from an unswapped Steam-downloaded copy on the RP6:
+
+    cd ".../Proton 11.0 (ARM64)/files/lib/wine" && tar --owner=0 --group=0 --sort=name -cJf <name> dxvk
+
+sha512 pinned in the PKGBUILD. DXVK is zlib-licensed; redistribution of built dlls is permitted.
+Mirrored at https://pocknix.shuuri.net/mirror/ because the Steam depot is not URL-fetchable at
+build time.

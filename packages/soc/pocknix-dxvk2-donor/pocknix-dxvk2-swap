@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+# pocknix-dxvk2-swap - put the DXVK 2.7 donor into a Valve ARM Proton whose DXVK requires
+# storageBuffer8BitAccess, which turnip lacks on a6xx. Valve's proton copies its own dxvk dir into
+# the prefix on every launch, so that dir is what loads. No args = one pass (run by
+# pocknix-proton-prep before Steam starts); --watch = re-apply within ~1 s of Steam restoring it.
+import contextlib
+import ctypes
+import errno
+import fcntl
+import os
+import re
+import select
+import shutil
+import struct
+import sys
+import time
+
+STEAM = os.path.expanduser("~/.local/share/Steam")
+DONOR = "/usr/share/pocknix-steam/dxvk2-donor"
+ARM_PROTONS = ("Proton 11.0 (ARM64)", "Proton Experimental (ARM64)")
+DXVK_PATH = ("files", "lib", "wine", "dxvk")
+PROBE = os.path.join("aarch64-windows", "d3d11.dll")
+MARKER = b"storageBuffer8BitAccess"
+TMP_SUFFIX = ".pocknix-swap-tmp"
+# A fixed path, not $XDG_RUNTIME_DIR: the session's prep hook and the service may not share env.
+LOCK = f"/run/user/{os.getuid()}/pocknix-dxvk2-swap.lock"
+
+# Steam writes a tool in bursts; swapping mid-burst only gets overwritten, so wait for quiet.
+SETTLE = 0.5
+SETTLE_MAX = 5.0
+# Catches what inotify cannot see: a library on a card mounted after its dir was watched.
+SAFETY = 60
+
+IN_CLOSE_WRITE = 0x8
+IN_MOVED_FROM = 0x40
+IN_MOVED_TO = 0x80
+IN_CREATE = 0x100
+IN_DELETE = 0x200
+IN_DELETE_SELF = 0x400
+IN_MOVE_SELF = 0x800
+IN_Q_OVERFLOW = 0x4000
+IN_IGNORED = 0x8000
+IN_ONLYDIR = 0x01000000
+MASK = (IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_CREATE | IN_DELETE
+        | IN_DELETE_SELF | IN_MOVE_SELF | IN_ONLYDIR)
+EVENT = struct.Struct("iIII")
+RENAME_EXCHANGE = 2
+AT_FDCWD = -100
+
+libc = ctypes.CDLL(None, use_errno=True)
+
+
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
+
+
+def library_commons():
+    commons = [os.path.join(STEAM, "steamapps", "common")]
+    try:
+        with open(os.path.join(STEAM, "steamapps", "libraryfolders.vdf"), errors="replace") as f:
+            for line in f:
+                m = re.match(r'\s*"path"\s*"(.*)"\s*$', line)
+                if m:
+                    commons.append(os.path.join(m.group(1), "steamapps", "common"))
+    except OSError:
+        pass
+    return list(dict.fromkeys(os.path.realpath(c) for c in commons))
+
+
+def donor_dlls():
+    dlls = []
+    for root, _, files in os.walk(DONOR):
+        for name in files:
+            if name.endswith(".dll"):
+                path = os.path.join(root, name)
+                dlls.append((os.path.relpath(path, DONOR), os.path.getsize(path)))
+    return sorted(dlls)
+
+
+_probes = {}
+
+
+def stat_key(path):
+    st = os.stat(path)
+    return (st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+# (has marker, equals the donor's), re-read only when the probe or the donor changes on disk.
+def probe_facts(path):
+    donor = os.path.join(DONOR, PROBE)
+    key = (stat_key(path), stat_key(donor))
+    if _probes.get(path, (None,))[0] != key:
+        with open(path, "rb") as f:
+            data = f.read()
+        with open(donor, "rb") as f:
+            _probes[path] = (key, (MARKER in data, data == f.read()))
+    return _probes[path][1]
+
+
+# DXVK names storageBuffer8BitAccess only once it requires it, and that floor landed before the
+# 3.0 tag, so the marker decides, not the version string; a pre-floor Valve 2.7 stays as shipped.
+# A probe equal to the donor's is our swap, so any other dll off by size is a partial restore.
+def needs_swap(dxvk, dlls):
+    probe = os.path.join(dxvk, PROBE)
+    if not os.path.isfile(probe):
+        return False
+    has_marker, is_donor = probe_facts(probe)
+    if has_marker:
+        return True
+    if not is_donor:
+        return False
+    for rel, size in dlls:
+        try:
+            if os.path.getsize(os.path.join(dxvk, rel)) != size:
+                return True
+        except OSError:
+            return True
+    return False
+
+
+# RENAME_EXCHANGE means a launch never finds the dir missing or half written; exFAT lacks it.
+def swap(dxvk):
+    tmp = dxvk + TMP_SUFFIX
+    shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        shutil.copytree(DONOR, tmp, symlinks=True)
+        if libc.renameat2(AT_FDCWD, tmp.encode(), AT_FDCWD, dxvk.encode(), RENAME_EXCHANGE) != 0:
+            err = ctypes.get_errno()
+            if err not in (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP):
+                raise OSError(err, os.strerror(err), dxvk)
+            shutil.rmtree(dxvk)
+            os.rename(tmp, dxvk)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# The boot hook and the service's first pass start within a second of each other and share the
+# tmp dir; the lock also makes the hook wait out a swap in flight, so Steam never starts mid-swap.
+# Without a runtime dir there is no session, so nothing to serialise against.
+def take_lock():
+    if not os.path.isdir(os.path.dirname(LOCK)):
+        return contextlib.nullcontext()
+    lock = open(LOCK, "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    return lock
+
+
+def apply_all(commons):
+    if not os.path.isdir(DONOR):
+        return
+    dlls = donor_dlls()
+    if not dlls or not os.path.isfile(os.path.join(DONOR, PROBE)):
+        return
+    with take_lock():
+        swap_all(commons, dlls)
+
+
+# Older swaps copied a donor carrying ~500 MB of .dll.debug into these dirs, and a Steam update
+# never deletes files outside its manifest; Valve's ARM builds ship none, so any found are ours.
+def drop_debug(dxvk):
+    with os.scandir(dxvk) as arches:
+        for arch in arches:
+            if arch.is_dir():
+                with os.scandir(arch.path) as files:
+                    for f in files:
+                        if f.name.endswith(".dll.debug"):
+                            os.unlink(f.path)
+
+
+def swap_all(commons, dlls):
+    for common in commons:
+        for proton in ARM_PROTONS:
+            dxvk = os.path.join(common, proton, *DXVK_PATH)
+            if not os.path.isdir(dxvk):
+                continue
+            try:
+                if needs_swap(dxvk, dlls):
+                    swap(dxvk)
+                    log(f"swapped DXVK 2.7 into {dxvk}")
+                drop_debug(dxvk)
+            except OSError as e:
+                log(f"swap failed for {dxvk}: {e}")
+
+
+# Watches are non-recursive, so each level down to dxvk/<arch> gets one, filtered to the name of
+# the next level: a Proton installed or a dxvk dir replaced at any depth wakes a pass.
+def watch_targets(commons):
+    targets = {os.path.join(STEAM, "steamapps"): frozenset(("libraryfolders.vdf",))}
+    for common in commons:
+        if not os.path.isdir(common):
+            continue
+        targets[common] = frozenset(ARM_PROTONS)
+        for proton in ARM_PROTONS:
+            path = os.path.join(common, proton)
+            if not os.path.isdir(path):
+                continue
+            for part in DXVK_PATH:
+                targets[path] = frozenset((part,))
+                path = os.path.join(path, part)
+                if not os.path.isdir(path):
+                    break
+            else:
+                targets[path] = None
+                try:
+                    arches = os.listdir(path)
+                except OSError:
+                    continue
+                for arch in arches:
+                    if os.path.isdir(os.path.join(path, arch)):
+                        targets[os.path.join(path, arch)] = None
+    return targets
+
+
+class Watcher:
+    def __init__(self):
+        self.fd = libc.inotify_init1(os.O_CLOEXEC)
+        if self.fd < 0:
+            raise OSError(ctypes.get_errno(), "inotify_init1")
+        self.paths = {}
+        self.wds = {}
+
+    def sync(self, targets):
+        for path in list(self.paths):
+            if path not in targets:
+                wd = self.paths.pop(path)
+                self.wds.pop(wd, None)
+                libc.inotify_rm_watch(self.fd, wd)
+        for path, wanted in targets.items():
+            wd = libc.inotify_add_watch(self.fd, path.encode(), MASK)
+            if wd < 0:
+                self.paths.pop(path, None)
+                continue
+            old = self.paths.get(path)
+            if old is not None and old != wd:
+                self.wds.pop(old, None)
+            self.paths[path] = wd
+            self.wds[wd] = wanted
+
+    # IN_IGNORED for a wd still in the table means its dir went away, and retires the wd so a later
+    # watch reusing the number cannot inherit it; events on a wd we already dropped are skipped.
+    def relevant(self):
+        data = os.read(self.fd, 65536)
+        hit = False
+        off = 0
+        while off < len(data):
+            wd, mask, _, length = EVENT.unpack_from(data, off)
+            name = os.fsdecode(data[off + EVENT.size:off + EVENT.size + length].rstrip(b"\0"))
+            off += EVENT.size + length
+            if mask & IN_Q_OVERFLOW:
+                hit = True
+            elif wd not in self.wds:
+                continue
+            elif mask & (IN_IGNORED | IN_DELETE_SELF | IN_MOVE_SELF):
+                if mask & IN_IGNORED:
+                    self.wds.pop(wd, None)
+                hit = True
+            else:
+                wanted = self.wds[wd]
+                if wanted is None or name in wanted:
+                    hit = True
+        return hit
+
+
+def watch():
+    w = Watcher()
+    first_event = deadline = None
+    last_pass = -SAFETY
+    while True:
+        now = time.monotonic()
+        if (deadline is not None and now >= deadline) or now - last_pass >= SAFETY:
+            commons = library_commons()
+            apply_all(commons)
+            w.sync(watch_targets(commons))
+            first_event = deadline = None
+            last_pass = time.monotonic()
+            continue
+        timeout = last_pass + SAFETY - now
+        if deadline is not None:
+            timeout = min(timeout, deadline - now)
+        ready, _, _ = select.select([w.fd], [], [], max(timeout, 0))
+        if ready and w.relevant():
+            now = time.monotonic()
+            if first_event is None:
+                first_event = now
+            deadline = min(now + SETTLE, first_event + SETTLE_MAX)
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--watch"]:
+        watch()
+    else:
+        apply_all(library_commons())

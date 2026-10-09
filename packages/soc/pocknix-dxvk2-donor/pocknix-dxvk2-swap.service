@@ -1,0 +1,12 @@
+[Unit]
+Description=pocknix: keep DXVK 2.7 in Valve's ARM Protons (a6xx cannot run DXVK 3)
+# A USER service: it rewrites tool dirs under ~/.local/share/Steam as the Steam user.
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/pocknix/pocknix-dxvk2-swap --watch
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
