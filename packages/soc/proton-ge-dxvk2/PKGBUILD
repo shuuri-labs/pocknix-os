@@ -10,7 +10,7 @@ _srctag=GE-Proton11-7
 _ver=${_srctag#GE-Proton}
 _major=${_ver%%-*}
 pkgver=${_ver//-/.}
-pkgrel=1
+pkgrel=2
 pkgdesc="GE-Proton (ARM64) with DXVK pinned to 2.7 for GPUs without 8-bit storage (a6xx)"
 arch=('aarch64')
 url="https://github.com/GloriousEggroll/proton-ge-custom"
@@ -20,14 +20,14 @@ options=('!strip' 'emptydirs')
 provides=("proton-ge=${pkgver}")
 conflicts=('proton-ge')
 replaces=('proton-ge')
-_donor=dxvk-arm64-2.7.1-467-valve-proton11
+_donor=dxvk-arm64-2.7.1-498-valve-proton11
 source=("https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${_srctag}/${_srctag}-aarch64.tar.gz"
         "https://pocknix.shuuri.net/mirror/${_donor}.tar.xz"
         'compatibilitytool.vdf.in'
         'toolmanifest.vdf'
         'pocknix-proton')
 sha512sums=('741cf70256f13b20d44952b590defd68b115814097f911c9ec053a64d33795267e2a982a5ce939407e8b649613eb3943bb2e2ebf4794d302ff96b83b61457cdd'
-            '0360fd5c00c16381be4380ea3f7b1f4c4afe6721fef483ad092bfd538bc57b2b4a869a17c084fbc2a795fc99c9dba10cf1a0258910fbb83afbe1a0257cf24962'
+            '0b87a6efbf21cde53477b2852713a43d905e23387bdc4a507a020993f6835df53cac7fd5cb32083cc1561e3be93d673df86f57073d1d0b7ca706e0ec33b318c0'
             'SKIP'
             'SKIP'
             'SKIP')

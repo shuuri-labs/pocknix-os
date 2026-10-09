@@ -1,17 +1,5 @@
-# dxvk-arm64-2.7.1-467-valve-proton11.tar.xz (pocknix mirror)
+# dxvk-arm64-2.7.1-498-valve-proton11.tar.xz (pocknix mirror)
 
-The DXVK donor bundle for this package: the complete `files/lib/wine/dxvk/`
-directory from Valve's "Proton 11.0 (ARM64)" Steam depot, version stamp
-`1779182345 proton-11.0-1-beta5-unstripped`, containing DXVK
-`v2.7.1-467-g83e503b4ae6de84` (aarch64-windows arm64ec + x86_64/i386 builds).
-
-Captured 2026-08-03 from a Steam-downloaded copy on the RP5
-(`steamapps/common/Proton 11.0 (ARM64)`):
-
-    cd ".../Proton 11.0 (ARM64)/files/lib/wine" && tar cJf dxvk-....tar.xz dxvk
-
-sha512 pinned in the PKGBUILD. DXVK is zlib-licensed; redistribution of built
-dlls is permitted. Mirrored at https://pocknix.shuuri.net/mirror/ because the
-Steam depot is not URL-fetchable at build time.
-
-Why Valve dlls and not a GE release: see the PKGBUILD header.
+The same Valve Proton 11 DXVK donor tarball as pocknix-dxvk2-donor; its provenance is in
+packages/soc/pocknix-dxvk2-donor/README.provenance. Why Valve dlls and not a GE release: see the
+PKGBUILD header.
