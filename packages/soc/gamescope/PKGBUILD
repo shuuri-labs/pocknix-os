@@ -6,7 +6,7 @@
 pkgname=gamescope
 epoch=1
 pkgver=3.16.31.rocknix.20260927.f6916aa
-pkgrel=1
+pkgrel=2
 _commit=f6916aacdecb4476f05746fef4dc49a650c28f05
 install=gamescope.install
 pkgdesc="SteamOS session compositing WM — patched (for msm handhelds)"
@@ -29,8 +29,9 @@ source=("gamescope::git+https://github.com/ValveSoftware/gamescope.git#commit=${
         '0001-WaylandBackend-wire-up-wl_touch-implementation.patch'
         '0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch'
         '0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch'
-        '0009-steamcompmgr-run-SGSR-when-FSR-is-requested-on-SDR-content.patch')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        '0009-steamcompmgr-run-SGSR-when-FSR-is-requested-on-SDR-content.patch'
+        '0010-steamcompmgr-elapsed-time-fps-limiter.patch')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
   cd gamescope
@@ -40,6 +41,7 @@ prepare() {
   patch -p1 < "${srcdir}/0004-DRMBackend-Add-GAMESCOPE_FAKE_OUTPUT_MM-env-to-set-c.patch"
   patch -p1 < "${srcdir}/0006-steamcompmgr-fix-gamepad-cursor-sprite-frozen-via-XTest.patch"
   patch -p1 < "${srcdir}/0009-steamcompmgr-run-SGSR-when-FSR-is-requested-on-SDR-content.patch"
+  patch -p1 < "${srcdir}/0010-steamcompmgr-elapsed-time-fps-limiter.patch"
 }
 
 build() {
