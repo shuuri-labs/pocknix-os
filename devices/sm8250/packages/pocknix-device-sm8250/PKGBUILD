@@ -16,7 +16,7 @@ depends=('pocknix-bsp-sm8250'
          # a6xx lacks 8-bit storage -> DXVK 3 rejects the GPU: dxvk2-pinned protons
          'proton-cachyos-dxvk2'
          'proton-ge-dxvk2'
-         # a6xx donor prep swaps into downloaded Valve ARM Protons (dep edge = delivery)
+         # a6xx DXVK 2.7 donor + its swap into downloaded Valve ARM Protons (dep edge = delivery)
          'pocknix-dxvk2-donor'
          # dep edge delivers the calibration boot replay to installed devices
          'pocknix-gamepad-calibration')

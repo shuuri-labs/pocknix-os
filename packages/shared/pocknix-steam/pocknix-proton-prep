@@ -1,26 +1,11 @@
 #!/bin/bash
-# ORDER: system tools must be mirrored in before the client STARTS (pocknix-steam runs this
-# synchronously). --watch re-applies the sm8250 DXVK swap, since Steam restores a tool's files on
-# every update. Per-game tweaks no longer touch compat tools: see pocknix-game-launch.
+# ORDER: system tools must be mirrored in, and proton-prep.d hooks run, before the client STARTS
+# (pocknix-steam runs this synchronously). --watch picks up tools installed mid-session. Per-game
+# tweaks no longer touch compat tools: see pocknix-game-launch.
 set -u
 
 STEAM="${HOME}/.local/share/Steam"
-RES=/usr/share/pocknix-steam
-
-# Subshell: device.conf sets many board vars; none may leak into this set -u script.
-DXVK2_DONOR="${RES}/dxvk2-donor"
-GPU_DXVK3="$(
-  set +u
-  for dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
-    [ -r "${dc}" ] && . "${dc}"
-  done
-  printf '%s' "${POCKNIX_GPU_DXVK3:-yes}"
-)"
-
-ARM_PROTONS=(
-  "Proton 11.0 (ARM64)"
-  "Proton Experimental (ARM64)"
-)
+HOOKS=/usr/lib/pocknix/proton-prep.d
 
 # Dirs our old registration (<= 0.1.0-49) left behind; they duplicate Steam's own entries.
 LEGACY_TOOLDIRS=(proton-11-arm64 proton-experimental-arm64)
@@ -47,22 +32,6 @@ library_commons() {
     "${STEAM}/steamapps/libraryfolders.vdf" 2>/dev/null
 }
 
-# DXVK 3 needs storageBuffer8BitAccess, which turnip lacks on a6xx, and Valve's proton copies its
-# own dxvk dir into the prefix on every launch, so the 2.7 donor has to replace that dir. One-dll
-# cmp = write-free loop (a DXVK bump changes every dll); tmp+mv so a mid-swap launch never sees a
-# half dir.
-swap_dxvk() { # <proton dir>
-  local dxvk="$1/files/lib/wine/dxvk" probe
-  [ -d "${dxvk}" ] || return 0
-  probe="$(cd "${DXVK2_DONOR}" && find . -type f -name '*.dll' | sort | head -1)"
-  if [ -n "${probe}" ] && ! cmp -s "${DXVK2_DONOR}/${probe}" "${dxvk}/${probe}"; then
-    rm -rf "${dxvk}.pocknix-tmp"
-    cp -a "${DXVK2_DONOR}" "${dxvk}.pocknix-tmp" \
-      && rm -rf "${dxvk}" \
-      && mv "${dxvk}.pocknix-tmp" "${dxvk}"
-  fi
-}
-
 # Undo the old entry-point claim (steam <= 0.1.0-66) so the runtime runs as Valve ships it. The
 # shim file stays: Steam caches the manifest per client session and may still exec it until restart.
 restore_slr() { # <runtime dir>
@@ -78,14 +47,9 @@ restore_slr() { # <runtime dir>
 
 apply() {
   prune_legacy_tools
-  local common entry slr_dir
+  local common slr_dir
   while IFS= read -r common; do
     [ -d "${common}" ] || continue
-    if [ "${GPU_DXVK3}" = no ] && [ -d "${DXVK2_DONOR}" ]; then
-      for entry in "${ARM_PROTONS[@]}"; do
-        swap_dxvk "${common}/${entry}"
-      done
-    fi
     for slr_dir in "${common}"/SteamLinuxRuntime*; do
       [ -d "${slr_dir}" ] && restore_slr "${slr_dir}"
     done
@@ -101,11 +65,22 @@ apply() {
   done
 }
 
+# Fixups other packages need in place before the client starts (one pass each); they own
+# their own watching, so --watch never runs them.
+run_hooks() {
+  local hook
+  for hook in "${HOOKS}"/*; do
+    [ -x "${hook}" ] || continue
+    "${hook}" || echo "[pocknix-proton-prep] hook ${hook##*/} failed" >&2
+  done
+}
+
 case "${1:-}" in
   --watch)
     while :; do apply; sleep 20; done
     ;;
   *)
     apply
+    run_hooks
     ;;
 esac

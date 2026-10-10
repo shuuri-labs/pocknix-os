@@ -1,5 +1,5 @@
 [Unit]
-Description=pocknix: keep the ARM Proton compat tools registered + usable (no reboot after Steam downloads/updates them)
+Description=pocknix: keep the ARM Proton compat tools registered (no reboot after Steam downloads/updates them)
 # Must stay a USER service: it reads/writes ~/.local/share/Steam. It covers mid-session downloads
 # and desktop mode only; pocknix-steam runs prep synchronously before the game session's Steam.
 
