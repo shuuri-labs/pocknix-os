@@ -1,0 +1,3 @@
+# <board> <devicetree model>: what /proc/device-tree/model reads -> boards/<board>.conf.
+# The first row is also the fallback for an unknown or absent model (image-build chroot).
+odin3        AYN Odin 3

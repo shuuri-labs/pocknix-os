@@ -2,7 +2,7 @@
 # Steam has no Quick Access button otherwise.
 pkgname=pocknix-bsp-sm8750
 pkgver=0.2.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix board support: SM8750 family (AYN Odin 3) — runtime board dispatch, input maps, audio UCM"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -15,34 +15,46 @@ provides=('pocknix-bsp')
 conflicts=('pocknix-bsp')
 optdepends=('inputplumber: gamepad -> Steam Input mapping (01-ayn-controller.yaml)'
             'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin3 UCM)')
-source=('device.conf'
-        'ayn_mcu.yaml' '01-ayn-controller.yaml'
-        'AYN-Odin3.conf' 'HiFi.conf'
-        'kernel-cmdline')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+# device.conf is rendered from boards/models. Consumers source it (some under set -e, cores.sh
+# inside $(...)), so it stays POSIX sh, prints nothing and always returns 0.
+_device_conf() {  # $1 = boards/models
+  awk -v q="'" '
+    /^[[:space:]]*(#|$)/ { next }
+    {
+      b = $1; m = $0
+      sub(/^[[:space:]]*[^[:space:]]+[[:space:]]+/, "", m); sub(/[[:space:]]+$/, "", m)
+      if (fb == "") fb = b
+      arms = arms "  \"" m "\")\n    . /usr/lib/pocknix/boards/" b ".conf\n    ;;\n"
+    }
+    END {
+      print "# /usr/lib/pocknix/device.conf, generated from the BSP" q "s boards/models: picks the board"
+      print "# file by devicetree model. An unknown or absent model (the image-build chroot) gets"
+      print "# the first board and POCKNIX_BOARD_UNKNOWN=1. /etc/pocknix/device.conf overrides."
+      print "_pocknix_model=\"$(cat /proc/device-tree/model 2>/dev/null | tr -d " q "\\0" q ")\""
+      print "case \"${_pocknix_model}\" in"
+      printf "%s", arms
+      print "  *)"
+      print "    POCKNIX_BOARD_UNKNOWN=1"
+      print "    . /usr/lib/pocknix/boards/" fb ".conf"
+      print "    [ -n \"${_pocknix_model}\" ] && \\"
+      print "      logger -t pocknix \"device.conf: unknown DT model " q "${_pocknix_model}" q " - using " fb " board defaults\" 2>/dev/null || true"
+      print "    ;;"
+      print "esac"
+      print "unset _pocknix_model"
+    }' "$1"
+}
 
 package() {
-  # boards/ is not in source= (makepkg local sources are flat): taken from startdir,
-  # which build-packages.sh populates with the whole package dir.
-  install -Dm644 "${srcdir}/device.conf" "${pkgdir}/usr/lib/pocknix/device.conf"
+  install -d "${pkgdir}/usr/lib/pocknix"
+  _device_conf "${startdir}/boards/models" > "${pkgdir}/usr/lib/pocknix/device.conf"
+  # root/ is the install tree. makepkg's umask 022 turns git's exec bit into 755/644, and
+  # files created under fakeroot are root-owned; -d keeps the UCM symlink as a link (it is
+  # named for the card longname SM8750-AYN; codec sequences come from base alsa-ucm-conf).
+  cp -dr "${startdir}/root/." "${pkgdir}/"
+  # boards/ also comes from startdir (build-packages.sh copies the whole package dir);
+  # models is not installed, family.conf is.
   local b
   for b in "${startdir}/boards/"*.conf; do
     install -Dm644 "${b}" "${pkgdir}/usr/lib/pocknix/boards/$(basename "${b}")"
   done
-
-  install -Dm644 "${srcdir}/01-ayn-controller.yaml" \
-    "${pkgdir}/usr/share/inputplumber/devices/01-ayn-controller.yaml"
-  install -Dm644 "${srcdir}/ayn_mcu.yaml" \
-    "${pkgdir}/usr/share/inputplumber/capability_maps/ayn_mcu.yaml"
-
-  # The card's longname is SM8750-AYN; codec include sequences come from base alsa-ucm-conf.
-  local ucm="${pkgdir}/usr/share/alsa/ucm2"
-  install -Dm644 "${srcdir}/AYN-Odin3.conf" "${ucm}/AYN/Odin3/AYN-Odin3.conf"
-  install -Dm644 "${srcdir}/HiFi.conf"      "${ucm}/AYN/Odin3/HiFi.conf"
-  install -d "${ucm}/conf.d/sm8750"
-  ln -sf "../../AYN/Odin3/AYN-Odin3.conf" "${ucm}/conf.d/sm8750/SM8750-AYN.conf"
-
-  # One family cmdline for the on-device /flash/KERNEL rebuild (pocknix-build-bootimg);
-  # build-packages.sh asserts it matches devices/sm8750/profile.conf.
-  install -Dm644 "${srcdir}/kernel-cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
 }

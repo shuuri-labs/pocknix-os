@@ -22,7 +22,7 @@ Current families:
 * **sm8550** (qcom-abl): Retroid Pocket 6 (+TOP-DPAD), Retroid Pocket Nova, AYN Odin 2 /
   Mini / Portal, AYN Thor. The family RSInput controller config covers every board but the
   Thor, which has its own (its extra AYN key).
-* **sm8750** (qcom-abl, community-maintained): AYN Odin 3. RSInput MCU gamepad, s2idle
+* **sm8750** (qcom-abl, community-maintained): AYN Odin 3; RSInput MCU gamepad, s2idle
   pinned in the kernel cmdline, AYN-Odin3 audio UCM.
 * **sm8250** (arm-efi): Retroid Pocket 5, Retroid Pocket Flip 2; each also as a Visionox-panel revision (separate `-visionox` dtb + board conf, picked by the grub `visionox` marker file).
 
