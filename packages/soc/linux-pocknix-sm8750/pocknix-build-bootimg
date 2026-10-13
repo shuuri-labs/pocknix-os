@@ -1,0 +1,45 @@
+#!/bin/bash
+# pocknix-build-bootimg — (re)assemble the qcom-abl /flash/KERNEL from the installed kernel:
+# gzip(/boot/Image) with every dtb appended, empty ramdisk, mkbootimg header v0 with zero offsets.
+# The ABL verifies KERNEL against /flash/KERNEL.md5, so the two are always written together.
+# SRCROOT builds from another root tree (pocknix-rollback passes the target snapshot, so kernel and
+# modules match); OUT_SUFFIX stages beside the live files, which rollback renames after its commit.
+# Same assembly as scripts/build-kernel.sh's assemble_bootimg — the two must stay in step.
+set -euo pipefail
+
+FLASH="${FLASH:-/flash}"
+SRCROOT="${SRCROOT:-}"
+OUT_SUFFIX="${OUT_SUFFIX:-}"
+MKBOOTIMG=/usr/lib/pocknix/mkbootimg/mkbootimg.py
+CMDLINE_FILE="${SRCROOT}/usr/lib/pocknix/kernel-cmdline"
+
+[ -f "${SRCROOT}/boot/Image" ] || { echo "pocknix-build-bootimg: no ${SRCROOT}/boot/Image — nothing to do"; exit 0; }
+[ -f "$MKBOOTIMG" ] && [ -f "$CMDLINE_FILE" ] || { echo "pocknix-build-bootimg: mkbootimg/cmdline missing"; exit 0; }
+# In the image-build chroot /flash is not a mount; build-sd-image.sh/install.sh assemble KERNEL.
+mountpoint -q "$FLASH" || { echo "pocknix-build-bootimg: $FLASH not mounted — skipping (build chroot?)"; exit 0; }
+
+cmdline="$(cat "$CMDLINE_FILE")"
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+
+gzip -c "${SRCROOT}/boot/Image" > "$tmp/kernel.gz"
+for d in "${SRCROOT}"/boot/dtbs/*.dtb; do [ -f "$d" ] && cat "$d" >> "$tmp/kernel.gz"; done
+# a VALID empty cpio, not an empty file: nothing needs an initramfs, but the kernel still unpacks it
+if command -v cpio >/dev/null 2>&1; then printf '' | cpio -o -H newc --quiet > "$tmp/ramdisk" 2>/dev/null
+else printf 'dummy' > "$tmp/ramdisk"; fi
+
+python3 "$MKBOOTIMG" \
+  --kernel "$tmp/kernel.gz" --ramdisk "$tmp/ramdisk" \
+  --kernel_offset 0x00000000 --ramdisk_offset 0x00000000 --tags_offset 0x00000000 \
+  --os_version 12.0.0 --os_patch_level "$(date '+%Y-%m')" --header_version 0 \
+  --cmdline "$cmdline" -o "$tmp/KERNEL"
+
+mount -o remount,rw "$FLASH" 2>/dev/null || true
+if [ -z "$OUT_SUFFIX" ]; then
+  [ -f "$FLASH/KERNEL" ] && cp -f "$FLASH/KERNEL" "$FLASH/KERNEL.bak"
+fi
+cp -f "$tmp/KERNEL" "$FLASH/KERNEL${OUT_SUFFIX}"
+# md5 content always names "KERNEL" (what the ABL verifies after the stage-rename)
+printf '%s  KERNEL\n' "$(md5sum "$FLASH/KERNEL${OUT_SUFFIX}" | awk '{print $1}')" > "$FLASH/KERNEL.md5${OUT_SUFFIX}"
+sync
+note="KERNEL.bak kept"; [ -n "$OUT_SUFFIX" ] && note="staged, not activated"
+echo "pocknix-build-bootimg: rebuilt $FLASH/KERNEL${OUT_SUFFIX} (kernel $(cat "${SRCROOT}/usr/lib/pocknix/kernelrelease" 2>/dev/null || echo '?'); ${note})"

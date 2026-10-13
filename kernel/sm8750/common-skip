@@ -1,0 +1,6 @@
+# kernel/common patches sm8750 leaves out, one name per line with its why.
+# a6xx_gmu.c also drives the Adreno 830, so the a6xx GMU set changes its HFI irq and GMU
+# boot paths on a GPU these patches never ran on.
+1076-drm-msm-a6xx-hfi-irq-clears-only-the-cm3-fault.patch            # unvalidated on the Adreno 830
+1077-drm-msm-a6xx-bound-the-gmu-wait-for-a-fault-devcoredump.patch   # unvalidated on the Adreno 830
+1078-drm-msm-a6xx-mask-the-hfi-interrupt-before-booting-the-gmu.patch # unvalidated on the Adreno 830

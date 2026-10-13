@@ -6,7 +6,8 @@ hardcodes a device fact: the **build** reads `devices/<name>/profile.conf` (sour
 `/usr/lib/pocknix/device.conf`, shipped by the family's BSP package.
 
 `DEVICE` names an **image target**, and there is one FAMILY target per SoC
-(`make build DEVICE=sm8550` is the default; `DEVICE=sm8250` for the RP5 family):
+(`make build DEVICE=sm8550` is the default; `DEVICE=sm8250` for the RP5 family,
+`DEVICE=sm8750` for the Odin 3):
 each family image serves every board on its SoC, ROCKNIX-style. The BSP
 (`pocknix-bsp-<soc>`) ships per-board facts in `/usr/lib/pocknix/boards/<board>.conf`,
 each sourcing the family-wide `boards/family.conf` first, and
@@ -21,6 +22,8 @@ Current families:
 * **sm8550** (qcom-abl): Retroid Pocket 6 (+TOP-DPAD), Retroid Pocket Nova, AYN Odin 2 /
   Mini / Portal, AYN Thor. The family RSInput controller config covers every board but the
   Thor, which has its own (its extra AYN key).
+* **sm8750** (qcom-abl, community-maintained): AYN Odin 3; RSInput MCU gamepad, s2idle
+  pinned in the kernel cmdline, AYN-Odin3 audio UCM.
 * **sm8250** (arm-efi): Retroid Pocket 5, Retroid Pocket Flip 2; each also as a Visionox-panel revision (separate `-visionox` dtb + board conf, picked by the grub `visionox` marker file).
 
 The first board a bullet names is the family's fallback: it must be the first `boards/models`
@@ -130,6 +133,7 @@ leaves it unset); otherwise it says what a board without the key gets. Keys:
 | `POCKNIX_BOARD_UNKNOWN` | pocknix-desktop-rotate | board known (only the fallback branch sets it) | set by the device.conf fallback branch: board not in the list, do not force guessed values |
 | `POCKNIX_PANEL_OUTPUT` | pocknix-steam, pocknix-desktop, pocknix-desktop-rotate | single panel, first DSI | DRM connector of the main panel (`DSI-2`); gamescope `--prefer-output`, the desktop seed's output |
 | `POCKNIX_PANEL_ROTATE_SHADER` | pocknix-steam | rotation autodetected | `1` = gamescope `--force-composition-rotation`: required for a panel past the DPU rotator's 1088-line cap, which otherwise scans out black |
+| `POCKNIX_PANEL_WAIT` | pocknix-steam | no wait | seconds to wait for the main panel connector before starting gamescope (boards whose panel probes late on cold boot) |
 | `POCKNIX_PANEL2_OUTPUT`, `POCKNIX_PANEL2_W` / `POCKNIX_PANEL2_H`, `POCKNIX_DESKTOP2_SCALE` | pocknix-desktop, pocknix-desktop-rotate | single screen (second scale: the main one's) | second panel (dual-screen boards): enabled, rotated like the main one, scaled, placed below it |
 | `POCKNIX_TOUCH_NAME` / `POCKNIX_TOUCH2_NAME` | pocknix-desktop, pocknix-second-screen, pocknix-steam (second) | no touch mapping, no second-screen handling | evdev names of the main/second touchscreen: kwin maps each to its output (kcminputrc); the second is libinput-ignored outside the desktop session (udev rule in the board BSP + pocknix-second-screen) |
 | `POCKNIX_BIG_CORES` | via cores.sh: pocknix-steam-env (-> pocknix-game-launch), pocknix-rt-ladder, emulator launchers | required | cores games and emulators are pinned to; the cores left out are the small cores irq work goes to (on a SoC with no little cluster, leave two mids out) |

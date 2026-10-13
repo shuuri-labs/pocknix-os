@@ -1,0 +1,82 @@
+# Odin 3 firmware upstream linux-firmware lacks (ath12k WCN7860, ADSP/CDSP, audio topology).
+# Pinned by commit + sha256, nothing in git. adsp.mbn/adsp_dtb.mbn come from a separate pin:
+# that pair is the ADSP build that charges the battery. /usr/lib/firmware/updates/ wins the
+# kernel's search and no ALARM package writes there, so linux-firmware updates never revert it.
+pkgname=pocknix-firmware-sm8750
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="SM8750 family vendor firmware (Odin 3 wifi, ADSP/CDSP, audio), immune to linux-firmware updates"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('custom:qcom-firmware')   # Qualcomm vendor blobs
+# firmware blobs must ship byte-identical; some parse as ELF and strip would alter them
+options=('!strip')
+
+_extrafw=30c56e2f34af37fe372166b739d6ab277f5155b5   # ROCKNIX/extra-firmware, SM8750/
+_armada=e0143ceb8e5752ce2b991d8c4490b3cb5be1e1e3    # armada-os/armada, system_files/usr/lib/firmware/
+_extrafw_files=(
+  ath12k/WCN7860/hw2.0/amss.bin
+  ath12k/WCN7860/hw2.0/aux_ucode.bin
+  ath12k/WCN7860/hw2.0/bdwlan.elf
+  ath12k/WCN7860/hw2.0/board-2.bin
+  ath12k/WCN7860/hw2.0/m3.bin
+  ath12k/WCN7860/hw2.0/qdss.cfg
+  ath12k/WCN7860/hw2.0/regdb.bin
+  qca/gngbtfw20.mbn
+  qca/gngbtnv20.bin
+  qcom/sm8750/SM8750-AYN-tplg.bin
+  qcom/sm8750/ayn/odin3/adspr.jsn
+  qcom/sm8750/ayn/odin3/adsps.jsn
+  qcom/sm8750/ayn/odin3/adspua.jsn
+  qcom/sm8750/ayn/odin3/adspuo.jsn
+  qcom/sm8750/ayn/odin3/aw883xx_acf.bin
+  qcom/sm8750/ayn/odin3/battmgr.jsn
+  qcom/sm8750/ayn/odin3/cdsp.mbn
+  qcom/sm8750/ayn/odin3/cdsp_dtb.mbn
+  qcom/sm8750/ayn/odin3/cdspr.jsn
+  qcom/sm8750/gen80000_zap.mbn
+  qcom/vpu/vpu35_p4.mbn
+)
+_armada_files=(
+  qcom/sm8750/ayn/odin3/adsp.mbn
+  qcom/sm8750/ayn/odin3/adsp_dtb.mbn
+)
+source=()
+for _f in "${_extrafw_files[@]}"; do
+  source+=("${_f//\//_}::https://raw.githubusercontent.com/ROCKNIX/extra-firmware/${_extrafw}/SM8750/${_f}")
+done
+for _f in "${_armada_files[@]}"; do
+  source+=("${_f//\//_}::https://raw.githubusercontent.com/armada-os/armada/${_armada}/system_files/usr/lib/firmware/${_f}")
+done
+sha256sums=(
+  'bbdfeec01b7de20e89c7e6906d7ea3fd89b896862de29396696a93dbb59fc77a'
+  '2b2eef47107e1c61e1f809371c7413867cf748fb57a2887cc4ff4d386b680fad'
+  '68175a7eeffe9ebe32cfb22676e3ac4c250eb3dcf35d4abe18fee45440e08f76'
+  '9cce38db012867432566dc0deea6d647c2ae2ffa367d3fc90b300e517b748381'
+  '063840b7509e5da791afa6c2905b191297a401c06d39774b82330949c1c8f438'
+  '4683d8683437a11172723dc5820801aaaf5eb082336875a7664142582cc90cbb'
+  'c774af903051e7af845435352fdb2ec6158835c4c95fd9323be22658971ffc6f'
+  '84e210e2ba386a9bad91a2d9dd5d1f4e2559b385f226b463dcfa4d8159f5937f'
+  'a4586f5205dc3752f7d52fd6b7106b02ffe877774e5633018ac48be99d5a079b'
+  'f13452b388908f8062d584b85f4a3806f5dd0b36b5046f972fcd2e2997b1bd10'
+  '66ce8531efb7979d234e0f0eabbe18d038ac97da771a8a194f613df8f0724e81'
+  '12ac2f3ae8ced12aa4b06b3ab3a01bc4d8efe1c92ebea503c002f209a6ec176f'
+  '982a99853495e34726b8e44697fdfad303334de0a67cbf6cde306c8f1731000b'
+  '92402f429bedf262f1ab4ea5b21a39b2f65ef52f1c46fb0e885a40b5ff442a4d'
+  '252428872f6faf5e555ec3c6a6fae7b609773dcac04a438f135ac9be0aa381f9'
+  'be8c6fba330908e4683fb6282761cb08485a302d6a66e09721e102e342f27236'
+  '13d8e2174803abd8bf74d499fc6b1ffb7276f654a0966e6a32075c34db96e0ce'
+  'd40f817847fa1f58b9ededffb8064d999a365746def359922054feec9800d70c'
+  '6d01cd7dce745204d5de20efe57e2511149ca2a5b48ee562fbedefda573ca465'
+  'e3cba8ddd549083568a4d733752bbe852ac8be25c643c0a48e5fa8a98f1335c3'
+  '26c92bd0e62a131e487431cf63a1b50fee83d8f7094f04df4dfbc523881ce0fc'
+  'd5fabba5720f0ddb851ae875e185bf6b89b128bc7f17b426c2dd63545f6b054a'
+  'a324dc976e726cc45653ae4a2d3054d73cba1f38575f5cf3f26708858f091258'
+)
+
+package() {
+  local _f
+  for _f in "${_extrafw_files[@]}" "${_armada_files[@]}"; do
+    install -Dm644 "${srcdir}/${_f//\//_}" "${pkgdir}/usr/lib/firmware/updates/${_f}"
+  done
+}

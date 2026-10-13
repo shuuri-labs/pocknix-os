@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/composite_device_v1.json
+# The RSInput MCU pad plus the back paddles on a separate gpio-keys node (BTN_Z left, BTN_C right),
+# both grabbed and folded into one Steam pad, so nothing sees the raw devices twice.
+version: 1
+kind: CompositeDevice
+name: AYN Odin 3 (RSInput)
+
+matches:
+  - udev:
+      sys_path: /sys/firmware/devicetree/base
+      attributes:
+        - name: model
+          value: AYN Odin 3
+
+single_source: false
+
+source_devices:
+  - group: gamepad
+    evdev:
+      phys_path: rsinput-gamepad/input0
+      handler: event*
+    capability_map_id: ayn_mcu
+
+  - group: gamepad
+    evdev:
+      name: gpio-keys-paddles
+      handler: event*
+    capability_map_id: ayn_mcu
+
+options:
+  auto_manage: true
+
+target_devices:
+  - deck-uhid
+  - keyboard

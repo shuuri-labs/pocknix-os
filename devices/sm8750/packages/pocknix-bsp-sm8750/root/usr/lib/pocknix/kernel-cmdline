@@ -1,0 +1,1 @@
+root=PARTLABEL=POCKNIX_ROOT rw quiet loglevel=3 systemd.show_status=false splash logo.nologo plymouth.ignore-serial-consoles rootwait video=efifb:off console=tty0 allow_mismatched_32bit_el0 fw_devlink.strict=1 pcie_ports=compat irqaffinity=0-1 cgroup.memory=nokmem,nosocket nosoftlockup mem_sleep_default=s2idle
