@@ -1,0 +1,10 @@
+#!/bin/bash
+# pocknix-seed-users - run the config seeder now for every logged-in user (alpm hook, as root).
+# RemainAfterExit makes `start` a no-op once run, hence restart. --no-block: the seeder's own
+# run must not hold up the pacman transaction.
+[ -d /run/systemd/system ] || exit 0   # image-build chroot: no logind, no users
+loginctl list-users --no-legend 2>/dev/null | awk '$1 >= 1000 { print $2 }' | while read -r u; do
+  systemctl --machine="${u}@.host" --user daemon-reload 2>/dev/null
+  systemctl --machine="${u}@.host" --user --no-block restart pocknix-roms-init.service 2>/dev/null
+done
+exit 0

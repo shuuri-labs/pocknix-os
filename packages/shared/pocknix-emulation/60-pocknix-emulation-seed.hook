@@ -1,0 +1,12 @@
+# The seeder otherwise first runs at the next login, and an emulator opened before then writes
+# its own config, which seed-if-absent then never replaces (Cemu: the setup wizard).
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/pocknix-emulation/*
+
+[Action]
+Description = pocknix: seeding emulator settings for logged-in users...
+When = PostTransaction
+Exec = /usr/lib/pocknix/pocknix-seed-users

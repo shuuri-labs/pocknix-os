@@ -1,14 +1,12 @@
 #!/bin/bash
 # pocknix-roms-init - login-time setup for the emulation layer, run as 'deck' by its user unit.
-# Seeds go through pocknix-seed-merge. Every step is guarded: a failure must never fail a login.
+# A seed is copied only when its target is absent: an update never rewrites a user's settings,
+# --reset <name> is the way to re-apply ours. A failure must never fail a login.
 set -u
 
 SHARE=/usr/share/pocknix-emulation
-PREV=/var/lib/pocknix/seed-prev
-MERGE=/usr/lib/pocknix/pocknix-seed-merge
 EMU="${HOME}/Emulation"
 . /usr/lib/pocknix/emu-resolve.sh
-MODE=merge
 STATE="${XDG_STATE_HOME:-${HOME}/.local/state}"
 
 # Seeds are authored for a 120Hz, 1080-line panel and adapted below; absent keys pass them through.
@@ -59,9 +57,6 @@ EMULATORS=(esde retroarch armsx2 eden ryujinx dolphin cemu ppsspp)
 TMP="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/pocknix-seed.XXXXXX")" || exit 0
 trap 'rm -rf "${TMP}"' EXIT
 
-have_merge() { command -v python3 >/dev/null 2>&1 && [ -x "${MERGE}" ]; }
-# Run on the shipped templates and, when the install hook stashed them, the previous
-# package's, which stand in as the baseline where no per-user one exists.
 render_all() {  # $1 template dir, $2 out dir
   local src="$1" out="$2"; mkdir -p "${out}"
   printf '<?xml version="1.0"?>\n<string name="ROMDirectory" value="%s" />\n' "${ROMS}" > "${out}/es_settings.xml"
@@ -81,44 +76,42 @@ render_all() {  # $1 template dir, $2 out dir
   return 0
 }
 render_all "${SHARE}" "${TMP}/new"
-[ -d "${PREV}" ] && render_all "${PREV}" "${TMP}/prev"
 
-seed_b() {  # $1 format, $2 rendered name, $3 target, $4 policy name (optional)
-  local policy=() fb=()
-  [ -n "${4:-}" ] && [ -f "${SHARE}/$4.policy" ] && policy=(--policy "${SHARE}/$4.policy")
-  [ -f "${TMP}/prev/$2" ] && fb=(--baseline "${TMP}/prev/$2")
-  mkdir -p "$(dirname "$3")" 2>/dev/null || return 0
-  if have_merge; then
-    "${MERGE}" --class b --format "$1" --mode "${MODE}" ${policy[@]+"${policy[@]}"} ${fb[@]+"${fb[@]}"} "${TMP}/new/$2" "$3" 2>&1 || true
-  else
-    [ -f "$3" ] || cp "${TMP}/new/$2" "$3" 2>/dev/null || true
-  fi
+seed_file() {  # $1 rendered name, $2 target
+  [ -f "${TMP}/new/$1" ] || return 0
+  [ -e "$2" ] || [ -L "$2" ] && return 0
+  mkdir -p "$(dirname "$2")" 2>/dev/null && cp "${TMP}/new/$1" "$2" 2>/dev/null || true
 }
-seed_a() {  # $1 file or dir (absolute, or relative to SHARE), $2 target
-  local src="$1" fb=()
-  case "$1" in /*) ;; *) src="${SHARE}/$1"; [ -e "${PREV}/$1" ] && fb=(--baseline "${PREV}/$1") ;; esac
-  mkdir -p "$(dirname "$2")" 2>/dev/null || return 0
-  if have_merge; then
-    "${MERGE}" --class a ${fb[@]+"${fb[@]}"} "${src}" "$2" 2>&1 || true
-  elif [ -d "${src}" ]; then
-    mkdir -p "$2"; cp -Rn "${src}/." "$2/" 2>/dev/null || true
-  else
-    [ -f "$2" ] || cp "${src}" "$2" 2>/dev/null || true
+seed_copy() {  # $1 file or dir (absolute, or relative to SHARE), $2 target; per file if a dir
+  local src="$1"
+  case "$1" in /*) ;; *) src="${SHARE}/$1" ;; esac
+  if [ -d "${src}" ]; then
+    mkdir -p "$2" && cp -Rn "${src}/." "$2/" 2>/dev/null || true
+  elif [ -f "${src}" ] && [ ! -e "$2" ] && [ ! -L "$2" ]; then
+    mkdir -p "$(dirname "$2")" 2>/dev/null && cp "${src}" "$2" 2>/dev/null || true
   fi
 }
 
+# The custom_systems pair is launch wiring, not settings: a frozen copy would drift from
+# pocknix-play and never learn a new emulator, so ES-DE reads ours through a link. A user's own
+# real file there is left alone.
+ESDE_WIRING="es_systems.xml es_find_rules.xml"
+link_esde() {  # $1 file name
+  [ -f "${SHARE}/$1" ] || return 0
+  [ -e "${ESDE_CUSTOM}/$1" ] || [ -L "${ESDE_CUSTOM}/$1" ] && return 0
+  mkdir -p "${ESDE_CUSTOM}" && ln -s "${SHARE}/$1" "${ESDE_CUSTOM}/$1" 2>/dev/null || true
+}
 seed_esde() {
-  seed_b esxml es_settings.xml "${ESDE_SETTINGS}" es_settings
-  seed_a es_find_rules.xml "${ESDE_CUSTOM}/es_find_rules.xml"
-  seed_a es_systems.xml "${ESDE_CUSTOM}/es_systems.xml"
+  seed_file es_settings.xml "${ESDE_SETTINGS}"
+  local f; for f in ${ESDE_WIRING}; do link_esde "${f}"; done
 }
 
 seed_retroarch() {
-  seed_b racfg retroarch.cfg "${HOME}/.config/retroarch/retroarch.cfg" retroarch
+  seed_file retroarch.cfg "${HOME}/.config/retroarch/retroarch.cfg"
   # RetroArch's own autoconfig dir, so user-saved profiles coexist; without these the Steam
   # Input pad has no bindings at all.
   [ -d /usr/share/libretro/autoconfig/udev ] && \
-    seed_a /usr/share/libretro/autoconfig/udev "${HOME}/.config/retroarch/autoconfig/udev"
+    seed_copy /usr/share/libretro/autoconfig/udev "${HOME}/.config/retroarch/autoconfig/udev"
   # Linked, not copied; the dir stays writable so preset saving works. A real
   # shaders_slang (Online Updater) wins.
   local shaders="${HOME}/.config/retroarch/shaders/shaders_slang"
@@ -126,7 +119,7 @@ seed_retroarch() {
     mkdir -p "${HOME}/.config/retroarch/shaders"
     ln -s /usr/share/libretro/shaders/shaders_slang "${shaders}" 2>/dev/null || true
   fi
-  [ -d "${SHARE}/retroarch-config" ] && seed_a retroarch-config "${HOME}/.config/retroarch/config"
+  [ -d "${SHARE}/retroarch-config" ] && seed_copy retroarch-config "${HOME}/.config/retroarch/config"
 }
 
 seed_armsx2() {
@@ -136,26 +129,59 @@ seed_armsx2() {
     mkdir -p "${HOME}/.config/ARMSX2"
     cp -a "${HOME}/.config/PCSX2/." "${HOME}/.config/ARMSX2/" 2>/dev/null || true
   fi
-  seed_b ini PCSX2.ini "${HOME}/.config/ARMSX2/inis/PCSX2.ini" armsx2-PCSX2
+  seed_file PCSX2.ini "${HOME}/.config/ARMSX2/inis/PCSX2.ini"
 }
 
 # Mailbox vsync (1) is bouncy on 60Hz panels, so those get FIFO (2)
-seed_eden()    { seed_b ini qt-config.ini "${HOME}/.config/eden/qt-config.ini" eden-qt-config; }
-seed_ryujinx() { seed_b json Config.json "${HOME}/.config/Ryujinx/Config.json" ryujinx-Config; }
+seed_eden()    { seed_file qt-config.ini "${HOME}/.config/eden/qt-config.ini"; }
+seed_ryujinx() { seed_file Config.json "${HOME}/.config/Ryujinx/Config.json"; }
 
 seed_dolphin() {
-  seed_b ini Dolphin.ini "${HOME}/.config/dolphin-emu/Dolphin.ini"
-  seed_b ini GFX.ini     "${HOME}/.config/dolphin-emu/GFX.ini"
-  seed_a dolphin-GCPadNew.ini.in "${HOME}/.config/dolphin-emu/GCPadNew.ini"
+  seed_file Dolphin.ini "${HOME}/.config/dolphin-emu/Dolphin.ini"
+  seed_file GFX.ini     "${HOME}/.config/dolphin-emu/GFX.ini"
+  seed_copy dolphin-GCPadNew.ini.in "${HOME}/.config/dolphin-emu/GCPadNew.ini"
 }
 
 seed_cemu() {
   # The file merely existing is what skips Cemu's onboarding wizard (CemuApp isFirstStart);
   # the controller profile is session-dependent, so pocknix-cemu-profile writes it at launch.
-  seed_b xml settings.xml "${HOME}/.config/Cemu/settings.xml" cemu-settings
+  seed_file settings.xml "${HOME}/.config/Cemu/settings.xml"
 }
 
-seed_ppsspp() { seed_b ini ppsspp.ini "${HOME}/.config/ppsspp/PSP/SYSTEM/ppsspp.ini"; }
+seed_ppsspp() { seed_file ppsspp.ini "${HOME}/.config/ppsspp/PSP/SYSTEM/ppsspp.ini"; }
+
+# One-time move off the old settings merge: an unedited custom_systems copy (comment and blank
+# line differences ignored) becomes the link, then the merge's per-user baselines and the
+# .pocknixnew offers beside our files go.
+BASELINE="${STATE}/pocknix/seed-baseline"
+xml_body() {  # $1 file -> its lines minus XML comments, blank lines and trailing blanks
+  awk '{
+    s = $0; out = ""
+    while (s != "") {
+      if (c) { i = index(s, "-->"); if (!i) break; s = substr(s, i + 3); c = 0 }
+      else { i = index(s, "<!--"); if (!i) { out = out s; break }; out = out substr(s, 1, i - 1); s = substr(s, i + 4); c = 1 }
+    }
+    sub(/[ \t\r]+$/, "", out); if (out != "") print out
+  }' "$1" 2>/dev/null
+}
+retire_merge() {
+  [ -d "${BASELINE}" ] || return 0
+  local f cur body old
+  for f in ${ESDE_WIRING}; do
+    cur="${ESDE_CUSTOM}/${f}" old="${BASELINE}/ES-DE/custom_systems/${f}"
+    [ -f "${cur}" ] && [ ! -L "${cur}" ] && [ -f "${SHARE}/${f}" ] || continue
+    body="$(xml_body "${cur}")"
+    if [ "${body}" = "$(xml_body "${SHARE}/${f}")" ] || { [ -f "${old}" ] && [ "${body}" = "$(xml_body "${old}")" ]; }; then
+      ln -sf "${SHARE}/${f}" "${cur}" && echo "pocknix-roms-init: ${cur} now links to ${SHARE}/${f}"
+    else
+      echo "pocknix-roms-init: ${cur} carries your own edits, kept (--reset esde links it back)"
+    fi
+  done
+  find "${BASELINE}" -type f 2>/dev/null | while IFS= read -r f; do
+    rm -f "${HOME}/${f#"${BASELINE}/"}.pocknixnew"
+  done
+  rm -rf "${BASELINE}"
+}
 
 # ROMS was read before any reset, so restoring ES-DE defaults keeps the user's ROM location
 label() {
@@ -171,15 +197,17 @@ label() {
 }
 STAMP="$(date +%Y%m%d-%H%M%S)"
 reset_target() {  # $1 target file
-  [ -e "$1" ] && mv "$1" "$1.bak-${STAMP}" 2>/dev/null
-  rm -f "${STATE}/pocknix/seed-baseline/${1#"${HOME}/"}" "$1.pocknixnew"
+  if [ -L "$1" ]; then rm -f "$1"
+  elif [ -e "$1" ]; then mv "$1" "$1.bak-${STAMP}" 2>/dev/null
+  fi
+  return 0
 }
 reset_dir() {  # $1 shipped dir, $2 target dir: only the files we ship, never the user's own
   local f
   [ -d "$1" ] || return 0
   while IFS= read -r f; do reset_target "$2/${f#"$1/"}"; done < <(find "$1" -type f)
 }
-reset_esde()      { reset_target "${ESDE_SETTINGS}"; reset_target "${ESDE_CUSTOM}/es_find_rules.xml"; reset_target "${ESDE_CUSTOM}/es_systems.xml"; }
+reset_esde()      { local f; reset_target "${ESDE_SETTINGS}"; for f in ${ESDE_WIRING}; do reset_target "${ESDE_CUSTOM}/${f}"; done; }
 reset_retroarch() {
   reset_target "${HOME}/.config/retroarch/retroarch.cfg"
   reset_dir /usr/share/libretro/autoconfig/udev "${HOME}/.config/retroarch/autoconfig/udev"
@@ -222,5 +250,6 @@ fi
 # refreshed every run so doc updates reach existing installs
 [ -f "${SHARE}/ROMS-README.txt" ] && cp -f "${SHARE}/ROMS-README.txt" "${EMU}/README.txt" 2>/dev/null
 
+retire_merge
 for e in "${present[@]}"; do "seed_${e}" || true; done
 exit 0

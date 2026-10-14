@@ -1,8 +1,0 @@
-# read by pocknix-seed-merge (verbs documented there)
-never ~^input_player\d+_(btn|axis|key|mbtn)_
-never ~^audio_(volume|mixer_volume)
-never ~^video_(window|fullscreen_x|fullscreen_y)
-# RetroArch materializes every key on first exit, so a stock value below marks an untouched device
-was core_updater_buildbot_cores_url ""
-was libretro_info_path "~/.config/retroarch/cores"
-was libretro_info_path ":/info"

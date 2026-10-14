@@ -2,7 +2,7 @@
 # configs, shipped as an arch=any data/scripts package.
 pkgname=pocknix-emulation
 pkgver=0.1.0
-pkgrel=22
+pkgrel=23
 pkgdesc="ES-DE + preconfigured emulators: drop ROMs into ~/Emulation and play; star -> Steam"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -11,24 +11,24 @@ license=('GPL-2.0-or-later')
 # is the pre-meta catch-up cycle, see pocknix-steam.
 depends=('bash' 'pocknix-emulation-full' 'pocknix-bsp-common>=0.1.0-24')
 install=pocknix-emulation.install
-source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-seed-merge' 'pocknix-play'
+source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-seed-users' '60-pocknix-emulation-seed.hook' 'pocknix-play'
         'emu-resolve.sh' 'es-eden' 'es-ryujinx' 'es-armsx2' 'es-dolphin' 'es-psp' 'es-xemu' 'es-retroarch'
         'retroarch-DuckStation-DuckStation.opt'
         'es-azahar' 'es-rpcs3' 'es-cemu' 'es-vita3k'
         'es_find_rules.xml' 'es_systems.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
         'eden-qt-config.ini.in' 'ppsspp.ini.in' 'ryujinx-Config.json.in'
-        'cemu-settings.policy' 'armsx2-PCSX2.policy' 'eden-qt-config.policy' 'retroarch.policy' 'es_settings.policy'
-        'ryujinx-Config.policy'
         'pocknix-cemu-profile' 'cemu-settings.xml.in' 'cemu-controller0.xml.in'
         'dolphin-Dolphin.ini.in' 'dolphin-GFX.ini.in' 'dolphin-GCPadNew.ini.in'
         # FLAT names: makepkg cannot retrieve local sources from subdirectory paths, so
         # package() maps retroarch-<Core>-<file> back into the retroarch-config/<Core>/ tree.
         'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
-  install -Dm755 "${srcdir}/pocknix-seed-merge" "${pkgdir}/usr/lib/pocknix/pocknix-seed-merge"
+  install -Dm755 "${srcdir}/pocknix-seed-users" "${pkgdir}/usr/lib/pocknix/pocknix-seed-users"
+  install -Dm644 "${srcdir}/60-pocknix-emulation-seed.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/60-pocknix-emulation-seed.hook"
   install -Dm755 "${srcdir}/pocknix-play"      "${pkgdir}/usr/bin/pocknix-play"
 
   install -Dm644 "${srcdir}/emu-resolve.sh" "${pkgdir}/usr/lib/pocknix/emu-resolve.sh"
@@ -67,10 +67,6 @@ package() {
     "${pkgdir}/usr/share/pocknix-emulation/ppsspp.ini.in"
   install -Dm644 "${srcdir}/ryujinx-Config.json.in" \
     "${pkgdir}/usr/share/pocknix-emulation/ryujinx-Config.json.in"
-  local pol
-  for pol in cemu-settings armsx2-PCSX2 eden-qt-config retroarch es_settings ryujinx-Config; do
-    install -Dm644 "${srcdir}/${pol}.policy" "${pkgdir}/usr/share/pocknix-emulation/${pol}.policy"
-  done
   install -Dm755 "${srcdir}/pocknix-cemu-profile" "${pkgdir}/usr/lib/pocknix/pocknix-cemu-profile"
   install -Dm644 "${srcdir}/cemu-settings.xml.in" \
     "${pkgdir}/usr/share/pocknix-emulation/cemu-settings.xml.in"

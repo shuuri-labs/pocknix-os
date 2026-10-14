@@ -50,4 +50,10 @@ copy of this ~/Emulation folder is fully self-contained and portable.
 MOVING YOUR ROMS (e.g. to an SD card): ES-DE Menu -> Other Settings -> ROM directory,
 pick the new location, move the files there. Everything else follows automatically.
 
+SETTINGS: each emulator is set up once, when it is installed; updates never change your
+settings afterwards. Pocknix Tools -> Restore emulator default settings re-applies ours.
+ES-DE's ~/ES-DE/custom_systems/es_systems.xml and es_find_rules.xml are links that follow
+updates. To edit your own, replace a link with a real copy first:
+  cp --remove-destination /usr/share/pocknix-emulation/es_systems.xml ~/ES-DE/custom_systems/
+
 You (and only you) are responsible for supplying game and BIOS files you legally own.

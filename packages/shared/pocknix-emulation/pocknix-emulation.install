@@ -3,14 +3,7 @@
 _drop_unowned_wants() {
   rm -f /etc/systemd/user/default.target.wants/pocknix-roms-init.service
 }
-# Kept ONCE, never refreshed: it has to describe the templates from before baselines existed,
-# which is what gives such a device a real three-way first merge.
-_stash_prev_templates() {
-  [ -e /var/lib/pocknix/seed-prev ] && return 0
-  [ -d /usr/share/pocknix-emulation ] || return 0
-  mkdir -p /var/lib/pocknix
-  cp -a /usr/share/pocknix-emulation /var/lib/pocknix/seed-prev 2>/dev/null || true
-}
-pre_upgrade()  { _stash_prev_templates; }
+# The old settings merge's template stash: root-owned, so the user-level seeder cannot drop it.
+_drop_seed_prev() { rm -rf /var/lib/pocknix/seed-prev; }
 post_install() { _drop_unowned_wants; }
-post_upgrade() { _drop_unowned_wants; }
+post_upgrade() { _drop_unowned_wants; _drop_seed_prev; }

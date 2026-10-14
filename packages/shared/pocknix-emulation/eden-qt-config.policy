@@ -1,4 +1,0 @@
-# read by pocknix-seed-merge; the pad bindings stay three-way on purpose
-never Controls/player_0_profile_name
-never Controls/player_0_vibration_*
-never Controls/player_0_*_color_*
