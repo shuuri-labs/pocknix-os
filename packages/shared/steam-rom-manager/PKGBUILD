@@ -1,0 +1,31 @@
+# It writes shortcuts.vdf, so Steam must be closed while it runs: its tile opens it in desktop mode.
+pkgname=steam-rom-manager
+pkgver=2.5.44
+pkgrel=1
+pkgdesc="Steam ROM Manager: add ROMs to Steam as tiles, with SteamGridDB artwork (official arm64 AppImage)"
+arch=('aarch64')
+url="https://github.com/SteamGridDB/steam-rom-manager"
+license=('GPL-3.0-only')
+depends=('pocknix-emulation-common' 'pocknix-steam' 'kdialog' 'fuse2' 'gtk3' 'nss' 'alsa-lib' 'python')
+options=('!strip')
+source=("Steam-ROM-Manager-${pkgver}-arm64.AppImage::${url}/releases/download/v${pkgver}/Steam-ROM-Manager-${pkgver}-arm64.AppImage"
+        "steam-rom-manager-${pkgver}.png::https://raw.githubusercontent.com/SteamGridDB/steam-rom-manager/v${pkgver}/src/assets/icons/256x256.png"
+        'steam-rom-manager-wrapper' 'steam-rom-manager.desktop' 'pocknix-srm-config' 'srm-userSettings.json.in'
+        'steam-srm.conf' 'pocknix-srm-session')
+sha256sums=('c8556ed3214b2fecc888df9edd27ca254206303998f32b1f9b7ae19b46b3189a'
+            'dfcef88c8e8b262f548c8d2799ff1f13e688bd0f710b5afdf780f9fc2686243b'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+noextract=("Steam-ROM-Manager-${pkgver}-arm64.AppImage")
+
+package() {
+  install -Dm755 "${srcdir}/Steam-ROM-Manager-${pkgver}-arm64.AppImage" \
+    "${pkgdir}/opt/pocknix/steam-rom-manager/Steam-ROM-Manager.AppImage"
+  install -Dm644 "${srcdir}/steam-rom-manager-${pkgver}.png" \
+    "${pkgdir}/usr/share/icons/hicolor/256x256/apps/steam-rom-manager.png"
+  install -Dm755 "${srcdir}/steam-rom-manager-wrapper" "${pkgdir}/usr/bin/steam-rom-manager"
+  install -Dm644 "${srcdir}/steam-rom-manager.desktop" "${pkgdir}/usr/share/applications/steam-rom-manager.desktop"
+  install -Dm755 "${srcdir}/pocknix-srm-config" "${pkgdir}/usr/lib/pocknix/pocknix-srm-config"
+  install -Dm644 "${srcdir}/srm-userSettings.json.in" "${pkgdir}/usr/share/pocknix-emulation/srm-userSettings.json.in"
+  install -Dm644 "${srcdir}/steam-srm.conf" "${pkgdir}/usr/share/pocknix-emulation/steam/srm.conf"
+  install -Dm755 "${srcdir}/pocknix-srm-session" "${pkgdir}/usr/lib/pocknix/pocknix-srm-session"
+}

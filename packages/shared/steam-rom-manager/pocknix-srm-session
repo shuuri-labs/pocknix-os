@@ -1,0 +1,35 @@
+#!/bin/bash
+# pocknix-srm-session [--desktop] - Steam ROM Manager's tile. SRM edits shortcuts.vdf, which a
+# running Steam overwrites, and in game mode closing Steam ends the session SRM runs in. So from
+# game mode: confirm, switch to desktop mode (the switch closes Steam) and open SRM there once
+# through a self-deleting autostart entry.
+set -u
+TITLE="Steam ROM Manager"
+AUTOSTART="${XDG_CONFIG_HOME:-${HOME}/.config}/autostart/pocknix-srm-once.desktop"
+# Steam's runtime libraries break Qt and the bundled Electron alike.
+unset LD_PRELOAD LD_LIBRARY_PATH
+
+if [ "${1:-}" = --desktop ]; then
+  rm -f "${AUTOSTART}"
+  exec steam-rom-manager
+fi
+
+# Desktop Steam: SRM itself asks for Steam to be closed before it saves.
+[ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" ] || exec steam-rom-manager
+
+TEXT="Steam ROM Manager runs in Desktop Mode, because Steam has to be closed while it adds games. Pocknix switches to Desktop Mode and opens it for you; return to Game Mode from the desktop when you are done."
+pocknix-tiles confirm "${TITLE}" "${TEXT}" "Switch to Desktop Mode"
+rc=$?
+if [ "${rc}" -eq 2 ]; then
+  kdialog --title "${TITLE}" --yes-label "Switch to Desktop Mode" --no-label "Cancel" --yesno "${TEXT}"
+  rc=$?
+fi
+[ "${rc}" -eq 0 ] || exit 0
+mkdir -p "${AUTOSTART%/*}"
+cat > "${AUTOSTART}" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=${TITLE}
+Exec=/usr/lib/pocknix/pocknix-srm-session --desktop
+DESKTOP
+exec steamos-session-select plasma

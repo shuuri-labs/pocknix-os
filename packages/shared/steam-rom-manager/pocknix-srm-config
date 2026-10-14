@@ -1,0 +1,77 @@
+#!/usr/bin/python3
+# pocknix-srm-config <rom-root> - prints Steam ROM Manager's userConfigurations.json with one
+# parser per system, every tile launching `pocknix-play <system> <rom>`. SRM's own emulator
+# presets start emulators directly and miss pocknix-play's big-core pin, the Steam env scrub and
+# the RetroArch pacing re-pin. Systems must be ones pocknix-play's case list knows.
+import json
+import sys
+
+# system dir, Steam category, extensions (one disc format per system where several exist, so a
+# .cue/.bin pair does not become two tiles)
+SYSTEMS = [
+    ("nes", "NES", "nes zip 7z"), ("snes", "SNES", "sfc smc zip 7z"), ("n64", "Nintendo 64", "n64 z64 v64 zip 7z"),
+    ("gb", "Game Boy", "gb zip 7z"), ("gbc", "Game Boy Color", "gbc zip 7z"),
+    ("gba", "Game Boy Advance", "gba zip 7z"), ("nds", "Nintendo DS", "nds zip 7z"),
+    ("n3ds", "Nintendo 3DS", "3ds cci cxi 3dsx"),
+    ("genesis", "Sega Genesis", "md gen smd bin zip 7z"), ("megadrive", "Sega Mega Drive", "md gen smd bin zip 7z"),
+    ("mastersystem", "Sega Master System", "sms zip 7z"), ("gamegear", "Sega Game Gear", "gg zip 7z"),
+    ("segacd", "Sega CD", "chd cue m3u"), ("saturn", "Sega Saturn", "chd cue m3u"),
+    ("dreamcast", "Sega Dreamcast", "chd gdi cdi m3u"),
+    ("tg16", "TurboGrafx-16", "pce zip 7z"), ("pcengine", "PC Engine", "pce zip 7z"),
+    ("neogeo", "Neo Geo", "zip 7z"), ("cps1", "Capcom CPS-1", "zip 7z"), ("cps2", "Capcom CPS-2", "zip 7z"),
+    ("cps3", "Capcom CPS-3", "zip 7z"), ("arcade", "Arcade", "zip 7z"), ("mame", "MAME", "zip 7z"),
+    ("atari2600", "Atari 2600", "a26 bin zip 7z"), ("atari7800", "Atari 7800", "a78 zip 7z"),
+    ("atarilynx", "Atari Lynx", "lnx zip 7z"), ("atarijaguar", "Atari Jaguar", "j64 jag zip"),
+    ("wonderswan", "WonderSwan", "ws wsc zip 7z"),
+    ("psx", "PlayStation", "chd cue pbp m3u"), ("ps2", "PlayStation 2", "chd iso cso zso m3u"),
+    ("ps3", "PlayStation 3", "ps3 ps3dir"), ("psp", "PSP", "iso cso chd pbp"), ("psvita", "PS Vita", "psvita"),
+    ("gc", "GameCube", "rvz iso gcz ciso wia"), ("wii", "Wii", "rvz wbfs iso ciso wia"),
+    ("wiiu", "Wii U", "wua wux wud rpx"), ("switch", "Switch", "nsp xci"), ("xbox", "Xbox", "iso"),
+]
+
+ARTWORK = ("tall", "long", "hero", "logo", "icon")
+
+
+def parser(system: str, label: str, exts: str, roms: str) -> dict:
+    glob = "|".join(f".{e}|.{e.upper()}" for e in exts.split())
+    return {
+        "version": 29,
+        "parserId": f"pocknix-{system}",
+        "parserType": "Glob",
+        "configTitle": f"{label} (pocknix)",
+        "steamCategories": [label],
+        "executable": {"path": "/usr/bin/pocknix-play", "shortcutPassthrough": False, "appendArgsToExecutable": False},
+        "executableArgs": f'pocknix-game-launch %command% {system} "${{filePath}}"',
+        "executableModifier": '"${exePath}"',
+        "romDirectory": f"{roms}/{system}",
+        "steamDirectory": "${steamdirglobal}",
+        "startInDirectory": "",
+        "titleModifier": "${fuzzyTitle}",
+        "userAccounts": {"specifiedAccounts": ["Global"]},
+        "parserInputs": {"glob": f"${{title}}@({glob})"},
+        "titleFromVariable": {"caseInsensitiveVariables": False, "skipFileIfVariableWasNotFound": False, "limitToGroups": []},
+        "sortAsFromVariable": {"limitedToGroups": [], "skipFileIfVariableWasNotFound": False, "caseInsensitiveVariables": False},
+        "fuzzyMatch": {"replaceDiacritics": True, "removeCharacters": True, "removeBrackets": True},
+        "onlineImageQueries": ["${fuzzyTitle}"],
+        "imagePool": "${fuzzyTitle}",
+        "imageProviders": ["sgdb"],
+        "imageProviderAPIs": {"sgdb": {"nsfw": False, "humor": False, "imageMotionTypes": ["static"],
+                                       "styles": [], "stylesHero": [], "stylesLogo": [], "stylesIcon": []},
+                              "steamCDN": {}},
+        "controllers": {k: None for k in ("ps4", "ps5", "xbox360", "xboxone", "switch_joycon_left",
+                                          "switch_joycon_right", "switch_pro", "neptune")},
+        "defaultImage": {a: "" for a in ARTWORK},
+        "localImages": {a: "" for a in ARTWORK},
+        "overlayImages": {a: "" for a in ARTWORK},
+        "steamInputEnabled": "1",
+        "drmProtect": False,
+        "group": "",
+        "disabled": False,
+    }
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        sys.exit("usage: pocknix-srm-config <rom-root>")
+    json.dump([parser(s, l, e, sys.argv[1].rstrip("/")) for s, l, e in SYSTEMS], sys.stdout, indent=2)
+    print()

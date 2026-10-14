@@ -41,6 +41,10 @@ matching subfolder and they are picked up automatically the next time ES-DE star
 5. STEAM LIBRARY
    ES-DE and every installed emulator have their own tile in Steam (added as soon as
    the emulator is installed in Game Mode). ES-DE favourites are not added to Steam.
+   For one tile per game, with cover art: open the Steam ROM Manager tile (it switches to
+   Desktop Mode, where Steam is closed), Add Games, Save to Steam, close it and go back
+   to Game Mode. Its own emulator presets bypass the Pocknix launch settings; use the
+   pocknix ones.
 
 Saves and save-states live in ~/Emulation/Saves and ~/Emulation/States, so a single
 copy of this ~/Emulation folder is fully self-contained and portable.

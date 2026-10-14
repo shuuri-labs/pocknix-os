@@ -121,7 +121,20 @@ own menu with the normal controller layout. Menus built for a mouse (Dolphin, Az
 RPCS3) can be driven with Steam's mouse controls, or pick another layout for the tile in Steam;
 Steam keeps that choice even if the emulator is reinstalled.
 
-ES-DE favourites are not added to Steam.
+ES-DE favourites are not added to Steam. To put individual games in your library, with cover
+art, use **Steam ROM Manager**. It needs Steam closed while it saves, so it runs in Desktop Mode:
+
+1. Open the *Steam ROM Manager* tile in Game Mode and confirm the switch to Desktop Mode (or
+   open it from the desktop app menu with Steam closed). It opens by itself.
+2. It comes set up with one parser per system, pointing at your ROM folder, each launching
+   games the same way ES-DE does. The first time, it asks which Steam account to add them to.
+3. Choose *Add Games*, then *Save to Steam*. Artwork comes from SteamGridDB, fetched on the
+   device.
+4. Close it and return to Game Mode from the desktop: the games are in your library.
+
+Avoid SRM's own emulator presets: they start the emulators directly and skip the Pocknix
+launch settings (CPU pinning, RetroArch frame pacing). *Restore emulator default settings* in
+Pocknix Tools also restores the Pocknix SRM parsers.
 
 ## Tweaking individual emulator settings
 

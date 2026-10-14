@@ -48,6 +48,7 @@ if [ -n "${gui:-}" ]; then
     azahar)    run_emu azahar -f ;;
     xemu)      run_emu xemu -full-screen ;;
     armsx2|rpcs3|dolphin) run_emu "${gui}" ;;
+    srm) exec /usr/lib/pocknix/pocknix-srm-session ;;
     cemu)
       /usr/lib/pocknix/pocknix-cemu-profile 2>/dev/null || true   # pad GUID differs per session
       run_emu cemu ;;

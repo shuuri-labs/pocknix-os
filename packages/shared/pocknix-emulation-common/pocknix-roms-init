@@ -52,7 +52,8 @@ have_dolphin()   { emu_path dolphin >/dev/null 2>&1; }
 have_cemu()      { emu_path cemu >/dev/null 2>&1; }
 have_ppsspp()    { emu_path ppsspp >/dev/null 2>&1; }
 have_ryujinx()   { emu_path ryujinx >/dev/null 2>&1; }
-EMULATORS=(esde retroarch armsx2 eden ryujinx dolphin cemu ppsspp)
+have_srm()       { command -v steam-rom-manager >/dev/null 2>&1; }
+EMULATORS=(esde retroarch armsx2 eden ryujinx dolphin cemu ppsspp srm)
 
 TMP="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/pocknix-seed.XXXXXX")" || exit 0
 trap 'rm -rf "${TMP}"' EXIT
@@ -73,6 +74,9 @@ render_all() {  # $1 template dir, $2 out dir
   # the largest 272-row multiple that fits the panel, +8 rows slack (4x on 1080 crops 8)
   local res=$(( (LOGICAL_H + 8) / 272 )); [ "${res}" -lt 1 ] && res=1
   [ -f "${src}/ppsspp.ini.in" ] && sed "s/^iInternalResolution = .*/iInternalResolution = ${res}/" "${src}/ppsspp.ini.in" > "${out}/ppsspp.ini"
+  [ -f "${src}/srm-userSettings.json.in" ] && sed -e "s|__HOME__|${HOME}|g" -e "s|__ROMS__|${ROMS}|g" \
+      "${src}/srm-userSettings.json.in" > "${out}/userSettings.json"
+  [ -x /usr/lib/pocknix/pocknix-srm-config ] && /usr/lib/pocknix/pocknix-srm-config "${ROMS}" > "${out}/userConfigurations.json"
   return 0
 }
 render_all "${SHARE}" "${TMP}/new"
@@ -150,6 +154,12 @@ seed_cemu() {
 
 seed_ppsspp() { seed_file ppsspp.ini "${HOME}/.config/ppsspp/PSP/SYSTEM/ppsspp.ini"; }
 
+SRM_DATA="${HOME}/.config/steam-rom-manager/userData"
+seed_srm() {
+  seed_file userSettings.json "${SRM_DATA}/userSettings.json"
+  seed_file userConfigurations.json "${SRM_DATA}/userConfigurations.json"
+}
+
 # One-time move off the old settings merge: an unedited custom_systems copy (comment and blank
 # line differences ignored) becomes the link, then the merge's per-user baselines and the
 # .pocknixnew offers beside our files go.
@@ -191,6 +201,7 @@ label() {
     armsx2) l="ARMSX2 (PS2)" ;;          eden) l="Eden (Switch)" ;;
     dolphin) l="Dolphin (GameCube/Wii)" ;; cemu) l="Cemu (Wii U)" ;;
     ppsspp) l="PPSSPP (PSP)" ;;          ryujinx) l="Ryujinx (Switch)" ;;
+    srm) l="Steam ROM Manager" ;;
   esac
   case "$(emu_path "$1" 2>/dev/null)" in "${EMU_DROP}"/*) own=" - your own build" ;; esac
   echo "${l}${own}"
@@ -219,6 +230,7 @@ reset_ryujinx()   { reset_target "${HOME}/.config/Ryujinx/Config.json"; }
 reset_dolphin()   { local f; for f in Dolphin.ini GFX.ini GCPadNew.ini; do reset_target "${HOME}/.config/dolphin-emu/${f}"; done; }
 reset_cemu()      { reset_target "${HOME}/.config/Cemu/settings.xml"; }
 reset_ppsspp()    { reset_target "${HOME}/.config/ppsspp/PSP/SYSTEM/ppsspp.ini"; }
+reset_srm()       { reset_target "${SRM_DATA}/userSettings.json"; reset_target "${SRM_DATA}/userConfigurations.json"; }
 
 present=()
 for e in "${EMULATORS[@]}"; do "have_${e}" && present+=("${e}"); done

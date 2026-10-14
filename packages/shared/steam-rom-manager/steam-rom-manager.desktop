@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Steam ROM Manager
+Comment=Add your ROMs to Steam as tiles, with artwork (close Steam first)
+Exec=steam-rom-manager
+Icon=steam-rom-manager
+Categories=Game;Utility;

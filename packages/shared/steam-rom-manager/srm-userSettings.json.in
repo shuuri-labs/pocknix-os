@@ -1,0 +1,9 @@
+{
+  "version": 11,
+  "environmentVariables": {
+    "steamDirectory": "__HOME__/.local/share/Steam",
+    "romsDirectory": "__ROMS__"
+  },
+  "offlineMode": false,
+  "autoUpdate": false
+}

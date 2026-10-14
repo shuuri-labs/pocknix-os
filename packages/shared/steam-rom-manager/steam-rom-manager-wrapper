@@ -1,0 +1,9 @@
+#!/bin/bash
+# --no-sandbox: chrome-sandbox needs setuid root, impossible inside the AppImage's squashfs.
+# Wayland ozone: without it Electron takes the X11 path, which fails wherever XAUTHORITY is not
+# set (ssh, a systemd unit). The env scrub: a Steam launch injects LD_PRELOAD and its runtime
+# libraries, which break the bundled Electron.
+plat=()
+[ -n "${WAYLAND_DISPLAY:-}" ] && plat=(--ozone-platform=wayland)
+exec env -u LD_PRELOAD -u LD_LIBRARY_PATH FUSERMOUNT_PROG=/usr/bin/fusermount \
+  /opt/pocknix/steam-rom-manager/Steam-ROM-Manager.AppImage --no-sandbox "${plat[@]}" "$@"
