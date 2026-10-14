@@ -38,11 +38,9 @@ matching subfolder and they are picked up automatically the next time ES-DE star
    alike, with the same pre-made settings. Remove the file to go back to the built-in one.
    Folders: eden, ryujinx, armsx2, rpcs3, vita3k, xemu, dolphin, cemu, azahar, ppsspp.
 
-5. GET IT INTO YOUR STEAM LIBRARY
-   In ES-DE, press the Favorite button on any game to star it. Starred games are
-   added to your Steam library automatically (in a "Pocknix" collection) - no manual
-   setup. Un-star to remove it again. New/removed favorites appear next time you
-   enter Game Mode.
+5. STEAM LIBRARY
+   ES-DE and every installed emulator have their own tile in Steam (added as soon as
+   the emulator is installed in Game Mode). ES-DE favourites are not added to Steam.
 
 Saves and save-states live in ~/Emulation/Saves and ~/Emulation/States, so a single
 copy of this ~/Emulation folder is fully self-contained and portable.

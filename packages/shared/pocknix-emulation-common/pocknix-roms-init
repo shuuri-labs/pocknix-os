@@ -19,8 +19,8 @@ case "${POCKNIX_PANEL_ORIENT:-left}" in
   *)          LOGICAL_H="${POCKNIX_PANEL_H:-1920}" ;;
 esac
 # ES-DE's ROMDirectory setting is the single source of truth for where ROMs live (the user can
-# repoint it at an SD card); this skeleton and pocknix-steam-sync both follow it. Empty/absent
-# means ES-DE's own default ~/ROMs. The settings file is a rootless XML fragment, hence sed.
+# repoint it at an SD card), and this skeleton follows it. Empty/absent means ES-DE's own default
+# ~/ROMs. The settings file is a rootless XML fragment, hence sed.
 ESDE_SETTINGS="${HOME}/ES-DE/settings/es_settings.xml"
 ESDE_CUSTOM="${HOME}/ES-DE/custom_systems"
 _roms_setting="$(sed -n 's/.*name="ROMDirectory" value="\([^"]*\)".*/\1/p' "${ESDE_SETTINGS}" 2>/dev/null | head -1)"

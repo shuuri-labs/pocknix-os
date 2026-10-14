@@ -1,0 +1,521 @@
+#!/usr/bin/python3
+# pocknix-tiles enable|disable <name>... | status <name> - the Steam tile of the emulator manifest
+# /usr/share/pocknix-emulation/steam/<name>.conf, live through Steam's client API on its CEF
+# debugging port while Steam runs, else written into shortcuts.vdf. A Steam running without that
+# API is left alone: it rewrites shortcuts.vdf and would undo the write.
+# pocknix-tiles prune {<name> <exe> <args>}... - the alpm Remove hook's entry: the manifest that
+# names the tile's command is gone by the time the tile goes.
+# Exit: 0 done (status prints enabled|disabled), 1 error, 2 usage, 3 Steam running but its API
+# unreachable or not ready (exit Steam and try again), 4 no Steam account on this device.
+# pocknix-tiles confirm <title> <text> <ok-label> - a controller-driven Steam dialog for tiles
+# that need one; exit 0 = OK, 1 = cancelled or timed out, 2 = no Steam dialog available.
+import base64
+import fcntl
+import json
+import os
+import re
+import socket
+import struct
+import subprocess
+import sys
+import time
+import urllib.request
+import zlib
+
+HOME = os.path.expanduser("~")
+STEAM = os.path.join(HOME, ".local/share/Steam")
+MANIFESTS = "/usr/share/pocknix-emulation/steam"
+CDP = "http://127.0.0.1:8080/json/list"
+LAUNCH = "pocknix-game-launch %command%"
+PLAY = "/usr/bin/pocknix-play"
+STEAMID64_BASE = 76561197960265728
+OK, ERROR, USAGE, BUSY, NO_ACCOUNT = 0, 1, 2, 3, 4
+
+
+class Busy(Exception):
+    pass
+
+
+def log(msg: str) -> None:
+    print(f"[pocknix-tiles] {msg}", file=sys.stderr, flush=True)
+
+
+def launch_options(args: str) -> str:
+    return f"{LAUNCH} {args}" if args else LAUNCH
+
+
+def manifest(name: str) -> dict | None:
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
+        return None
+    m = {}
+    try:
+        with open(os.path.join(MANIFESTS, f"{name}.conf")) as f:
+            for line in f:
+                k, sep, v = line.strip().partition("=")
+                if sep and not k.startswith("#"):
+                    m[k.strip()] = v.strip()
+    except OSError:
+        return None
+    if not (m.get("name") and m.get("exe")):
+        return None
+    return {"name": m["name"], "exe": m["exe"], "lo": launch_options(m.get("args", ""))}
+
+
+def get(d: dict, key: str, default=""):
+    """Key case varies between Steam builds and other shortcut tools; Steam reads either."""
+    for k, v in d.items():
+        if k.lower() == key.lower():
+            return v
+    return default
+
+
+def command(e: dict) -> str:
+    return str(get(e, "exe")).strip('"') + "\0" + str(get(e, "LaunchOptions"))
+
+
+def kv_text(path: str) -> dict:
+    """Steam's text KeyValues (loginusers.vdf): quoted tokens and braces."""
+    with open(path, encoding="utf-8", errors="replace") as f:
+        tokens = re.findall(r'"((?:\\.|[^"\\])*)"|([{}])', f.read())
+    root, stack, key = {}, [], None
+    cur = root
+    for s, brace in tokens:
+        if brace == "{":
+            new = {}
+            cur[key] = new
+            stack.append(cur)
+            cur, key = new, None
+        elif brace == "}":
+            cur = stack.pop()
+        elif key is None:
+            key = s
+        else:
+            cur[key], key = s, None
+    return root
+
+
+def account() -> str | None:
+    """The account the next Steam start logs into, the only one a live write could reach. Older
+    clients mark it MostRecent; the ARM client only keeps each login's timestamp."""
+    userdata = os.path.join(STEAM, "userdata")
+    try:
+        users = get(kv_text(os.path.join(STEAM, "config/loginusers.vdf")), "users", {})
+        users = [(get(u, "MostRecent") == "1", int(get(u, "timestamp", "0") or 0), sid)
+                 for sid, u in users.items() if isinstance(u, dict)]
+        if users:
+            acc = str(int(max(users)[2]) - STEAMID64_BASE)
+            return acc if os.path.isdir(os.path.join(userdata, acc)) else None
+    except (OSError, ValueError, IndexError, AttributeError):
+        pass
+    try:
+        accs = [d for d in os.listdir(userdata) if d.isdigit() and d != "0"]
+    except OSError:
+        return None
+    return accs[0] if len(accs) == 1 else None
+
+
+def vdf_path(acc: str) -> str:
+    return os.path.join(STEAM, "userdata", acc, "config", "shortcuts.vdf")
+
+
+TYPE_MAP, TYPE_STR, TYPE_INT, END = 0x00, 0x01, 0x02, 0x08
+
+
+# surrogateescape + unsigned ints: a rewrite must give back other tiles' bytes unchanged.
+def parse_map(data: bytes, pos: int):
+    out = {}
+    while True:
+        t = data[pos]
+        if t == END:
+            return out, pos + 1
+        pos += 1
+        key_end = data.index(b"\x00", pos)
+        key = data[pos:key_end].decode("utf-8", "surrogateescape")
+        pos = key_end + 1
+        if t == TYPE_MAP:
+            out[key], pos = parse_map(data, pos)
+        elif t == TYPE_STR:
+            val_end = data.index(b"\x00", pos)
+            out[key] = data[pos:val_end].decode("utf-8", "surrogateescape")
+            pos = val_end + 1
+        elif t == TYPE_INT:
+            out[key] = struct.unpack_from("<I", data, pos)[0]
+            pos += 4
+        else:
+            raise ValueError(f"unknown vdf type 0x{t:02x} at {pos}")
+
+
+def dump_map(d: dict) -> bytes:
+    out = b""
+    for k, v in d.items():
+        kb = k.encode("utf-8", "surrogateescape") + b"\x00"
+        if isinstance(v, dict):
+            out += bytes([TYPE_MAP]) + kb + dump_map(v)
+        elif isinstance(v, int):
+            out += bytes([TYPE_INT]) + kb + struct.pack("<I", v)
+        else:
+            out += bytes([TYPE_STR]) + kb + str(v).encode("utf-8", "surrogateescape") + b"\x00"
+    return out + bytes([END])
+
+
+def read_vdf(path: str) -> tuple[str, list]:
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        return "shortcuts", []
+    if not data:
+        return "shortcuts", []
+    if data[0] != TYPE_MAP:
+        raise ValueError(f"{path}: not a binary vdf")
+    end = data.index(b"\x00", 1)
+    entries, _ = parse_map(data, end + 1)
+    return data[1:end].decode("utf-8", "surrogateescape"), list(entries.values())
+
+
+def steam_running() -> bool:
+    return subprocess.run(["pgrep", "-x", "-u", str(os.getuid()), "steam"],
+                          stdout=subprocess.DEVNULL).returncode == 0
+
+
+def write_vdf(path: str, root: str, entries: list) -> None:
+    data = (bytes([TYPE_MAP]) + root.encode("utf-8", "surrogateescape") + b"\x00"
+            + dump_map({str(i): e for i, e in enumerate(entries)}) + bytes([END]))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.pocknix-tmp"
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        # Steam reads the file at login and writes its own list back later, so one started since
+        # the first check would drop this write. The rename is atomic: Steam never sees half a file.
+        if steam_running():
+            raise Busy("Steam started during the write")
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def legacy_favourite(e: dict) -> bool:
+    """An ES-DE favourite tile from the old sync. Only the vdf carries its DevkitGameID mark; by
+    command it looks like a Steam ROM Manager tile, which must stay."""
+    return (get(e, "DevkitGameID") == "pocknix" and str(get(e, "exe")).strip('"') == PLAY
+            and " --gui " not in str(get(e, "LaunchOptions")))
+
+
+def make_entry(w: dict) -> dict:
+    # Steam's own id for an offline entry, so a tile re-enabled offline gets its art back.
+    return {"appid": zlib.crc32(f'"{w["exe"]}"{w["name"]}'.encode()) | 0x80000000,
+            "appname": w["name"], "exe": f'"{w["exe"]}"', "StartDir": f'"{HOME}"', "icon": "",
+            "ShortcutPath": "", "LaunchOptions": w["lo"], "IsHidden": 0, "AllowDesktopConfig": 1,
+            "AllowOverlay": 1, "OpenVR": 0, "Devkit": 0, "DevkitGameID": "",
+            "DevkitOverrideAppID": 0, "LastPlayTime": 0, "FlatpakAppID": "", "tags": {}}
+
+
+def offline(ops: list[dict], prune_legacy: bool) -> dict | None:
+    acc = account()
+    if not acc:
+        return None
+    path = vdf_path(acc)
+    root, entries = read_vdf(path)
+    r = {"added": [], "kept": [], "removed": [], "failed": [], "state": {}}
+    if prune_legacy:
+        r["removed"] = [str(get(e, "appname")) for e in entries if isinstance(e, dict) and legacy_favourite(e)]
+        entries = [e for e in entries if not (isinstance(e, dict) and legacy_favourite(e))]
+    for w in ops:
+        key = w["exe"] + "\0" + w["lo"]
+        found = any(isinstance(e, dict) and command(e) == key for e in entries)
+        if w["op"] == "status":
+            r["state"][w["name"]] = found
+        elif w["op"] == "add":
+            e = make_entry(w)
+            if found:
+                r["kept"].append(w["name"])
+            elif any(isinstance(o, dict) and get(o, "appid", None) == e["appid"] for o in entries):
+                r["failed"].append(f"{w['name']} (appid taken by another tile)")
+            else:
+                entries.append(e)
+                r["added"].append(w["name"])
+        elif found:
+            entries = [e for e in entries if not (isinstance(e, dict) and command(e) == key)]
+            r["removed"].append(w["name"])
+    if r["added"] or r["removed"]:
+        write_vdf(path, root, entries)
+    return r
+
+
+class WebSocket:
+    """Just enough RFC 6455 for one CDP exchange: the base image ships no websocket module."""
+
+    def __init__(self, url: str, timeout: float):
+        hostport, path = url[len("ws://"):].split("/", 1)
+        host, port = hostport.rsplit(":", 1)
+        self.s = socket.create_connection((host, int(port)), timeout=timeout)
+        key = base64.b64encode(os.urandom(16)).decode()
+        self.s.sendall((f"GET /{path} HTTP/1.1\r\nHost: {hostport}\r\nUpgrade: websocket\r\n"
+                        f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n"
+                        "Sec-WebSocket-Version: 13\r\n\r\n").encode())
+        head = b""
+        while b"\r\n\r\n" not in head:
+            head += self._exact(1)
+        if b" 101 " not in head.split(b"\r\n", 1)[0]:
+            raise ConnectionError(head.split(b"\r\n", 1)[0].decode(errors="replace"))
+
+    def _exact(self, n: int) -> bytes:
+        b = b""
+        while len(b) < n:
+            c = self.s.recv(n - len(b))
+            if not c:
+                raise ConnectionError("connection closed")
+            b += c
+        return b
+
+    def send(self, text: str) -> None:
+        data, mask = text.encode(), os.urandom(4)
+        n = len(data)
+        if n < 126:
+            hdr = bytes([0x81, 0x80 | n])
+        elif n < 65536:
+            hdr = bytes([0x81, 0x80 | 126]) + struct.pack(">H", n)
+        else:
+            hdr = bytes([0x81, 0x80 | 127]) + struct.pack(">Q", n)
+        self.s.sendall(hdr + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+    def recv(self) -> str:
+        msg = b""
+        while True:
+            b0, b1 = self._exact(2)
+            n = b1 & 0x7F
+            if n == 126:
+                n = struct.unpack(">H", self._exact(2))[0]
+            elif n == 127:
+                n = struct.unpack(">Q", self._exact(8))[0]
+            payload, op = self._exact(n), b0 & 0x0F
+            if op == 0x8:
+                raise ConnectionError("closed by Steam")
+            if op in (0x9, 0xA):
+                continue
+            msg += payload
+            if b0 & 0x80:
+                return msg.decode()
+
+
+def target() -> str | None:
+    try:
+        with urllib.request.urlopen(CDP, timeout=3) as r:
+            for t in json.load(r):
+                if t.get("title") == "SharedJSContext":
+                    return t["webSocketDebuggerUrl"]
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def evaluate(url: str, js: str, timeout: float = 60):
+    ws = WebSocket(url, timeout)
+    ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate",
+                        "params": {"expression": js, "awaitPromise": True, "returnByValue": True}}))
+    while True:
+        r = json.loads(ws.recv())
+        if r.get("id") == 1:
+            res = r.get("result", {})
+            if "exceptionDetails" in res:
+                raise RuntimeError(res["exceptionDetails"].get("exception", {}).get("description", "JS exception"))
+            return res.get("result", {}).get("value")
+
+
+# One evaluate per run, and every check before the first change. Tiles are matched by command
+# (exe + launch options), never re-added: a re-add gets a new appid and loses playtime. Early in
+# Steam's startup a tile's details can come back empty: its command then comes from
+# shortcuts.vdf, and a tile known to neither means Steam is not ready (a skip would add a twin).
+LIVE = r"""
+(async (ops, legacy, saved, home) => {
+  const A = SteamClient.Apps;
+  const details = id => new Promise(res => {
+    const t = setTimeout(() => res(null), 3000);
+    const reg = A.RegisterForAppDetails(id, d => { clearTimeout(t); reg.unregister(); res(d); });
+  });
+  const unq = s => (s || "").replace(/^"(.*)"$/, "$1");
+  const r = {added: [], kept: [], removed: [], failed: [], state: {}};
+  const have = new Map(), gone = [];
+  const all = [...appStore.m_mapApps.values()].filter(o => o.app_type == 1073741824);
+  const old = all.filter(o => legacy.includes(o.appid)), rest = all.filter(o => !legacy.includes(o.appid));
+  // In parallel: a few hundred ROM tiles at up to 3 s each would outlast the CDP timeout.
+  const ds = await Promise.all(rest.map(o => details(o.appid)));
+  for (const [i, o] of rest.entries()) {
+    const d = ds[i];
+    let exe = d && unq(d.strShortcutExe), lo = d && d.strLaunchOptions;
+    if (!exe) {
+      if (!(String(o.appid) in saved)) return {busy: "details for " + o.appid + " not loaded yet"};
+      [exe, lo] = saved[String(o.appid)];
+    }
+    const key = exe + "\0" + (lo || "");
+    have.set(key, [...(have.get(key) || []), o.appid]);
+  }
+  for (const o of old) { A.RemoveShortcut(o.appid); gone.push(o.appid); r.removed.push(o.display_name); }
+  for (const w of ops) {
+    const key = w.exe + "\0" + w.lo, ids = have.get(key) || [];
+    if (w.op === "status") { r.state[w.name] = ids.length > 0; continue; }
+    if (w.op === "remove") {
+      ids.forEach(id => { A.RemoveShortcut(id); gone.push(id); });
+      have.delete(key);
+      if (ids.length) r.removed.push(w.name);
+      continue;
+    }
+    if (ids.length) { r.kept.push(w.name); continue; }
+    const id = Number(await A.AddShortcut(w.name, w.exe, home, w.lo));
+    if (!id) { r.failed.push(w.name); continue; }
+    A.SetShortcutName(id, w.name); A.SetShortcutLaunchOptions(id, w.lo);
+    A.SetShortcutStartDir(id, '"' + home + '"');
+    have.set(key, [id]);
+    r.added.push(w.name);
+  }
+  // A removal leaves appStore asynchronously: a status read right after would still see it.
+  const listed = id => [...appStore.m_mapApps.values()].some(o => o.appid === id);
+  for (let i = 0; i < 25 && gone.some(listed); i++) await new Promise(res => setTimeout(res, 200));
+  return r;
+})
+"""
+
+STATE = """(() => {
+  const u = typeof App !== "undefined" && App.m_CurrentUser;
+  if (!u || !u.strSteamID) return null;
+  return {id: u.strSteamID, n: [...appStore.m_mapApps.values()].filter(o => o.app_type == 1073741824).length};
+})()"""
+
+
+def live_once(url: str, ops: list[dict], prune_legacy: bool, timeout: float) -> dict:
+    st = evaluate(url, STATE, timeout=timeout)
+    if not st:
+        raise Busy("no Steam user logged in")
+    # Mid-login Steam reports the anonymous id (account 0): its empty library would pass the
+    # count gate below and read as "no tiles".
+    acc = str(int(st["id"]) - STEAMID64_BASE)
+    if acc == "0" or not os.path.isdir(os.path.join(STEAM, "userdata", acc)):
+        raise Busy("Steam is still logging in")
+    path = vdf_path(acc)
+    try:
+        entries = [e for e in read_vdf(path)[1] if isinstance(e, dict)]
+    except (OSError, ValueError, IndexError, struct.error) as e:
+        log(f"{path}: unreadable ({e})")
+        entries = []
+    # Steam reports a logged-in user before it has loaded the saved tiles: a lookup then finds
+    # none and adds every one again.
+    if st["n"] < len(entries):
+        raise Busy("Steam has not loaded its tiles yet")
+    legacy = [get(e, "appid") for e in entries if legacy_favourite(e)] if prune_legacy else []
+    saved = {str(get(e, "appid")): [str(get(e, "exe")).strip('"'), str(get(e, "LaunchOptions"))]
+             for e in entries if get(e, "appid", None) is not None}
+    r = evaluate(url, LIVE + f"({json.dumps(ops)}, {json.dumps(legacy)}, "
+                             f"{json.dumps(saved)}, {json.dumps(HOME)})")
+    if not isinstance(r, dict) or "busy" in r:
+        raise Busy(r.get("busy") if isinstance(r, dict) else "no answer from Steam")
+    return r
+
+
+def live(url: str, ops: list[dict], prune_legacy: bool) -> dict:
+    # A removal leaves shortcuts.vdf one tile ahead of Steam's list for ~6 s, which reads as
+    # "not loaded yet": a short settle keeps a quick off-on toggle from failing.
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            return live_once(url, ops, prune_legacy, max(2.0, deadline - time.monotonic()))
+        except (Busy, OSError, ConnectionError, RuntimeError, ValueError, KeyError) as e:
+            if time.monotonic() >= deadline:
+                raise Busy(str(e)) from e
+            time.sleep(2)
+
+
+def apply(ops: list[dict], prune_legacy: bool) -> dict | None:
+    # Hook runs are detached: two in a row would both read the same shortcuts.vdf and the second
+    # write would drop the first one's change.
+    lock = open(os.path.join(os.environ.get("XDG_RUNTIME_DIR") or HOME, ".pocknix-tiles.lock"), "a")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    url = target()
+    if url:
+        try:
+            return live(url, ops, prune_legacy)
+        except Busy:
+            # Steam closed mid-run (game mode left right after an install): the vdf is the record.
+            if steam_running():
+                raise
+    elif steam_running():
+        raise Busy("Steam is running without its client API")
+    return offline(ops, prune_legacy)
+
+
+# Decky's frontend library is loaded into SharedJSContext with every game-mode Steam; its modal is
+# Steam's own, so it takes the controller (touch does not reach X windows under gamescope).
+CONFIRM = r"""
+((title, text, ok) => new Promise(res => {
+  if (typeof DFL === "undefined" || !DFL.showModal || !DFL.ConfirmModal) return res(null);
+  const t = setTimeout(() => res(false), 120000);
+  const done = v => { clearTimeout(t); res(v); };
+  DFL.showModal(SP_REACT.createElement(DFL.ConfirmModal, {
+    strTitle: title, strDescription: text, strOKButtonText: ok, strCancelButtonText: "Cancel",
+    onOK: () => done(true), onCancel: () => done(false)}));
+}))
+"""
+
+
+def confirm(title: str, text: str, ok: str) -> int:
+    url = target()
+    if not url:
+        return 2
+    try:
+        r = evaluate(url, CONFIRM + f"({json.dumps(title)}, {json.dumps(text)}, {json.dumps(ok)})", timeout=130)
+    except (OSError, ConnectionError, RuntimeError):
+        return 2
+    return 2 if r is None else (0 if r else 1)
+
+
+USAGE_TEXT = ("usage: pocknix-tiles enable|disable <name>... | status <name> | "
+              "prune {<name> <exe> <args>}... | confirm <title> <text> <ok-label>")
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    cmd = args[0] if args else ""
+    if cmd == "confirm" and len(args) == 4:
+        return confirm(*args[1:])
+    if (cmd in ("enable", "disable") and len(args) >= 2) or (cmd == "status" and len(args) == 2):
+        found = [manifest(n) for n in args[1:]]
+        if None in found:
+            log(f"no manifest for {', '.join(n for n, m in zip(args[1:], found) if m is None)}")
+            return ERROR
+        op = {"enable": "add", "disable": "remove", "status": "status"}[cmd]
+        ops = [dict(m, op=op) for m in found]
+    elif cmd == "prune" and len(args) >= 4 and (len(args) - 1) % 3 == 0:
+        ops = [{"op": "remove", "name": args[i], "exe": args[i + 1].strip(),
+                "lo": launch_options(args[i + 2].strip())}
+               for i in range(1, len(args), 3)]
+    else:
+        print(USAGE_TEXT, file=sys.stderr)
+        return USAGE
+    try:
+        r = apply(ops, prune_legacy=cmd == "enable")
+    except Busy as e:
+        log(f"{e}: exit Steam and try again")
+        if cmd == "status":
+            print("busy")
+        return BUSY
+    except (OSError, ValueError, IndexError, struct.error) as e:
+        log(f"shortcuts.vdf: {e}")
+        return ERROR
+    if r is None:
+        log("no Steam account on this device yet")
+        if cmd == "status":
+            print("no-account")
+        return NO_ACCOUNT
+    if cmd == "status":
+        print("enabled" if r["state"][ops[0]["name"]] else "disabled")
+        return OK
+    log(f"added {r['added'] or 'none'}, kept {r['kept'] or 'none'}, removed {r['removed'] or 'none'}"
+        + (f", FAILED {r['failed']}" if r["failed"] else ""))
+    return ERROR if r["failed"] else OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())

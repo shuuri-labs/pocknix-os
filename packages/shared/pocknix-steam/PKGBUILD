@@ -2,7 +2,7 @@
 # gamescope launcher, and the ARM-Proton compat-tool plumbing.
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=69
+pkgrel=70
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -19,20 +19,24 @@ depends=('pocknix-steam-full' 'pocknix-bsp-common>=0.1.0-24'
          'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
          'pocknix-steamos-shim' 'xorg-server-xvfb' 'ffmpeg' 'xorg-xprop')
 install=pocknix-steam.install
-source=('pocknix-steam-install' 'pocknix-steam' 'pocknix-steam-splash' 'pocknix-steam-sync' 'steam' 'steam.desktop'
+source=('pocknix-steam-install' 'pocknix-steam' 'pocknix-steam-splash' 'pocknix-tiles' 'pocknix-tiles-users'
+        '60-pocknix-tiles-add.hook' '60-pocknix-tiles-remove.hook' 'steam' 'steam.desktop'
         'steam-256.png' 'steam-512.png' 'registry.vdf'
         'pocknix-proton-prep' 'pocknix-proton-prep.service'
         'pocknix-game-launch' 'pocknix-steam-env' 'pocknix-proton-wrapper' 'fex-profiles.json'
         'pocknix-guestos-mount' 'pocknix-guestos.service' 'graphics_provider.json')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-steam-install" "${pkgdir}/usr/bin/pocknix-steam-install"
   install -Dm755 "${srcdir}/pocknix-steam"         "${pkgdir}/usr/bin/pocknix-steam"
   install -Dm755 "${srcdir}/pocknix-steam-splash"  "${pkgdir}/usr/lib/pocknix/pocknix-steam-splash"
-  # lives here, not in pocknix-emulation: it must still run (and prune) after the layer is removed
-  install -Dm755 "${srcdir}/pocknix-steam-sync"    "${pkgdir}/usr/bin/pocknix-steam-sync"
+  # here, not in the emulation packages: it must still run (and prune) after the layer is removed
+  install -Dm755 "${srcdir}/pocknix-tiles"         "${pkgdir}/usr/bin/pocknix-tiles"
+  install -Dm755 "${srcdir}/pocknix-tiles-users"   "${pkgdir}/usr/lib/pocknix/pocknix-tiles-users"
+  install -Dm644 "${srcdir}/60-pocknix-tiles-add.hook"    "${pkgdir}/usr/share/libalpm/hooks/60-pocknix-tiles-add.hook"
+  install -Dm644 "${srcdir}/60-pocknix-tiles-remove.hook" "${pkgdir}/usr/share/libalpm/hooks/60-pocknix-tiles-remove.hook"
   install -Dm755 "${srcdir}/steam"                 "${pkgdir}/usr/bin/steam"
   install -Dm644 "${srcdir}/steam.desktop"         "${pkgdir}/usr/share/applications/steam.desktop"
   # The native ARM client is not a system package, so nothing else provides the themed `steam`

@@ -1,5 +1,3 @@
-# pocknix-emu-azahar - pocknix glue for Azahar (3DS): its ES-DE launch wrapper.
-# Build with ./nodeps: makepkg -s would install the emulator into the build chroot.
 pkgname=pocknix-emu-azahar
 pkgver=0.1.0
 pkgrel=1
@@ -8,9 +6,10 @@ arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
 depends=('pocknix-emulation-common' 'azahar')
-source=('es-azahar')
-sha256sums=('SKIP')
+source=('steam-azahar.conf' 'es-azahar')
+sha256sums=('SKIP' 'SKIP')
 
 package() {
+  install -Dm644 "${srcdir}/steam-azahar.conf" "${pkgdir}/usr/share/pocknix-emulation/steam/azahar.conf"
   install -Dm755 "${srcdir}/es-azahar" "${pkgdir}/usr/lib/pocknix/es-azahar"
 }

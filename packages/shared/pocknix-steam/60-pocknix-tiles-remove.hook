@@ -1,0 +1,11 @@
+# Before the transaction: afterwards the manifest naming the tile's command is gone.
+[Trigger]
+Operation = Remove
+Type = Path
+Target = usr/share/pocknix-emulation/steam/*.conf
+
+[Action]
+Description = pocknix: removing Steam tiles of removed emulators...
+When = PreTransaction
+Exec = /usr/lib/pocknix/pocknix-tiles-users remove
+NeedsTargets

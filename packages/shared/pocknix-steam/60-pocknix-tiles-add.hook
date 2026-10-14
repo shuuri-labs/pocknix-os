@@ -1,0 +1,12 @@
+# Install only: a file already on disk counts as Upgrade, so a reinstall or upgrade never brings
+# back a tile the user deleted.
+[Trigger]
+Operation = Install
+Type = Path
+Target = usr/share/pocknix-emulation/steam/*.conf
+
+[Action]
+Description = pocknix: adding Steam tiles for new emulators...
+When = PostTransaction
+Exec = /usr/lib/pocknix/pocknix-tiles-users add
+NeedsTargets

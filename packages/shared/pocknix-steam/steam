@@ -2,7 +2,7 @@
 # steam — desktop-mode launcher for the same native ARM64 client pocknix-steam runs under
 # gamescope. The client is bootstrapped into $HOME rather than packaged, so nothing else puts a
 # `steam` on PATH, which Steam's own per-game shortcuts (`steam steam://rungameid/<id>`) need.
-# Same client dir / LD_LIBRARY_PATH / cwd contract as pocknix-steam.
+# Same client dir / LD_LIBRARY_PATH / cwd / CEF-marker contract as pocknix-steam.
 set -e
 
 export HOME="${HOME:-/home/deck}"
@@ -16,6 +16,8 @@ export LD_LIBRARY_PATH="${CLIENT_DIR}:${STEAM}/lib/aarch64-linux-gnu"
 if [ ! -x "${CLIENT}" ]; then
   /usr/bin/pocknix-steam-install
 fi
+
+touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 
 # Steam resolves legacy module paths (bin/vgui2_s.dll …) relative to getcwd.
 cd "${CLIENT_DIR}" 2>/dev/null || { echo "steam: missing ${CLIENT_DIR}" >&2; exit 1; }

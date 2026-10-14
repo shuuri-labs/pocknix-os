@@ -29,7 +29,7 @@ fi
 # passes our cwd to the client: launching from $HOME gives "Could not load module 'bin/vgui2_s.dll'".
 cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
 
-# Marker Decky's CEF remote-debugging connection looks for.
+# Steam opens its CEF debugging port (Decky, pocknix-tiles) only if this exists at start.
 touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 
 # Re-pin EVERY launch: the ARM64 Big-Picture client only works on steamdeck_publicbeta, and
@@ -63,11 +63,6 @@ fi
 
 # Do NOT seed a global default compat tool here: a CompatToolMapping "0" entry makes Steam refuse
 # to install Valve compat tools with "Invalid platform" (steam-for-linux issue 6874).
-
-# Must stay HERE, before Steam starts: Steam rewrites shortcuts.vdf on exit, so a sync against a
-# live client is clobbered.
-/usr/bin/pocknix-steam-sync || echo "[pocknix-steam] Steam-library sync failed (non-fatal)"
-mark "library sync done"
 
 for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
   [ -r "${_dc}" ] && . "${_dc}"

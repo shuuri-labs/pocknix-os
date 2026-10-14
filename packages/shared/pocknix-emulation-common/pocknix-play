@@ -1,14 +1,19 @@
 #!/bin/bash
-# pocknix-play <system> <rom> — the launch target of every Steam favorite shortcut, so an
-# emulator or core swap happens here once and existing shortcuts keep working. ES-DE launches
-# do NOT come through here (es_systems.xml calls the es-* wrappers directly): keep the two aligned.
+# pocknix-play <system> <rom> | --gui <emulator> - the launch target of every Steam tile we
+# make (one per installed emulator, --gui) and of Steam ROM Manager's ROM tiles, so an emulator
+# or core swap happens here once and existing tiles keep working. ES-DE launches do NOT come
+# through here (es_systems.xml calls the es-* wrappers directly): keep the two aligned.
 set -u
 
-system="${1:-}"; rom="${2:-}"
-if [ -z "${system}" ] || [ -z "${rom}" ]; then
-  echo "usage: pocknix-play <system> <rom-path>" >&2; exit 2
+if [ "${1:-}" = --gui ]; then
+  gui="${2:-}"
+else
+  system="${1:-}"; rom="${2:-}"
+  if [ -z "${system}" ] || [ -z "${rom}" ]; then
+    echo "usage: pocknix-play <system> <rom-path> | --gui <emulator>" >&2; exit 2
+  fi
+  [ -e "${rom}" ] || { echo "pocknix-play: ROM not found: ${rom}" >&2; exit 1; }
 fi
-[ -e "${rom}" ] || { echo "pocknix-play: ROM not found: ${rom}" >&2; exit 1; }
 
 . /usr/lib/pocknix/emu-resolve.sh
 _big_cores="$(big_cores)"
@@ -32,6 +37,23 @@ run_emu() {  # $1 = emulator name; remaining args = emulator flags (rom appended
     *) exec taskset -c "${_big_cores}" "${app}" "$@" ;;
   esac
 }
+
+# Tiles never point at the es-* wrappers: they skip the Steam env scrub (es-retroarch only adds
+# flags). Fullscreen flags only where --help says they cover the UI, not just a running game.
+if [ -n "${gui:-}" ]; then
+  case "${gui}" in
+    retroarch) exec /usr/lib/pocknix/es-retroarch ;;
+    ppsspp)    run_emu ppsspp --fullscreen ;;
+    vita3k)    run_emu vita3k -F ;;
+    azahar)    run_emu azahar -f ;;
+    xemu)      run_emu xemu -full-screen ;;
+    armsx2|rpcs3|dolphin) run_emu "${gui}" ;;
+    cemu)
+      /usr/lib/pocknix/pocknix-cemu-profile 2>/dev/null || true   # pad GUID differs per session
+      run_emu cemu ;;
+    *) echo "pocknix-play: no UI launch for '${gui}'" >&2; exit 2 ;;
+  esac
+fi
 
 # ES-DE records the per-system alternative emulator in the gamelist; the Steam tile must match.
 esde_alt_emulator() {  # $1 system -> prints the label, or nothing

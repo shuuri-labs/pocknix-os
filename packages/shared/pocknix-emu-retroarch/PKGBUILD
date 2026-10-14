@@ -1,6 +1,3 @@
-# pocknix-emu-retroarch - pocknix glue for RetroArch:
-# its ES-DE launch wrapper and first-install config seeds.
-# Build with ./nodeps: makepkg -s would install the emulator into the build chroot.
 pkgname=pocknix-emu-retroarch
 pkgver=0.1.0
 pkgrel=1
@@ -9,13 +6,14 @@ arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
 depends=('pocknix-emulation-common' 'retroarch' 'libretro-cores-pocknix' 'libretro-core-info' 'retroarch-autoconfig-pocknix' 'retroarch-shaders-pocknix')
-source=('es-retroarch' 'retroarch.cfg'
+source=('steam-retroarch.conf' 'es-retroarch' 'retroarch.cfg'
         # FLAT names: makepkg cannot retrieve local sources from subdirectory paths, so
         # package() maps retroarch-<Core>-<file> back into the retroarch-config/<Core>/ tree.
         'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp' 'retroarch-DuckStation-DuckStation.opt')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
+  install -Dm644 "${srcdir}/steam-retroarch.conf" "${pkgdir}/usr/share/pocknix-emulation/steam/retroarch.conf"
   install -Dm755 "${srcdir}/es-retroarch" "${pkgdir}/usr/lib/pocknix/es-retroarch"
   install -Dm644 "${srcdir}/retroarch.cfg" "${pkgdir}/usr/share/pocknix-emulation/retroarch.cfg"
   install -Dm644 "${srcdir}/retroarch-mGBA-gba.cfg"    "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.cfg"
