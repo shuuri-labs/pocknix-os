@@ -1,29 +1,24 @@
-# pocknix-emulation-full — the emulation layer metapackage. depends= is hard so that
-# `pacman -Rs pocknix-emulation-full` removes exactly this layer; the source-built emulators
-# are optdepends instead, so a failed optional build cannot block the layer.
+# pocknix-emulation-full - the emulation layer metapackage. depends= is hard so that
+# `pacman -Rs pocknix-emulation-full` removes exactly this layer, and so -Syu keeps every
+# emulator's wrapper on fielded devices: a failed emulator build blocks the release at
+# stage-check instead of silently dropping that system.
 pkgname=pocknix-emulation-full
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="pocknix optional layer: ES-DE frontend, RetroArch cores, standalone emulators (Switch: bring your own)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('pocknix-emulation'
-         'es-de'
-         'libretro-cores-pocknix'
-         'retroarch'
-         'libretro-core-info'
-         'retroarch-autoconfig-pocknix'
-         'retroarch-shaders-pocknix'
-         'ppsspp'
-         'fuse2'
-         'armsx2-bin'
-         'rpcs3-bin'
-         'xemu-bin'
-         'vita3k-bin')
-optdepends=('dolphin-emu: GameCube/Wii'
-            'azahar: 3DS'
-            'cemu: Wii U')
+depends=('pocknix-emu-esde'
+         'pocknix-emu-retroarch'
+         'pocknix-emu-ppsspp'
+         'pocknix-emu-armsx2'
+         'pocknix-emu-rpcs3'
+         'pocknix-emu-xemu'
+         'pocknix-emu-vita3k'
+         'pocknix-emu-dolphin'
+         'pocknix-emu-azahar'
+         'pocknix-emu-cemu')
 
 package() {
   :   # pure metapackage

@@ -1,0 +1,16 @@
+# pocknix-emu-xemu - pocknix glue for xemu (Xbox): its ES-DE launch wrapper.
+# Build with ./nodeps: makepkg -s would install the emulator into the build chroot.
+pkgname=pocknix-emu-xemu
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix setup for xemu (Xbox): ES-DE wiring and preconfigured defaults"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('pocknix-emulation-common' 'xemu-bin')
+source=('es-xemu')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/es-xemu" "${pkgdir}/usr/lib/pocknix/es-xemu"
+}

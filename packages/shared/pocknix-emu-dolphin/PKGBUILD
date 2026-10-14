@@ -1,0 +1,20 @@
+# pocknix-emu-dolphin - pocknix glue for Dolphin (GameCube/Wii):
+# its ES-DE launch wrapper and first-install config seeds.
+# Build with ./nodeps: makepkg -s would install the emulator into the build chroot.
+pkgname=pocknix-emu-dolphin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix setup for Dolphin (GameCube/Wii): ES-DE wiring and preconfigured defaults"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('pocknix-emulation-common' 'dolphin-emu')
+source=('es-dolphin' 'dolphin-Dolphin.ini.in' 'dolphin-GFX.ini.in' 'dolphin-GCPadNew.ini.in')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/es-dolphin" "${pkgdir}/usr/lib/pocknix/es-dolphin"
+  install -Dm644 "${srcdir}/dolphin-Dolphin.ini.in" "${pkgdir}/usr/share/pocknix-emulation/dolphin-Dolphin.ini.in"
+  install -Dm644 "${srcdir}/dolphin-GFX.ini.in" "${pkgdir}/usr/share/pocknix-emulation/dolphin-GFX.ini.in"
+  install -Dm644 "${srcdir}/dolphin-GCPadNew.ini.in" "${pkgdir}/usr/share/pocknix-emulation/dolphin-GCPadNew.ini.in"
+}

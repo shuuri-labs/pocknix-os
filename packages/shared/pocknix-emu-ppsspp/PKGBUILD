@@ -1,0 +1,18 @@
+# pocknix-emu-ppsspp - pocknix glue for PPSSPP (PSP):
+# its ES-DE launch wrapper and first-install config seeds.
+# Build with ./nodeps: makepkg -s would install the emulator into the build chroot.
+pkgname=pocknix-emu-ppsspp
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix setup for PPSSPP (PSP): ES-DE wiring and preconfigured defaults"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('pocknix-emulation-common' 'ppsspp')
+source=('es-psp' 'ppsspp.ini.in')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/es-psp" "${pkgdir}/usr/lib/pocknix/es-psp"
+  install -Dm644 "${srcdir}/ppsspp.ini.in" "${pkgdir}/usr/share/pocknix-emulation/ppsspp.ini.in"
+}

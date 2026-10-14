@@ -1,0 +1,16 @@
+# pocknix-emu-vita3k - pocknix glue for Vita3K (PS Vita): its ES-DE launch wrapper.
+# Build with ./nodeps: makepkg -s would install the emulator into the build chroot.
+pkgname=pocknix-emu-vita3k
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix setup for Vita3K (PS Vita): ES-DE wiring and preconfigured defaults"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('pocknix-emulation-common' 'vita3k-bin')
+source=('es-vita3k')
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/es-vita3k" "${pkgdir}/usr/lib/pocknix/es-vita3k"
+}

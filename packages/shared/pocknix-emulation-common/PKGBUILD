@@ -1,0 +1,37 @@
+pkgname=pocknix-emulation-common
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix emulation base: ~/Emulation layout, config seeder, pocknix-play launcher"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('bash' 'pocknix-bsp-common>=0.1.0-24')
+install=pocknix-emulation-common.install
+source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-seed-users' '60-pocknix-emulation-seed.hook'
+        'pocknix-play' 'emu-resolve.sh' 'es-eden' 'es-ryujinx' 'ROMS-README.txt'
+        'eden-qt-config.ini.in' 'ryujinx-Config.json.in')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-roms-init"  "${pkgdir}/usr/bin/pocknix-roms-init"
+  install -Dm755 "${srcdir}/pocknix-seed-users" "${pkgdir}/usr/lib/pocknix/pocknix-seed-users"
+  install -Dm644 "${srcdir}/60-pocknix-emulation-seed.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/60-pocknix-emulation-seed.hook"
+  install -Dm755 "${srcdir}/pocknix-play"       "${pkgdir}/usr/bin/pocknix-play"
+  install -Dm644 "${srcdir}/emu-resolve.sh"     "${pkgdir}/usr/lib/pocknix/emu-resolve.sh"
+  install -Dm755 "${srcdir}/es-eden"            "${pkgdir}/usr/lib/pocknix/es-eden"
+  install -Dm755 "${srcdir}/es-ryujinx"         "${pkgdir}/usr/lib/pocknix/es-ryujinx"
+
+  install -Dm644 "${srcdir}/pocknix-roms-init.service" \
+    "${pkgdir}/usr/lib/systemd/user/pocknix-roms-init.service"
+  # enabled by a packaged wants link, so removing the layer removes the autostart with it
+  install -d "${pkgdir}/usr/lib/systemd/user/default.target.wants"
+  ln -s ../pocknix-roms-init.service \
+    "${pkgdir}/usr/lib/systemd/user/default.target.wants/pocknix-roms-init.service"
+
+  install -Dm644 "${srcdir}/ROMS-README.txt" "${pkgdir}/usr/share/pocknix-emulation/ROMS-README.txt"
+  install -Dm644 "${srcdir}/eden-qt-config.ini.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/eden-qt-config.ini.in"
+  install -Dm644 "${srcdir}/ryujinx-Config.json.in" \
+    "${pkgdir}/usr/share/pocknix-emulation/ryujinx-Config.json.in"
+}

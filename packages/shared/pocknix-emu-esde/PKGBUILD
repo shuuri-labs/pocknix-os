@@ -1,0 +1,18 @@
+# pocknix-emu-esde - pocknix glue for ES-DE: the system list and emulator lookup that
+# ES-DE reads through links pocknix-roms-init makes.
+# Build with ./nodeps: makepkg -s would install the emulator into the build chroot.
+pkgname=pocknix-emu-esde
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix setup for ES-DE: system list and emulator lookup wired to the pocknix launchers"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('pocknix-emulation-common' 'es-de')
+source=('es_systems.xml' 'es_find_rules.xml')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm644 "${srcdir}/es_systems.xml" "${pkgdir}/usr/share/pocknix-emulation/es_systems.xml"
+  install -Dm644 "${srcdir}/es_find_rules.xml" "${pkgdir}/usr/share/pocknix-emulation/es_find_rules.xml"
+}

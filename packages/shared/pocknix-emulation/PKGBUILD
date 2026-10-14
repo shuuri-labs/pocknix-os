@@ -1,85 +1,16 @@
-# pocknix-emulation — the "drop ROMs in and play" layer: ES-DE + preconfigured emulator
-# configs, shipped as an arch=any data/scripts package.
+# pocknix-emulation - the emulation layer under the name it shipped as before the split: an
+# empty package whose only dep is the layer meta. Kept for good: devices and rollback snapshots
+# that still carry this name reach every pocknix-emu-* package through it, and the meta stays
+# required here instead of turning into an orphan that `pacman -Rns $(pacman -Qdtq)` strips.
 pkgname=pocknix-emulation
 pkgver=0.1.0
 pkgrel=23
-pkgdesc="ES-DE + preconfigured emulators: drop ROMs into ~/Emulation and play; star -> Steam"
+pkgdesc="pocknix emulation layer (old name, pulls in pocknix-emulation-full)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-# Build with ./nodeps: the meta dep would drag ES-DE/RetroArch/Qt into the chroot. The meta dep
-# is the pre-meta catch-up cycle, see pocknix-steam.
-depends=('bash' 'pocknix-emulation-full' 'pocknix-bsp-common>=0.1.0-24')
-install=pocknix-emulation.install
-source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-seed-users' '60-pocknix-emulation-seed.hook' 'pocknix-play'
-        'emu-resolve.sh' 'es-eden' 'es-ryujinx' 'es-armsx2' 'es-dolphin' 'es-psp' 'es-xemu' 'es-retroarch'
-        'retroarch-DuckStation-DuckStation.opt'
-        'es-azahar' 'es-rpcs3' 'es-cemu' 'es-vita3k'
-        'es_find_rules.xml' 'es_systems.xml' 'retroarch.cfg' 'ROMS-README.txt' 'armsx2-PCSX2.ini.in'
-        'eden-qt-config.ini.in' 'ppsspp.ini.in' 'ryujinx-Config.json.in'
-        'pocknix-cemu-profile' 'cemu-settings.xml.in' 'cemu-controller0.xml.in'
-        'dolphin-Dolphin.ini.in' 'dolphin-GFX.ini.in' 'dolphin-GCPadNew.ini.in'
-        # FLAT names: makepkg cannot retrieve local sources from subdirectory paths, so
-        # package() maps retroarch-<Core>-<file> back into the retroarch-config/<Core>/ tree.
-        'retroarch-mGBA-gba.cfg' 'retroarch-mGBA-gba.slangp')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+depends=('pocknix-emulation-full')
 
 package() {
-  install -Dm755 "${srcdir}/pocknix-roms-init" "${pkgdir}/usr/bin/pocknix-roms-init"
-  install -Dm755 "${srcdir}/pocknix-seed-users" "${pkgdir}/usr/lib/pocknix/pocknix-seed-users"
-  install -Dm644 "${srcdir}/60-pocknix-emulation-seed.hook" \
-    "${pkgdir}/usr/share/libalpm/hooks/60-pocknix-emulation-seed.hook"
-  install -Dm755 "${srcdir}/pocknix-play"      "${pkgdir}/usr/bin/pocknix-play"
-
-  install -Dm644 "${srcdir}/emu-resolve.sh" "${pkgdir}/usr/lib/pocknix/emu-resolve.sh"
-  install -Dm755 "${srcdir}/es-eden"    "${pkgdir}/usr/lib/pocknix/es-eden"
-  install -Dm755 "${srcdir}/es-ryujinx" "${pkgdir}/usr/lib/pocknix/es-ryujinx"
-  install -Dm755 "${srcdir}/es-armsx2"  "${pkgdir}/usr/lib/pocknix/es-armsx2"
-  install -Dm755 "${srcdir}/es-psp"     "${pkgdir}/usr/lib/pocknix/es-psp"
-  install -Dm755 "${srcdir}/es-retroarch" "${pkgdir}/usr/lib/pocknix/es-retroarch"
-  install -Dm755 "${srcdir}/es-xemu"    "${pkgdir}/usr/lib/pocknix/es-xemu"
-  install -Dm755 "${srcdir}/es-azahar"  "${pkgdir}/usr/lib/pocknix/es-azahar"
-  install -Dm755 "${srcdir}/es-rpcs3"   "${pkgdir}/usr/lib/pocknix/es-rpcs3"
-  install -Dm755 "${srcdir}/es-cemu"    "${pkgdir}/usr/lib/pocknix/es-cemu"
-  install -Dm755 "${srcdir}/es-vita3k"  "${pkgdir}/usr/lib/pocknix/es-vita3k"
-  install -Dm755 "${srcdir}/es-dolphin" "${pkgdir}/usr/lib/pocknix/es-dolphin"
-
-  install -Dm644 "${srcdir}/pocknix-roms-init.service" \
-    "${pkgdir}/usr/lib/systemd/user/pocknix-roms-init.service"
-  # enabled by a packaged wants link, so removing the layer removes the autostart with it
-  install -d "${pkgdir}/usr/lib/systemd/user/default.target.wants"
-  ln -s ../pocknix-roms-init.service \
-    "${pkgdir}/usr/lib/systemd/user/default.target.wants/pocknix-roms-init.service"
-
-  install -Dm644 "${srcdir}/es_find_rules.xml" \
-    "${pkgdir}/usr/share/pocknix-emulation/es_find_rules.xml"
-  install -Dm644 "${srcdir}/es_systems.xml" \
-    "${pkgdir}/usr/share/pocknix-emulation/es_systems.xml"
-  install -Dm644 "${srcdir}/retroarch.cfg" \
-    "${pkgdir}/usr/share/pocknix-emulation/retroarch.cfg"
-  install -Dm644 "${srcdir}/ROMS-README.txt" \
-    "${pkgdir}/usr/share/pocknix-emulation/ROMS-README.txt"
-  install -Dm644 "${srcdir}/armsx2-PCSX2.ini.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/armsx2-PCSX2.ini.in"
-  install -Dm644 "${srcdir}/eden-qt-config.ini.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/eden-qt-config.ini.in"
-  install -Dm644 "${srcdir}/ppsspp.ini.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/ppsspp.ini.in"
-  install -Dm644 "${srcdir}/ryujinx-Config.json.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/ryujinx-Config.json.in"
-  install -Dm755 "${srcdir}/pocknix-cemu-profile" "${pkgdir}/usr/lib/pocknix/pocknix-cemu-profile"
-  install -Dm644 "${srcdir}/cemu-settings.xml.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/cemu-settings.xml.in"
-  install -Dm644 "${srcdir}/cemu-controller0.xml.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/cemu-controller0.xml.in"
-  install -Dm644 "${srcdir}/dolphin-Dolphin.ini.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/dolphin-Dolphin.ini.in"
-  install -Dm644 "${srcdir}/dolphin-GFX.ini.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/dolphin-GFX.ini.in"
-  install -Dm644 "${srcdir}/dolphin-GCPadNew.ini.in" \
-    "${pkgdir}/usr/share/pocknix-emulation/dolphin-GCPadNew.ini.in"
-  install -Dm644 "${srcdir}/retroarch-mGBA-gba.cfg"    "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.cfg"
-  install -Dm644 "${srcdir}/retroarch-mGBA-gba.slangp" "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/mGBA/gba.slangp"
-  # DuckStation's own renderer option; "OpenGL" drags the session onto GL (see es-retroarch).
-  install -Dm644 "${srcdir}/retroarch-DuckStation-DuckStation.opt" "${pkgdir}/usr/share/pocknix-emulation/retroarch-config/DuckStation/DuckStation.opt"
+  :   # pure metapackage
 }

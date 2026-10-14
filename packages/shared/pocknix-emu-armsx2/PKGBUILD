@@ -1,0 +1,18 @@
+# pocknix-emu-armsx2 - pocknix glue for ARMSX2 (PS2):
+# its ES-DE launch wrapper and first-install config seeds.
+# Build with ./nodeps: makepkg -s would install the emulator into the build chroot.
+pkgname=pocknix-emu-armsx2
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix setup for ARMSX2 (PS2): ES-DE wiring and preconfigured defaults"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('pocknix-emulation-common' 'armsx2-bin')
+source=('es-armsx2' 'armsx2-PCSX2.ini.in')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/es-armsx2" "${pkgdir}/usr/lib/pocknix/es-armsx2"
+  install -Dm644 "${srcdir}/armsx2-PCSX2.ini.in" "${pkgdir}/usr/share/pocknix-emulation/armsx2-PCSX2.ini.in"
+}
