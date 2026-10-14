@@ -1,6 +1,9 @@
 # One answer to "which binary is <emulator>" for the wrappers, pocknix-play and the seeder:
 # a build dropped into ~/Emulation/emulators/<name>/ wins over the packaged one.
 EMU_DROP="${HOME}/Emulation/emulators"
+# Steam starts games with no PATH at all. bash falls back to its built-in search, but an AppImage
+# runtime then finds neither fusermount3 nor bash and exits (RPCS3's does).
+export PATH="${PATH:-/usr/local/bin:/usr/bin:/bin}"
 EMU_NAMES="armsx2 eden ryujinx rpcs3 vita3k xemu dolphin cemu azahar ppsspp"
 
 # Heavy emulators pin to the board's game cores: scx_lavd otherwise parks the critical thread
