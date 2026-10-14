@@ -159,7 +159,7 @@ layer_installed() { [ "$(pocknix-layer status 2>/dev/null | sed -n 's/^installed
 do_layer() {
   if layer_installed; then
     kdialog --title "$TITLE" --warningcontinuecancel \
-      "Remove the emulation layer?\n\nES-DE, RetroArch and the standalone emulators are uninstalled. Your ROMs, BIOS files, saves and emulator settings are kept, so installing the layer again brings everything back as it was.\n\nClose ES-DE and any emulator first. The ES-DE and favourite tiles in Steam disappear the next time Steam starts." \
+      "Remove the emulation layer?\n\nES-DE, RetroArch and the standalone emulators are uninstalled. Your ROMs, BIOS files, saves and emulator settings are kept, so installing the layer again brings everything back as it was.\n\nClose ES-DE and any emulator first. Their tiles leave your Steam library the next time you enter Game Mode." \
       || return 0
     konsole_run "/usr/bin/pocknix-layer remove"
     layer_installed && { gui_err "The emulation layer is still installed. The terminal output says what went wrong."; return 0; }
@@ -171,7 +171,7 @@ do_layer() {
     || return 0
   konsole_run "/usr/bin/pocknix-layer install"
   layer_installed || { gui_err "The emulation layer is still not installed. The terminal output says what went wrong."; return 0; }
-  kdialog --title "$TITLE" --msgbox "The emulation layer is installed.\n\nES-DE is in the app menu now, and in Steam the next time it starts." || true
+  kdialog --title "$TITLE" --msgbox "The emulation layer is installed.\n\nES-DE and the emulators are in the app menu now, and get their Steam tiles the next time you enter Game Mode." || true
 }
 
 emulators_present() { pocknix-roms-init --list 2>/dev/null || true; }

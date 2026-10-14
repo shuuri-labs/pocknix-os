@@ -18,7 +18,8 @@ depends=('pocknix-emu-esde'
          'pocknix-emu-vita3k'
          'pocknix-emu-dolphin'
          'pocknix-emu-azahar'
-         'pocknix-emu-cemu')
+         'pocknix-emu-cemu'
+         'steam-rom-manager')
 
 package() {
   :   # pure metapackage

@@ -5,40 +5,34 @@
 set -euo pipefail
 
 META=pocknix-emulation-full
-# optdepends of the meta: -S/-Rs do not follow them, so they are handled by name
-OPTIONAL=(dolphin-emu azahar cemu)
-UNIT=pocknix-roms-init.service
+# the pre-split package name, now an empty package depending on the meta: it goes with the layer
+ALIAS=pocknix-emulation
 
 need_root() { [ "$(id -u)" -eq 0 ] || { echo "pocknix-layer: must run as root" >&2; exit 1; }; }
 meta_installed() { pacman -Q "${META}" >/dev/null 2>&1; }
 esde_installed() { [ -x /usr/bin/es-de ]; }
 installed() { meta_installed || esde_installed; }
 
-# a device fielded before the layer metas has the members but no meta, hence the sync-db fallback
-members() {
-  local src p
-  if meta_installed; then src="$(pacman -Qi "${META}")"; else src="$(pacman -Si "${META}" 2>/dev/null || true)"; fi
+depends_of() {  # $1 package -> its depends, from the local db or, when not installed, the sync db
+  local src
+  if pacman -Q "$1" >/dev/null 2>&1; then src="$(pacman -Qi "$1")"; else src="$(pacman -Si "$1" 2>/dev/null || true)"; fi
   # awk, not sed: pacman wraps a long list onto indented continuation lines on a tty
   printf '%s\n' "${src}" \
     | awk -F' *: *' '/^Depends On/{f=1; print $2; next} /^[A-Z][A-Za-z ]+ *:/{f=0} f{print}' \
-    | tr ' ' '\n' | sed 's/[<>=].*//' \
-    | while IFS= read -r p; do
-        [ -n "${p}" ] && [ "${p}" != None ] && pacman -Q "${p}" >/dev/null 2>&1 && echo "${p}"
-      done
+    | tr ' ' '\n' | sed 's/[<>=].*//' | grep -v -x -e '' -e None
+}
+# The emulators sit one level down, under the pocknix-emu-* packages, and devices fielded before
+# the layer metas have them explicitly installed. Only the emu packages' depends are walked:
+# steam-rom-manager's (gtk3, nss) are system libraries a remove must not mark.
+members() {
+  local p q
+  for p in $(depends_of "${META}"); do
+    echo "${p}"
+    case "${p}" in pocknix-emu-*) for q in $(depends_of "${p}"); do echo "${q}"; done ;; esac
+  done | sort -u | while IFS= read -r p; do pacman -Q "${p}" >/dev/null 2>&1 && echo "${p}"; done
 }
 
-# RemainAfterExit makes `start` a no-op once run: restart the seeder for the user who asked
-user_systemctl() {
-  local u; u="$(id -nu "${PKEXEC_UID:-1001}" 2>/dev/null)" || return 1
-  systemctl --machine="${u}@.host" --user "$@"
-}
-kick_seeder() {
-  user_systemctl daemon-reload 2>/dev/null || true
-  user_systemctl restart "${UNIT}" 2>/dev/null \
-    || echo "pocknix-layer: could not run the config seeder now; log out and back in once"
-}
-
-# Opt-in flavour: no optdepends and no seeder, and -Rs takes its Plasma deps with it.
+# Opt-in flavour: no seeder, and -Rs takes its Plasma deps with it.
 if [ "${2:-emulation}" = desktop-plasma ]; then
   FLAVOUR=pocknix-desktop-plasma
   case "${1:-status}" in
@@ -58,30 +52,26 @@ case "${1:-status}" in
     ;;
   install)
     need_root
-    # -Syu, never -Sy: a refreshed index on an un-upgraded system is the partial-upgrade trap
+    # -Syu, never -Sy: a refreshed index on an un-upgraded system is the partial-upgrade trap.
+    # The packages' alpm hooks seed configs and add Steam tiles for logged-in users.
     pacman -Syu --noconfirm "${META}"
-    for p in "${OPTIONAL[@]}"; do
-      pacman -S --needed --noconfirm "${p}" || echo "pocknix-layer: optional ${p} skipped (not published for this build)"
-    done
-    kick_seeder
     echo "installed=yes"
     ;;
   remove)
     need_root
     installed || { echo "installed=no"; exit 0; }
     mapfile -t m < <(members)
-    for p in "${OPTIONAL[@]}"; do pacman -Q "${p}" >/dev/null 2>&1 && m+=("${p}"); done
     # members are explicitly installed on pre-meta devices, which -Rs would protect
     [ "${#m[@]}" -gt 0 ] && pacman -D --asdeps "${m[@]}" >/dev/null
     # name only members nothing else needs (fuse2 serves fex-emu too); -Rs cascades the rest
     orphans=" $(pacman -Qdtq 2>/dev/null | tr '\n' ' ') "
     targets=()
     meta_installed && targets+=("${META}")
+    pacman -Q "${ALIAS}" >/dev/null 2>&1 && targets+=("${ALIAS}")
     for p in "${m[@]}"; do case "${orphans}" in *" ${p} "*) targets+=("${p}") ;; esac; done
     [ "${#targets[@]}" -gt 0 ] || { echo "pocknix-layer: nothing removable" >&2; exit 1; }
-    # never touch ~/Emulation, ~/ES-DE, config dirs or the baseline: a reinstall must merge
+    # never touch ~/Emulation, ~/ES-DE or config dirs: a reinstall finds the user's settings as left
     pacman -Rs --noconfirm "${targets[@]}"
-    user_systemctl daemon-reload 2>/dev/null || true
     echo "installed=no"
     ;;
   *)
