@@ -235,7 +235,7 @@ layer metapackage's depends= (packages/shared/pocknix-*), then re-run."
 
 # --- layer completeness ------------------------------------------------------
 # A layer's ALARM deps reach the base only if the image installs that layer or
-# base-extras.list hosts them; a layer the build left out (POCKNIX_EMULATION) would
+# base-extras.list hosts them; a layer the image leaves out (emulation) would
 # otherwise silently lose its deps from the snapshot.
 layer_missing=""
 for _meta in "${PACKAGES_DIR}"/shared/pocknix-core/PKGBUILD \

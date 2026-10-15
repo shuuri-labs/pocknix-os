@@ -17,10 +17,6 @@ for t in curl tar sed; do need_tool "$t"; done
 LOCAL_REPO_DIR="${LOCALREPO_DIR}"                 # per-SoC: build/localrepo/${SOC} (set in lib.sh)
 LOCAL_REPO_SHARED_DIR="${LOCALREPO_SHARED_DIR}"   # SoC-neutral: build/localrepo/shared
 
-# ES-DE + the emulators are an opt-in layer Pocknix Tools installs, so the image leaves them
-# out; =1 bakes them in (and their ALARM deps then need no base-extras.list entry).
-POCKNIX_EMULATION="${POCKNIX_EMULATION:-0}"
-
 render_pacman_conf() {
   local out="$1"
   log "rendering pacman.conf (base: ${POCKNIX_BASE_SNAPSHOT:-live ALARM})"
@@ -77,12 +73,11 @@ install_local_packages() {
   # install — so force ours here, loudly.
   chroot "${root}" pacman -S --noconfirm --needed \
     pocknix/mesa pocknix/vulkan-freedreno pocknix/gamescope pocknix-shared/mangohud
-  # The layer metas (POCKNIX_EMULATION=1 adds emulation). Their unqualified depends
-  # resolve by repo order: [pocknix] + [pocknix-shared] sit ABOVE the base repos
-  # (append_local_repo), so pocknix names resolve to our builds, ALARM names to base.
+  # The layer metas. Emulation is not one of them: Pocknix Tools installs it on the device, so
+  # its Steam tiles come from a real pacman transaction. Unqualified depends resolve by repo
+  # order: [pocknix] + [pocknix-shared] sit ABOVE the base repos (append_local_repo), so pocknix
+  # names resolve to our builds, ALARM names to base.
   local metas=(pocknix-core pocknix-steam-full pocknix-desktop-full)
-  if [ "${POCKNIX_EMULATION}" = 1 ]; then metas+=(pocknix-emulation-full)
-  else log "emulation layer left out (POCKNIX_EMULATION=1 bakes it in)"; fi
   chroot "${root}" pacman -S --noconfirm --needed "${metas[@]/#/pocknix-shared/}"
   # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
   # especially: without composite rotation it requests a plane rotation the msm DPU rejects.

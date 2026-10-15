@@ -118,7 +118,6 @@ sudo make sd-image      # -> build/image/<soc>/
 ```
 
 The SoC family defaults to `sm8550`; pass `DEVICE=sm8250` to any target for the RP5 / Flip 2.
-`POCKNIX_EMULATION=1` bakes the emulation layer into the image.
 
 Packages compress as `.pkg.tar.xz`, so glob `*.pkg.tar.*`. Never sign or publish anything -
 releases go through the maintainer's staged publish flow.
