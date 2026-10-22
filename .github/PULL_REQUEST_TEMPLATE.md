@@ -16,7 +16,7 @@ hardware before merging, and without steps the PR stalls.
 
 ## Tested
 
-<!-- Device(s), SoC family (sm8550 / sm8250), and how you installed it (pacman -U a built
+<!-- Device(s), SoC family (sm8550 / sm8250 / sm8750), and how you installed it (pacman -U a built
      package / hand-copied files / fresh image). Then what you actually exercised. -->
 
 - Device / SoC:

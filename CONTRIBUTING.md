@@ -171,9 +171,9 @@ Not everything applies to every PR. Cover what is relevant, and say which items 
 3. **The update path, not just a fresh image.** Confirm the change actually arrives via
    `pacman -U` on an existing install with the bumped `pkgrel`. If the change is image-only,
    say so explicitly.
-4. **The other SoC family**, if you touched shared code. sm8550 (RP6, Odin 2 family) and
-   sm8250 (RP5, Flip 2) differ in GPU generation, bootloader, and audio. If you only have
-   one, test it and declare the other untested.
+4. **The other SoC families**, if you touched shared code. sm8550 (RP6, Odin 2 family),
+   sm8250 (RP5, Flip 2) and sm8750 (Odin 3) differ in GPU generation, bootloader, and audio.
+   Test the ones you have and declare the others untested.
 5. **Devices that lack the hardware you are driving.** Not every board has the LEDs, the fan,
    or the sensor. Probe for the thing and degrade quietly when it is missing; never error the
    session. If you cannot test the absent-hardware path on hardware, at least show the code

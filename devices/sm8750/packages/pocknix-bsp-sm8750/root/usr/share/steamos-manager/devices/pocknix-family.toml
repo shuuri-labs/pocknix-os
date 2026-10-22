@@ -1,0 +1,19 @@
+# steamos-manager's device match for this family, by devicetree compatible (these boards have
+# no DMI). Entries match in order, so the SoC entry stays last to catch boards without their
+# own line: an unmatched board would get a local CpuScaling1.
+
+[[device]]
+dt.compatible = "ayn,odin3"
+device        = "ayn_odin_3"
+variant       = "Odin3"
+friendly_name = "AYN Odin 3"
+
+[[device]]
+dt.compatible = "qcom,sm8750"
+device        = "pocknix_sm8750"
+variant       = "SM8750"
+friendly_name = "Snapdragon 8 Elite handheld"
+
+# Leaves the slot for pocknix-perfd, which only allows schedutil.
+[cpu_scaling]
+driver = "none"

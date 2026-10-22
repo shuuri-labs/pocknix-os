@@ -1,0 +1,33 @@
+# ayn_mcu.yaml maps BTN_BACK (Quick Access) to gamepad QuickAccess, not keyboard F1:
+# Steam has no Quick Access button otherwise.
+pkgname=pocknix-bsp-sm8750
+pkgver=0.2.0
+pkgrel=3
+pkgdesc="pocknix board support: SM8750 family (AYN Odin 3) — runtime board dispatch, input maps, audio UCM"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+# pocknix-firmware-sm8750 rides this dep edge to the fleet: -Syu never installs
+# a new package name without one
+depends=('pocknix-bsp-common' 'pocknix-firmware-sm8750')
+# Exactly one device BSP may be installed (wrong-device guard for a shared repo).
+provides=('pocknix-bsp')
+conflicts=('pocknix-bsp')
+optdepends=('inputplumber: gamepad -> Steam Input mapping (01-ayn-controller.yaml)'
+            'alsa-ucm-conf: base UCM (codec include sequences for the AYN-Odin3 UCM)')
+package() {
+  # scripts/render-bsp.sh renders device.conf and family.conf into ./staged (build-packages.sh).
+  install -Dm644 "${startdir}/staged/device.conf" "${pkgdir}/usr/lib/pocknix/device.conf"
+  # root/ is the install tree. makepkg's umask 022 turns git's exec bit into 755/644, and
+  # files created under fakeroot are root-owned; -d keeps the UCM symlink as a link (it is
+  # named for the card longname SM8750-AYN; codec sequences come from base alsa-ucm-conf).
+  cp -dr "${startdir}/root/." "${pkgdir}/"
+  # The on-device boot image rebuild bakes this in; build-packages.sh stages it from the profile.
+  install -Dm644 "${startdir}/staged/kernel-cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
+  # boards/ also comes from startdir (build-packages.sh copies the whole package dir);
+  # models is not installed, and the rendered family.conf replaces the committed one.
+  local b
+  for b in "${startdir}/boards/"*.conf "${startdir}/staged/family.conf"; do
+    install -Dm644 "${b}" "${pkgdir}/usr/lib/pocknix/boards/$(basename "${b}")"
+  done
+}

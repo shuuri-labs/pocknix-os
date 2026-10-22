@@ -1,0 +1,10 @@
+# Local kernel delta that make sync (scripts/sync.sh) restores from git after its rsync --delete,
+# paths under kernel/sm8750/. path = our edit of an upstream file, +path = our own file,
+# -path = deleted locally. Our 1000+ patches the sync deletes come back without a line here;
+# the upstream SM8750 set ships its own 1000-1004 and 1300, so watch those in the sync warnings.
+-patches/20-version/9999-fix-rust-build-error.patch
+-patches/20-version/0011-thermal-adc-tm5-drop-iio-val-int-check.patch
+-patches/30-sm8750/0050-clk-qcom-gxclkctl-kaanapali-fix-gx-gdsc-collapse.patch
+-patches/30-sm8750/0055-backlight-aw99706-upstream-fixes.patch
+patches/30-sm8750/0517-usb-typec-mux-dont-swallow-EPROBE_DEFER.patch
+-dts/qcom/sm8750-konkr-pf-elite.dts
