@@ -1,0 +1,39 @@
+From: arcadematicas <arcadematicas@users.noreply.github.com>
+Subject: [PATCH] wifi: ath12k: tolerate a NULL ar while a link is being torn down
+
+The AYN Odin 3 (SM8750, WCN7860) panics within ~10 s of wlan0 coming up: the
+AP stops answering, firmware commands start failing (-108), and the scan/link
+teardown paths below dereference arvif->ar, which is not set for every link
+still present in the links map. With oops=panic in the cmdline that is a boot
+loop. Check arvif->ar before using it in the three paths that assume it.
+
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -5927,7 +5927,7 @@
+ 
+ 	for_each_set_bit(link_id, &links_map, ATH12K_NUM_MAX_LINKS) {
+ 		arvif = wiphy_dereference(hw->wiphy, ahvif->link[link_id]);
+-		if (!arvif || !arvif->is_created ||
++		if (!arvif || !arvif->is_created || !arvif->ar ||
+ 		    arvif->ar->scan.arvif != arvif)
+ 			continue;
+ 
+@@ -11066,6 +11066,8 @@
+ 			continue;
+ 
+ 		ar = arvif->ar;
++		if (!ar)
++			continue;
+ 
+ 		/* Scan abortion is in progress since before this, cancel_hw_scan()
+ 		 * is expected to be executed. Since link is anyways going to be removed
+@@ -12478,6 +12480,9 @@
+ 		return;
+ 
+ 	ar = arvif->ar;
++	if (!ar)
++		return;
++
+ 	ab = ar->ab;
+ 
+ 	ath12k_dbg(ab, ATH12K_DBG_MAC,
