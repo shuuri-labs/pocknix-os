@@ -69,7 +69,8 @@ AppWindow {
             title: qsTr("Remove %1?").arg(e.name),
             text: (emulation && store.mode === "all" ? qsTr("The other emulators stay installed. ") : "")
                 + (emulation ? qsTr("Close it first. Its Steam tile is removed too. Your ROMs, saves and settings are kept.")
-                             : qsTr("You can install it again at any time.")),
+                   : e.section === "compatibility" ? qsTr("Any game set to use %1 will need a different compatibility tool in Steam.").arg(e.name)
+                   : qsTr("You can install it again at any time.")),
             confirmText: qsTr("Remove"),
             danger: true,
             yes: () => act("remove", [id], qsTr("Removing %1").arg(e.name))

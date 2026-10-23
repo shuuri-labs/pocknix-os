@@ -85,9 +85,10 @@ devices/<soc>/
                                   #   No kernel-cmdline: the build renders it from the profile.
                                   #   MUST: depends=(pocknix-bsp-common)
                                   #   provides/conflicts=(pocknix-bsp)   <- wrong-device guard
-    pocknix-device-<soc>/         # metapackage: depends on the BSP + kernel + bootloader
-                                  #   + its protons: exactly the ./gpus packages listing its
-                                  #   GPU_GEN (make check enforces), the stock ones otherwise.
+    pocknix-device-<soc>/         # metapackage: depends on the BSP + kernel + bootloader;
+                                  #   optdepends names its protons (the Pocknix Store installs
+                                  #   those): exactly the ./gpus packages listing its GPU_GEN
+                                  #   (make check enforces, either list), the stock ones otherwise.
                                   #   Nothing every family needs: that goes on pocknix-core.
                                   #   MUST provides/conflicts=(pocknix-device).
     pocknix-firmware-<soc>/       # (optional) vendor firmware linux-firmware lacks or gets wrong,

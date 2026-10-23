@@ -41,7 +41,8 @@ Per game, either can stay on the global value.
 **Game Tweaks**
 
 - **Proton Version** (per game only): the compatibility tool Steam launches the game with,
-  the same setting as the game's **Properties → Compatibility**.
+  the same setting as the game's **Properties → Compatibility**. Proton-GE and Proton-CachyOS
+  show up in this list once you install them from the **Pocknix Store** (Compatibility).
 - **FEX Preset**: **Default**, **Fast**, or **Compatible**. Trades x86 translation accuracy
   for speed. Try **Fast** for more FPS; switch to **Compatible** if a game misbehaves
   (crashes, glitched physics, odd audio).

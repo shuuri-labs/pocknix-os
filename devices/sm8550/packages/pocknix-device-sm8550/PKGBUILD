@@ -1,22 +1,23 @@
 # pocknix-device-sm8550 — metapackage: the per-SoC members of an SM8550 system
-# (BSP, kernel, bootloader, the SoC's proton choice). Shared members live on
+# (BSP, kernel, bootloader). optdepends names the SoC's Proton builds: the Pocknix Store
+# installs the one listed here. Shared members live on
 # pocknix-core / the pocknix-*-full layers: a dep edge from here would block
 # `pacman -Rs` of an optional layer.
 # Successor to the retired per-device metapackages; 'replaces' migrates
 # installed devices (e.g. an internal-installed RP6) on their next pacman -Syu.
 pkgname=pocknix-device-sm8550
 pkgver=0.2.0
-pkgrel=12
+pkgrel=13
 pkgdesc="pocknix device metapackage: SM8550 family (Retroid Pocket 6, AYN Odin 2 family)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
 depends=('pocknix-bsp-sm8550'
          'linux-pocknix-sm8550'
-         'pocknix-bootloader-sm8550'
-         # a7xx runs DXVK 3: the stock ARM protons (a6xx needs the -dxvk2 variants)
-         'proton-cachyos'
-         'proton-ge')
+         'pocknix-bootloader-sm8550')
+# a7xx runs DXVK 3: the stock ARM protons (a6xx needs the -dxvk2 variants)
+optdepends=('proton-cachyos: Proton-CachyOS, from the Pocknix Store'
+            'proton-ge: Proton-GE, from the Pocknix Store')
 # Exactly one device metapackage per install (wrong-device guard, same pattern
 # as the BSPs).
 provides=('pocknix-device')
