@@ -20,5 +20,5 @@ package() {
   install -Dm644 -t "${pkgdir}/usr/share/pocknix-store/qml" "${startdir}"/qml/*.qml
   install -Dm644 -t "${pkgdir}/usr/share/pocknix-store/catalogue.d" "${startdir}"/catalogue.d/*.conf
   install -Dm644 -t "${pkgdir}/usr/share/pocknix-store/icons" "${startdir}"/icons/*
-  install -Dm644 "${startdir}/tiles/store.conf" "${pkgdir}/usr/share/pocknix/tiles/store.conf"
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix/tiles" "${startdir}"/tiles/*.conf
 }

@@ -14,6 +14,8 @@ AppWindow {
     // what the running store job works on: its tiles show busy
     property var acting: []
     property string actingKind: ""
+    // tiles to drop after a removal: an emulator's goes with its manifest, Moonlight's stays
+    property var actingTiles: []
     // ids whose Steam tiles to offer once the status after an install is in
     property var offerTiles: []
     property var pending: null
@@ -73,7 +75,10 @@ AppWindow {
                    : qsTr("It can be installed again at any time.")),
             confirmText: qsTr("Remove"),
             danger: true,
-            yes: () => act("remove", [id], qsTr("Removing %1").arg(e.name))
+            yes: () => {
+                actingTiles = !emulation && e.tile ? [e.tile] : []
+                act("remove", [id], qsTr("Removing %1").arg(e.name))
+            }
         })
     }
     function reset(id) {
@@ -144,7 +149,10 @@ AppWindow {
                     app.offerTiles = app.acting
                 else if (app.actingKind === "install-all")
                     app.offerTiles = app.store.entries.filter(e => e.section === "emulation").map(e => e.id)
+                else if (app.actingKind === "remove" && app.actingTiles.length > 0)
+                    untileJob.start(["/usr/bin/pocknix-tiles", "disable"].concat(app.actingTiles))
             }
+            app.actingTiles = []
             app.acting = []
             app.actingKind = ""
             app.refresh()
@@ -160,6 +168,15 @@ AppWindow {
                            qsTr("It is in your Steam library."))
             else
                 app.notice(qsTr("Tiles not added"), app.tileFailure(code, error))
+        }
+    }
+
+    Job {
+        id: untileJob
+        onFinished: code => {
+            if (code !== 0)
+                app.notice(qsTr("Steam tile not removed"),
+                           app.tileFailure(code, error) + " " + qsTr("You can delete the tile in Steam."))
         }
     }
 

@@ -23,5 +23,12 @@ vita3k.svg      Vita3K, github.com/Vita3K/Vita3K @ dbde549178
                 vita3k/org.vita3k.vita3k.svg - GPL-2.0
 xemu.svg        xemu, github.com/xemu-project/xemu @ 25e1ee2fd5
                 ui/icons/xemu.svg - GPL-2.0-or-later
+tailscale.svg   Tailscale, github.com/tailscale/tailscale @ 00650c0b3b
+                client/systray/tailscale.svg - BSD-3-Clause
+wireguard.svg   WireGuard, github.com/WireGuard/wireguard-windows @ 6ece77bc48
+                ui/icon/wireguard.svg - MIT. "WireGuard" and the "WireGuard" logo are
+                registered trademarks of Jason A. Donenfeld.
+moonlight.svg   Moonlight, github.com/moonlight-stream/moonlight-qt @ 781b26fd1c
+                app/res/moonlight.svg - GPL-3.0
 srm.svg         Steam ROM Manager, github.com/SteamGridDB/steam-rom-manager @ f68289a770
                 src/assets/icons/steam-rom-manager.svg - GPL-3.0

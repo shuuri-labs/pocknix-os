@@ -16,7 +16,8 @@ pocknix-store/
   qml/                    the app: /usr/share/pocknix-store/qml/Main.qml
   catalogue.d/            one <id>.conf per entry
   icons/                  entry icons, credited in icons/CREDITS
-  tiles/store.conf        the store's own Steam tile, added once per account by pocknix-tiles auto
+  tiles/                  Steam tile manifests: the store's own (auto=1, added once per account),
+                          and those of entries whose package ships none (Moonlight)
 ```
 
 ## Catalogue entries
@@ -32,6 +33,8 @@ pocknix-store/
 | `packages` | what install adds and remove takes away, space-separated |
 | `variants` | per-GPU builds of one package: the store takes the one the installed `pocknix-device-<soc>` lists in `optdepends`; none listed hides the entry |
 | `tile` | the pocknix-tiles manifest name; absent = no Steam tile toggle |
+| `services` | systemd units enabled `--now` after install and disabled before removal |
+| `setup` | one named step built into the CLI (`tailscale-operator`), never a command |
 
 - **Hidden until hosted.** An entry shows only when every package is in the sync db or installed.
   The store reads the local copy of the sync db, so a newly hosted package appears after the next
