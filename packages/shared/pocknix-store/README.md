@@ -15,6 +15,7 @@ pocknix-store/
   qml/                    the app: /usr/share/pocknix-store/qml/Main.qml
   catalogue.d/            one <id>.conf per entry
   icons/                  entry icons, credited in icons/CREDITS
+  tiles/store.conf        the store's own Steam tile, added once per account by pocknix-tiles auto
 ```
 
 ## Catalogue entries
