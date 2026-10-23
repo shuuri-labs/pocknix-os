@@ -1,11 +1,15 @@
 #!/usr/bin/python3
-# pocknix-tiles enable|disable <name>... | status <name> - the Steam tile of the emulator manifest
-# /usr/share/pocknix-emulation/steam/<name>.conf, live through Steam's client API on its CEF
-# debugging port while Steam runs, else written into shortcuts.vdf. A Steam running without that
-# API is left alone: it rewrites shortcuts.vdf and would undo the write. Only an explicit request
-# (Pocknix Tools) adds a tile, never a pacman install: a tile is the user's choice.
+# pocknix-tiles enable|disable <name>... | status <name> - the Steam tile of the manifest <name>.conf
+# in /usr/share/pocknix-emulation/steam (emulators) or /usr/share/pocknix/tiles (system apps),
+# live through Steam's client API on its CEF debugging port while Steam runs, else written into
+# shortcuts.vdf. A Steam running without that API is left alone: it rewrites shortcuts.vdf and
+# would undo the write. Only an explicit request adds an emulator tile, never a pacman install: a
+# tile is the user's choice.
+# pocknix-tiles auto - the game session's start, before Steam: adds each system app manifest marked
+# auto=1 once per Steam account (stamp in ~/.local/state/pocknix), so a deleted tile stays deleted.
+# A manifest's launch=plain skips the game-launch prefix: a settings app wants no game tuning.
 # pocknix-tiles prune {<name> <exe> <args>}... - the alpm Remove hook's entry: the manifest that
-# names the tile's command is gone by the time the tile goes.
+# names the tile's command is gone by the time the tile goes, launch= with it, so both forms go.
 # Exit: 0 done (status prints enabled|disabled), 1 error, 2 usage, 3 Steam running but its API
 # unreachable or not ready (exit Steam and try again), 4 no Steam account on this device.
 # pocknix-tiles confirm <title> <text> <ok-label> - a controller-driven Steam dialog for tiles
@@ -25,7 +29,9 @@ from pocknix_cdp import evaluate, target  # noqa: E402
 
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
-MANIFESTS = "/usr/share/pocknix-emulation/steam"
+MANIFESTS = ("/usr/share/pocknix-emulation/steam", "/usr/share/pocknix/tiles")
+STAMP = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local/state"),
+                     "pocknix", "tiles-auto")
 LAUNCH = "pocknix-game-launch %command%"
 PLAY = "/usr/bin/pocknix-play"
 STEAMID64_BASE = 76561197960265728
@@ -40,25 +46,59 @@ def log(msg: str) -> None:
     print(f"[pocknix-tiles] {msg}", file=sys.stderr, flush=True)
 
 
-def launch_options(args: str) -> str:
+def launch_options(args: str, launch: str = "") -> str:
+    if launch == "plain":
+        return args
     return f"{LAUNCH} {args}" if args else LAUNCH
 
 
 def manifest(name: str) -> dict | None:
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
         return None
-    m = {}
+    for d in MANIFESTS:
+        m = {}
+        try:
+            with open(os.path.join(d, f"{name}.conf")) as f:
+                for line in f:
+                    k, sep, v = line.strip().partition("=")
+                    if sep and not k.startswith("#"):
+                        m[k.strip()] = v.strip()
+        except OSError:
+            continue
+        if not (m.get("name") and m.get("exe")):
+            return None
+        return {"name": m["name"], "exe": m["exe"], "auto": m.get("auto") == "1",
+                "lo": launch_options(m.get("args", ""), m.get("launch", ""))}
+    return None
+
+
+def auto() -> int:
+    acc = account()
+    if not acc:
+        return NO_ACCOUNT
     try:
-        with open(os.path.join(MANIFESTS, f"{name}.conf")) as f:
-            for line in f:
-                k, sep, v = line.strip().partition("=")
-                if sep and not k.startswith("#"):
-                    m[k.strip()] = v.strip()
+        with open(STAMP) as f:
+            done = {tuple(line.split()) for line in f if len(line.split()) == 2}
     except OSError:
-        return None
-    if not (m.get("name") and m.get("exe")):
-        return None
-    return {"name": m["name"], "exe": m["exe"], "lo": launch_options(m.get("args", ""))}
+        done = set()
+    names = sorted(n[:-len(".conf")] for n in os.listdir(MANIFESTS[1]) if n.endswith(".conf")) \
+        if os.path.isdir(MANIFESTS[1]) else []
+    found = [(n, manifest(n)) for n in names if (acc, n) not in done]
+    ops = [dict(m, op="add") for n, m in found if m and m["auto"]]
+    if not ops:
+        return OK
+    r = apply(ops, prune_legacy=False)
+    if r is None:
+        return NO_ACCOUNT
+    added = {o["name"] for o in ops} - set(r["failed"])
+    os.makedirs(os.path.dirname(STAMP), exist_ok=True)
+    with open(STAMP, "a") as f:
+        for n, m in found:
+            if m and m["auto"] and m["name"] in added:
+                f.write(f"{acc} {n}\n")
+    log(f"added {r['added'] or 'none'}, kept {r['kept'] or 'none'}"
+        + (f", FAILED {r['failed']}" if r["failed"] else ""))
+    return ERROR if r["failed"] else OK
 
 
 def get(d: dict, key: str, default=""):
@@ -393,7 +433,7 @@ def confirm(title: str, text: str, ok: str) -> int:
     return 2 if r is None else (0 if r else 1)
 
 
-USAGE_TEXT = ("usage: pocknix-tiles enable|disable <name>... | status <name> | "
+USAGE_TEXT = ("usage: pocknix-tiles enable|disable <name>... | status <name> | auto | "
               "prune {<name> <exe> <args>}... | confirm <title> <text> <ok-label>")
 
 
@@ -402,6 +442,15 @@ def main() -> int:
     cmd = args[0] if args else ""
     if cmd == "confirm" and len(args) == 4:
         return confirm(*args[1:])
+    if args == ["auto"]:
+        try:
+            return auto()
+        except Busy as e:
+            log(f"{e}: the tiles are added at the next game session")
+            return BUSY
+        except (OSError, ValueError, IndexError, struct.error) as e:
+            log(f"shortcuts.vdf: {e}")
+            return ERROR
     if (cmd in ("enable", "disable") and len(args) >= 2) or (cmd == "status" and len(args) == 2):
         found = [manifest(n) for n in args[1:]]
         if None in found:
@@ -411,8 +460,8 @@ def main() -> int:
         ops = [dict(m, op=op) for m in found]
     elif cmd == "prune" and len(args) >= 4 and (len(args) - 1) % 3 == 0:
         ops = [{"op": "remove", "name": args[i], "exe": args[i + 1].strip(),
-                "lo": launch_options(args[i + 2].strip())}
-               for i in range(1, len(args), 3)]
+                "lo": launch_options(args[i + 2].strip(), launch)}
+               for i in range(1, len(args), 3) for launch in ("", "plain")]
     else:
         print(USAGE_TEXT, file=sys.stderr)
         return USAGE

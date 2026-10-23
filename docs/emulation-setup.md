@@ -31,8 +31,8 @@ emulator can get a tile in your Steam library when installed from the Pocknix St
 
 ## Installing it
 
-Emulation is optional, so a fresh install does not have it. Open the **Pocknix Store** (desktop
-mode app menu) and either:
+Emulation is optional, so a fresh install does not have it. Open the **Pocknix Store** (its tile
+in your Steam library, or the app menu in desktop mode) and either:
 
 - **Install all**: ES-DE, Steam ROM Manager and every emulator, kept up to date as one set.
 - **Pick**: tap an emulator, then *Install*. Install only the ones you want; ES-DE is its own
