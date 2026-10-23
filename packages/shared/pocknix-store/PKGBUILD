@@ -11,6 +11,8 @@ depends=('pocknix-ui' 'python' 'polkit')
 
 package() {
   install -Dm755 "${startdir}/pocknix-store" "${pkgdir}/usr/bin/pocknix-store"
+  install -Dm644 "${startdir}/90-pocknix-store-adopt.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/90-pocknix-store-adopt.hook"
   install -Dm644 "${startdir}/57-pocknix-store.rules" \
     "${pkgdir}/usr/share/polkit-1/rules.d/57-pocknix-store.rules"
   install -Dm644 "${startdir}/pocknix-store.desktop" \

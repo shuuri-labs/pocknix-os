@@ -343,19 +343,19 @@ check_boards() {  # $1 = SoC, $2 = boards dir
   rm -rf "${t}"
 }
 
-# Prints one problem per line: meta PKGBUILD $1 must depend on every $3/*/gpus package listing
-# GPU_GEN $2 and on none that omits it, so a meta carrying another generation's packages fails.
-# Metas run nothing at top level, so sourcing reads depends= exactly.
+# Prints one problem per line: meta PKGBUILD $1 must list (depends or optdepends) every
+# $3/*/gpus package listing GPU_GEN $2 and none that omits it, so a meta carrying another
+# generation's packages fails. Metas run nothing at top level, so sourcing reads the arrays exactly.
 check_meta_gpus() {  # $1 = meta PKGBUILD, $2 = GPU_GEN, $3 = packages/gpu dir
   local deps g n
-  deps=" $( (set +eu; . "$1" >/dev/null 2>&1; printf '%s ' "${depends[@]}") ) "
+  deps=" $( (set +eu; . "$1" >/dev/null 2>&1; printf '%s ' "${depends[@]}" "${optdepends[@]%%:*}") ) "
   for g in "$3"/*/gpus; do
     [ -f "${g}" ] || continue
     n="${g%/gpus}"; n="${n##*/}"
     if grep -qw -- "$2" "${g}"; then
       case "${deps}" in *" ${n} "*) ;; *) echo "${1##*/devices/} lacks ${n} (its gpus lists $2)" ;; esac
     else
-      case "${deps}" in *" ${n} "*) echo "${1##*/devices/} depends on ${n}, whose gpus omits $2" ;; esac
+      case "${deps}" in *" ${n} "*) echo "${1##*/devices/} lists ${n}, whose gpus omits $2" ;; esac
     fi
   done
 }

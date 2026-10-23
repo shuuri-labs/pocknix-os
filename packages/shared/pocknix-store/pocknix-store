@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # pocknix-store status --json | follow                      (as the user)
 # pocknix-store install|remove <id>... | install-all | remove-all   (root, via pkexec)
+# pocknix-store adopt [--later]                                     (root, the alpm hook)
 # Root commands take catalogue ids, never package names: the polkit rule allows this program with
 # any arguments, so the ids are the allowlist. pacman runs in the pocknix-job unit `store`, which
 # re-enters this program as `job <command> <id>...` and resolves the ids again there.
@@ -10,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 SHARE = "/usr/share/pocknix-store"
 TILES = "/usr/share/pocknix-emulation/steam"
@@ -59,11 +61,26 @@ def read_conf(path: str) -> dict:
     return m
 
 
+def device_options(local: set[str]) -> set[str]:
+    """The installed device meta's optdepends: which build of a per-SoC package fits this GPU."""
+    opts, inside = set(), False
+    metas = [p for p in local if p.startswith("pocknix-device-")]
+    for line in pacman_q("-Qi", *metas) if metas else []:
+        if line.startswith("Optional Deps"):
+            inside, line = True, line.partition(":")[2]
+        elif inside and not line[:1].isspace():
+            inside = False
+        if inside:
+            name = line.strip().split(":", 1)[0].strip()
+            if name and name != "None":
+                opts.add(name)
+    return opts
+
+
 def entries(local: set[str], sync: set[str]) -> dict[str, dict]:
-    """Every entry this device can show: one whose packages are all hosted or already installed.
-    Hosting is read from the local copy of the sync db, so a new package appears after the next
-    -Syu, which every install runs."""
-    found, claimed = {}, set()
+    """Entries whose packages are all hosted (local sync db: new ones appear after the next -Syu)
+    or installed. Of an entry's variants, the one the device meta lists; none listed hides it."""
+    found, claimed, opts = {}, set(), None
     try:
         names = sorted(os.listdir(f"{SHARE}/catalogue.d"))
     except OSError:
@@ -76,7 +93,14 @@ def entries(local: set[str], sync: set[str]) -> dict[str, dict]:
             c = read_conf(f"{SHARE}/catalogue.d/{n}")
         except OSError:
             continue
-        pkgs = c.get("packages", "").split()
+        pkgs, variants = c.get("packages", "").split(), c.get("variants", "").split()
+        if variants:
+            claimed.update(variants)
+            opts = device_options(local) if opts is None else opts
+            pick = [v for v in variants if v in opts][:1]
+            if not pick:
+                continue
+            pkgs += pick
         if not pkgs or c.get("section") not in SECTIONS:
             continue
         claimed.update(pkgs)
@@ -304,6 +328,35 @@ def job(cmd: str, ids: list[str]) -> int:
     return OK
 
 
+def adopt(later: bool) -> int:
+    """Marks installed non-Emulation catalogue packages nothing requires as explicit, or orphan
+    cleanup removes one a meta stopped requiring (Proton). Emulation keeps its All/Pick marks."""
+    need_root()
+    if later:
+        # The hook runs while pacman holds its lock: the marking waits in a unit of its own.
+        if not os.path.isdir("/run/systemd/system"):
+            out("pocknix-store adopt: no systemd (image build), skipped")
+            return OK
+        subprocess.run(["systemd-run", "--quiet", "--no-block", "--collect",
+                        "--unit", "pocknix-store-adopt", SELF, "adopt"], capture_output=True)
+        return OK
+    for _ in range(600):
+        if not os.path.exists(LOCK):
+            break
+        time.sleep(1)
+    else:
+        raise Fail("pacman stayed busy for 10 minutes: nothing adopted", BUSY)
+    local, sync = set(pacman_q("-Qq")), set(pacman_q("-Slq"))
+    mine = {p for e in entries(local, sync).values() if e["section"] != "emulation"
+            for p in e["packages"]}
+    # -tt: a package that is only some meta's optdepends counts as unrequired; -Qdt hides it.
+    todo = sorted(mine & set(pacman_q("-Qdttq")))
+    if todo:
+        mark("--asexplicit", todo)
+    out(f"adopted: {' '.join(todo) or 'nothing'}")
+    return OK
+
+
 def start(cmd: str, ids: list[str]) -> int:
     need_root()
     not_busy()
@@ -313,7 +366,7 @@ def start(cmd: str, ids: list[str]) -> int:
 
 
 USAGE_TEXT = ("usage: pocknix-store status --json | follow | install <id>... | remove <id>... "
-              "| install-all | remove-all")
+              "| install-all | remove-all | adopt [--later]")
 ROOT_COMMANDS = ("install", "remove", "install-all", "remove-all")
 
 
@@ -324,6 +377,8 @@ def main() -> int:
             return status()
         if args == ["follow"]:
             os.execv(JOB, [JOB, "follow", "store"])
+        if args in (["adopt"], ["adopt", "--later"]):
+            return adopt(later=len(args) == 2)
         if args[:1] and args[0] in ROOT_COMMANDS:
             return start(args[0], args[1:])
         if len(args) >= 2 and args[0] == "job" and args[1] in ROOT_COMMANDS:

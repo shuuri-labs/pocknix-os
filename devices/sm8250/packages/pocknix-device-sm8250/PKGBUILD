@@ -1,10 +1,11 @@
 # pocknix-device-sm8250 — metapackage: the per-SoC members of an SM8250 system
-# (BSP, kernel, bootloader, the SoC's proton choice). Shared members live on
+# (BSP, kernel, bootloader). optdepends names the SoC's Proton builds: the Pocknix Store
+# installs the one listed here. Shared members live on
 # pocknix-core / the pocknix-*-full layers: a dep edge from here would block
 # `pacman -Rs` of an optional layer.
 pkgname=pocknix-device-sm8250
 pkgver=0.1.0
-pkgrel=10
+pkgrel=11
 pkgdesc="pocknix device metapackage: SM8250 family (RP5, RP Flip 2)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -12,11 +13,11 @@ license=('GPL-2.0-or-later')
 depends=('pocknix-bsp-sm8250'
          'linux-pocknix-sm8250'
          'pocknix-bootloader-sm8250'
-         # a6xx lacks 8-bit storage -> DXVK 3 rejects the GPU: dxvk2-pinned protons
-         'proton-cachyos-dxvk2'
-         'proton-ge-dxvk2'
          # a6xx DXVK 2.7 donor + its swap into downloaded Valve ARM Protons (dep edge = delivery)
          'pocknix-dxvk2-donor')
+# a6xx lacks 8-bit storage -> DXVK 3 rejects the GPU: dxvk2-pinned protons
+optdepends=('proton-cachyos-dxvk2: Proton-CachyOS, from the Pocknix Store'
+            'proton-ge-dxvk2: Proton-GE, from the Pocknix Store')
 # Exactly one device metapackage per install (wrong-device guard, same pattern
 # as the BSPs).
 provides=('pocknix-device')
