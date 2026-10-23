@@ -1,0 +1,86 @@
+#!/bin/bash
+# pocknix-job run <name> -- <cmd>... | follow <name> | status <name>
+# run (root): <cmd> becomes the transient unit pocknix-job-<name> under PID 1, so neither the app
+# that asked for it nor Steam closing that app can stop a pacman transaction halfway; then follows.
+# follow (any user): replays the job's log from the start, streams it to the end, exits with the
+# job's code. status: running | done <code> | none.
+# Exit: the job's code, 1 error, 2 usage, 3 a job of that name is already running.
+set -uo pipefail
+
+DIR=/run/pocknix/jobs
+MARK='POCKNIX:{"exit":'
+
+usage() { echo "usage: pocknix-job run <name> -- <cmd>... | follow <name> | status <name>" >&2; exit 2; }
+[ "$#" -ge 2 ] || usage
+cmd="$1" name="$2"; shift 2
+[[ "${name}" =~ ^[a-z0-9-]+$ ]] || usage
+unit="pocknix-job-${name}.service" log="${DIR}/${name}.log"
+
+active() {
+  case "$(systemctl is-active "${unit}" 2>/dev/null)" in
+    active|activating|deactivating|reloading) return 0 ;;
+  esac
+  return 1
+}
+# The marker can share a line with the job's last output when that lacks a newline.
+exit_code() { sed -n 's/.*POCKNIX:{"exit":\([0-9]*\)}$/\1/p' "${log}" 2>/dev/null | tail -n 1; }
+
+follow() {
+  [ -e "${log}" ] || { echo "pocknix-job: no job named ${name}" >&2; return 1; }
+  local line part="" code rc gone=0
+  exec 3< <(exec tail -n +1 -F "${log}" 2>/dev/null)
+  TAIL_PID=$!
+  trap 'kill "${TAIL_PID}" 2>/dev/null' EXIT
+  while :; do
+    IFS= read -r -t 2 line <&3
+    rc=$?
+    if [ "${rc}" -eq 0 ]; then
+      line="${part}${line}" part=""
+      case "${line}" in
+        *"${MARK}"*)
+          [ -n "${line%%"${MARK}"*}" ] && printf '%s\n' "${line%%"${MARK}"*}"
+          code="${line##*"${MARK}"}"
+          return "${code%\}}"
+          ;;
+      esac
+      printf '%s\n' "${line}"
+      continue
+    fi
+    # Timed out: keep what arrived of an unfinished line. Otherwise tail is gone.
+    [ "${rc}" -gt 128 ] && part+="${line}"
+    # A unit can end between a timeout and the check with its last lines still in the pipe:
+    # once it is gone, one more quiet read means nothing is left to come.
+    if [ "${gone}" -eq 1 ] || [ "${rc}" -le 128 ]; then
+      [ -n "${part}" ] && printf '%s\n' "${part}"
+      code="$(exit_code)"
+      [ -n "${code}" ] && return "${code}"
+      echo "pocknix-job: ${name} stopped without a result" >&2
+      return 1
+    fi
+    active || gone=1
+  done
+}
+
+case "${cmd}" in
+  run)
+    [ "$(id -u)" -eq 0 ] || { echo "pocknix-job: run needs root" >&2; exit 1; }
+    [ "${1:-}" = "--" ] && shift
+    [ "$#" -gt 0 ] || usage
+    active && { echo "pocknix-job: ${name} is already running" >&2; exit 3; }
+    install -d -m755 "${DIR}"
+    : > "${log}"
+    chmod 644 "${log}"
+    systemd-run --quiet --collect --unit "${unit}" \
+      --property "StandardOutput=append:${log}" --property "StandardError=append:${log}" \
+      /bin/sh -c '"$@"; echo "POCKNIX:{\"exit\":$?}"' sh "$@" || exit 1
+    follow
+    ;;
+  follow) follow ;;
+  status)
+    if active; then echo running
+    elif code="$(exit_code)" && [ -n "${code}" ]; then echo "done ${code}"
+    else echo none
+    fi
+    ;;
+  *) usage ;;
+esac

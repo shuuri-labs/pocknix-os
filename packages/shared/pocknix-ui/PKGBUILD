@@ -1,0 +1,22 @@
+# pocknix-ui - the only compiled piece of the touch apps: Tools and the Store ship plain QML
+# (arch=any) that loads on this host.
+pkgname=pocknix-ui
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Pocknix touch UI host and components shared by Pocknix Tools and the Pocknix Store"
+arch=('aarch64')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'kirigami' 'breeze-icons' 'systemd')
+makedepends=('cmake' 'ninja')
+
+build() {
+  cmake -S "${startdir}" -B build -G Ninja -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
+  cmake --build build
+}
+
+package() {
+  DESTDIR="${pkgdir}" cmake --install build
+  install -Dm755 "${startdir}/pocknix-ui" "${pkgdir}/usr/bin/pocknix-ui"
+  install -Dm755 "${startdir}/pocknix-job" "${pkgdir}/usr/lib/pocknix-ui/pocknix-job"
+}

@@ -1,0 +1,4 @@
+#!/bin/sh
+# pocknix-ui <app> - start a Pocknix touch app (store, tools). A Steam tile hands its children
+# the overlay preload, which a binary cannot drop for itself once loaded.
+exec env -u LD_PRELOAD -u LD_LIBRARY_PATH /usr/lib/pocknix-ui/pocknix-ui-host "$@"
