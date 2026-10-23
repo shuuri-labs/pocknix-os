@@ -27,13 +27,14 @@ pocknix-store/
 | Key | Meaning |
 |---|---|
 | `name` | shown on the tile |
-| `section` | `emulation`, `compatibility`, `network` or `streaming` |
+| `section` | `emulation`, `compatibility`, `network`, `streaming` or `desktop` (shown as Desktop mode) |
 | `description` | one line under the name |
 | `icon` | a file in `icons/`, else a theme icon name |
 | `packages` | what install adds and remove takes away, space-separated |
 | `variants` | per-GPU builds of one package: the store takes the one the installed `pocknix-device-<soc>` lists in `optdepends`; none listed hides the entry |
 | `tile` | the pocknix-tiles manifest name; absent = no Steam tile toggle |
-| `services` | systemd units enabled `--now` after install and disabled before removal |
+| `services` | systemd services or sockets enabled `--now` after install and disabled before removal |
+| `note` | one line the app shows once the install finishes (where to turn it on) |
 | `setup` | one named step built into the CLI (`tailscale-operator`), never a command |
 
 - **Hidden until hosted.** An entry shows only when every package is in the sync db or installed.
@@ -61,6 +62,8 @@ pocknix-store/
   catalogue plus the `pocknix-emu-*` set is the whole allowlist. The meta and the
   `pocknix-emulation` alias are only reached through `install-all`, `remove-all` and the switch
   below.
+- **Shared packages stay.** A removal never takes a package another installed entry lists
+  (gnome-keyring belongs to GNOME, COSMIC and Hyprland alike).
 - **All and Pick.** All = the meta is installed. Removing one emulator in All mode marks the other
   installed members explicit, then removes the meta and the alias with it: the device is in Pick
   mode and keeps the rest.

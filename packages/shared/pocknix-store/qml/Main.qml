@@ -18,6 +18,8 @@ AppWindow {
     property var actingTiles: []
     // ids whose Steam tiles to offer once the status after an install is in
     property var offerTiles: []
+    // ids whose install note to show once the status after an install is in
+    property var offerNotes: []
     property var pending: null
 
     function refresh() {
@@ -72,6 +74,7 @@ AppWindow {
             text: (emulation && store.mode === "all" ? qsTr("The other emulators stay installed. ") : "")
                 + (emulation ? qsTr("Close it first. Its Steam tile goes with it; your ROMs, saves and settings are kept.")
                    : e.section === "compatibility" ? qsTr("Games set to %1 need another compatibility tool in Steam.").arg(e.name)
+                   : e.section === "desktop" ? qsTr("If desktop mode uses it, pick another desktop in Pocknix Tools first.")
                    : qsTr("It can be installed again at any time.")),
             confirmText: qsTr("Remove"),
             danger: true,
@@ -129,6 +132,11 @@ AppWindow {
             }
             const offer = app.store.entries.filter(e => app.offerTiles.includes(e.id) && e.installed && e.tile)
             app.offerTiles = []
+            const noted = app.store.entries.filter(e => app.offerNotes.includes(e.id) && e.installed && e.note)
+            app.offerNotes = []
+            if (offer.length === 0 && noted.length > 0)
+                app.notice(qsTr("%1 is installed").arg(noted.map(e => e.name).join(", ")),
+                           noted.map(e => e.note).filter((n, i, a) => a.indexOf(n) === i).join("\n"))
             if (offer.length > 0)
                 app.ask({
                     title: offer.length === 1 ? qsTr("Add %1 to Steam?").arg(offer[0].name)
@@ -145,8 +153,10 @@ AppWindow {
         onFinished: code => {
             if (code === 0) {
                 log.close()
-                if (app.actingKind === "install")
+                if (app.actingKind === "install") {
                     app.offerTiles = app.acting
+                    app.offerNotes = app.acting
+                }
                 else if (app.actingKind === "install-all")
                     app.offerTiles = app.store.entries.filter(e => e.section === "emulation").map(e => e.id)
                 else if (app.actingKind === "remove" && app.actingTiles.length > 0)
