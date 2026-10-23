@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Pocknix Store
+Comment=Install and remove emulators and other extras
+Exec=/usr/bin/pocknix-ui store
+TryExec=/usr/bin/pocknix-ui
+Icon=system-software-install
+Terminal=false
+Categories=System;PackageManager;
+Keywords=emulator;emulation;install;remove;store;

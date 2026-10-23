@@ -1,0 +1,27 @@
+Icons in this folder are the projects' own logos, shipped unaltered so an entry has its icon
+before it is installed. Each belongs to its project; showing it implies no endorsement.
+Taken 2026-10-23 from the upstream commit given.
+
+esde.svg        ES-DE, gitlab.com/es-de/emulationstation-de @ a529a9d38c
+                es-app/assets/org.es_de.frontend.svg - MIT
+retroarch.svg   RetroArch, github.com/libretro/RetroArch @ 5333a7c5a5
+                media/com.libretro.RetroArch.svg - GPL-3.0
+ppsspp.svg      PPSSPP, github.com/hrydgard/ppsspp @ 31e94fcf68
+                icons/icon-512.svg - GPL-2.0-or-later
+armsx2.png      ARMSX2, github.com/ARMSX2/ARMSX2 @ 90126bdfea
+                pcsx2-qt/resources/icons/ARMSX2logo.png - GPL-3.0
+dolphin.svg     Dolphin, github.com/dolphin-emu/dolphin @ e1d35f666c
+                Data/dolphin-emu.svg - GPL-2.0-or-later; logo by MayImilae
+azahar.svg      Azahar, github.com/azahar-emu/azahar @ 93f8939a10
+                dist/azahar.svg - "Azahar Emu Logo (c) 2024 by angyartanddraw and PabloMK7 is
+                licensed under CC BY 4.0" (https://creativecommons.org/licenses/by/4.0/)
+cemu.png        Cemu, github.com/cemu-project/Cemu @ 29f2f1fae4
+                dist/linux/info.cemu.Cemu.png - MPL-2.0
+rpcs3.svg       RPCS3, github.com/RPCS3/rpcs3 @ 87766f9e98
+                rpcs3/rpcs3.svg - GPL-2.0
+vita3k.svg      Vita3K, github.com/Vita3K/Vita3K @ dbde549178
+                vita3k/org.vita3k.vita3k.svg - GPL-2.0
+xemu.svg        xemu, github.com/xemu-project/xemu @ 25e1ee2fd5
+                ui/icons/xemu.svg - GPL-2.0-or-later
+srm.svg         Steam ROM Manager, github.com/SteamGridDB/steam-rom-manager @ f68289a770
+                src/assets/icons/steam-rom-manager.svg - GPL-3.0
