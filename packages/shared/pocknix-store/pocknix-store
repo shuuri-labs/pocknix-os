@@ -1,0 +1,339 @@
+#!/usr/bin/python3
+# pocknix-store status --json | follow                      (as the user)
+# pocknix-store install|remove <id>... | install-all | remove-all   (root, via pkexec)
+# Root commands take catalogue ids, never package names: the polkit rule allows this program with
+# any arguments, so the ids are the allowlist. pacman runs in the pocknix-job unit `store`, which
+# re-enters this program as `job <command> <id>...` and resolves the ids again there.
+# Exit: 0 done, 1 error, 2 usage or unknown id, 3 busy (a store job or another pacman is running).
+import json
+import os
+import re
+import subprocess
+import sys
+
+SHARE = "/usr/share/pocknix-store"
+TILES = "/usr/share/pocknix-emulation/steam"
+JOB = "/usr/lib/pocknix-ui/pocknix-job"
+SELF = "/usr/bin/pocknix-store"
+ROMS_INIT = "/usr/bin/pocknix-roms-init"
+TILES_CLI = "/usr/bin/pocknix-tiles"
+LOCK = "/var/lib/pacman/db.lck"
+META = "pocknix-emulation-full"
+# the pre-split package name, an empty package depending on the meta: it goes with the meta
+ALIAS = "pocknix-emulation"
+EMU = re.compile(r"pocknix-emu-[a-z0-9-]+")
+ID = re.compile(r"[a-z0-9][a-z0-9-]*")
+SECTIONS = {"emulation": "Emulation", "compatibility": "Compatibility",
+            "network": "Network", "streaming": "Streaming"}
+GENERIC_ICON = "applications-games"
+OK, ERROR, USAGE, BUSY = 0, 1, 2, 3
+
+
+class Fail(Exception):
+    def __init__(self, msg: str, code: int = ERROR):
+        super().__init__(msg)
+        self.code = code
+
+
+def out(line: str) -> None:
+    print(line, flush=True)
+
+
+def progress(**kw) -> None:
+    out("POCKNIX:" + json.dumps(kw))
+
+
+def pacman_q(*args: str) -> list[str]:
+    r = subprocess.run(["pacman", *args], capture_output=True, text=True,
+                       env=dict(os.environ, LC_ALL="C"))
+    return r.stdout.splitlines()
+
+
+def read_conf(path: str) -> dict:
+    m = {}
+    with open(path) as f:
+        for line in f:
+            k, sep, v = line.strip().partition("=")
+            if sep and not k.startswith("#"):
+                m[k.strip()] = v.strip()
+    return m
+
+
+def entries(local: set[str], sync: set[str]) -> dict[str, dict]:
+    """Every entry this device can show: one whose packages are all hosted or already installed.
+    Hosting is read from the local copy of the sync db, so a new package appears after the next
+    -Syu, which every install runs."""
+    found, claimed = {}, set()
+    try:
+        names = sorted(os.listdir(f"{SHARE}/catalogue.d"))
+    except OSError:
+        names = []
+    for n in names:
+        eid = n[:-len(".conf")]
+        if not n.endswith(".conf") or not ID.fullmatch(eid):
+            continue
+        try:
+            c = read_conf(f"{SHARE}/catalogue.d/{n}")
+        except OSError:
+            continue
+        pkgs = c.get("packages", "").split()
+        if not pkgs or c.get("section") not in SECTIONS:
+            continue
+        claimed.update(pkgs)
+        if all(p in sync or p in local for p in pkgs):
+            found[eid] = {"name": c.get("name") or eid, "section": c["section"],
+                          "description": c.get("description", ""), "icon": c.get("icon", ""),
+                          "packages": pkgs, "tile": c.get("tile", "")}
+    # A new emulator's glue package shows without a store update, under its package description.
+    new = sorted(p for p in (sync | local) if EMU.fullmatch(p) and p not in claimed
+                 and p[len("pocknix-emu-"):] not in found)
+    desc = {}
+    if new:
+        name = None
+        for line in pacman_q("-Si", *new):
+            k, _, v = line.partition(":")
+            if k.strip() == "Name":
+                name = v.strip()
+            elif k.strip() == "Description" and name:
+                desc[name] = v.strip()
+    for p in new:
+        eid = p[len("pocknix-emu-"):]
+        found[eid] = {"name": eid, "section": "emulation", "description": desc.get(p, ""),
+                      "icon": "", "packages": [p], "tile": eid}
+    return found
+
+
+def icon(name: str) -> str:
+    if name and "/" not in name and os.path.isfile(f"{SHARE}/icons/{name}"):
+        return f"file://{SHARE}/icons/{name}"
+    return name or GENERIC_ICON
+
+
+def installed(e: dict, local: set[str]) -> bool:
+    return all(p in local for p in e["packages"])
+
+
+def mode(found: dict, local: set[str]) -> str:
+    if META in local:
+        return "all"
+    emus = [e for e in found.values() if e["section"] == "emulation"]
+    return "pick" if any(installed(e, local) for e in emus) else "none"
+
+
+def job_state() -> str:
+    if not os.access(JOB, os.X_OK):
+        return "none"
+    r = subprocess.run([JOB, "status", "store"], capture_output=True, text=True)
+    return r.stdout.strip() or "none"
+
+
+def resettable() -> set[str]:
+    if not os.access(ROMS_INIT, os.X_OK):
+        return set()
+    r = subprocess.run([ROMS_INIT, "--list"], capture_output=True, text=True)
+    return {line.split("\t", 1)[0] for line in r.stdout.splitlines() if line}
+
+
+def status() -> int:
+    local, sync = set(pacman_q("-Qq")), set(pacman_q("-Slq"))
+    found = entries(local, sync)
+    reset = resettable()
+    tiles = os.access(TILES_CLI, os.X_OK)
+    rows = []
+    for eid, e in found.items():
+        on = installed(e, local)
+        tile = e["tile"] if on and tiles and e["tile"] and os.path.isfile(f"{TILES}/{e['tile']}.conf") else ""
+        rows.append({"id": eid, "name": e["name"], "section": e["section"],
+                     "description": e["description"], "icon": icon(e["icon"]),
+                     "installed": on, "tile": tile, "reset": on and eid in reset})
+    used = {r["section"] for r in rows}
+    out(json.dumps({"mode": mode(found, local), "job": job_state(),
+                    "sections": [{"id": s, "name": n} for s, n in SECTIONS.items() if s in used],
+                    "entries": rows}))
+    return OK
+
+
+def need_root() -> None:
+    if os.geteuid() != 0:
+        raise Fail("must run as root (pkexec pocknix-store ...)")
+
+
+def not_busy() -> None:
+    if os.path.exists(LOCK):
+        raise Fail("another install or update is running: try again when it has finished", BUSY)
+
+
+def resolve(cmd: str, ids: list[str], found: dict) -> list[str]:
+    if cmd in ("install-all", "remove-all"):
+        if ids:
+            raise Fail(f"{cmd} takes no ids", USAGE)
+        return []
+    if not ids:
+        raise Fail(f"{cmd} needs at least one id", USAGE)
+    unknown = [i for i in ids if i not in found]
+    if unknown:
+        raise Fail(f"unknown id: {' '.join(unknown)}", USAGE)
+    return list(dict.fromkeys(ids))
+
+
+def depends_of(pkg: str, local: set[str]) -> list[str]:
+    """Its depends from the local db, or from the sync db when it is not installed."""
+    deps, inside = [], False
+    for line in pacman_q("-Qi" if pkg in local else "-Si", pkg):
+        if line.startswith("Depends On"):
+            inside, line = True, line.partition(":")[2]
+        elif inside and not line[:1].isspace():
+            break
+        if inside:
+            deps += [re.split(r"[<>=]", d, maxsplit=1)[0] for d in line.split() if d != "None"]
+    return deps
+
+
+def mark(how: str, pkgs: list[str]) -> None:
+    if pkgs:
+        run_pacman(["-D", how, *pkgs], quiet=True)
+
+
+class Progress:
+    """pacman --noprogressbar output -> POCKNIX progress lines. Download is the first half of the
+    bar (counted against `Packages (N)`), the transaction the second."""
+    STEP = re.compile(r"\((\d+)/(\d+)\) (installing|upgrading|reinstalling|downgrading|removing) (\S+)")
+    VERB = {"installing": "Installing", "upgrading": "Updating", "reinstalling": "Reinstalling",
+            "downgrading": "Installing", "removing": "Removing"}
+
+    def __init__(self):
+        self.total = 0
+        self.downloaded = 0
+
+    def feed(self, line: str) -> None:
+        m = re.match(r"Packages \((\d+)\)", line)
+        if m:
+            self.total = int(m.group(1))
+            return
+        if line.startswith(":: Synchronizing package databases"):
+            progress(phase="sync", text="Checking for updates", progress=None)
+        elif self.total and line.endswith(" downloading..."):
+            self.downloaded += 1
+            progress(phase="download", text=f"Downloading {min(self.downloaded, self.total)} of {self.total}",
+                     progress=0.5 * min(self.downloaded, self.total) / self.total)
+        elif line.startswith(":: Processing package changes"):
+            progress(phase="install", text="Installing", progress=0.5)
+        elif line.startswith(":: Running post-transaction hooks"):
+            progress(phase="hooks", text="Finishing up", progress=0.95)
+        elif (m := self.STEP.match(line)):
+            n, total = int(m.group(1)), int(m.group(2))
+            progress(phase="install", text=f"{self.VERB[m.group(3)]} {m.group(4)}",
+                     progress=0.5 + 0.45 * n / total)
+
+
+def run_pacman(args: list[str], quiet: bool = False) -> None:
+    out("$ pacman " + " ".join(args))
+    p = subprocess.Popen(["pacman", *args], stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT, text=True, env=dict(os.environ, LC_ALL="C"))
+    prog = Progress()
+    for line in p.stdout:
+        line = line.rstrip("\n")
+        if not quiet:
+            out(line)
+        prog.feed(line)
+    if p.wait() != 0:
+        raise Fail(f"pacman {args[0]} failed (exit {p.returncode})")
+
+
+def members(local: set[str]) -> list[str]:
+    """The layer's installed packages: the meta's depends plus each pocknix-emu-*'s emulators (older
+    devices have those explicit). SRM's depends are system libraries, never walked."""
+    found = []
+    for p in depends_of(META, local):
+        found.append(p)
+        if EMU.fullmatch(p):
+            found += depends_of(p, local)
+    return [p for p in dict.fromkeys(found) if p in local]
+
+
+def do_install(pkgs: list[str]) -> None:
+    # -Syu, never -Sy: a refreshed index on an un-upgraded system is the partial-upgrade trap.
+    run_pacman(["-Syu", "--needed", "--noconfirm", "--noprogressbar", *pkgs])
+
+
+def do_remove(ids: list[str], found: dict, local: set[str]) -> None:
+    targets = [p for i in ids for p in found[i]["packages"] if p in local]
+    if not targets:
+        out("Nothing to remove: not installed.")
+        return
+    if META in local:
+        layer = depends_of(META, local)
+        if any(p in layer for p in targets):
+            # All -> Pick: the rest of the layer stays, now installed for its own sake.
+            out("Emulation switches to picked emulators: the others stay installed.")
+            mark("--asexplicit", [p for p in layer if p in local and p not in targets])
+            targets += [META] + ([ALIAS] if ALIAS in local else [])
+    # explicit on devices fielded before the metas, which -Rs would keep
+    mark("--asdeps", [d for p in targets if EMU.fullmatch(p) for d in depends_of(p, local) if d in local])
+    run_pacman(["-Rs", "--noconfirm", "--noprogressbar", *targets])
+
+
+def do_remove_all(local: set[str]) -> None:
+    m = members(local)
+    if META not in local and not m:
+        out("Nothing to remove: emulation is not installed.")
+        return
+    mark("--asdeps", m)
+    # name only members nothing else needs (fuse2 serves fex-emu too); -Rs cascades the rest
+    orphans = set(pacman_q("-Qdtq"))
+    targets = [p for p in (META, ALIAS) if p in local] + [p for p in m if p in orphans]
+    # ~/Emulation, ~/ES-DE and config dirs stay: a reinstall finds the user's settings as left
+    run_pacman(["-Rs", "--noconfirm", "--noprogressbar", *dict.fromkeys(targets)])
+
+
+def job(cmd: str, ids: list[str]) -> int:
+    need_root()
+    not_busy()
+    local, sync = set(pacman_q("-Qq")), set(pacman_q("-Slq"))
+    found = entries(local, sync)
+    ids = resolve(cmd, ids, found)
+    if cmd == "install":
+        do_install([p for i in ids for p in found[i]["packages"]])
+    elif cmd == "install-all":
+        do_install([META])
+    elif cmd == "remove":
+        do_remove(ids, found, local)
+    else:
+        do_remove_all(local)
+    progress(phase="done", text="Done", progress=1)
+    return OK
+
+
+def start(cmd: str, ids: list[str]) -> int:
+    need_root()
+    not_busy()
+    local, sync = set(pacman_q("-Qq")), set(pacman_q("-Slq"))
+    ids = resolve(cmd, ids, entries(local, sync))
+    os.execv(JOB, [JOB, "run", "store", "--", SELF, "job", cmd, *ids])
+
+
+USAGE_TEXT = ("usage: pocknix-store status --json | follow | install <id>... | remove <id>... "
+              "| install-all | remove-all")
+ROOT_COMMANDS = ("install", "remove", "install-all", "remove-all")
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    try:
+        if args == ["status", "--json"]:
+            return status()
+        if args == ["follow"]:
+            os.execv(JOB, [JOB, "follow", "store"])
+        if args[:1] and args[0] in ROOT_COMMANDS:
+            return start(args[0], args[1:])
+        if len(args) >= 2 and args[0] == "job" and args[1] in ROOT_COMMANDS:
+            return job(args[1], args[2:])
+    except Fail as e:
+        print(f"pocknix-store: {e}", file=sys.stderr, flush=True)
+        return e.code
+    print(USAGE_TEXT, file=sys.stderr)
+    return USAGE
+
+
+if __name__ == "__main__":
+    sys.exit(main())

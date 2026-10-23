@@ -1,0 +1,21 @@
+# pocknix-store - the Pocknix Store: one-tap install and removal of the optional pieces
+# (emulators, compatibility tools, network tools, streaming). QML on pocknix-ui plus one root CLI.
+pkgname=pocknix-store
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Pocknix Store: install and remove emulators and other optional extras"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('pocknix-ui' 'python' 'polkit')
+
+package() {
+  install -Dm755 "${startdir}/pocknix-store" "${pkgdir}/usr/bin/pocknix-store"
+  install -Dm644 "${startdir}/57-pocknix-store.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/57-pocknix-store.rules"
+  install -Dm644 "${startdir}/pocknix-store.desktop" \
+    "${pkgdir}/usr/share/applications/pocknix-store.desktop"
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix-store/qml" "${startdir}"/qml/*.qml
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix-store/catalogue.d" "${startdir}"/catalogue.d/*.conf
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix-store/icons" "${startdir}"/icons/*
+}

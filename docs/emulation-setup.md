@@ -2,7 +2,7 @@
 
 pocknix-os offers **ES-DE** as the frontend, with RetroArch and a few standalone emulators doing
 the work. It is "drop your files in and play": no per-emulator setup, and ES-DE plus every
-emulator get a tile in your Steam library when installed from Pocknix Tools.
+emulator can get a tile in your Steam library when installed from the Pocknix Store.
 
 ## Supported systems
 
@@ -31,12 +31,20 @@ emulator get a tile in your Steam library when installed from Pocknix Tools.
 
 ## Installing it
 
-Emulation is optional, so a fresh install does not have it. Switch to desktop mode, open
-**Pocknix Tools** and pick *Install the emulation layer (ES-DE + emulators)*. It is a large
-download; everything is ready when it finishes, with no restart or logout needed.
+Emulation is optional, so a fresh install does not have it. Open the **Pocknix Store** (desktop
+mode app menu) and either:
 
-The same entry removes the layer again. Your ROMs, BIOS files, saves and emulator settings stay
-where they are, so installing it again later picks up exactly where you left off.
+- **Install all**: ES-DE, Steam ROM Manager and every emulator, kept up to date as one set.
+- **Pick**: tap an emulator, then *Install*. Install only the ones you want; ES-DE is its own
+  entry.
+
+Every install runs a full system update first, so it can take a while; everything is ready when
+it finishes, with no restart or logout needed. Closing the store does not stop it, and opening it
+again shows the progress.
+
+Tap an installed emulator to *Remove* it, or use *Remove all*. Removing one emulator from an
+*Install all* set keeps the others installed. Your ROMs, BIOS files, saves and emulator settings
+stay where they are, so installing again later picks up exactly where you left off.
 
 ## Where your files go
 
@@ -62,7 +70,7 @@ The ROM directory can live anywhere, and ES-DE is the single source of truth. Go
 stay in `~/Emulation`.
 
 Steam ROM Manager, Dolphin, Cemu and Ryujinx were pointed at the ROM folder when they were set up, and
-keep the old one. Run *Restore emulator default settings* in **Pocknix Tools** for each of them
+keep the old one. In the **Pocknix Store**, tap each of them and pick *Restore default settings*
 (your old file is kept as a `.bak-<date>` copy), then *Add Games* and *Save to Steam* in Steam ROM
 Manager again so your game tiles use the new paths.
 
@@ -120,12 +128,13 @@ Once it is on, open one of these from the other computer:
 
 ## Getting games into Steam
 
-Installing emulation from Pocknix Tools also adds a tile to your Steam library for ES-DE, each
-emulator and Steam ROM Manager. If Steam cannot take new tiles right then (still starting, for
-example), Tools asks you to wait or close Steam, then tries again. Updates never add a tile or
-bring back one you deleted, and installing a single emulator with pacman adds none either: run
+After an install, the Pocknix Store offers to add a Steam tile for each new emulator (ES-DE and
+Steam ROM Manager included). Later, tap an installed emulator to switch its tile on or off, or use
+*Add Steam tiles* for all of them. If Steam cannot take new tiles right then (still starting, for
+example), wait or close Steam, then try again. Updates never add a tile or bring back one you
+deleted, and installing an emulator with pacman adds none either: run
 `pocknix-tiles enable <emulator>` from a desktop terminal (for example `pocknix-tiles enable
-dolphin`, or `esde` for ES-DE). That also removes ES-DE favourite tiles left by an older
+dolphin`, or `esde` for ES-DE). Adding tiles also removes ES-DE favourite tiles left by an older
 Pocknix. Removing an emulator removes its tile. The emulator tiles open the emulator's own menu
 with the normal controller layout. Menus built for a mouse (Dolphin, Azahar, Cemu, RPCS3) can be
 driven with Steam's mouse controls, or pick another layout for the tile in Steam; Steam keeps
@@ -155,8 +164,8 @@ It applies from the next switch to Desktop Mode, the tile included. Delete the f
 the automatic size.
 
 Avoid SRM's own emulator presets: they start the emulators directly and skip the Pocknix
-launch settings (CPU pinning, RetroArch frame pacing). *Restore emulator default settings* in
-Pocknix Tools also restores the Pocknix SRM parsers.
+launch settings (CPU pinning, RetroArch frame pacing). *Restore default settings* on Steam ROM
+Manager in the Pocknix Store restores the Pocknix SRM parsers.
 
 ## Tweaking individual emulator settings
 
@@ -174,9 +183,9 @@ Defaults are tuned for the RP6, but you can change per-emulator settings any tim
 
 Pocknix sets each emulator up once, the first time it is installed (an Eden or Ryujinx build you
 drop in: the first time it launches). After that the settings are
-yours: updates never change them. **Pocknix Tools** has a *Restore emulator default settings*
-entry that puts one emulator, or all of them, back to the current Pocknix defaults, keeping your
-old file as a `.bak-<date>` copy.
+yours: updates never change them. Tap an emulator in the **Pocknix Store** and pick *Restore
+default settings* to put it back to the current Pocknix defaults, keeping your old file as a
+`.bak-<date>` copy.
 
 ES-DE's system list and emulator lookup (`~/ES-DE/custom_systems/es_systems.xml` and
 `es_find_rules.xml`) are links to the Pocknix copies, so they stay in step with updates. To use

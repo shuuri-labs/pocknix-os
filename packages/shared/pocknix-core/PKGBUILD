@@ -2,7 +2,7 @@
 # layers stay out, or `pacman -Rs <layer>` becomes impossible.
 pkgname=pocknix-core
 pkgver=0.1.0
-pkgrel=6
+pkgrel=7
 pkgdesc="pocknix mandatory layer: GPU stack, input, storage, base/update tooling"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -17,6 +17,7 @@ depends=('mesa'                     # epoch-2 trimmed/tuned freedreno build ([po
          'pocknix-base-lock'
          'pocknix-lock-migrate'
          'pocknix-tools'
+         'pocknix-store'
          'pocknix-branding'         # plymouthd.conf names its theme on every device
          'pocknix-gamepad-calibration'  # boot replay of Pocknix Control's calibration; every family's pad driver takes one
          'pocknix-session')
