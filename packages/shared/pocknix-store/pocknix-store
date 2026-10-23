@@ -25,9 +25,9 @@ META = "pocknix-emulation-full"
 ALIAS = "pocknix-emulation"
 EMU = re.compile(r"pocknix-emu-[a-z0-9-]+")
 ID = re.compile(r"[a-z0-9][a-z0-9-]*")
-UNIT = re.compile(r"[a-z0-9][a-z0-9@._-]*\.service")
+UNIT = re.compile(r"[a-z0-9][a-z0-9@._-]*\.(service|socket)")
 SECTIONS = {"emulation": "Emulation", "compatibility": "Compatibility",
-            "network": "Network", "streaming": "Streaming"}
+            "network": "Network", "streaming": "Streaming", "desktop": "Desktop mode"}
 GENERIC_ICON = "applications-games"
 OK, ERROR, USAGE, BUSY = 0, 1, 2, 3
 
@@ -110,7 +110,7 @@ def entries(local: set[str], sync: set[str]) -> dict[str, dict]:
                           "description": c.get("description", ""), "icon": c.get("icon", ""),
                           "packages": pkgs, "tile": c.get("tile", ""),
                           "services": [u for u in c.get("services", "").split() if UNIT.fullmatch(u)],
-                          "setup": c.get("setup", "")}
+                          "setup": c.get("setup", ""), "note": c.get("note", "")}
     # A new emulator's glue package shows without a store update, under its package description.
     new = sorted(p for p in (sync | local) if EMU.fullmatch(p) and p not in claimed
                  and p[len("pocknix-emu-"):] not in found)
@@ -126,7 +126,7 @@ def entries(local: set[str], sync: set[str]) -> dict[str, dict]:
     for p in new:
         eid = p[len("pocknix-emu-"):]
         found[eid] = {"name": eid, "section": "emulation", "description": desc.get(p, ""),
-                      "icon": "", "packages": [p], "tile": eid, "services": [], "setup": ""}
+                      "icon": "", "packages": [p], "tile": eid, "services": [], "setup": "", "note": ""}
     return found
 
 
@@ -172,7 +172,7 @@ def status() -> int:
         tile = e["tile"] if on and tiles and e["tile"] and any(
             os.path.isfile(f"{d}/{e['tile']}.conf") for d in TILES) else ""
         rows.append({"id": eid, "name": e["name"], "section": e["section"],
-                     "description": e["description"], "icon": icon(e["icon"]),
+                     "description": e["description"], "icon": icon(e["icon"]), "note": e["note"],
                      "installed": on, "tile": tile, "reset": on and eid in reset})
     used = {r["section"] for r in rows}
     out(json.dumps({"mode": mode(found, local), "job": job_state(),
@@ -285,7 +285,9 @@ def do_install(pkgs: list[str]) -> None:
 
 
 def do_remove(ids: list[str], found: dict, local: set[str]) -> None:
-    targets = [p for i in ids for p in found[i]["packages"] if p in local]
+    # A package another installed entry lists stays (gnome-keyring serves every desktop).
+    kept = {p for i, e in found.items() if i not in ids and installed(e, local) for p in e["packages"]}
+    targets = [p for i in ids for p in found[i]["packages"] if p in local and p not in kept]
     if not targets:
         out("Nothing to remove: not installed.")
         return
