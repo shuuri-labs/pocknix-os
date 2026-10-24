@@ -89,7 +89,7 @@ Steam's own **Add a Non-Steam Game** dialog does not work on pocknix-os, so add 
 
 **Share my home folder** turns the device into a network share, so you can drag ROMs, BIOS files
 and emulator firmware onto it from another computer. The first time, it offers a small download.
-The same toggle is in **Pocknix Tools** on the desktop side.
+The same toggle is in **Pocknix Tools** → **Network**.
 
 > **There is no password.** Anyone on the same network can read and write your home folder, so
 > turn it off when you are done. See
@@ -118,8 +118,8 @@ System updates, without leaving game mode:
 3. Restart when it finishes to apply everything (**Restart Now** appears right there).
 
 The update keeps running even if you close the Quick Access menu - reopen the tab to check
-on progress. If you prefer, the same update is just `sudo pacman -Syu` in a terminal, or the
-**Pocknix Updater** shortcut in desktop mode.
+on progress. If you prefer, the same update is just `sudo pacman -Syu` in a terminal, or
+**Pocknix Tools** → **System** → **Update now**.
 
 ### Rolling back an update
 

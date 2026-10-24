@@ -1,18 +1,63 @@
 #!/bin/bash
-# pocknix-update — terminal system updater behind the "Pocknix Updater" Plasma entry.
-# Starts as the session user and re-execs itself through pkexec (passwordless for wheel via
-# 51-pocknix-update.rules). Always -Syu, never -Sy: a refreshed index on an un-upgraded
-# system is the partial-upgrade trap.
+# pocknix-update - the system updater. Always -Syu, never -Sy: a refreshed index on an
+# un-upgraded system is the partial-upgrade trap.
+#   pocknix-update            in a terminal: asks, then re-execs itself through pkexec
+#                             (passwordless for wheel via 51-pocknix-update.rules)
+#   pocknix-update --check    root: prints {"updates": [[name, from, to], ...]}. The index is
+#                             refreshed into a throwaway db, so the real one never runs ahead
+#   pocknix-update --gui      root: -Syu --noconfirm in the pocknix-job unit `update` (Pocknix Tools)
+#   pocknix-update --follow   re-attaches to a running --gui update
 set -euo pipefail
 
 SELF=/usr/bin/pocknix-update
+JOB=/usr/lib/pocknix-ui/pocknix-job
+PACMAN=/usr/lib/pocknix-ui/pocknix-pacman
 
-if [ "$(id -u)" = 0 ]; then
+die() { printf 'pocknix-update: %s\n' "$1" >&2; exit "${2:-1}"; }
+need_root() { [ "$(id -u)" = 0 ] || die "must run as root (pkexec pocknix-update $1)"; }
+
+rolling_note() {
   if ! grep -q '^\[pocknix-base\]' /etc/pacman.conf && [ -e /etc/pocknix/rolling-mode ]; then
     echo "bleeding-edge rolling mode: this is a live ALARM upgrade. pocknix-rollback"
     echo "undoes it; 'sudo pocknix-base locked' returns to the supported base."
     echo
   fi
+}
+
+check() {
+  local tmp rc=0
+  tmp="$(mktemp -d /tmp/pocknix-update-check.XXXXXX)"
+  # expanded now: at exit the local is gone
+  trap "rm -rf '${tmp}'" EXIT
+  ln -s /var/lib/pacman/local "${tmp}/local"
+  cp -a /var/lib/pacman/sync "${tmp}/" 2>/dev/null || true
+  LC_ALL=C pacman -Sy --dbpath "${tmp}" --logfile /dev/null >&2 || die "could not reach the package servers"
+  # -Qu exits 1 when nothing is out of date
+  LC_ALL=C pacman -Qu --dbpath "${tmp}" > "${tmp}/updates" 2>/dev/null || rc=$?
+  [ "${rc}" -le 1 ] || die "pacman -Qu failed (exit ${rc})"
+  awk 'BEGIN { printf "{\"updates\": [" }
+       $3 == "->" { printf "%s[\"%s\", \"%s\", \"%s\"]", (n++ ? ", " : ""), $1, $2, $4 }
+       END { print "]}" }' "${tmp}/updates"
+}
+
+case "${1:-}" in
+  --check)
+    need_root --check
+    check
+    exit 0 ;;
+  --gui)
+    need_root --gui
+    [ ! -e /var/lib/pacman/db.lck ] || die "another install or update is running" 3
+    rolling_note
+    exec "${JOB}" run update -- "${PACMAN}" -Syu --noconfirm ;;
+  --follow)
+    exec "${JOB}" follow update ;;
+  "") ;;
+  *) die "usage: pocknix-update [--check|--gui|--follow]" 2 ;;
+esac
+
+if [ "$(id -u)" = 0 ]; then
+  rolling_note
   exec pacman -Syu
 fi
 

@@ -100,7 +100,7 @@ Finder, Windows Explorer and Linux file managers - no extra software on either e
 Turn it on in either place:
 
 - **Game Mode**: Quick Access Menu → **Pocknix Control** → **Library** → *Share my home folder*
-- **Desktop**: **Pocknix Tools** → *File sharing (SMB) is off - turn it on...*
+- **Pocknix Tools** (game or desktop mode): **Network** → *File sharing (SMB)*
 
 The first time, you will be offered a small download (Samba is not shipped in the image, so
 devices that never share a file never pay for it). It then stays on across reboots until you
