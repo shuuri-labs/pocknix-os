@@ -1,0 +1,26 @@
+#!/bin/bash
+# pocknix-tools-run <step> - the Advanced tab's root steps, each in the pocknix-job unit `tools`:
+# closing Pocknix Tools (or Steam closing it) must never stop a bootloader write or a
+# repartition halfway. Only these exact commands; 58-pocknix-tools-run.rules lets wheel run it.
+#   abl | install-internal <android-gib> | uninstall-internal | rolling | locked   (root)
+#   follow                                                                     (re-attach)
+# Exit: the step's code, 1 error, 2 usage, 3 a step already running.
+set -euo pipefail
+
+JOB=/usr/lib/pocknix-ui/pocknix-job
+
+die() { printf 'pocknix-tools-run: %s\n' "$1" >&2; exit "${2:-1}"; }
+usage() { die "usage: pocknix-tools-run abl|install-internal <android-gib>|uninstall-internal|rolling|locked|follow" 2; }
+
+[ "${1:-}" != follow ] || exec "${JOB}" follow tools
+[ "$(id -u)" = 0 ] || die "must run as root (pkexec pocknix-tools-run $*)"
+case "${1:-}:$#" in
+  abl:1)                cmd=(/usr/bin/pocknix-update-abl --yes) ;;
+  install-internal:2)   [[ "$2" =~ ^[0-9]{1,4}$ ]] || usage
+                        cmd=(/usr/bin/pocknix-install-internal --yes --userdata-gib "$2") ;;
+  uninstall-internal:1) cmd=(/usr/bin/pocknix-uninstall-internal --yes) ;;
+  rolling:1)            cmd=(/usr/bin/pocknix-base rolling --yes) ;;
+  locked:1)             cmd=(/usr/bin/pocknix-base locked) ;;
+  *)                    usage ;;
+esac
+exec "${JOB}" run tools -- "${cmd[@]}"

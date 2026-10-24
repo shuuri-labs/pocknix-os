@@ -7,16 +7,16 @@ pkgdesc="Pocknix Tools: updates, snapshot rollback, SSH + file sharing, desktop 
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('pocknix-ui' 'pocknix-snapshots' 'pocknix-base' 'kdialog')
+depends=('pocknix-ui' 'pocknix-snapshots' 'pocknix-base')
 install=pocknix-tools.install
-source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui'
+source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-tools-run' '58-pocknix-tools-run.rules'
         'pocknix-install-internal' 'pocknix-uninstall-internal' '54-pocknix-installer.rules'
         'pocknix-internal-boot-rename' 'pocknix-internal-boot-rename.service'
         'pocknix-ssh' '53-pocknix-ssh.rules' '10-pocknix-no-root-login.conf'
         'pocknix-share' '55-pocknix-share.rules' 'smb.conf' 'pocknix-smb.service'
         'pocknix-layer' '56-pocknix-layer.rules')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 backup=('etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf'
         'etc/samba/smb.conf')
 
@@ -24,7 +24,9 @@ package() {
   install -Dm755 "${srcdir}/pocknix-tools" "${pkgdir}/usr/bin/pocknix-tools"
   install -Dm644 -t "${pkgdir}/usr/share/pocknix-tools/qml" "${startdir}"/qml/*.qml
   install -Dm644 -t "${pkgdir}/usr/share/pocknix/tiles" "${startdir}"/tiles/*.conf
-  install -Dm755 "${srcdir}/pocknix-installer-gui" "${pkgdir}/usr/bin/pocknix-installer-gui"
+  install -Dm755 "${srcdir}/pocknix-tools-run" "${pkgdir}/usr/bin/pocknix-tools-run"
+  install -Dm644 "${srcdir}/58-pocknix-tools-run.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/58-pocknix-tools-run.rules"
   install -Dm755 "${srcdir}/pocknix-install-internal" "${pkgdir}/usr/bin/pocknix-install-internal"
   install -Dm755 "${srcdir}/pocknix-uninstall-internal" "${pkgdir}/usr/bin/pocknix-uninstall-internal"
   # ROCKNIX->POCKNIX boot-partition migration, statically enabled via wants symlink

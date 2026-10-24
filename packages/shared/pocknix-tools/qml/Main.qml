@@ -69,6 +69,9 @@ AppWindow {
     DesktopPage {
         app: app
     }
+    AdvancedPage {
+        app: app
+    }
 
     ConfirmSheet {
         id: askSheet

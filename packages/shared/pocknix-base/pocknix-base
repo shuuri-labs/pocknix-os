@@ -90,8 +90,11 @@ case "${1:-status}" in
   returns fully to the supported state at any time.
 
 EOF
-    read -rp "  Type ROLL to continue: " a
-    [ "${a}" = "ROLL" ] || { echo "cancelled."; exit 0; }
+    # --yes: Pocknix Tools asked with a hold-to-confirm already
+    if [ "${2:-}" != --yes ]; then
+      read -rp "  Type ROLL to continue: " a
+      [ "${a}" = "ROLL" ] || { echo "cancelled."; exit 0; }
+    fi
     # both conf generators emit the section as header/SigLevel/Server, so the range is stable
     sed -i '/^\[pocknix-base\]$/,/^Server = /d' "${CONF}"
     cat >> "${CONF}" <<'EOF'
@@ -141,5 +144,5 @@ EOF
     "${MIGRATE}" converge
     ;;
 
-  *) die "usage: pocknix-base [status [--json]|rolling|locked]" ;;
+  *) die "usage: pocknix-base [status [--json]|rolling [--yes]|locked]" ;;
 esac

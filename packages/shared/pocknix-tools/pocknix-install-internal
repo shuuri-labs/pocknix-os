@@ -12,7 +12,7 @@
 # linux-pocknix-<soc>, deployed by pocknix-bsp-common's pacman hook), never re-run this.
 #
 # Usage: pocknix-install-internal [--dry-run] [--yes] [--userdata-gib N] [--device /dev/sdX]
-#        pocknix-install-internal --detect    # read-only probe: k=v state for pocknix-installer-gui
+#        pocknix-install-internal --detect    # read-only probe: k=v state for Pocknix Tools
 #
 # Device facts (disk, boot style, partition names) default to the RP6/SM8550 values and are
 # overridden by /usr/lib/pocknix/device.conf, then /etc/pocknix/device.conf.
@@ -76,7 +76,8 @@ fi
 
 ROOT_SRC="$(findmnt -no SOURCE / || true)"
 case "$ROOT_SRC" in
-  "$DEVICE"*) die "$DEVICE is the disk we booted from — that's the SD, not internal. Aborting." ;;
+  "$DEVICE"*) [ "$DETECT" = 1 ] && { echo "mode=internal"; exit 0; }
+              die "running from $DEVICE (internal storage): boot from the SD card to install or reinstall." ;;
 esac
 
 partdev() { case "$DEVICE" in *mmcblk*|*nvme*) echo "${DEVICE}p$1" ;; *) echo "${DEVICE}$1" ;; esac; }
