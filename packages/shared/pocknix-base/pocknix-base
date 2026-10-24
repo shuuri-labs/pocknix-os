@@ -57,8 +57,19 @@ status() {
   fi
 }
 
+# Package names and versions are plain ASCII words, so they need no JSON escaping.
+status_json() {
+  local version blocked=""
+  version="$(sed -n 's/^VERSION_ID=//p' /etc/os-release 2>/dev/null | tr -d '"')"
+  [ ! -f "${BLOCKED}" ] || blocked="$(paste -sd' ' "${BLOCKED}")"
+  printf '{"mode": "%s", "snapshot": "%s", "version": "%s", "blocked": "%s", "pending": %s, "foreign": [%s]}\n' \
+    "$(mode)" "$(snapshot_id || true)" "${version}" "${blocked}" \
+    "$([ -f "${PENDING}" ] && echo true || echo false)" \
+    "$(foreign | sed 's/.*/"&"/' | paste -sd, - | sed 's/,/, /g')"
+}
+
 case "${1:-status}" in
-  status) status ;;
+  status) if [ "${2:-}" = --json ]; then status_json; else status; fi ;;
 
   rolling)
     [ "$(id -u)" -eq 0 ] || die "must run as root (sudo pocknix-base rolling)"
@@ -130,5 +141,5 @@ EOF
     "${MIGRATE}" converge
     ;;
 
-  *) die "usage: pocknix-base [status|rolling|locked]" ;;
+  *) die "usage: pocknix-base [status [--json]|rolling|locked]" ;;
 esac

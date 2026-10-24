@@ -16,6 +16,7 @@ import time
 SHARE = "/usr/share/pocknix-store"
 TILES = ("/usr/share/pocknix-emulation/steam", "/usr/share/pocknix/tiles")
 JOB = "/usr/lib/pocknix-ui/pocknix-job"
+PACMAN = "/usr/lib/pocknix-ui/pocknix-pacman"
 SELF = "/usr/bin/pocknix-store"
 ROMS_INIT = "/usr/bin/pocknix-roms-init"
 TILES_CLI = "/usr/bin/pocknix-tiles"
@@ -219,53 +220,13 @@ def depends_of(pkg: str, local: set[str]) -> list[str]:
 
 def mark(how: str, pkgs: list[str]) -> None:
     if pkgs:
-        run_pacman(["-D", how, *pkgs], quiet=True)
+        run_pacman(["-D", how, "--quiet", *pkgs])
 
 
-class Progress:
-    """pacman --noprogressbar output -> POCKNIX progress lines. Download is the first half of the
-    bar (counted against `Packages (N)`), the transaction the second."""
-    STEP = re.compile(r"\((\d+)/(\d+)\) (installing|upgrading|reinstalling|downgrading|removing) (\S+)")
-    VERB = {"installing": "Installing", "upgrading": "Updating", "reinstalling": "Reinstalling",
-            "downgrading": "Installing", "removing": "Removing"}
-
-    def __init__(self):
-        self.total = 0
-        self.downloaded = 0
-
-    def feed(self, line: str) -> None:
-        m = re.match(r"Packages \((\d+)\)", line)
-        if m:
-            self.total = int(m.group(1))
-            return
-        if line.startswith(":: Synchronizing package databases"):
-            progress(phase="sync", text="Checking for updates", progress=None)
-        elif self.total and line.endswith(" downloading..."):
-            self.downloaded += 1
-            progress(phase="download", text=f"Downloading {min(self.downloaded, self.total)} of {self.total}",
-                     progress=0.5 * min(self.downloaded, self.total) / self.total)
-        elif line.startswith(":: Processing package changes"):
-            progress(phase="install", text="Installing", progress=0.5)
-        elif line.startswith(":: Running post-transaction hooks"):
-            progress(phase="hooks", text="Finishing up", progress=0.95)
-        elif (m := self.STEP.match(line)):
-            n, total = int(m.group(1)), int(m.group(2))
-            progress(phase="install", text=f"{self.VERB[m.group(3)]} {m.group(4)}",
-                     progress=0.5 + 0.45 * n / total)
-
-
-def run_pacman(args: list[str], quiet: bool = False) -> None:
+def run_pacman(args: list[str]) -> None:
     out("$ pacman " + " ".join(args))
-    p = subprocess.Popen(["pacman", *args], stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT, text=True, env=dict(os.environ, LC_ALL="C"))
-    prog = Progress()
-    for line in p.stdout:
-        line = line.rstrip("\n")
-        if not quiet:
-            out(line)
-        prog.feed(line)
-    if p.wait() != 0:
-        raise Fail(f"pacman {args[0]} failed (exit {p.returncode})")
+    if subprocess.run([PACMAN, *args]).returncode != 0:
+        raise Fail(f"pacman {args[0]} failed")
 
 
 def members(local: set[str]) -> list[str]:
@@ -281,7 +242,7 @@ def members(local: set[str]) -> list[str]:
 
 def do_install(pkgs: list[str]) -> None:
     # -Syu, never -Sy: a refreshed index on an un-upgraded system is the partial-upgrade trap.
-    run_pacman(["-Syu", "--needed", "--noconfirm", "--noprogressbar", *pkgs])
+    run_pacman(["-Syu", "--needed", "--noconfirm", *pkgs])
 
 
 def do_remove(ids: list[str], found: dict, local: set[str]) -> None:
@@ -300,7 +261,7 @@ def do_remove(ids: list[str], found: dict, local: set[str]) -> None:
             targets += [META] + ([ALIAS] if ALIAS in local else [])
     # explicit on devices fielded before the metas, which -Rs would keep
     mark("--asdeps", [d for p in targets if EMU.fullmatch(p) for d in depends_of(p, local) if d in local])
-    run_pacman(["-Rs", "--noconfirm", "--noprogressbar", *targets])
+    run_pacman(["-Rs", "--noconfirm", *targets])
 
 
 def do_remove_all(local: set[str]) -> None:
@@ -313,7 +274,7 @@ def do_remove_all(local: set[str]) -> None:
     orphans = set(pacman_q("-Qdtq"))
     targets = [p for p in (META, ALIAS) if p in local] + [p for p in m if p in orphans]
     # ~/Emulation, ~/ES-DE and config dirs stay: a reinstall finds the user's settings as left
-    run_pacman(["-Rs", "--noconfirm", "--noprogressbar", *dict.fromkeys(targets)])
+    run_pacman(["-Rs", "--noconfirm", *dict.fromkeys(targets)])
 
 
 def seat_user() -> str | None:

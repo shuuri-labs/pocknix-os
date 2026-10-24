@@ -59,7 +59,8 @@ Updates, kernel included, arrive through the pocknix package repo, with no refla
 
 - **Pocknix Control (recommended)**: Quick Access Menu → **Pocknix Control** → **Updater** →
   **Check for Updates** → **Install Updates**, without leaving game mode.
-- **Pocknix Updater**: in desktop mode, launch the **Pocknix Updater** app.
+- **Pocknix Tools**: **System** → **Check**, then **Update now**, in game mode (its tile in your
+  Steam library) or desktop mode.
 - **Terminal**: `sudo pacman -Syu`, like any Arch system.
 
 The Steam client updates itself separately and tells you when one is available. If an update goes

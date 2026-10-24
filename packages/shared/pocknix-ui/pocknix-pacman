@@ -1,0 +1,50 @@
+#!/usr/bin/python3
+# pocknix-pacman <pacman arguments> - pacman with its output passed through and POCKNIX progress
+# lines added for the app. Exits with pacman's code. Download fills the first half of the bar
+# (counted against `Packages (N)`), the transaction the second.
+import json
+import os
+import re
+import subprocess
+import sys
+
+STEP = re.compile(r"\((\d+)/(\d+)\) (installing|upgrading|reinstalling|downgrading|removing) (\S+)")
+VERB = {"installing": "Installing", "upgrading": "Updating", "reinstalling": "Reinstalling",
+        "downgrading": "Installing", "removing": "Removing"}
+
+
+def progress(**kw) -> None:
+    print("POCKNIX:" + json.dumps(kw), flush=True)
+
+
+def main() -> int:
+    # --noprogressbar: the bar is redrawn with \r, which the app shows as one long line
+    args = sys.argv[1:]
+    if args[:1] and args[0][:2] in ("-S", "-U", "-R"):
+        args.append("--noprogressbar")
+    p = subprocess.Popen(["pacman", *args], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, env=dict(os.environ, LC_ALL="C"))
+    total = downloaded = 0
+    for line in p.stdout:
+        line = line.rstrip("\n")
+        print(line, flush=True)
+        if (m := re.match(r"Packages \((\d+)\)", line)):
+            total = int(m.group(1))
+        elif line.startswith(":: Synchronizing package databases"):
+            progress(phase="sync", text="Checking for updates", progress=None)
+        elif total and line.endswith(" downloading..."):
+            downloaded = min(downloaded + 1, total)
+            progress(phase="download", text=f"Downloading {downloaded} of {total}",
+                     progress=0.5 * downloaded / total)
+        elif line.startswith(":: Processing package changes"):
+            progress(phase="install", text="Installing", progress=0.5)
+        elif line.startswith(":: Running post-transaction hooks"):
+            progress(phase="hooks", text="Finishing up", progress=0.95)
+        elif (m := STEP.match(line)):
+            progress(phase="install", text=f"{VERB[m.group(3)]} {m.group(4)}",
+                     progress=0.5 + 0.45 * int(m.group(1)) / int(m.group(2)))
+    return p.wait()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

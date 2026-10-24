@@ -1,9 +1,9 @@
 # pocknix-base — base-mode tooling for locked devices: the locked<->rolling
-# switch and the desktop updater.
+# switch and the system updater (Pocknix Tools runs it).
 pkgname=pocknix-base
 pkgver=0.2.0
-pkgrel=9
-pkgdesc="Locked/rolling base mode switch and desktop updater for pocknix"
+pkgrel=10
+pkgdesc="Locked/rolling base mode switch and system updater for pocknix"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
@@ -12,19 +12,16 @@ depends=('pacman' 'pocknix-base-lock')
 install=pocknix-base.install
 source=('pocknix-base'
         'pocknix-update'
-        'pocknix-update.desktop'
         '51-pocknix-update.rules'
         'pocknix-os-release'
         '50-pocknix-os-release.hook')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-base" "${pkgdir}/usr/bin/pocknix-base"
   # /usr/bin, not the old /usr/local path: that would file-conflict with the unowned
   # overlay copy on fielded devices (the scriptlet prunes it instead)
   install -Dm755 "${srcdir}/pocknix-update" "${pkgdir}/usr/bin/pocknix-update"
-  install -Dm644 "${srcdir}/pocknix-update.desktop" \
-    "${pkgdir}/usr/share/applications/pocknix-update.desktop"
   install -Dm644 "${srcdir}/51-pocknix-update.rules" \
     "${pkgdir}/usr/share/polkit-1/rules.d/51-pocknix-update.rules"
   install -Dm755 "${srcdir}/pocknix-os-release" "${pkgdir}/usr/lib/pocknix/pocknix-os-release"

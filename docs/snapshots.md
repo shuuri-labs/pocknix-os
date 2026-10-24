@@ -15,10 +15,10 @@ Three front-ends, one mechanism - pick whichever still works when things go wron
 - **Game mode (QAM):** Pocknix Control → Updater tab → **Roll Back Last Update**. The
   confirmation lists what gets restored; confirm, then **Reboot Now**. It only ever offers the
   last update.
-- **Desktop mode:** **Pocknix Tools** → *Roll back the last update...* lists every snapshot,
-  newest first; pick one, confirm, and it offers the reboot. Use this when Steam or the
-  plugin is what broke. Booted from the SD with Pocknix also on internal storage, *Roll back
-  the INTERNAL install...* does the same for the internal copy.
+- **Pocknix Tools** (game or desktop mode): **System** → *Roll back an update* lists every
+  snapshot, newest first; press and hold *Roll back* on one, and it offers the restart. Use this
+  when the plugin is what broke. Booted from the SD with Pocknix also on internal storage, an
+  *Internal install* list does the same for the internal copy.
 - **CLI (terminal/ssh):**
 
 ```bash

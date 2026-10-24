@@ -11,6 +11,7 @@ pocknix-ui/
   CMakeLists.txt
   pocknix-ui          /usr/bin wrapper: drops Steam's preload env, starts the host
   pocknix-job         /usr/lib/pocknix-ui/pocknix-job: pacman runs that outlive the app
+  pocknix-pacman      /usr/lib/pocknix-ui/pocknix-pacman: pacman with progress lines added
   host/               the host (main.cpp) and the C++ types Job and Host
   qml/Pocknix/Ui/     the Pocknix.Ui QML module, compiled into the host
 ```
@@ -45,7 +46,9 @@ agent, so a program without a rule cannot run at all.
 
 **pacman.** A root CLI never runs pacman as its own child. It calls
 `/usr/lib/pocknix-ui/pocknix-job run <name> -- <command>...`, which starts the transient unit
-`pocknix-job-<name>` under PID 1 and streams its log back. The command is usually the CLI itself,
-re-entered to do the transaction, so a multi-step change finishes as a whole. The app closing (or Steam closing it)
-then ends only the stream; the transaction finishes. `pocknix-job follow <name>` re-attaches
-without root, and `status --json` reports a running job so a reopened app knows to.
+`pocknix-job-<name>` under PID 1 and streams its log back. The command is usually the CLI
+itself, re-entered to do the transaction, so a multi-step change finishes as a whole. Every
+pacman transaction goes through `/usr/lib/pocknix-ui/pocknix-pacman`, which adds the progress
+lines. The app closing (or Steam closing it) then ends only the stream; the transaction
+finishes. `pocknix-job follow <name>` re-attaches without root, and `status --json` reports a
+running job so a reopened app knows to.

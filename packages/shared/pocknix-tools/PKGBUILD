@@ -1,13 +1,13 @@
-# pocknix-tools — the desktop maintenance app. It also ships the internal-install CLIs,
+# pocknix-tools - the Pocknix Tools app (QML on pocknix-ui). It also ships the internal-install CLIs,
 # which live here rather than in the image overlay so fixes reach fielded SDs on -Syu (#34).
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=22
-pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH + file sharing toggles, emulation layer, desktop picker"
+pkgrel=23
+pkgdesc="Pocknix Tools: updates, snapshot rollback, SSH + file sharing, desktop picker, internal install"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('pocknix-snapshots' 'pocknix-base' 'kdialog')
+depends=('pocknix-ui' 'pocknix-snapshots' 'pocknix-base' 'kdialog')
 install=pocknix-tools.install
 source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui'
         'pocknix-install-internal' 'pocknix-uninstall-internal' '54-pocknix-installer.rules'
@@ -22,6 +22,8 @@ backup=('etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf'
 
 package() {
   install -Dm755 "${srcdir}/pocknix-tools" "${pkgdir}/usr/bin/pocknix-tools"
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix-tools/qml" "${startdir}"/qml/*.qml
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix/tiles" "${startdir}"/tiles/*.conf
   install -Dm755 "${srcdir}/pocknix-installer-gui" "${pkgdir}/usr/bin/pocknix-installer-gui"
   install -Dm755 "${srcdir}/pocknix-install-internal" "${pkgdir}/usr/bin/pocknix-install-internal"
   install -Dm755 "${srcdir}/pocknix-uninstall-internal" "${pkgdir}/usr/bin/pocknix-uninstall-internal"
