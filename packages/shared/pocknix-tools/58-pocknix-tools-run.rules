@@ -1,0 +1,8 @@
+// Promptless pkexec of pocknix-tools-run for wheel: it runs only its fixed list of steps.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/pocknix-tools-run") {
+        return polkit.Result.YES;
+    }
+});
