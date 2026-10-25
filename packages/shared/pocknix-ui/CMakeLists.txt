@@ -12,7 +12,7 @@ target_include_directories(pocknix-ui-host PRIVATE host)
 set(QML_FILES
     qml/Pocknix/Ui/Theme.qml
     qml/Pocknix/Ui/AppWindow.qml
-    qml/Pocknix/Ui/TabStrip.qml
+    qml/Pocknix/Ui/NavRail.qml
     qml/Pocknix/Ui/TabPage.qml
     qml/Pocknix/Ui/Tile.qml
     qml/Pocknix/Ui/ActionRow.qml

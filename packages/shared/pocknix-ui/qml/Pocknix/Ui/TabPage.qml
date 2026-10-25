@@ -8,6 +8,8 @@ import Pocknix.Ui
 Flickable {
     id: page
     property string title
+    // theme icon name for the rail
+    property string icon
     default property alias content: column.data
 
     contentWidth: width

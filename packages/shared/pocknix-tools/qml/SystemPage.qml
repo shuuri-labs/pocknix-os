@@ -7,6 +7,7 @@ TabPage {
     id: page
     property var app
     title: qsTr("System")
+    icon: "system-software-update-symbolic"
 
     property var base: ({})
     // null = not checked yet; else [[name, from, to], ...]

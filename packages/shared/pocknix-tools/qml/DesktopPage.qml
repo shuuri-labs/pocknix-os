@@ -7,6 +7,7 @@ TabPage {
     id: page
     property var app
     title: qsTr("Desktop")
+    icon: "monitor-symbolic"
 
     // pocknix-desktop-select list: name TAB label TAB active|""
     property var desktops: []

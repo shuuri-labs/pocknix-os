@@ -26,6 +26,8 @@ never changes.
 - Wayland in both sessions. Under gamescope the app runs fullscreen without decorations at the
   board's `POCKNIX_DESKTOP_SCALE` (the wrapper reads device.conf) and Plasma's 10pt font, so it
   reads the same in both sessions. `QT_SCALE_FACTOR` in the environment wins.
+- An app is an `AppWindow` whose `TabPage` children are its pages, listed in a left rail with
+  each page's `title` and `icon` (a `-symbolic` theme name: only those draw in the rail's tint).
 - Controls use Qt's Basic style, coloured from `Theme.qml` through the window palette. A reskin
   edits `Theme.qml` (and the components), never a CLI.
 

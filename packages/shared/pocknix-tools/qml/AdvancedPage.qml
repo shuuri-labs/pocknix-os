@@ -7,6 +7,7 @@ TabPage {
     id: page
     property var app
     title: qsTr("Advanced")
+    icon: "configure-symbolic"
 
     readonly property string runner: "/usr/bin/pocknix-tools-run"
     // key=value probes: pocknix-update-abl --status, pocknix-install-internal --detect

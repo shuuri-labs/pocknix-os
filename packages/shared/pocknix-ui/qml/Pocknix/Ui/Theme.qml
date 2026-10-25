@@ -12,6 +12,7 @@ QtObject {
     readonly property color textMuted: "#9aa2b1"
     readonly property color accent: "#3d8bfd"
     readonly property color accentText: "#ffffff"
+    readonly property color accentSoft: Qt.rgba(accent.r, accent.g, accent.b, 0.3)
     readonly property color positive: "#3fb97a"
     readonly property color warning: "#e9a23b"
     readonly property color negative: "#e5534b"
@@ -23,6 +24,7 @@ QtObject {
     // Never below 48 logical px, the smallest target a thumb hits reliably (Material's minimum).
     readonly property real touchTarget: Math.max(48, unit * 2.75)
     readonly property real tileWidth: unit * 9
+    readonly property real railWidth: unit * 5.5
     readonly property real iconSize: Kirigami.Units.iconSizes.large
     readonly property real fontSize: Kirigami.Theme.defaultFont.pointSize
     readonly property real titleFontSize: fontSize * 1.3
