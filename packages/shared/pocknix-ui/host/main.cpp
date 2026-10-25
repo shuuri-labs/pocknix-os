@@ -1,31 +1,15 @@
 // pocknix-ui-host <app> | <path/to/Main.qml> - started through the pocknix-ui wrapper only.
-#include <QByteArray>
 #include <QFileInfo>
+#include <QFont>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QRegularExpression>
-#include <QScreen>
 #include <QStandardPaths>
 #include <QUrl>
 
-#include <cmath>
 #include <cstdio>
-#include <unistd.h>
-
-// 1x = 160 dpi, Android's baseline density. Without a physical size the short side counts as
-// 540 logical pixels.
-static qreal gamescopeScale(const QScreen *screen)
-{
-    if (!screen)
-        return 1.0;
-    const QSizeF mm = screen->physicalSize();
-    const qreal f = mm.width() >= 40 && mm.height() >= 40
-        ? screen->physicalDotsPerInch() / 160.0
-        : qMin(screen->size().width(), screen->size().height()) / 540.0;
-    return qMax(1.0, std::round(f * 4) / 4);
-}
 
 int main(int argc, char *argv[])
 {
@@ -69,13 +53,11 @@ int main(int argc, char *argv[])
     if (QIcon::themeName().isEmpty() || QIcon::themeName() == u"hicolor")
         QIcon::setThemeName(QStringLiteral("breeze-dark"));
 
-    // gamescope reports scale 1, and Qt reads QT_SCALE_FACTOR only at startup: set it, start over.
-    if (gamescope && qEnvironmentVariableIsEmpty("QT_SCALE_FACTOR")) {
-        const qreal f = gamescopeScale(app.primaryScreen());
-        if (f > 1.0) {
-            qputenv("QT_SCALE_FACTOR", QByteArray::number(f));
-            execv("/proc/self/exe", argv);
-        }
+    // No platform theme under gamescope: match Plasma's default 10pt instead of fontconfig's 9.
+    if (gamescope) {
+        QFont font = QGuiApplication::font();
+        font.setPointSizeF(10);
+        QGuiApplication::setFont(font);
     }
 
     QQmlApplicationEngine engine;

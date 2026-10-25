@@ -1,4 +1,12 @@
 #!/bin/sh
 # pocknix-ui <app> - start a Pocknix touch app (store, tools). A Steam tile hands its children
 # the overlay preload, which a binary cannot drop for itself once loaded.
+# Under gamescope the app takes the board's desktop scale, so it reads the same in game mode and
+# desktop mode: the size gamescope reports is a fake tuned for Steam's own UI.
+if [ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" ] && [ -z "${QT_SCALE_FACTOR:-}" ]; then
+  for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
+    [ -r "${_dc}" ] && . "${_dc}"
+  done
+  export QT_SCALE_FACTOR="${POCKNIX_DESKTOP_SCALE:-2.5}"
+fi
 exec env -u LD_PRELOAD -u LD_LIBRARY_PATH /usr/lib/pocknix-ui/pocknix-ui-host "$@"
