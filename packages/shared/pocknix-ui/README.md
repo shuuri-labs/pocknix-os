@@ -23,8 +23,9 @@ folder and stays `arch=any`. `pocknix-ui path/to/Main.qml` loads a file directly
 device. Steam tiles run `pocknix-ui <app>`: a tile's command is its identity in Steam, so it
 never changes.
 
-- Wayland in both sessions. Under gamescope the app runs fullscreen without decorations and
-  sets its own scale (gamescope reports 1); `QT_SCALE_FACTOR` in the environment wins.
+- Wayland in both sessions. Under gamescope the app runs fullscreen without decorations at the
+  board's `POCKNIX_DESKTOP_SCALE` (the wrapper reads device.conf) and Plasma's 10pt font, so it
+  reads the same in both sessions. `QT_SCALE_FACTOR` in the environment wins.
 - Controls use Qt's Basic style, coloured from `Theme.qml` through the window palette. A reskin
   edits `Theme.qml` (and the components), never a CLI.
 

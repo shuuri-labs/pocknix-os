@@ -157,7 +157,7 @@ leaves it unset); otherwise it says what a board without the key gets. Keys:
 | `POCKNIX_PANEL_W` / `POCKNIX_PANEL_H` / `POCKNIX_PANEL_REFRESH` | pocknix-steam, pocknix-roms-init (refresh also: es-retroarch) | required | gamescope -W/-H/-r |
 | `POCKNIX_PANEL_ORIENT` | pocknix-steam, pocknix-roms-init | required | gamescope --force-orientation |
 | `POCKNIX_PANEL_MM` | pocknix-steam | required | GAMESCOPE_FAKE_OUTPUT_MM (gamepadui DPI; deliberately faked on small panels) |
-| `POCKNIX_DESKTOP_ROTATE` / `POCKNIX_DESKTOP_SCALE` | pocknix-desktop-rotate | required | kscreen-doctor rotation/scale (seeded once per user; env re-forces) |
+| `POCKNIX_DESKTOP_ROTATE` / `POCKNIX_DESKTOP_SCALE` | pocknix-desktop-rotate (scale also: pocknix-ui) | required | kscreen-doctor rotation/scale (seeded once per user; env re-forces); the touch apps' scale in game mode |
 | `POCKNIX_BOARD_UNKNOWN` | pocknix-desktop-rotate | board known (only the fallback branch sets it) | set by the device.conf fallback branch: board not in the list, do not force guessed values |
 | `POCKNIX_PANEL_OUTPUT` | pocknix-steam, pocknix-desktop, pocknix-desktop-rotate, pocknix-desktop-touchpin | single panel, first DSI | DRM connector of the main panel (`DSI-2`); gamescope `--prefer-output`, the desktop seed's output |
 | `POCKNIX_PANEL_ROTATE_SHADER` | pocknix-steam | rotation autodetected | `1` = gamescope `--force-composition-rotation`: required for a panel past the DPU rotator's 1088-line cap, which otherwise scans out black |
