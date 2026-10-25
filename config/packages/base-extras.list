@@ -6,10 +6,7 @@
 tailscale
 wireguard-tools      # no openresolv for wg-quick DNS: conflicts with the base's systemd-resolvconf
 
-# --- file sharing ---
-samba
-
-# --- emulation layer (opt-in: no image installs it, Pocknix Tools does) ---
+# --- emulation layer (opt-in: no image installs it, the Pocknix Store does) ---
 # Its ALARM deps, plus those of the old emulator source builds. Derive changes from an orphan
 # set on a device, not from the snapshot guard: that reads the metas' and their glue packages'
 # depends= only, never the emulators' own.
