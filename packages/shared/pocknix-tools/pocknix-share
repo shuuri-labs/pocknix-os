@@ -1,6 +1,7 @@
 #!/bin/bash
-# pocknix-share - SMB share on/off. status stays unprivileged (the menu polls it every draw);
-# the rest arrives via pkexec under 55-pocknix-share.rules.
+# pocknix-share - SMB share on/off, login as deck with deck's password. status stays
+# unprivileged (the menu polls it every draw); the rest arrives via pkexec under
+# 55-pocknix-share.rules.
 set -euo pipefail
 
 # smb.service alone defines the state; the Decky plugin reads its enable symlink, so consulting
@@ -11,10 +12,13 @@ UNITS=(smb.service avahi-daemon.service)
 # exist in Arch's samba; listing it is harmless and survives it appearing.
 SOCKETS=(smb.socket avahi-daemon.socket)
 
-# guest_account in smb.conf; kept in sync by hand because smb.conf ships alongside this.
+# valid users in smb.conf; kept in sync by hand because smb.conf ships alongside this.
 SHARE_USER=deck
+# Samba keeps its own password copy (Linux stores a hash Samba cannot use). This marker says one
+# was set from deck's login password, readable without root for status.
+PASSWORD_SET=/var/lib/pocknix/share-password-set
 
-# Samba is an opt-in base extra, not in any image: devices that never share carry none of it.
+# pocknix-tools depends on samba; `install` stays for Pocknix Control's install button.
 is_installed() { command -v smbd >/dev/null 2>&1; }
 
 is_on() {
@@ -24,20 +28,24 @@ is_on() {
 
 need_root() { [ "$(id -u)" -eq 0 ] || { echo "pocknix-share: must run as root" >&2; exit 1; }; }
 
-# Guest-only, but deck must EXIST in passdb or every write is refused at smb2_create: the
-# guest token keeps the Guest SID and the synthesised ACL grants write to the owner SID only.
-# The password is random and discarded so nobody can authenticate AS deck over SMB.
-ensure_passdb() {
-  pdbedit -L 2>/dev/null | cut -d: -f1 | grep -qx "${SHARE_USER}" && return 0
+# One line on stdin, checked against deck's login (unix_chkpwd, as the login screen does), so the
+# share password is always the account password at the time sharing was turned on.
+set_password() {
   local pw
-  pw="$(head -c 18 /dev/urandom | base64)"
+  IFS= read -r pw || true
+  [ -n "${pw}" ] || { echo "pocknix-share: no password given" >&2; exit 2; }
+  printf '%s\0' "${pw}" | /usr/bin/unix_chkpwd "${SHARE_USER}" nullok \
+    || { echo "pocknix-share: that is not ${SHARE_USER}'s password" >&2; exit 1; }
   printf '%s\n%s\n' "${pw}" "${pw}" | smbpasswd -a -s "${SHARE_USER}" >/dev/null
+  install -d /var/lib/pocknix
+  : > "${PASSWORD_SET}"
 }
 
 case "${1:-status}" in
   status)
     is_installed && echo "installed=yes" || echo "installed=no"
     is_on && echo "state=on" || echo "state=off"
+    [ -e "${PASSWORD_SET}" ] && echo "password=yes" || echo "password=no"
     echo "active=$(systemctl is-active smb.service 2>/dev/null || true)"
     ;;
   install)
@@ -51,7 +59,12 @@ case "${1:-status}" in
   on)
     need_root
     is_installed || { echo "pocknix-share: samba is not installed" >&2; exit 3; }
-    ensure_passdb
+    if [ "${2:-}" = --password-stdin ]; then
+      set_password
+    elif [ ! -e "${PASSWORD_SET}" ]; then
+      echo "pocknix-share: set the sharing password in Pocknix Tools (Network) first" >&2
+      exit 1
+    fi
     systemctl enable --now "${UNITS[@]}" >/dev/null
     echo "state=on"
     ;;
@@ -70,7 +83,7 @@ case "${1:-status}" in
     echo "state=off"
     ;;
   *)
-    echo "usage: pocknix-share {status|install|on|off}" >&2
+    echo "usage: pocknix-share {status|install|on [--password-stdin]|off}" >&2
     exit 2
     ;;
 esac

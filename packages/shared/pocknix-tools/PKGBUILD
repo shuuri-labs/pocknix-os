@@ -7,7 +7,7 @@ pkgdesc="Pocknix Tools: updates, snapshot rollback, SSH + file sharing, desktop 
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('pocknix-ui' 'pocknix-snapshots' 'pocknix-base')
+depends=('pocknix-ui' 'pocknix-snapshots' 'pocknix-base' 'samba')
 install=pocknix-tools.install
 source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-tools-run' '58-pocknix-tools-run.rules' 'pocknix-wg-import'
         'pocknix-install-internal' 'pocknix-uninstall-internal' '54-pocknix-installer.rules'
