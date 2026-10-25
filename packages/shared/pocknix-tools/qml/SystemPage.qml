@@ -30,16 +30,12 @@ TabPage {
         snapJob.start(["/usr/bin/pocknix-rollback", "--list"])
     }
     function update() {
-        const kernel = (updates || []).some(u => u[0].startsWith("linux-pocknix"))
         app.run(qsTr("Updating"), ["/usr/bin/pocknix-update", "--gui"], { root: true, detached: true }, code => {
             refresh()
             if (code !== 0)
                 return
             updates = []
-            if (kernel)
-                app.askReboot(qsTr("Updated"), qsTr("The update includes a new kernel. Restart to use it."))
-            else
-                app.notice(qsTr("Updated"), qsTr("Pocknix is up to date."))
+            kernelJob.start(["/usr/bin/test", "-e", "/run/pocknix/reboot-required"])
         })
     }
     function rollback(s, flag) {
@@ -69,6 +65,16 @@ TabPage {
         updateState.start([app.jobRunner, "status", "update"])
     }
 
+    // The snapshot hook marks an update that changed the kernel, Check run first or not.
+    Job {
+        id: kernelJob
+        onFinished: code => {
+            if (code === 0)
+                page.app.askReboot(qsTr("Updated"), qsTr("The update includes a new kernel. Restart to use it."))
+            else
+                page.app.notice(qsTr("Updated"), qsTr("Pocknix is up to date."))
+        }
+    }
     Job {
         id: baseJob
         onFinished: code => {

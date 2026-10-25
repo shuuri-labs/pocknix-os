@@ -303,9 +303,21 @@ TabPage {
         }
     }
     ActionRow {
+        id: shareRow
         title: qsTr("File sharing (SMB)")
-        description: page.share.state === "on" ? qsTr("On: sign in as deck with deck's password. Changed that password? Turn sharing off and on again.")
+        // On from before sign-in passwords: Samba refuses every login until one is set.
+        readonly property bool noPassword: page.share.state === "on" && page.share.password !== "yes"
+        description: noPassword ? qsTr("On, but nobody can sign in yet: set the sharing password.")
+            : page.share.state === "on" ? qsTr("On: sign in as deck with deck's password. Changed that password? Turn sharing off and on again.")
             : qsTr("Off")
+        QQC2.Button {
+            visible: shareRow.noPassword
+            implicitHeight: Theme.touchTarget
+            text: qsTr("Set password")
+            palette.button: Theme.accent
+            palette.buttonText: Theme.accentText
+            onClicked: shareSheet.open()
+        }
         QQC2.Switch {
             checkable: false
             checked: page.share.state === "on"
