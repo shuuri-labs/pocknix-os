@@ -21,6 +21,13 @@ AppWindow {
     // ids whose install note to show once the status after an install is in
     property var offerNotes: []
     property var pending: null
+    // Replaced only when the sections change, so a refresh after each action keeps the pages.
+    property var sections: []
+    readonly property var sectionIcons: ({
+        emulation: "input-gamepad-symbolic", compatibility: "system-run-symbolic",
+        network: "network-vpn-symbolic", streaming: "media-playback-start-symbolic",
+        desktop: "monitor-symbolic"
+    })
 
     function refresh() {
         statusJob.start([cli, "status", "--json"])
@@ -116,6 +123,8 @@ AppWindow {
             if (code === 0) {
                 try {
                     app.store = JSON.parse(output)
+                    if (JSON.stringify(app.store.sections) !== JSON.stringify(app.sections))
+                        app.sections = app.store.sections
                 } catch (e) {
                     console.warn("pocknix-store status:", e)
                 }
@@ -197,117 +206,127 @@ AppWindow {
                                        code === 0 ? qsTr("%1 starts with the Pocknix defaults.").arg(name) : error)
     }
 
-    TabPage {
-        title: qsTr("Store")
+    // One page per section. Until the status is in (or when it lists nothing) a single page
+    // holds the message, so the rail stays hidden.
+    Repeater {
+        model: app.sections.length > 0 ? app.sections : [{ id: "", name: qsTr("Store") }]
 
-        QQC2.Label {
-            visible: !app.loaded
-            text: qsTr("Loading…")
-            color: Theme.textMuted
-        }
-        QQC2.Label {
-            Layout.fillWidth: true
-            visible: app.loaded && app.store.entries.length === 0
-            text: qsTr("Nothing to show. Run an update first: the store lists what the Pocknix repository offers.")
-            color: Theme.textMuted
-            wrapMode: Text.WordWrap
-        }
+        TabPage {
+            id: section
+            required property var modelData
+            readonly property bool emulation: modelData.id === "emulation"
+            readonly property var tiles: app.installedTiles(modelData.id)
 
-        Repeater {
-            model: app.store.sections
+            title: modelData.name
+            icon: app.sectionIcons[modelData.id] || "applications-other-symbolic"
+
+            QQC2.Label {
+                visible: section.modelData.id === ""
+                Layout.fillWidth: true
+                text: !app.loaded ? qsTr("Loading…")
+                    : qsTr("Nothing to show. Run an update first: the store lists what the Pocknix repository offers.")
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
+            }
 
             ColumnLayout {
-                id: section
-                required property var modelData
-                readonly property bool emulation: modelData.id === "emulation"
-                readonly property var tiles: app.installedTiles(modelData.id)
+                visible: section.modelData.id !== ""
+                Layout.fillWidth: true
+                spacing: 0
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: section.modelData.name
+                    font.bold: true
+                    font.pointSize: Theme.titleFontSize
+                }
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    visible: section.emulation
+                    text: app.store.mode === "all" ? qsTr("Everything installed as one set")
+                        : app.store.mode === "pick" ? qsTr("Your pick of emulators")
+                        : qsTr("Nothing installed yet")
+                    color: Theme.textMuted
+                    font.pointSize: Theme.smallFontSize
+                }
+            }
 
+            // A Flow, so the actions wrap on a narrow panel instead of squeezing the title.
+            Flow {
+                Layout.fillWidth: true
+                visible: installAll.visible || addTiles.visible
+                spacing: Theme.spacing
+
+                QQC2.Button {
+                    id: installAll
+                    visible: section.emulation && app.store.mode !== "all"
+                    enabled: !actionJob.running
+                    implicitHeight: Theme.touchTarget
+                    text: qsTr("Install all")
+                    palette.button: Theme.accent
+                    palette.buttonText: Theme.accentText
+                    onClicked: app.ask({
+                        title: qsTr("Install all emulation?"),
+                        text: qsTr("ES-DE, Steam ROM Manager and every emulator, kept up to date as one set. A large download with a full system update."),
+                        confirmText: qsTr("Install all"),
+                        yes: () => app.act("install-all", [], qsTr("Installing emulation"))
+                    })
+                }
+                QQC2.Button {
+                    id: addTiles
+                    visible: section.tiles.length > 0
+                    enabled: !tilesJob.running
+                    implicitHeight: Theme.touchTarget
+                    text: qsTr("Add Steam tiles")
+                    onClicked: app.addTiles(section.tiles)
+                }
+            }
+
+            Flow {
                 Layout.fillWidth: true
                 spacing: Theme.spacing
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Theme.spacing
-                    spacing: Theme.spacing
+                Repeater {
+                    model: app.inSection(section.modelData.id)
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-                        QQC2.Label {
-                            Layout.fillWidth: true
-                            text: section.modelData.name
-                            font.bold: true
-                            font.pointSize: Theme.titleFontSize
+                    Tile {
+                        required property var modelData
+                        icon: modelData.icon
+                        title: modelData.name
+                        subtitle: modelData.description
+                        badge: modelData.installed ? qsTr("Installed") : ""
+                        badgeTone: "positive"
+                        busy: actionJob.running && (app.acting.includes(modelData.id)
+                            || (app.actingKind.endsWith("-all") && section.emulation))
+                        onClicked: {
+                            sheet.entry = modelData
+                            sheet.open()
                         }
-                        QQC2.Label {
-                            Layout.fillWidth: true
-                            visible: section.emulation
-                            text: app.store.mode === "all" ? qsTr("Everything installed as one set")
-                                : app.store.mode === "pick" ? qsTr("Your pick of emulators")
-                                : qsTr("Nothing installed yet")
-                            color: Theme.textMuted
-                            font.pointSize: Theme.smallFontSize
-                        }
-                    }
-                    QQC2.Button {
-                        visible: section.tiles.length > 0
-                        enabled: !tilesJob.running
-                        implicitHeight: Theme.touchTarget
-                        text: qsTr("Add Steam tiles")
-                        onClicked: app.addTiles(section.tiles)
-                    }
-                    QQC2.Button {
-                        visible: section.emulation && app.store.mode !== "none"
-                        enabled: !actionJob.running
-                        implicitHeight: Theme.touchTarget
-                        text: qsTr("Remove all")
-                        onClicked: app.ask({
-                            title: qsTr("Remove all emulation?"),
-                            text: qsTr("ES-DE, Steam ROM Manager and every emulator are uninstalled, with their Steam tiles. Your ROMs, BIOS files, saves and settings are kept, so installing again brings everything back as it was."),
-                            confirmText: qsTr("Remove all"),
-                            hold: true,
-                            danger: true,
-                            yes: () => app.act("remove-all", [], qsTr("Removing emulation"))
-                        })
-                    }
-                    QQC2.Button {
-                        visible: section.emulation && app.store.mode !== "all"
-                        enabled: !actionJob.running
-                        implicitHeight: Theme.touchTarget
-                        text: qsTr("Install all")
-                        palette.button: Theme.accent
-                        palette.buttonText: Theme.accentText
-                        onClicked: app.ask({
-                            title: qsTr("Install all emulation?"),
-                            text: qsTr("ES-DE, Steam ROM Manager and every emulator, kept up to date as one set. A large download with a full system update."),
-                            confirmText: qsTr("Install all"),
-                            yes: () => app.act("install-all", [], qsTr("Installing emulation"))
-                        })
                     }
                 }
+            }
 
-                Flow {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacing
+            // Kept apart from Install all, at the end of the page: the one action here that takes
+            // the whole section away.
+            ActionRow {
+                visible: section.emulation && app.store.mode !== "none"
+                Layout.topMargin: Theme.spacing * 2
+                title: qsTr("Remove all emulation")
+                description: qsTr("Your ROMs, BIOS files, saves and settings are kept.")
 
-                    Repeater {
-                        model: app.inSection(section.modelData.id)
-
-                        Tile {
-                            required property var modelData
-                            icon: modelData.icon
-                            title: modelData.name
-                            subtitle: modelData.description
-                            badge: modelData.installed ? qsTr("Installed") : ""
-                            badgeTone: "positive"
-                            busy: actionJob.running && (app.acting.includes(modelData.id)
-                                || (app.actingKind.endsWith("-all") && section.emulation))
-                            onClicked: {
-                                sheet.entry = modelData
-                                sheet.open()
-                            }
-                        }
-                    }
+                QQC2.Button {
+                    enabled: !actionJob.running
+                    implicitHeight: Theme.touchTarget
+                    text: qsTr("Remove all")
+                    palette.button: Theme.negative
+                    palette.buttonText: Theme.accentText
+                    onClicked: app.ask({
+                        title: qsTr("Remove all emulation?"),
+                        text: qsTr("ES-DE, Steam ROM Manager and every emulator are uninstalled, with their Steam tiles. Your ROMs, BIOS files, saves and settings are kept, so installing again brings everything back as it was."),
+                        confirmText: qsTr("Remove all"),
+                        hold: true,
+                        danger: true,
+                        yes: () => app.act("remove-all", [], qsTr("Removing emulation"))
+                    })
                 }
             }
         }
