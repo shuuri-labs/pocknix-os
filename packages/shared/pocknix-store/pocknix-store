@@ -2,12 +2,15 @@
 # pocknix-store status --json | follow                      (as the user)
 # pocknix-store install|remove <id>... | install-all | remove-all   (root, via pkexec)
 # pocknix-store adopt [--later]                                     (root, the alpm hook)
+# pocknix-store setup <id>       (root) the entry's setup step again: tailscale logout clears the
+#                                operator, and Pocknix Tools restores it before signing in
 # Root commands take catalogue ids, never package names: the polkit rule allows this program with
 # any arguments, so the ids are the allowlist. pacman runs in the pocknix-job unit `store`, which
 # re-enters this program as `job <command> <id>...` and resolves the ids again there.
 # Exit: 0 done, 1 error, 2 usage or unknown id, 3 busy (a store job or another pacman is running).
 import json
 import os
+import pwd
 import re
 import subprocess
 import sys
@@ -290,7 +293,8 @@ def seat_user() -> str | None:
 
 def setup_tailscale_operator() -> None:
     # The user then runs tailscale up/down/login (Pocknix Tools) without root.
-    user = seat_user()
+    uid = os.environ.get("PKEXEC_UID", "")
+    user = pwd.getpwuid(int(uid)).pw_name if uid.isdigit() else seat_user()
     if not user:
         out("No signed-in user: run `sudo tailscale set --operator=<you>` later.")
         return
@@ -311,6 +315,19 @@ def services(ids: list[str], found: dict, on: bool) -> None:
         out(f"$ systemctl {'enable' if on else 'disable'} --now {u}")
         if subprocess.run(["systemctl", "enable" if on else "disable", "--now", u]).returncode != 0 and on:
             raise Fail(f"{u} did not start")
+
+
+def setup(eid: str) -> int:
+    need_root()
+    local, sync = set(pacman_q("-Qq")), set(pacman_q("-Slq"))
+    found = entries(local, sync)
+    resolve("setup", [eid], found)
+    e = found[eid]
+    if not installed(e, local) or e["setup"] not in SETUP:
+        raise Fail(f"{eid}: not installed, or no setup step", USAGE)
+    services([eid], found, on=True)
+    SETUP[e["setup"]]()
+    return OK
 
 
 def job(cmd: str, ids: list[str]) -> int:
@@ -374,7 +391,7 @@ def start(cmd: str, ids: list[str]) -> int:
 
 
 USAGE_TEXT = ("usage: pocknix-store status --json | follow | install <id>... | remove <id>... "
-              "| install-all | remove-all | adopt [--later]")
+              "| install-all | remove-all | adopt [--later] | setup <id>")
 ROOT_COMMANDS = ("install", "remove", "install-all", "remove-all")
 
 
@@ -385,6 +402,8 @@ def main() -> int:
             return status()
         if args == ["follow"]:
             os.execv(JOB, [JOB, "follow", "store"])
+        if len(args) == 2 and args[0] == "setup":
+            return setup(args[1])
         if args in (["adopt"], ["adopt", "--later"]):
             return adopt(later=len(args) == 2)
         if args[:1] and args[0] in ROOT_COMMANDS:

@@ -1,5 +1,7 @@
+import QtCore
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Pocknix.Ui
 
@@ -12,6 +14,21 @@ TabPage {
     property var ssh: ({})
     property var share: ({})
     property string addresses: ""
+    // which of tailscale / wireguard-tools are installed: their sections show only then
+    property var installed: ({})
+    // tailscale status --json; the login URL while a sign-in waits, and its QR code file
+    property var ts: ({})
+    property string tsUrl: ""
+    property string tsQr: ""
+    // the coordination server Tailscale uses: its own unless signed in to e.g. Headscale
+    readonly property string defaultServer: "https://controlplane.tailscale.com"
+    property string tsServer: defaultServer
+    readonly property bool customServer: tsServer.replace(/\/+$/, "") !== defaultServer
+    // empty after `tailscale logout`, which resets every setting: deck then needs root to sign in
+    property string tsOperator: ""
+    property string pendingServer: ""
+    // NetworkManager's WireGuard connections: {uuid, name, active}
+    property var tunnels: []
 
     function parse(text) {
         const r = {}
@@ -26,6 +43,24 @@ TabPage {
         sshJob.start(["/usr/bin/pocknix-ssh", "status"])
         shareJob.start(["/usr/bin/pocknix-share", "status"])
         addrJob.start(["/usr/bin/ip", "-4", "-o", "addr", "show", "scope", "global"])
+        pkgJob.start(["/usr/bin/pacman", "-Qq", "tailscale", "wireguard-tools"])
+        wgJob.start(["/usr/bin/nmcli", "-g", "UUID,TYPE,ACTIVE,NAME", "connection", "show"])
+    }
+    // --operator and --login-server every time: `up` clears an operator it is not given, and
+    // refuses to run without a non-default server it was signed in with.
+    function tailscaleUp(server) {
+        tsUrl = ""
+        tsQr = ""
+        if (!tsOperator) {
+            pendingServer = server || tsServer
+            operatorJob.start(["/usr/bin/pocknix-store", "setup", "tailscale"], { root: true })
+            return
+        }
+        upJob.start(["/bin/sh", "-c", 'exec tailscale up --operator="$(id -un)" --timeout=5m --login-server="$1"',
+                     "sh", server || tsServer])
+    }
+    function quick(argv) {
+        quickJob.start(argv)
     }
     function toggle(cli, on, onDone) {
         app.run(on ? qsTr("Turning on") : qsTr("Turning off"), [cli, on ? "on" : "off"], { root: true }, code => {
@@ -76,6 +111,109 @@ TabPage {
         onFinished: page.share = page.parse(output)
     }
     Job {
+        id: pkgJob
+        onFinished: {
+            const r = {}
+            output.split("\n").forEach(n => { if (n) r[n] = true })
+            page.installed = r
+            if (r.tailscale) {
+                tsJob.start(["/usr/bin/tailscale", "status", "--json"])
+                prefsJob.start(["/usr/bin/tailscale", "debug", "prefs"])
+            }
+        }
+    }
+    Job {
+        id: tsJob
+        onFinished: code => {
+            try {
+                page.ts = JSON.parse(output)
+            } catch (e) {
+                page.ts = {}
+            }
+        }
+    }
+    Job {
+        id: prefsJob
+        onFinished: code => {
+            try {
+                const prefs = JSON.parse(output)
+                page.tsServer = prefs.ControlURL || page.defaultServer
+                page.tsOperator = prefs.OperatorUser || ""
+            } catch (e) {
+                page.tsServer = page.defaultServer
+            }
+        }
+    }
+    Job {
+        id: operatorJob
+        onFinished: code => {
+            if (code !== 0) {
+                page.app.notice(qsTr("Tailscale could not be set up"), error)
+                return
+            }
+            page.tsOperator = "restored"
+            page.tailscaleUp(page.pendingServer)
+        }
+    }
+    // The login link is printed on a line of its own; error texts quote URLs inside commands.
+    Job {
+        id: upJob
+        onLine: text => {
+            const m = text.match(/^\s*(https?:\/\/\S+)\s*$/)
+            if (m && !page.tsUrl) {
+                page.tsUrl = m[1]
+                qrJob.start(["/bin/sh", "-c", 'f="${XDG_RUNTIME_DIR:-/tmp}/pocknix-tailscale-qr.svg"; qrencode -t SVG -o "$f" "$1" && echo "$f"',
+                             "sh", m[1]])
+            }
+        }
+        onFinished: code => {
+            const waited = page.tsUrl !== ""
+            page.tsUrl = ""
+            page.tsQr = ""
+            page.refresh()
+            if (code !== 0)
+                page.app.notice(qsTr("Tailscale did not connect"),
+                                waited ? qsTr("Sign-in did not finish within 5 minutes. Try again.") : error)
+        }
+    }
+    Job {
+        id: qrJob
+        onFinished: code => page.tsQr = code === 0 ? "file://" + output.trim() : ""
+    }
+    Job {
+        id: quickJob
+        onFinished: code => {
+            page.refresh()
+            if (code !== 0)
+                page.app.notice(qsTr("That did not work"), error)
+        }
+    }
+    // -g escapes ':' in a name as '\:', and the name is the last field
+    Job {
+        id: wgJob
+        onFinished: page.tunnels = output.split("\n").map(l => l.split(":")).filter(f => f[1] === "wireguard")
+            .map(f => ({ uuid: f[0], active: f[2] === "yes", name: f.slice(3).join(":").replace(/\\:/g, ":") }))
+    }
+    Job {
+        id: importJob
+        onFinished: code => {
+            page.refresh()
+            if (code === 0)
+                page.app.notice(qsTr("Tunnel added"), qsTr("It is off and does not connect on its own: switch it on here."))
+            else
+                page.app.notice(qsTr("Import failed"), error)
+        }
+    }
+    FileDialog {
+        id: picker
+        title: qsTr("Import a WireGuard tunnel")
+        nameFilters: [qsTr("WireGuard tunnels (*.conf)")]
+        currentFolder: StandardPaths.writableLocation(StandardPaths.DownloadLocation)
+        onAccepted: importJob.start(["/usr/lib/pocknix-tools/pocknix-wg-import",
+                                     decodeURIComponent(selectedFile.toString().replace(/^file:\/\//, ""))])
+    }
+
+    Job {
         id: addrJob
         onFinished: page.addresses = output.split("\n").map(l => l.trim().split(/\s+/)[3] || "")
             .filter(a => a).map(a => a.split("/")[0]).join(" ")
@@ -101,6 +239,161 @@ TabPage {
             checked: page.share.state === "on"
             enabled: !page.app.logJobRunning && page.share.state !== undefined
             onClicked: checked ? page.toggle("/usr/bin/pocknix-share", false) : page.shareOn()
+        }
+    }
+
+    QQC2.Label {
+        visible: !!page.installed.tailscale
+        Layout.topMargin: Theme.spacing
+        text: qsTr("Tailscale")
+        font.bold: true
+        font.pointSize: Theme.titleFontSize
+    }
+    ActionRow {
+        id: tsRow
+        readonly property string tsState: page.ts.BackendState || ""
+        readonly property var tsSelf: page.ts.Self || {}
+        visible: !!page.installed.tailscale
+        title: qsTr("Tailscale")
+        description: upJob.running ? qsTr("Connecting…")
+            : tsRow.tsState === "Running" ? qsTr("Connected as %1 (%2)").arg(tsSelf.HostName).arg((tsSelf.TailscaleIPs || [""])[0])
+                + (page.customServer ? qsTr(" via %1").arg(page.tsServer.replace(/^https?:\/\//, "")) : "")
+            : tsRow.tsState === "Stopped" ? qsTr("Off")
+            : tsRow.tsState === "NeedsLogin" ? qsTr("Signed out")
+            : tsRow.tsState === "Starting" ? qsTr("Connecting…")
+            : qsTr("The Tailscale service is not running")
+        busy: upJob.running || quickJob.running || operatorJob.running
+        QQC2.Button {
+            visible: (tsRow.tsState === "Running" || tsRow.tsState === "Stopped") && !upJob.running
+            implicitHeight: Theme.touchTarget
+            text: qsTr("Sign out")
+            onClicked: page.quick(["/usr/bin/tailscale", "logout"])
+        }
+        QQC2.Button {
+            visible: tsRow.tsState === "NeedsLogin" && !upJob.running
+            implicitHeight: Theme.touchTarget
+            text: qsTr("Sign in")
+            palette.button: Theme.accent
+            palette.buttonText: Theme.accentText
+            enabled: !ownServer.checked || /^https?:\/\/\S+$/.test(serverField.text.trim())
+            onClicked: page.tailscaleUp(ownServer.checked ? serverField.text.trim() : page.defaultServer)
+        }
+        QQC2.Switch {
+            visible: tsRow.tsState === "Running" || tsRow.tsState === "Stopped"
+            checkable: false
+            checked: tsRow.tsState === "Running"
+            enabled: !upJob.running && !quickJob.running
+            onClicked: checked ? page.quick(["/usr/bin/tailscale", "down"]) : page.tailscaleUp()
+        }
+    }
+    ColumnLayout {
+        visible: tsRow.visible && tsRow.tsState === "NeedsLogin" && !upJob.running
+        Layout.fillWidth: true
+        spacing: Theme.smallSpacing
+        QQC2.CheckBox {
+            id: ownServer
+            text: qsTr("Use my own server (Headscale)")
+            checked: page.customServer
+        }
+        QQC2.TextField {
+            id: serverField
+            visible: ownServer.checked
+            Layout.fillWidth: true
+            implicitHeight: Theme.touchTarget
+            placeholderText: "https://headscale.example.com"
+            text: page.customServer ? page.tsServer : ""
+            inputMethodHints: Qt.ImhUrlCharactersOnly | Qt.ImhNoAutoUppercase
+        }
+        QQC2.Label {
+            visible: ownServer.checked && Host.gamescope
+            Layout.fillWidth: true
+            text: qsTr("In game mode, open the keyboard with STEAM + X.")
+            color: Theme.textMuted
+            font.pointSize: Theme.smallFontSize
+        }
+    }
+    Rectangle {
+        visible: page.tsUrl !== ""
+        Layout.fillWidth: true
+        implicitHeight: qrRow.implicitHeight + Theme.spacing * 2
+        radius: Theme.radius
+        color: Theme.surface
+        RowLayout {
+            id: qrRow
+            anchors.fill: parent
+            anchors.margins: Theme.spacing
+            spacing: Theme.spacing * 2
+            Rectangle {
+                implicitWidth: Theme.unit * 11
+                implicitHeight: Theme.unit * 11
+                color: "white"
+                radius: Theme.radius
+                Image {
+                    anchors.fill: parent
+                    anchors.margins: Theme.smallSpacing * 2
+                    source: page.tsQr
+                    cache: false
+                    sourceSize.width: width
+                    sourceSize.height: height
+                    smooth: false
+                }
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Scan with your phone to sign in, or open this link on any device:")
+                    wrapMode: Text.WordWrap
+                }
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: page.tsUrl
+                    color: Theme.accent
+                    wrapMode: Text.WrapAnywhere
+                }
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: qsTr("This updates by itself once you have signed in (up to 5 minutes).")
+                    color: Theme.textMuted
+                    font.pointSize: Theme.smallFontSize
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
+    }
+
+    QQC2.Label {
+        visible: !!page.installed["wireguard-tools"] || page.tunnels.length > 0
+        Layout.topMargin: Theme.spacing
+        text: qsTr("WireGuard")
+        font.bold: true
+        font.pointSize: Theme.titleFontSize
+    }
+    Repeater {
+        model: page.tunnels
+        ActionRow {
+            required property var modelData
+            title: modelData.name
+            description: modelData.active ? qsTr("Connected") : qsTr("Off")
+            busy: quickJob.running
+            QQC2.Switch {
+                checkable: false
+                checked: modelData.active
+                enabled: !quickJob.running
+                onClicked: page.quick(["/usr/bin/nmcli", "connection", checked ? "down" : "up", "uuid", modelData.uuid])
+            }
+        }
+    }
+    ActionRow {
+        visible: !!page.installed["wireguard-tools"] || page.tunnels.length > 0
+        title: qsTr("Import a tunnel")
+        description: qsTr("A .conf file from your VPN provider or your own server. It is added switched off.")
+        busy: importJob.running
+        QQC2.Button {
+            implicitHeight: Theme.touchTarget
+            text: qsTr("Import .conf")
+            enabled: !importJob.running
+            onClicked: picker.open()
         }
     }
 }
