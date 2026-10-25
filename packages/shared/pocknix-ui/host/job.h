@@ -50,6 +50,8 @@ private:
 
     QProcess *m_proc = nullptr;
     bool m_root = false;
+    QStringList m_pending;
+    QVariantMap m_pendingOptions;
     QByteArray m_partial[2];
     QStringList m_tail;
     int m_exitCode = 0;

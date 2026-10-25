@@ -66,13 +66,18 @@ case "${cmd}" in
     [ "$(id -u)" -eq 0 ] || { echo "pocknix-job: run needs root" >&2; exit 1; }
     [ "${1:-}" = "--" ] && shift
     [ "$#" -gt 0 ] || usage
-    active && { echo "pocknix-job: ${name} is already running" >&2; exit 3; }
     install -d -m755 "${DIR}"
+    # Held from the busy check until the unit exists: a second run in that window would
+    # otherwise truncate the first one's log.
+    exec 9>"${DIR}/${name}.lock"
+    flock -n 9 || { echo "pocknix-job: ${name} is already starting" >&2; exit 3; }
+    active && { echo "pocknix-job: ${name} is already running" >&2; exit 3; }
     : > "${log}"
     chmod 644 "${log}"
     systemd-run --quiet --collect --unit "${unit}" \
       --property "StandardOutput=append:${log}" --property "StandardError=append:${log}" \
       /bin/sh -c '"$@"; echo "POCKNIX:{\"exit\":$?}"' sh "$@" || exit 1
+    exec 9>&-
     follow
     ;;
   follow) follow ;;
