@@ -57,6 +57,7 @@ pocknix-store/
 | `install-all` | root | the emulation meta `pocknix-emulation-full` (All mode) |
 | `remove-all` | root | the meta, its emulators and their now-unneeded dependencies |
 | `adopt` | root | marks installed entries outside Emulation that nothing requires as explicit |
+| `setup <id>` | root | runs an installed entry's `setup` step again (Pocknix Tools restores the Tailscale operator that `tailscale logout` clears) |
 
 - **Ids, never package names.** The rule lets wheel run the CLI with any arguments, so the
   catalogue plus the `pocknix-emu-*` set is the whole allowlist. The meta and the
