@@ -248,6 +248,23 @@ def do_install(pkgs: list[str]) -> None:
     run_pacman(["-Syu", "--needed", "--noconfirm", *pkgs])
 
 
+def to_deps(pkgs: list[str]) -> list[str]:
+    """Marks the explicitly installed ones as dependencies, so -Rs takes them, and returns those:
+    if the removal then fails they must get their mark back, or an orphan cleanup removes them."""
+    explicit = set(pacman_q("-Qqe"))
+    flipped = [p for p in dict.fromkeys(pkgs) if p in explicit]
+    mark("--asdeps", flipped)
+    return flipped
+
+
+def remove_marked(targets: list[str], flipped: list[str]) -> None:
+    try:
+        run_pacman(["-Rs", "--noconfirm", *dict.fromkeys(targets)])
+    except Fail:
+        mark("--asexplicit", flipped)
+        raise
+
+
 def do_remove(ids: list[str], found: dict, local: set[str]) -> None:
     # A package another installed entry lists stays (gnome-keyring serves every desktop).
     kept = {p for i, e in found.items() if i not in ids and installed(e, local) for p in e["packages"]}
@@ -263,8 +280,8 @@ def do_remove(ids: list[str], found: dict, local: set[str]) -> None:
             mark("--asexplicit", [p for p in layer if p in local and p not in targets])
             targets += [META] + ([ALIAS] if ALIAS in local else [])
     # explicit on devices fielded before the metas, which -Rs would keep
-    mark("--asdeps", [d for p in targets if EMU.fullmatch(p) for d in depends_of(p, local) if d in local])
-    run_pacman(["-Rs", "--noconfirm", *targets])
+    flipped = to_deps([d for p in targets if EMU.fullmatch(p) for d in depends_of(p, local) if d in local])
+    remove_marked(targets, flipped)
 
 
 def do_remove_all(local: set[str]) -> None:
@@ -272,12 +289,12 @@ def do_remove_all(local: set[str]) -> None:
     if META not in local and not m:
         out("Nothing to remove: emulation is not installed.")
         return
-    mark("--asdeps", m)
+    flipped = to_deps(m)
     # name only members nothing else needs (fuse2 serves fex-emu too); -Rs cascades the rest
     orphans = set(pacman_q("-Qdtq"))
     targets = [p for p in (META, ALIAS) if p in local] + [p for p in m if p in orphans]
     # ~/Emulation, ~/ES-DE and config dirs stay: a reinstall finds the user's settings as left
-    run_pacman(["-Rs", "--noconfirm", *dict.fromkeys(targets)])
+    remove_marked(targets, flipped)
 
 
 def seat_user() -> str | None:
@@ -345,8 +362,17 @@ def job(cmd: str, ids: list[str]) -> int:
     elif cmd == "install-all":
         do_install([META])
     elif cmd == "remove":
-        services([i for i in ids if installed(found[i], local)], found, on=False)
-        do_remove(ids, found, local)
+        running = [i for i in ids if installed(found[i], local)]
+        services(running, found, on=False)
+        try:
+            do_remove(ids, found, local)
+        except Fail:
+            # still installed: give its services back
+            try:
+                services(running, found, on=True)
+            except Fail:
+                pass
+            raise
     else:
         do_remove_all(local)
     progress(phase="done", text="Done", progress=1)
