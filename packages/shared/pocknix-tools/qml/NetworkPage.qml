@@ -9,6 +9,7 @@ TabPage {
     id: page
     property var app
     title: qsTr("Network")
+    icon: "network-wireless-symbolic"
 
     // key=value status lines of pocknix-ssh / pocknix-share
     property var ssh: ({})

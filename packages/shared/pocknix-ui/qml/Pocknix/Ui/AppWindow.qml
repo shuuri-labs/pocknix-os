@@ -8,7 +8,7 @@ import Pocknix.Ui
 QQC2.ApplicationWindow {
     id: root
     default property alias pages: stack.data
-    property alias currentIndex: strip.currentIndex
+    property alias currentIndex: rail.currentIndex
 
     visible: true
     visibility: Host.gamescope ? Window.FullScreen : Window.AutomaticVisibility
@@ -37,20 +37,30 @@ QQC2.ApplicationWindow {
         toolTipText: Theme.text
     }
 
-    header: TabStrip {
-        id: strip
-        visible: stack.children.length > 1
-        titles: Array.from(stack.children, page => page.title || "")
-    }
+    // Only the TabPage children are pages: a Repeater making them sits among them.
+    readonly property var tabPages: Array.from(stack.children).filter(c => c instanceof TabPage)
 
-    StackLayout {
-        id: stack
+    RowLayout {
         anchors.fill: parent
-        currentIndex: strip.currentIndex
-        // Monochrome theme icons take Kirigami's text colour.
-        Kirigami.Theme.inherit: false
-        Kirigami.Theme.textColor: Theme.text
-        Kirigami.Theme.backgroundColor: Theme.background
-        Kirigami.Theme.highlightColor: Theme.accent
+        spacing: 0
+
+        NavRail {
+            id: rail
+            Layout.fillHeight: true
+            visible: root.tabPages.length > 1
+            pages: root.tabPages.map(p => ({ title: p.title, icon: p.icon }))
+        }
+
+        StackLayout {
+            id: stack
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: rail.currentIndex
+            // Monochrome theme icons take Kirigami's text colour.
+            Kirigami.Theme.inherit: false
+            Kirigami.Theme.textColor: Theme.text
+            Kirigami.Theme.backgroundColor: Theme.background
+            Kirigami.Theme.highlightColor: Theme.accent
+        }
     }
 }
