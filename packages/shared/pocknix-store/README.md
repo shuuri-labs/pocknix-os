@@ -27,7 +27,7 @@ pocknix-store/
 | Key | Meaning |
 |---|---|
 | `name` | shown on the tile |
-| `section` | `emulation`, `compatibility`, `network`, `streaming` or `desktop` (shown as Desktop mode) |
+| `section` | `emulation`, `compatibility`, `network`, `streaming` or `desktop` (shown as Desktop mode): each section is one page in the app's rail |
 | `description` | one line under the name |
 | `icon` | a file in `icons/`, else a theme icon name |
 | `packages` | what install adds and remove takes away, space-separated |
