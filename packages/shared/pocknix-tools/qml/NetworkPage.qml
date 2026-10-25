@@ -79,25 +79,13 @@ TabPage {
         })
     }
     function shareOn() {
-        if (share.installed !== "yes") {
-            app.ask({
-                title: qsTr("Install Samba?"),
-                text: qsTr("File sharing needs Samba, which is not installed (7.4 MB download)."),
-                confirmText: qsTr("Install"),
-                yes: () => app.run(qsTr("Installing Samba"), ["/usr/bin/pocknix-share", "install"], { root: true },
-                                   code => { refresh(); if (code === 0) shareOn() })
-            })
-            return
-        }
-        app.ask({
-            title: qsTr("Share your home folder?"),
-            text: qsTr("Anyone on the same network can then read and write every file in it: your games, saves and emulator settings, but also your Steam login and SSH keys. There is no password.\n\nOnly turn this on at home. It stays on, across reboots, until you turn it off here."),
-            confirmText: qsTr("Turn on"),
-            danger: true,
-            yes: () => toggle("/usr/bin/pocknix-share", true, () => app.notice(qsTr("File sharing is on"),
-                qsTr("On another computer, open smb://pocknix.local%1 and connect as Guest.")
-                    .arg(addresses ? qsTr(" (or smb://%1)").arg(addresses.split(" ")[0]) : "")))
-        })
+        shareSheet.open()
+    }
+    // The password goes on stdin, never on a command line other users can read.
+    function shareWithPassword(pw) {
+        shareOnJob.start(["/usr/bin/pocknix-share", "on", "--password-stdin"], { root: true, input: true })
+        shareOnJob.send(pw)
+        shareOnJob.closeInput()
     }
 
     Component.onCompleted: refresh()
@@ -214,6 +202,90 @@ TabPage {
     }
 
     Job {
+        id: shareOnJob
+        onFinished: code => {
+            page.refresh()
+            if (code === 0)
+                page.app.notice(qsTr("File sharing is on"),
+                    qsTr("On another computer, open smb://pocknix.local%1 and sign in as deck with deck's password.")
+                        .arg(page.addresses ? qsTr(" (or smb://%1)").arg(page.addresses.split(" ")[0]) : ""))
+            else
+                page.app.notice(qsTr("File sharing stayed off"), error)
+        }
+    }
+    QQC2.Popup {
+        id: shareSheet
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(parent ? parent.width - Theme.spacing * 4 : 0, Theme.unit * 32)
+        modal: true
+        padding: Theme.spacing * 1.5
+        background: Rectangle {
+            color: Theme.surface
+            radius: Theme.radius
+            border.color: Theme.border
+        }
+        onOpened: {
+            password.text = ""
+            password.forceActiveFocus()
+        }
+        function go() {
+            if (password.text === "")
+                return
+            close()
+            page.shareWithPassword(password.text)
+            password.text = ""
+        }
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spacing
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: qsTr("Share your home folder?")
+                font.bold: true
+                font.pointSize: Theme.titleFontSize
+            }
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: qsTr("Anyone on this network who knows deck's password can then read and write every file in it: games, saves and settings, but also your Steam login and SSH keys. If deck still has the password Pocknix shipped with, change it first (passwd in a terminal).\n\nYou sign in as deck with deck's password. It stays on, across reboots, until you turn it off here.")
+                wrapMode: Text.WordWrap
+            }
+            QQC2.TextField {
+                id: password
+                Layout.fillWidth: true
+                implicitHeight: Theme.touchTarget
+                echoMode: TextInput.Password
+                placeholderText: qsTr("deck's password")
+                onAccepted: shareSheet.go()
+            }
+            QQC2.Label {
+                visible: Host.gamescope
+                Layout.fillWidth: true
+                text: qsTr("In game mode, open the keyboard with STEAM + X.")
+                color: Theme.textMuted
+                font.pointSize: Theme.smallFontSize
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: Theme.spacing
+                QQC2.Button {
+                    implicitHeight: Theme.touchTarget
+                    text: qsTr("Cancel")
+                    onClicked: shareSheet.close()
+                }
+                QQC2.Button {
+                    implicitHeight: Theme.touchTarget
+                    text: qsTr("Turn on")
+                    enabled: password.text !== ""
+                    palette.button: Theme.negative
+                    palette.buttonText: Theme.accentText
+                    onClicked: shareSheet.go()
+                }
+            }
+        }
+    }
+
+    Job {
         id: addrJob
         onFinished: page.addresses = output.split("\n").map(l => l.trim().split(/\s+/)[3] || "")
             .filter(a => a).map(a => a.split("/")[0]).join(" ")
@@ -232,12 +304,12 @@ TabPage {
     }
     ActionRow {
         title: qsTr("File sharing (SMB)")
-        description: page.share.state === "on" ? qsTr("On: your home folder is shared on this network, without a password.")
-            : page.share.installed === "yes" ? qsTr("Off") : qsTr("Off. Turning it on installs Samba first.")
+        description: page.share.state === "on" ? qsTr("On: sign in as deck with deck's password. Changed that password? Turn sharing off and on again.")
+            : qsTr("Off")
         QQC2.Switch {
             checkable: false
             checked: page.share.state === "on"
-            enabled: !page.app.logJobRunning && page.share.state !== undefined
+            enabled: !page.app.logJobRunning && !shareOnJob.running && page.share.state !== undefined
             onClicked: checked ? page.toggle("/usr/bin/pocknix-share", false) : page.shareOn()
         }
     }

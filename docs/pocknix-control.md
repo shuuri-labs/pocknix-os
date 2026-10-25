@@ -88,10 +88,10 @@ Steam's own **Add a Non-Steam Game** dialog does not work on pocknix-os, so add 
 ### File sharing
 
 **Share my home folder** turns the device into a network share, so you can drag ROMs, BIOS files
-and emulator firmware onto it from another computer. The first time, it offers a small download.
-The same toggle is in **Pocknix Tools** → **Network**.
+and emulator firmware onto it from another computer. Turn it on the first time in **Pocknix
+Tools** → **Network**, which asks for deck's password: you sign in to the share as deck with it.
 
-> **There is no password.** Anyone on the same network can read and write your home folder, so
+> Anyone on the same network who knows deck's password can read and write your home folder, so
 > turn it off when you are done. See
 > [copying files over the network](emulation-setup.md#copying-files-over-the-network) for how to
 > connect.

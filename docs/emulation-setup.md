@@ -97,14 +97,12 @@ Rather than shuttling a microSD card back and forth, you can turn the device int
 share and drag files straight onto it from another computer. It works out of the box in macOS
 Finder, Windows Explorer and Linux file managers - no extra software on either end.
 
-Turn it on in either place:
+Turn it on the first time in **Pocknix Tools** (game or desktop mode): **Network** → *File sharing
+(SMB)*. It asks for deck's password, which is also the share's password. After that, Quick
+Access Menu → **Pocknix Control** → **Library** → *Share my home folder* turns it on and off too.
 
-- **Game Mode**: Quick Access Menu → **Pocknix Control** → **Library** → *Share my home folder*
-- **Pocknix Tools** (game or desktop mode): **Network** → *File sharing (SMB)*
-
-The first time, you will be offered a small download (Samba is not shipped in the image, so
-devices that never share a file never pay for it). It then stays on across reboots until you
-turn it off in the same place.
+It stays on across reboots until you turn it off. If you change deck's password, turn sharing off
+and on again in Pocknix Tools so the share takes the new one.
 
 Once it is on, open one of these from the other computer:
 
@@ -114,17 +112,18 @@ Once it is on, open one of these from the other computer:
 | Windows | Explorer address bar: `\\pocknix.local` |
 | Linux | Files → *Other Locations* → `smb://pocknix.local` |
 
-**Connect as Guest - there is no password.** Two shares appear:
+**Sign in as `deck` with deck's password.** Two shares appear:
 
 - **deck** - your home folder, so `Emulation/` for ROMs and BIOS, and the per-emulator folders
   described above for firmware and keys
 - **sdcard** - whatever is in the SD card slot
 
 > [!WARNING]
-> There is no password, so **anyone on the same network** can read and write everything in your
-> home folder - not just games and saves, but your Steam login and SSH keys too. Sharing is
-> limited to private home-network address ranges, so joining public wifi does not expose the
-> device, but treat it as "on while I am at home" rather than something to leave running.
+> **Anyone on the same network who knows deck's password** can read and write everything in your
+> home folder - not just games and saves, but your Steam login and SSH keys too. If deck still has
+> the password Pocknix shipped with, change it first (`passwd` in a terminal). Sharing is limited
+> to private home-network address ranges, so joining public wifi does not expose the device, but
+> treat it as "on while I am at home" rather than something to leave running.
 
 ## Getting games into Steam
 
