@@ -4,6 +4,8 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
+#include <utility>
+
 namespace {
 const QString kMark = QStringLiteral("POCKNIX:");
 constexpr qsizetype kTailLines = 3;
@@ -29,8 +31,17 @@ Job::~Job()
 
 bool Job::start(const QStringList &argv, const QVariantMap &options)
 {
-    if (m_proc || argv.isEmpty())
+    if (argv.isEmpty())
         return false;
+    // A status read asked for while the last one runs would see stale state: the newest request
+    // runs next. A root step never queues, so a double tap cannot run it twice.
+    if (m_proc) {
+        if (options.value(QStringLiteral("root")).toBool() || m_root)
+            return false;
+        m_pending = argv;
+        m_pendingOptions = options;
+        return true;
+    }
     static const QRegularExpression rootProgram(QStringLiteral("^/usr/bin/pocknix-[a-z0-9-]+$"));
     const bool root = options.value(QStringLiteral("root")).toBool();
 
@@ -170,4 +181,8 @@ void Job::done(int exitCode, const QString &error)
         m_error = tr("Failed (exit code %1)").arg(exitCode);
     emit runningChanged();
     emit finished(exitCode);
+    if (!m_proc && !m_pending.isEmpty()) {
+        const QStringList argv = std::exchange(m_pending, {});
+        start(argv, std::exchange(m_pendingOptions, {}));
+    }
 }
