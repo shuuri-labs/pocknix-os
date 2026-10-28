@@ -8,8 +8,8 @@ QQC2.Button {
     id: control
     enum Kind { Secondary, Primary, Danger }
     property int kind: Button.Secondary
-    readonly property color fill: kind === Button.Primary ? Theme.accent
-        : kind === Button.Danger ? Theme.negative : Theme.surfaceHigh
+    readonly property color fill: kind === Button.Primary ? Theme.accentFill
+        : kind === Button.Danger ? Theme.negativeFill : Theme.surfaceHigh
 
     implicitHeight: Theme.touchTarget
     palette.buttonText: !enabled ? Theme.textMuted : kind === Button.Secondary ? Theme.text : Theme.accentText

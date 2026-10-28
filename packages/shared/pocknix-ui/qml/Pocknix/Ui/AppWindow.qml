@@ -24,7 +24,7 @@ QQC2.ApplicationWindow {
         text: Theme.text
         button: Theme.surfaceHigh
         buttonText: Theme.text
-        highlight: Theme.accent
+        highlight: Theme.accentFill
         highlightedText: Theme.accentText
         placeholderText: Theme.textMuted
         mid: Theme.border
