@@ -34,10 +34,9 @@ int main(int argc, char *argv[])
         qputenv("QT_QPA_PLATFORM", "wayland;xcb");
     if (gamescope)
         qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
-    // Basic draws every control from the window palette, which Theme.qml sets in both sessions;
-    // Breeze reads Plasma's colour scheme, which gamescope does not have.
-    if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE"))
-        QQuickStyle::setStyle(QStringLiteral("Basic"));
+    // Basic draws from the window palette Theme.qml sets; unconditional, as Plasma exports
+    // QT_QUICK_CONTROLS_STYLE=org.kde.breeze, whose light-scheme text lands dark on our popups.
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     QGuiApplication app(argc, argv);
     // The Wayland app id: Plasma finds the icon and taskbar entry through the .desktop name.
