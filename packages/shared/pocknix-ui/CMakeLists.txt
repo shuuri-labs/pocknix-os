@@ -11,6 +11,7 @@ target_include_directories(pocknix-ui-host PRIVATE host)
 
 set(QML_FILES
     qml/Pocknix/Ui/Theme.qml
+    qml/Pocknix/Ui/Util.qml
     qml/Pocknix/Ui/AppWindow.qml
     qml/Pocknix/Ui/NavRail.qml
     qml/Pocknix/Ui/TabPage.qml
@@ -25,7 +26,7 @@ foreach(f IN LISTS QML_FILES)
     get_filename_component(n "${f}" NAME)
     set_source_files_properties("${f}" PROPERTIES QT_RESOURCE_ALIAS "${n}")
 endforeach()
-set_source_files_properties(qml/Pocknix/Ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Pocknix/Ui/Theme.qml qml/Pocknix/Ui/Util.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(pocknix-ui-host
     URI Pocknix.Ui

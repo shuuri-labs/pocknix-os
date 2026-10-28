@@ -37,6 +37,21 @@ QQC2.ApplicationWindow {
         toolTipText: Theme.text
     }
 
+    // { title, text, confirmText, hold, danger, yes }: yes() runs on confirm.
+    function ask(o) {
+        askSheet.title = o.title
+        askSheet.text = o.text || ""
+        askSheet.confirmText = o.confirmText || qsTr("OK")
+        askSheet.cancelText = o.notice ? "" : qsTr("Cancel")
+        askSheet.hold = !!o.hold
+        askSheet.danger = !!o.danger
+        askSheet.yes = o.yes || null
+        askSheet.open()
+    }
+    function notice(title, text) {
+        ask({ title: title, text: text, notice: true })
+    }
+
     // Only the TabPage children are pages: a Repeater making them sits among them.
     readonly property var tabPages: Array.from(stack.children).filter(c => c instanceof TabPage)
 
@@ -61,6 +76,17 @@ QQC2.ApplicationWindow {
             Kirigami.Theme.textColor: Theme.text
             Kirigami.Theme.backgroundColor: Theme.background
             Kirigami.Theme.highlightColor: Theme.accent
+        }
+    }
+
+    ConfirmSheet {
+        id: askSheet
+        property var yes: null
+        onAccepted: {
+            const f = yes
+            yes = null
+            if (f)
+                f()
         }
     }
 }

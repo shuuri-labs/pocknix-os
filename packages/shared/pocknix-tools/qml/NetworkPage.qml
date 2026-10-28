@@ -31,15 +31,6 @@ TabPage {
     // NetworkManager's WireGuard connections: {uuid, name, active}
     property var tunnels: []
 
-    function parse(text) {
-        const r = {}
-        text.split("\n").forEach(l => {
-            const i = l.indexOf("=")
-            if (i > 0)
-                r[l.slice(0, i)] = l.slice(i + 1)
-        })
-        return r
-    }
     function refresh() {
         sshJob.start(["/usr/bin/pocknix-ssh", "status"])
         shareJob.start(["/usr/bin/pocknix-share", "status"])
@@ -93,11 +84,11 @@ TabPage {
 
     Job {
         id: sshJob
-        onFinished: page.ssh = page.parse(output)
+        onFinished: page.ssh = Util.kv(output)
     }
     Job {
         id: shareJob
-        onFinished: page.share = page.parse(output)
+        onFinished: page.share = Util.kv(output)
     }
     Job {
         id: pkgJob
