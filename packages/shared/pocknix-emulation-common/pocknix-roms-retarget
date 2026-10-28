@@ -102,7 +102,9 @@ def main(argv: list[str]) -> int:
         if a == "--new":
             new = next(it, None)
         elif a == "--old":
-            old.append(next(it, "").rstrip("/"))
+            o = next(it, "").rstrip("/")
+            if o:  # "" or "/" would match every absolute path
+                old.append(o)
         elif a == "--dry-run":
             dry = True
         elif "=" in a and a.split("=", 1)[0] in KINDS:

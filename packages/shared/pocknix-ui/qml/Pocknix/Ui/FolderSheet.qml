@@ -188,7 +188,7 @@ QQC2.Popup {
                 Layout.fillWidth: true
                 implicitHeight: Theme.touchTarget
                 placeholderText: qsTr("Folder name")
-                onAccepted: create.clicked()
+                onAccepted: if (create.enabled) create.clicked()
             }
             QQC2.Button {
                 id: create
