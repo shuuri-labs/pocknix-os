@@ -4,25 +4,16 @@ import QtQuick.Layouts
 import Pocknix.Ui
 
 // `detached`: the work runs under pocknix-job and survives the app, so the sheet may close mid-run.
-QQC2.Popup {
+Sheet {
     id: sheet
     property Job job
     property string title
     property bool detached: false
     readonly property bool running: job !== null && job.running
 
-    parent: QQC2.Overlay.overlay
-    anchors.centerIn: parent
     width: parent ? parent.width - Theme.spacing * 2 : 0
     height: parent ? parent.height * 0.85 : 0
-    modal: true
-    padding: Theme.spacing * 1.5
     closePolicy: running && !detached ? QQC2.Popup.NoAutoClose : QQC2.Popup.CloseOnEscape
-    background: Rectangle {
-        color: Theme.surface
-        radius: Theme.radius
-        border.color: Theme.border
-    }
 
     ListModel { id: lines }
 

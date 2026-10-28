@@ -205,18 +205,8 @@ TabPage {
                 page.app.notice(qsTr("File sharing stayed off"), error)
         }
     }
-    QQC2.Popup {
+    Sheet {
         id: shareSheet
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(parent ? parent.width - Theme.spacing * 4 : 0, Theme.unit * 32)
-        modal: true
-        padding: Theme.spacing * 1.5
-        background: Rectangle {
-            color: Theme.surface
-            radius: Theme.radius
-            border.color: Theme.border
-        }
         onOpened: {
             password.text = ""
             password.forceActiveFocus()
