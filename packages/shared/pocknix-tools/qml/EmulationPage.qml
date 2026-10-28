@@ -57,7 +57,8 @@ TabPage {
     Job {
         id: romsWhere
         onFinished: code => {
-            page.romsDir = code === 0 ? output.trim() : ""
+            // an older pocknix-roms-init has no --where and runs its full seed instead
+            page.romsDir = code === 0 && output.trim().startsWith("/") ? output.trim() : ""
             page.loaded = true
         }
     }

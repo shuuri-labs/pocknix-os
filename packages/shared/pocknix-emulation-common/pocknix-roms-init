@@ -34,6 +34,8 @@ elif [ -f "${ESDE_SETTINGS}" ]; then
 else
   ROMS="${EMU}/ROMs"           # fresh install: the seed below points ES-DE here
 fi
+# -s: a symlinked folder keeps the path the configs hold, or --roms would not find it in them
+ROMS="$(realpath -ms "${ROMS}")"
 
 # ES-DE's own default folder names - creating one only gives the user a labelled drop point;
 # ES-DE still shows a system only once it is populated.
@@ -291,7 +293,8 @@ case "${1:-}" in
     echo "${ROMS}"
     exit 0 ;;
   --roms)
-    [ "$#" -ge 2 ] || { echo "usage: pocknix-roms-init --roms <dir> [--dry-run]" >&2; exit 2; }
+    [ "$#" -ge 2 ] && { [ -z "${3:-}" ] || [ "${3:-}" = --dry-run ]; } \
+      || { echo "usage: pocknix-roms-init --roms <dir> [--dry-run]" >&2; exit 2; }
     set_roms "$2" "${3:-}"; rc=$?
     [ "${rc}" -ne 0 ] || [ -n "${3:-}" ] && exit "${rc}"
     # a normal run from the new folder: system dirs, and seeds for configs not written yet
