@@ -75,4 +75,5 @@ pocknix-store/
   from turning into an orphan that a cleanup would remove. The hook runs `adopt --later`, which
   starts it as the unit `pocknix-store-adopt`: pacman holds its lock while hooks run.
 - Tiles and default settings are not root's: the app runs `pocknix-tiles` and
-  `pocknix-roms-init --reset` as the user.
+  `pocknix-roms-init --reset` as the user. The ROMs folder is set in Pocknix Tools; the Emulation
+  page only shows it (`pocknix-roms-init --where`).

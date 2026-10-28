@@ -64,7 +64,9 @@ and saves all travel together.
 
 ### Putting ROMs on an SD card
 
-Close ES-DE and the emulators, then run:
+Close ES-DE and the emulators, then in **Pocknix Tools** go to **Emulation** → *ROMs folder* →
+*Change*. Pick *Internal storage* or the SD card, open the folder your games go in (or make one with
+*New folder*), tap *Use this folder* and confirm. From a terminal the same is:
 
 ```
 pocknix-roms-init --roms /run/media/deck/<card label>/ROMs
