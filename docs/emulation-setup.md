@@ -64,15 +64,18 @@ and saves all travel together.
 
 ### Putting ROMs on an SD card
 
-The ROM directory can live anywhere, and ES-DE is the single source of truth. Go to **ES-DE Menu
-→ Other Settings → ROM directory** and point it at the new location (for example
-`/run/media/deck/<card label>/ROMs`). Move your files there, then rescan. `BIOS/`, `Saves/`, and `States/`
-stay in `~/Emulation`.
+Close ES-DE and the emulators, then run:
 
-Steam ROM Manager, Dolphin, Cemu and Ryujinx were pointed at the ROM folder when they were set up, and
-keep the old one. In the **Pocknix Store**, tap each of them and pick *Restore default settings*
-(your old file is kept as a `.bak-<date>` copy), then *Add Games* and *Save to Steam* in Steam ROM
-Manager again so your game tiles use the new paths.
+```
+pocknix-roms-init --roms /run/media/deck/<card label>/ROMs
+```
+
+ES-DE, Steam ROM Manager, Dolphin, Cemu, ARMSX2 and Ryujinx then look in the new folder, which
+gets one subfolder per system. **No files are moved:** copy your games over yourself. `BIOS/`,
+`Saves/` and `States/` stay in `~/Emulation`. The card's label is part of the path, so a card with
+another label is a different folder. *Restore default settings* in the Pocknix Store keeps the
+folder you picked. Game tiles you already made with Steam ROM Manager still point at the old
+folder: open it, then *Add Games* and *Save to Steam* again.
 
 ## BIOS and firmware
 

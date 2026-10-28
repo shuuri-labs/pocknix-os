@@ -4,7 +4,7 @@ pocknix - Your Games Folder
 This folder (~/Emulation) is where everything goes. Copy your files into the
 matching subfolder and they are picked up automatically the next time ES-DE starts.
 
-1. ROMS -> ~/Emulation/ROMs/<system>/
+1. ROMS -> ~/Emulation/ROMs/<system>/  (or the ROMs folder you picked, see below)
    Put each game in the folder for its system, e.g.
      ROMs/snes/    Super Nintendo games
      ROMs/psx/     PlayStation 1 games
@@ -51,11 +51,10 @@ matching subfolder and they are picked up automatically the next time ES-DE star
 Saves and save-states live in ~/Emulation/Saves and ~/Emulation/States, so a single
 copy of this ~/Emulation folder is fully self-contained and portable.
 
-MOVING YOUR ROMS (e.g. to an SD card): ES-DE Menu -> Other Settings -> ROM directory,
-pick the new location, move the files there. ES-DE follows straight away. Steam ROM
-Manager, Dolphin, Cemu and Ryujinx keep the old folder: Pocknix Tools -> Restore emulator
-default settings for each of them points it at the new one, then run Steam ROM Manager's Add
-Games + Save to Steam again so your game tiles use the new paths.
+MOVING YOUR ROMS (e.g. to an SD card): pocknix-roms-init --roms <folder>. ES-DE, Steam
+ROM Manager and every emulator follow it; no files are moved, so copy your games there
+yourself (a folder per system is created). Then run Steam ROM Manager's Add Games + Save
+to Steam again so your game tiles use the new paths. BIOS, Saves and States stay here.
 
 SETTINGS: each emulator is set up once, when it is installed (an Eden or Ryujinx build
 you drop in: the first time it launches); updates never change your
