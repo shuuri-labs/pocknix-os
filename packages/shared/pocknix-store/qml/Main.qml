@@ -1,3 +1,4 @@
+import QtCore
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
@@ -8,6 +9,9 @@ AppWindow {
     title: qsTr("Pocknix Store")
 
     readonly property string cli: "/usr/bin/pocknix-store"
+    readonly property string romsInit: "/usr/bin/pocknix-roms-init"
+    readonly property string home: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "")
+    property string romsDir: ""
     property var store: ({ mode: "none", job: "none", sections: [], entries: [] })
     property bool loaded: false
     property bool attached: false
@@ -31,6 +35,8 @@ AppWindow {
 
     function refresh() {
         statusJob.start([cli, "status", "--json"])
+        // after an install or a removal too: emulation brings or takes pocknix-roms-init
+        romsWhere.start([romsInit, "--where"])
     }
     function entry(id) {
         return store.entries.find(e => e.id === id)
@@ -115,7 +121,18 @@ AppWindow {
         return error
     }
 
+    function shortPath(path) {
+        const cards = "/run/media/" + home.split("/").pop() + "/"
+        return path.startsWith(cards) ? path.slice(cards.length)
+            : path.startsWith(home + "/") ? "~" + path.slice(home.length) : path
+    }
+
     Component.onCompleted: refresh()
+
+    Job {
+        id: romsWhere
+        onFinished: code => app.romsDir = code === 0 ? output.trim() : ""
+    }
 
     Job {
         id: statusJob
@@ -279,6 +296,15 @@ AppWindow {
                     text: qsTr("Add Steam tiles")
                     onClicked: app.addTiles(section.tiles)
                 }
+            }
+
+            // Set in Pocknix Tools: the Store installs, Tools configures.
+            QQC2.Label {
+                Layout.fillWidth: true
+                visible: section.emulation && app.store.mode !== "none" && app.romsDir !== ""
+                text: qsTr("Your games go in %1. Change it in Pocknix Tools, under Emulation.").arg(app.shortPath(app.romsDir))
+                color: Theme.textMuted
+                wrapMode: Text.WordWrap
             }
 
             Flow {

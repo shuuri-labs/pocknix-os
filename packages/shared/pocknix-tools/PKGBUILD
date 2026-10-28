@@ -3,7 +3,7 @@
 pkgname=pocknix-tools
 pkgver=0.1.0
 pkgrel=23
-pkgdesc="Pocknix Tools: updates, snapshot rollback, SSH + file sharing, desktop picker, internal install"
+pkgdesc="Pocknix Tools: updates, snapshot rollback, SSH + file sharing, ROMs folder, desktop picker, internal install"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')

@@ -66,6 +66,9 @@ AppWindow {
     NetworkPage {
         app: app
     }
+    EmulationPage {
+        app: app
+    }
     DesktopPage {
         app: app
     }

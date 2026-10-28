@@ -39,7 +39,7 @@ matching subfolder and they are picked up automatically the next time ES-DE star
    Folders: eden, ryujinx, armsx2, rpcs3, vita3k, xemu, dolphin, cemu, azahar, ppsspp.
 
 5. STEAM LIBRARY
-   Installing emulation from Pocknix Tools adds a Steam tile for ES-DE and every
+   Installing emulation from the Pocknix Store adds a Steam tile for ES-DE and every
    emulator. Add or bring back one later from a terminal: pocknix-tiles enable <name>
    (e.g. dolphin, or esde for ES-DE). ES-DE favourites are not added to Steam.
    For one tile per game, with cover art: open the Steam ROM Manager tile (it switches to
@@ -51,14 +51,16 @@ matching subfolder and they are picked up automatically the next time ES-DE star
 Saves and save-states live in ~/Emulation/Saves and ~/Emulation/States, so a single
 copy of this ~/Emulation folder is fully self-contained and portable.
 
-MOVING YOUR ROMS (e.g. to an SD card): pocknix-roms-init --roms <folder>. ES-DE, Steam
-ROM Manager and every emulator follow it; no files are moved, so copy your games there
-yourself (a folder per system is created). Then run Steam ROM Manager's Add Games + Save
-to Steam again so your game tiles use the new paths. BIOS, Saves and States stay here.
+MOVING YOUR ROMS (e.g. to an SD card): Pocknix Tools -> Emulation -> ROMs folder ->
+Change, and pick the new folder. ES-DE, Steam ROM Manager and every emulator follow it; no
+files are moved, so copy your games there yourself (a folder per system is created). Then
+run Steam ROM Manager's Add Games + Save to Steam again so your game tiles use the new
+paths. From a terminal: pocknix-roms-init --roms <folder>. BIOS, Saves and States stay here.
 
 SETTINGS: each emulator is set up once, when it is installed (an Eden or Ryujinx build
 you drop in: the first time it launches); updates never change your
-settings afterwards. Pocknix Tools -> Restore emulator default settings re-applies ours.
+settings afterwards. Pocknix Store -> tap the emulator -> Restore default settings
+re-applies ours, pointed at your ROMs folder.
 ES-DE's ~/ES-DE/custom_systems/es_systems.xml and es_find_rules.xml are links that follow
 updates. To edit your own, replace a link with a real copy first:
   cp --remove-destination /usr/share/pocknix-emulation/es_systems.xml ~/ES-DE/custom_systems/
