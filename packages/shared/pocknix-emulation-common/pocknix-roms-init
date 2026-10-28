@@ -2,7 +2,8 @@
 # pocknix-roms-init - login-time setup for the emulation layer, run as 'deck' by its user unit.
 # A seed is copied only when its target is absent: an update never rewrites a user's settings,
 # --reset <name> is the way to re-apply ours; --seed <name> seeds one emulator now (its launcher
-# calls this). A failure must never fail a login.
+# calls this). --roms <dir> points ES-DE and every emulator at another ROMs folder, moving no
+# files; --where prints the current one. A failure must never fail a login.
 set -u
 
 SHARE=/usr/share/pocknix-emulation
@@ -65,7 +66,7 @@ render_all() {  # $1 template dir, $2 out dir
   local si=$(( REFRESH / 60 )); [ "${si}" -lt 1 ] && si=1
   [ -f "${src}/retroarch.cfg" ] && sed -e "s/^video_refresh_rate = .*/video_refresh_rate = \"${REFRESH}.000000\"/" \
       -e "s/^video_swap_interval = .*/video_swap_interval = \"${si}\"/" "${src}/retroarch.cfg" > "${out}/retroarch.cfg"
-  [ -f "${src}/armsx2-PCSX2.ini.in" ] && sed "s|__HOME__|${HOME}|g" "${src}/armsx2-PCSX2.ini.in" > "${out}/PCSX2.ini"
+  [ -f "${src}/armsx2-PCSX2.ini.in" ] && sed -e "s|__ROMS__|${ROMS}|g" -e "s|__HOME__|${HOME}|g" "${src}/armsx2-PCSX2.ini.in" > "${out}/PCSX2.ini"
   local vs=2; [ "${REFRESH}" -ge 120 ] 2>/dev/null && vs=1
   [ -f "${src}/eden-qt-config.ini.in" ] && sed "s/^use_vsync=.*/use_vsync=${vs}/" "${src}/eden-qt-config.ini.in" > "${out}/qt-config.ini"
   [ -f "${src}/ryujinx-Config.json.in" ] && sed "s|__ROMS__|${ROMS}|g" "${src}/ryujinx-Config.json.in" > "${out}/Config.json"
@@ -237,7 +238,64 @@ reset_srm()       { reset_target "${SRM_DATA}/userSettings.json"; reset_target "
 present=()
 for e in "${EMULATORS[@]}"; do "have_${e}" && present+=("${e}"); done
 
+# Each one rewrites its own config when it closes, so a path changed under it would come back.
+# Anchored to the program itself: Steam's launch wrappers carry the app's path in their args.
+RUNNING_RE='^([^ ]*/)?(es-de|Cemu|dolphin-emu|ARMSX2|Ryujinx(\.Ava)?|steam-rom-manager)(\.AppImage)?( |$)'
+set_roms() {  # $1 new ROMs folder, $2 "--dry-run" or empty
+  local new="$1" dry="${2:-}" o list i
+  local -a running
+  case "${new}" in "~"*) new="${HOME}${new#\~}" ;; esac
+  case "${new}" in /*) ;; *) echo "pocknix-roms-init: ${new} is not an absolute path" >&2; return 2 ;; esac
+  new="$(realpath -m "${new}")"
+  if [ -e "${new}" ]; then
+    [ -d "${new}" ] && [ -w "${new}" ] || { echo "pocknix-roms-init: ${new} is not a folder you can write to" >&2; return 2; }
+  else
+    [ -d "$(dirname "${new}")" ] && [ -w "$(dirname "${new}")" ] || { echo "pocknix-roms-init: cannot create ${new}" >&2; return 2; }
+  fi
+  # Old roots: the current folder plus both defaults, since ES-DE could be repointed alone before.
+  local old=("${ROMS}" "${EMU}/ROMs" "${HOME}/ROMs")
+  for o in "${old[@]}"; do
+    case "${new}" in "${o}"/*) echo "pocknix-roms-init: pick a folder outside ${o}" >&2; return 2 ;; esac
+  done
+  mapfile -t running < <(pgrep -u "$(id -u)" -a -f "${RUNNING_RE}" | sed -E 's/^[0-9]+ //; s/ .*//; s|.*/||;
+    s/\.AppImage$//; s/^es-de$/ES-DE/; s/^dolphin-emu$/Dolphin/; s/^Ryujinx.*/Ryujinx/; s/^steam-rom-manager$/Steam ROM Manager/' | sort -u)
+  if [ "${#running[@]}" -gt 0 ]; then
+    list="${running[0]}"
+    for ((i = 1; i < ${#running[@]}; i++)); do
+      [ "${i}" -eq $((${#running[@]} - 1)) ] && list+=" and ${running[i]}" || list+=", ${running[i]}"
+    done
+    if [ "${#running[@]}" -eq 1 ]; then
+      echo "pocknix-roms-init: Close ${list} first: it saves its settings when it closes, which would undo the change." >&2
+    else
+      echo "pocknix-roms-init: Close ${list} first: they save their settings when they close, which would undo the change." >&2
+    fi
+    return 3
+  fi
+  local args=(--new "${new}")
+  for o in "${old[@]}"; do args+=(--old "${o}"); done
+  [ -n "${dry}" ] && args+=(--dry-run)
+  [ -z "${dry}" ] && { mkdir -p "${new}" || return 1; }
+  # ES-DE last: it is the record of where ROMs live, so a run cut short is simply run again
+  /usr/lib/pocknix/pocknix-roms-retarget "${args[@]}" \
+    srm-settings="${SRM_DATA}/userSettings.json" srm-parsers="${SRM_DATA}/userConfigurations.json" \
+    cemu="${HOME}/.config/Cemu/settings.xml" dolphin="${HOME}/.config/dolphin-emu/Dolphin.ini" \
+    ryujinx="${HOME}/.config/Ryujinx/Config.json" armsx2="${HOME}/.config/ARMSX2/inis/PCSX2.ini" \
+    esde="${ESDE_SETTINGS}" | while IFS="$(printf '\t')" read -r kind file; do
+      printf '%s\t%s\n' "$(label "${kind%%-*}")" "${file}"
+    done
+  return "${PIPESTATUS[0]}"
+}
+
 case "${1:-}" in
+  --where)
+    echo "${ROMS}"
+    exit 0 ;;
+  --roms)
+    [ "$#" -ge 2 ] || { echo "usage: pocknix-roms-init --roms <dir> [--dry-run]" >&2; exit 2; }
+    set_roms "$2" "${3:-}"; rc=$?
+    [ "${rc}" -ne 0 ] || [ -n "${3:-}" ] && exit "${rc}"
+    # a normal run from the new folder: system dirs, and seeds for configs not written yet
+    exec "$0" ;;
   --list)
     for e in "${present[@]}"; do printf '%s\t%s\n' "${e}" "$(label "${e}")"; done
     exit 0 ;;

@@ -636,7 +636,7 @@ CheckAtStartup = false
 
 
 [GameList]
-RecursivePaths = __HOME__/Emulation/ROMs/ps2
+RecursivePaths = __ROMS__/ps2
 
 
 [GameListTableView]
