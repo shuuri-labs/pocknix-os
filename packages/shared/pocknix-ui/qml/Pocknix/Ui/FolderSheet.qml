@@ -180,9 +180,8 @@ Sheet {
                 placeholderText: qsTr("Folder name")
                 onAccepted: if (create.enabled) create.clicked()
             }
-            QQC2.Button {
+            Button {
                 id: create
-                implicitHeight: Theme.touchTarget
                 enabled: !mkdirJob.running && /^[^/]+$/.test(nameField.text.trim()) && nameField.text.trim() !== "."
                     && nameField.text.trim() !== ".."
                 text: qsTr("Create")
@@ -205,16 +204,14 @@ Sheet {
             Layout.fillWidth: true
             spacing: Theme.spacing
 
-            QQC2.Button {
+            Button {
                 visible: sheet.browsing
-                implicitHeight: Theme.touchTarget
                 icon.name: "go-up-symbolic"
                 text: sheet.place && sheet.folder === sheet.place.path ? qsTr("Places") : qsTr("Up")
                 onClicked: sheet.place && sheet.folder === sheet.place.path ? sheet.place = null : sheet.up()
             }
-            QQC2.Button {
+            Button {
                 visible: sheet.browsing && !sheet.naming && !sheet.missing
-                implicitHeight: Theme.touchTarget
                 icon.name: "folder-new-symbolic"
                 text: qsTr("New folder")
                 onClicked: {
@@ -224,19 +221,16 @@ Sheet {
                 }
             }
             Item { Layout.fillWidth: true }
-            QQC2.Button {
+            Button {
                 visible: !sheet.browsing
-                implicitHeight: Theme.touchTarget
                 text: qsTr("Cancel")
                 onClicked: sheet.close()
             }
-            QQC2.Button {
+            Button {
                 visible: sheet.browsing
                 enabled: !sheet.missing
-                implicitHeight: Theme.touchTarget
                 text: qsTr("Use this folder")
-                palette.button: Theme.accent
-                palette.buttonText: Theme.accentText
+                kind: Button.Primary
                 onClicked: sheet.choose(sheet.folder)
             }
         }

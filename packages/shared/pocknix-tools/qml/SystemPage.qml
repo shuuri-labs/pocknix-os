@@ -144,18 +144,15 @@ TabPage {
             : qsTr("A snapshot is taken before every update, so you can roll it back.")
         busy: checkJob.running
 
-        QQC2.Button {
-            implicitHeight: Theme.touchTarget
+        Button {
             text: qsTr("Check")
             enabled: !page.busy
             onClicked: checkJob.start(["/usr/bin/pocknix-update", "--check"], { root: true })
         }
-        QQC2.Button {
-            implicitHeight: Theme.touchTarget
+        Button {
             text: qsTr("Update now")
             enabled: !page.busy
-            palette.button: page.updates && page.updates.length > 0 ? Theme.accent : Theme.surfaceHigh
-            palette.buttonText: page.updates && page.updates.length > 0 ? Theme.accentText : Theme.text
+            kind: page.updates && page.updates.length > 0 ? Button.Primary : Button.Secondary
             onClicked: page.update()
         }
     }
@@ -180,17 +177,15 @@ TabPage {
             required property var modelData
             title: modelData.when.toLocaleString(Qt.locale(), "d MMM yyyy, HH:mm")
             description: modelData.targets + (modelData.kernel ? " · " + qsTr("includes the kernel") : "")
-            QQC2.Button {
-                implicitHeight: Theme.touchTarget
+            Button {
                 text: qsTr("Roll back")
                 enabled: !page.busy
                 onClicked: page.rollback(modelData, "")
             }
         }
     }
-    QQC2.Button {
+    Button {
         visible: page.snapshots.length > 5
-        implicitHeight: Theme.touchTarget
         text: page.showAll ? qsTr("Show fewer") : qsTr("Show all %1").arg(page.snapshots.length)
         onClicked: page.showAll = !page.showAll
     }
@@ -208,8 +203,7 @@ TabPage {
             required property var modelData
             title: modelData.when.toLocaleString(Qt.locale(), "d MMM yyyy, HH:mm")
             description: modelData.targets + (modelData.kernel ? " · " + qsTr("includes the kernel") : "")
-            QQC2.Button {
-                implicitHeight: Theme.touchTarget
+            Button {
                 text: qsTr("Roll back")
                 enabled: !page.busy
                 onClicked: page.rollback(modelData, "--internal")

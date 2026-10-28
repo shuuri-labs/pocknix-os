@@ -65,9 +65,8 @@ TabPage {
                 text: qsTr("In use")
                 tone: "positive"
             }
-            QQC2.Button {
+            Button {
                 visible: !modelData.active
-                implicitHeight: Theme.touchTarget
                 text: qsTr("Use")
                 enabled: !page.app.logJobRunning
                 onClicked: page.pick(modelData)
