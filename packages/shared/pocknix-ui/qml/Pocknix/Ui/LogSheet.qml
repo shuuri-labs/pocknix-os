@@ -80,9 +80,8 @@ Sheet {
             font.pointSize: Theme.smallFontSize
             wrapMode: Text.WordWrap
         }
-        QQC2.Button {
+        Button {
             Layout.alignment: Qt.AlignRight
-            implicitHeight: Theme.touchTarget
             text: sheet.running ? qsTr("Hide") : qsTr("Close")
             enabled: !sheet.running || sheet.detached
             onClicked: sheet.close()

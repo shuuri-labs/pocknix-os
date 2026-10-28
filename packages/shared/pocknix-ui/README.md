@@ -31,7 +31,8 @@ never changes.
 - The window owns the confirm sheet: a page calls `app.ask({ title, text, confirmText, hold,
   danger, yes })` or `app.notice(title, text)`. Paths and `key=value` parsing are in `Util`.
 - Controls use Qt's Basic style, coloured from `Theme.qml` through the window palette. A reskin
-  edits `Theme.qml` (and the components), never a CLI.
+  edits `Theme.qml` (and the components), never a CLI. Buttons are `Button` with a `kind`
+  (`Button.Primary`, `Button.Danger`, else secondary), never a palette set at the call site.
 
 ## The CLI contract
 

@@ -254,14 +254,12 @@ AppWindow {
                 visible: installAll.visible || addTiles.visible
                 spacing: Theme.spacing
 
-                QQC2.Button {
+                Button {
                     id: installAll
                     visible: section.emulation && app.store.mode !== "all"
                     enabled: !actionJob.running
-                    implicitHeight: Theme.touchTarget
                     text: qsTr("Install all")
-                    palette.button: Theme.accent
-                    palette.buttonText: Theme.accentText
+                    kind: Button.Primary
                     onClicked: app.ask({
                         title: qsTr("Install all emulation?"),
                         text: qsTr("ES-DE, Steam ROM Manager and every emulator, kept up to date as one set. A large download with a full system update."),
@@ -269,11 +267,10 @@ AppWindow {
                         yes: () => app.act("install-all", [], qsTr("Installing emulation"))
                     })
                 }
-                QQC2.Button {
+                Button {
                     id: addTiles
                     visible: section.tiles.length > 0
                     enabled: !tilesJob.running
-                    implicitHeight: Theme.touchTarget
                     text: qsTr("Add Steam tiles")
                     onClicked: app.addTiles(section.tiles)
                 }
@@ -320,12 +317,10 @@ AppWindow {
                 title: qsTr("Remove all emulation")
                 description: qsTr("Your ROMs, BIOS files, saves and settings are kept.")
 
-                QQC2.Button {
+                Button {
                     enabled: !actionJob.running
-                    implicitHeight: Theme.touchTarget
                     text: qsTr("Remove all")
-                    palette.button: Theme.negative
-                    palette.buttonText: Theme.accentText
+                    kind: Button.Danger
                     onClicked: app.ask({
                         title: qsTr("Remove all emulation?"),
                         text: qsTr("ES-DE, Steam ROM Manager and every emulator are uninstalled, with their Steam tiles. Your ROMs, BIOS files, saves and settings are kept, so installing again brings everything back as it was."),

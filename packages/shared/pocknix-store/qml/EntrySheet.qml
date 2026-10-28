@@ -104,42 +104,36 @@ Sheet {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spacing
 
-            QQC2.Button {
+            Button {
                 visible: sheet.entry && sheet.entry.reset
                 enabled: !sheet.locked
-                implicitHeight: Theme.touchTarget
                 text: qsTr("Restore default settings")
                 onClicked: {
                     sheet.close()
                     sheet.reset(sheet.entry.id)
                 }
             }
-            QQC2.Button {
+            Button {
                 visible: sheet.entry && sheet.entry.installed
                 enabled: !sheet.locked
-                implicitHeight: Theme.touchTarget
                 text: qsTr("Remove")
-                palette.button: Theme.negative
-                palette.buttonText: Theme.accentText
+                kind: Button.Danger
                 onClicked: {
                     sheet.close()
                     sheet.remove(sheet.entry.id)
                 }
             }
-            QQC2.Button {
+            Button {
                 visible: sheet.entry && !sheet.entry.installed
                 enabled: !sheet.locked
-                implicitHeight: Theme.touchTarget
                 text: qsTr("Install")
-                palette.button: Theme.accent
-                palette.buttonText: Theme.accentText
+                kind: Button.Primary
                 onClicked: {
                     sheet.close()
                     sheet.install(sheet.entry.id)
                 }
             }
-            QQC2.Button {
-                implicitHeight: Theme.touchTarget
+            Button {
                 text: qsTr("Close")
                 onClicked: sheet.close()
             }

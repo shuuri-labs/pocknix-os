@@ -250,17 +250,14 @@ TabPage {
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 spacing: Theme.spacing
-                QQC2.Button {
-                    implicitHeight: Theme.touchTarget
+                Button {
                     text: qsTr("Cancel")
                     onClicked: shareSheet.close()
                 }
-                QQC2.Button {
-                    implicitHeight: Theme.touchTarget
+                Button {
                     text: qsTr("Turn on")
                     enabled: password.text !== ""
-                    palette.button: Theme.negative
-                    palette.buttonText: Theme.accentText
+                    kind: Button.Danger
                     onClicked: shareSheet.go()
                 }
             }
@@ -292,12 +289,10 @@ TabPage {
         description: noPassword ? qsTr("On, but nobody can sign in yet: set the sharing password.")
             : page.share.state === "on" ? qsTr("On: sign in as deck with deck's password. Changed that password? Turn sharing off and on again.")
             : qsTr("Off")
-        QQC2.Button {
+        Button {
             visible: shareRow.noPassword
-            implicitHeight: Theme.touchTarget
             text: qsTr("Set password")
-            palette.button: Theme.accent
-            palette.buttonText: Theme.accentText
+            kind: Button.Primary
             onClicked: shareSheet.open()
         }
         QQC2.Switch {
@@ -329,18 +324,15 @@ TabPage {
             : tsRow.tsState === "Starting" ? qsTr("Connecting…")
             : qsTr("The Tailscale service is not running")
         busy: upJob.running || quickJob.running || operatorJob.running
-        QQC2.Button {
+        Button {
             visible: (tsRow.tsState === "Running" || tsRow.tsState === "Stopped") && !upJob.running
-            implicitHeight: Theme.touchTarget
             text: qsTr("Sign out")
             onClicked: page.quick(["/usr/bin/tailscale", "logout"])
         }
-        QQC2.Button {
+        Button {
             visible: tsRow.tsState === "NeedsLogin" && !upJob.running
-            implicitHeight: Theme.touchTarget
             text: qsTr("Sign in")
-            palette.button: Theme.accent
-            palette.buttonText: Theme.accentText
+            kind: Button.Primary
             enabled: !ownServer.checked || /^https?:\/\/\S+$/.test(serverField.text.trim())
             onClicked: page.tailscaleUp(ownServer.checked ? serverField.text.trim() : page.defaultServer)
         }
@@ -455,8 +447,7 @@ TabPage {
         title: qsTr("Import a tunnel")
         description: qsTr("A .conf file from your VPN provider or your own server. It is added switched off.")
         busy: importJob.running
-        QQC2.Button {
-            implicitHeight: Theme.touchTarget
+        Button {
             text: qsTr("Import .conf")
             enabled: !importJob.running
             onClicked: picker.open()

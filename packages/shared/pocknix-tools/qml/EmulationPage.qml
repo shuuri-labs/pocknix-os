@@ -105,9 +105,8 @@ TabPage {
         description: Util.shortPath(page.romsDir)
         busy: page.busy
 
-        QQC2.Button {
+        Button {
             enabled: !page.busy
-            implicitHeight: Theme.touchTarget
             text: qsTr("Change")
             onClicked: page.pickRoms()
         }

@@ -48,19 +48,16 @@ Sheet {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spacing
 
-            QQC2.Button {
+            Button {
                 visible: sheet.cancelText !== ""
                 text: sheet.cancelText
-                implicitHeight: Theme.touchTarget
                 onClicked: sheet.close()
             }
-            QQC2.Button {
+            Button {
                 id: confirm
                 property real held: 0
                 text: sheet.confirmText
-                implicitHeight: Theme.touchTarget
-                palette.button: sheet.danger ? Theme.negative : Theme.accent
-                palette.buttonText: Theme.accentText
+                kind: sheet.danger ? Button.Danger : Button.Primary
                 onClicked: if (!sheet.hold) sheet.accept()
                 onPressedChanged: {
                     if (!sheet.hold)

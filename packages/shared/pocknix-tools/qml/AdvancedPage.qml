@@ -97,13 +97,11 @@ TabPage {
         description: page.abl.state === "uptodate" ? qsTr("Up to date (%1)").arg(page.abl.shipped_version)
             : page.abl.state === "gptrepair" ? qsTr("The partition table needs a repair before %1 can be installed.").arg(page.abl.shipped_version)
             : qsTr("Version %1 is available.").arg(page.abl.shipped_version)
-        QQC2.Button {
+        Button {
             visible: page.abl.state !== "uptodate"
             enabled: !page.app.logJobRunning
-            implicitHeight: Theme.touchTarget
             text: page.abl.state === "gptrepair" ? qsTr("Repair and install") : qsTr("Install")
-            palette.button: Theme.negative
-            palette.buttonText: Theme.accentText
+            kind: Button.Danger
             onClicked: page.app.ask({
                 title: page.abl.state === "gptrepair" ? qsTr("Repair the partition table and install the bootloader?")
                                                       : qsTr("Install bootloader %1?").arg(page.abl.shipped_version),
@@ -147,12 +145,10 @@ TabPage {
         title: qsTr("Install Pocknix to internal storage")
         description: qsTr("Next to Android, which keeps %1 GB. Pocknix gets %2 GB (%3 GB to copy from this SD card). Android is factory-reset: its apps and their data are lost.")
             .arg(page.androidGib).arg(parseInt(page.internal.android_current_gib) - page.androidGib).arg(page.internal.sd_used_gib)
-        QQC2.Button {
+        Button {
             enabled: !page.app.logJobRunning
-            implicitHeight: Theme.touchTarget
             text: qsTr("Install")
-            palette.button: Theme.negative
-            palette.buttonText: Theme.accentText
+            kind: Button.Danger
             onClicked: page.app.ask({
                 title: qsTr("Install Pocknix to internal storage?"),
                 text: qsTr("Android keeps %1 GB, Pocknix gets %2 GB. This factory-resets Android: installed Android apps and their data are lost (Android itself stays). The SD card is not touched, and nothing before the Android data partition is changed, so the bootloader stays safe. Do not power off until it finishes.")
@@ -201,12 +197,10 @@ TabPage {
         title: qsTr("Pocknix is installed on internal storage")
         description: qsTr("Android: %1 GB, Pocknix: %2 GB. To reinstall, remove it, then install again.")
             .arg(page.internal.android_gib).arg(page.internal.pocknix_gib)
-        QQC2.Button {
+        Button {
             enabled: !page.app.logJobRunning
-            implicitHeight: Theme.touchTarget
             text: qsTr("Remove")
-            palette.button: Theme.negative
-            palette.buttonText: Theme.accentText
+            kind: Button.Danger
             onClicked: page.app.ask({
                 title: qsTr("Remove Pocknix from internal storage?"),
                 text: qsTr("This erases the internal Pocknix and gives all internal storage back to Android, which factory-resets on its next start. Do not power off until it finishes."),
@@ -232,9 +226,8 @@ TabPage {
         description: page.baseMode === "rolling"
             ? qsTr("Packages come from live Arch Linux ARM. Return to the tested Pocknix base: every base package converges back to it, downgrades included.")
             : qsTr("Packages come from the tested Pocknix base and update together.")
-        QQC2.Button {
+        Button {
             enabled: !page.app.logJobRunning
-            implicitHeight: Theme.touchTarget
             text: page.baseMode === "rolling" ? qsTr("Return to locked") : qsTr("Switch to rolling")
             onClicked: page.baseMode === "rolling"
                 ? page.app.ask({
