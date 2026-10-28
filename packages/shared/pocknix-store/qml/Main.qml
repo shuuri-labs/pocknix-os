@@ -63,6 +63,8 @@ AppWindow {
     }
 
     function act(kind, ids, title) {
+        if (actionJob.running)
+            return
         acting = ids
         actingKind = kind
         log.title = title

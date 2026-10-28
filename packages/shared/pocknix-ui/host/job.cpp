@@ -42,6 +42,9 @@ bool Job::start(const QStringList &argv, const QVariantMap &options)
         m_pendingOptions = options;
         return true;
     }
+    // A fresh start is the newest request: a read queued before it would run stale after it.
+    m_pending.clear();
+    m_pendingOptions.clear();
     static const QRegularExpression rootProgram(QStringLiteral("^/usr/bin/pocknix-[a-z0-9-]+$"));
     const bool root = options.value(QStringLiteral("root")).toBool();
 

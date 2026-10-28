@@ -2,7 +2,6 @@ import QtCore
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
-import Qt.labs.folderlistmodel
 import Pocknix.Ui
 
 TabPage {
@@ -32,13 +31,15 @@ TabPage {
         romsWhere.start([romsInit, "--where"])
     }
     function pickRoms() {
+        cardsJob.start(["/usr/bin/find", cards, "-mindepth", "1", "-maxdepth", "1", "-type", "d"])
+    }
+    // Listed per tap, so a card put in while Tools is open shows; no cards = find fails, none listed.
+    function openPicker(cardPaths) {
         const def = home + "/Emulation/ROMs"
         const p = [{ label: qsTr("Internal storage"), detail: "~", path: home, icon: "drive-harddisk-symbolic", browse: true }]
-        // no cards: the model shows the working directory instead
-        const cardsThere = decodeURIComponent(cardList.folder.toString().replace("file://", "")) === cards
-        for (let i = 0; cardsThere && i < cardList.count; i++)
-            p.push({ label: qsTr("SD card %1").arg(cardList.get(i, "fileName")), detail: "",
-                     path: cardList.get(i, "filePath"), icon: "media-flash-sd-mmc-symbolic", browse: true })
+        for (const c of cardPaths.sort())
+            p.push({ label: qsTr("SD card %1").arg(c.split("/").pop()), detail: "",
+                     path: c, icon: "media-flash-sd-mmc-symbolic", browse: true })
         if (romsDir !== def)
             p.push({ label: qsTr("Default folder"), detail: "~/Emulation/ROMs", path: def,
                      icon: "edit-undo-symbolic", browse: false })
@@ -48,10 +49,9 @@ TabPage {
 
     Component.onCompleted: refresh()
 
-    FolderListModel {
-        id: cardList
-        folder: "file://" + page.cards
-        showFiles: false
+    Job {
+        id: cardsJob
+        onFinished: code => page.openPicker(code === 0 ? output.split("\n").filter(l => l) : [])
     }
 
     Job {
