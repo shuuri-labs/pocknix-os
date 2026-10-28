@@ -250,13 +250,18 @@ AppWindow {
 
             // A Flow, so the actions wrap on a narrow panel instead of squeezing the title.
             Flow {
+                id: actions
+                // A child's visible reads false while the page is hidden, so testing the children
+                // would hide this row for good after a visit to another page.
+                readonly property bool installAllShown: section.emulation && app.store.mode !== "all"
+                readonly property bool tilesShown: section.tiles.length > 0
                 Layout.fillWidth: true
-                visible: installAll.visible || addTiles.visible
+                visible: installAllShown || tilesShown
                 spacing: Theme.spacing
 
                 Button {
                     id: installAll
-                    visible: section.emulation && app.store.mode !== "all"
+                    visible: actions.installAllShown
                     enabled: !actionJob.running
                     text: qsTr("Install all")
                     kind: Button.Primary
@@ -269,7 +274,7 @@ AppWindow {
                 }
                 Button {
                     id: addTiles
-                    visible: section.tiles.length > 0
+                    visible: actions.tilesShown
                     enabled: !tilesJob.running
                     text: qsTr("Add Steam tiles")
                     onClicked: app.addTiles(section.tiles)
