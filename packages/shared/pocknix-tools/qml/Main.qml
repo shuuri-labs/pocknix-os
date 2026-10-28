@@ -26,6 +26,9 @@ AppWindow {
     // A change with a log: `done(code)` runs when it ends. A detached one (pacman under
     // pocknix-job) keeps running when the sheet or the app closes.
     function run(title, argv, options, done) {
+        // A second start would queue behind the first while the sheet shows the new title.
+        if (logJob.running)
+            return
         log.title = title
         log.detached = !!(options && options.detached)
         logJob.done = done || null
