@@ -1,4 +1,3 @@
-import QtCore
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
@@ -10,7 +9,6 @@ AppWindow {
 
     readonly property string cli: "/usr/bin/pocknix-store"
     readonly property string romsInit: "/usr/bin/pocknix-roms-init"
-    readonly property string home: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "")
     property string romsDir: ""
     property var store: ({ mode: "none", job: "none", sections: [], entries: [] })
     property bool loaded: false
@@ -24,7 +22,6 @@ AppWindow {
     property var offerTiles: []
     // ids whose install note to show once the status after an install is in
     property var offerNotes: []
-    property var pending: null
     // Replaced only when the sections change, so a refresh after each action keeps the pages.
     property var sections: []
     readonly property var sectionIcons: ({
@@ -48,19 +45,6 @@ AppWindow {
         return inSection(section).filter(e => e.installed && e.tile)
     }
 
-    function ask(o) {
-        askSheet.title = o.title
-        askSheet.text = o.text || ""
-        askSheet.confirmText = o.confirmText || qsTr("OK")
-        askSheet.cancelText = o.notice ? "" : qsTr("Cancel")
-        askSheet.hold = !!o.hold
-        askSheet.danger = !!o.danger
-        pending = o.yes || null
-        askSheet.open()
-    }
-    function notice(title, text) {
-        ask({ title: title, text: text, notice: true })
-    }
 
     function act(kind, ids, title) {
         if (actionJob.running)
@@ -123,11 +107,6 @@ AppWindow {
         return error
     }
 
-    function shortPath(path) {
-        const cards = "/run/media/" + home.split("/").pop() + "/"
-        return path.startsWith(cards) ? path.slice(cards.length)
-            : path.startsWith(home + "/") ? "~" + path.slice(home.length) : path
-    }
 
     Component.onCompleted: refresh()
 
@@ -304,7 +283,7 @@ AppWindow {
             QQC2.Label {
                 Layout.fillWidth: true
                 visible: section.emulation && app.store.mode !== "none" && app.romsDir !== ""
-                text: qsTr("Your games go in %1. Change it in Pocknix Tools, under Emulation.").arg(app.shortPath(app.romsDir))
+                text: qsTr("Your games go in %1. Change it in Pocknix Tools, under Emulation.").arg(Util.shortPath(app.romsDir))
                 color: Theme.textMuted
                 wrapMode: Text.WordWrap
             }
@@ -368,15 +347,6 @@ AppWindow {
         onReset: id => app.reset(id)
     }
 
-    ConfirmSheet {
-        id: askSheet
-        onAccepted: {
-            const f = app.pending
-            app.pending = null
-            if (f)
-                f()
-        }
-    }
 
     LogSheet {
         id: log

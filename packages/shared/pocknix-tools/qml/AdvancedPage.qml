@@ -19,15 +19,6 @@ TabPage {
     readonly property int minGib: parseInt(internal.android_min_gib) || 0
     readonly property int maxGib: parseInt(internal.android_max_gib) || 0
 
-    function kv(text) {
-        const r = {}
-        text.split("\n").forEach(l => {
-            const i = l.indexOf("=")
-            if (i > 0)
-                r[l.slice(0, i)] = l.slice(i + 1)
-        })
-        return r
-    }
     function refresh() {
         ablJob.start(["/usr/bin/pocknix-update-abl", "--status"], { root: true })
         detectJob.start(["/usr/bin/pocknix-install-internal", "--detect"], { root: true })
@@ -52,12 +43,12 @@ TabPage {
 
     Job {
         id: ablJob
-        onFinished: code => page.abl = code === 0 ? page.kv(output) : ({})
+        onFinished: code => page.abl = code === 0 ? Util.kv(output) : ({})
     }
     Job {
         id: detectJob
         onFinished: code => {
-            page.internal = code === 0 ? page.kv(output) : ({})
+            page.internal = code === 0 ? Util.kv(output) : ({})
             if (page.internal.mode === "fresh") {
                 const lo = parseInt(page.internal.android_min_gib), hi = parseInt(page.internal.android_max_gib)
                 page.androidGib = hi >= 32 ? Math.max(32, lo) : lo

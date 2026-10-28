@@ -28,6 +28,8 @@ never changes.
   reads the same in both sessions. `QT_SCALE_FACTOR` in the environment wins.
 - An app is an `AppWindow` whose `TabPage` children are its pages, listed in a left rail with
   each page's `title` and `icon` (a `-symbolic` theme name: only those draw in the rail's tint).
+- The window owns the confirm sheet: a page calls `app.ask({ title, text, confirmText, hold,
+  danger, yes })` or `app.notice(title, text)`. Paths and `key=value` parsing are in `Util`.
 - Controls use Qt's Basic style, coloured from `Theme.qml` through the window palette. A reskin
   edits `Theme.qml` (and the components), never a CLI.
 

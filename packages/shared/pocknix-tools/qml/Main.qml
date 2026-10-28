@@ -6,22 +6,8 @@ AppWindow {
     title: qsTr("Pocknix Tools")
 
     readonly property string jobRunner: "/usr/lib/pocknix-ui/pocknix-job"
-    property var pending: null
     readonly property bool logJobRunning: logJob.running
 
-    function ask(o) {
-        askSheet.title = o.title
-        askSheet.text = o.text || ""
-        askSheet.confirmText = o.confirmText || qsTr("OK")
-        askSheet.cancelText = o.notice ? "" : qsTr("Cancel")
-        askSheet.hold = !!o.hold
-        askSheet.danger = !!o.danger
-        pending = o.yes || null
-        askSheet.open()
-    }
-    function notice(title, text) {
-        ask({ title: title, text: text, notice: true })
-    }
 
     // A change with a log: `done(code)` runs when it ends. A detached one (pacman under
     // pocknix-job) keeps running when the sheet or the app closes.
@@ -79,15 +65,6 @@ AppWindow {
         app: app
     }
 
-    ConfirmSheet {
-        id: askSheet
-        onAccepted: {
-            const f = app.pending
-            app.pending = null
-            if (f)
-                f()
-        }
-    }
 
     LogSheet {
         id: log
