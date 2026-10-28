@@ -18,6 +18,7 @@ set(QML_FILES
     qml/Pocknix/Ui/Tile.qml
     qml/Pocknix/Ui/ActionRow.qml
     qml/Pocknix/Ui/StatusBadge.qml
+    qml/Pocknix/Ui/Sheet.qml
     qml/Pocknix/Ui/ConfirmSheet.qml
     qml/Pocknix/Ui/LogSheet.qml
     qml/Pocknix/Ui/FolderSheet.qml)

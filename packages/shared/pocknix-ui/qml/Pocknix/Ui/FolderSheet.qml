@@ -8,7 +8,7 @@ import Pocknix.Ui
 // Pick a folder by touch: the app's places, each browsed from its own root (Up stops there, so
 // the pick stays inside the user's storage). Qt's own FolderDialog falls back to a small desktop
 // tree under gamescope.
-QQC2.Popup {
+Sheet {
     id: sheet
     property string title
     // [{ label, detail, path, icon, browse }]: browse = open the folder, else pick it as it is
@@ -50,17 +50,7 @@ QQC2.Popup {
     }
     property bool naming: false
 
-    parent: QQC2.Overlay.overlay
-    anchors.centerIn: parent
-    width: Math.min(parent ? parent.width - Theme.spacing * 4 : 0, Theme.unit * 32)
     height: parent ? parent.height - Theme.spacing * 4 : 0
-    modal: true
-    padding: Theme.spacing * 1.5
-    background: Rectangle {
-        color: Theme.surface
-        radius: Theme.radius
-        border.color: Theme.border
-    }
     onOpened: {
         place = null
         naming = false

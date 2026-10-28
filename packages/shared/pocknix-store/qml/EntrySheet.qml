@@ -6,7 +6,7 @@ import Pocknix.Ui
 
 // One entry's actions. The Steam tile state is read when the sheet opens, never for the whole
 // list: every pocknix-tiles call is a round trip into Steam.
-QQC2.Popup {
+Sheet {
     id: sheet
     property var entry: null
     property bool locked: false
@@ -17,16 +17,6 @@ QQC2.Popup {
     signal remove(string id)
     signal reset(string id)
 
-    parent: QQC2.Overlay.overlay
-    anchors.centerIn: parent
-    width: Math.min(parent ? parent.width - Theme.spacing * 4 : 0, Theme.unit * 32)
-    modal: true
-    padding: Theme.spacing * 1.5
-    background: Rectangle {
-        color: Theme.surface
-        radius: Theme.radius
-        border.color: Theme.border
-    }
 
     onOpened: {
         tileError = ""
