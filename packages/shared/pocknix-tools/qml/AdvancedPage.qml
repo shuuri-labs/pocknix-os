@@ -113,7 +113,7 @@ TabPage {
                 hold: true,
                 danger: true,
                 yes: () => page.step(qsTr("Installing the bootloader"), ["abl"],
-                                     () => page.app.notice(qsTr("Bootloader installed"), qsTr("It will be used from the next restart.")))
+                                     () => page.app.toast(qsTr("Bootloader installed"), qsTr("It will be used from the next restart.")))
             })
         }
     }

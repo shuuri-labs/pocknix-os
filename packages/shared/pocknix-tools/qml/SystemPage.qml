@@ -55,7 +55,7 @@ TabPage {
                 if (code === 0 && !flag)
                     app.askReboot(qsTr("Rolled back"), qsTr("A restart completes the rollback."))
                 else if (code === 0)
-                    app.notice(qsTr("Internal install rolled back"), qsTr("It starts in that state the next time you boot from internal storage."))
+                    app.toast(qsTr("Internal install rolled back"), qsTr("It starts in that state the next time you boot from internal storage."))
             })
         })
     }
@@ -73,7 +73,7 @@ TabPage {
             if (code === 0)
                 page.app.askReboot(qsTr("Updated"), qsTr("The update includes a new kernel. Restart to use it."))
             else
-                page.app.notice(qsTr("Updated"), qsTr("Pocknix is up to date."))
+                page.app.toast(qsTr("Updated"), qsTr("Pocknix is up to date."))
         }
     }
     Job {

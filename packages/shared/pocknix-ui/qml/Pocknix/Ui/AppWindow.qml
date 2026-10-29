@@ -51,6 +51,10 @@ QQC2.ApplicationWindow {
     function notice(title, text) {
         ask({ title: title, text: text, notice: true })
     }
+    // A success with nothing to act on; anything to read or act on goes in notice().
+    function toast(title, text) {
+        toaster.show(title, text)
+    }
 
     // Only the TabPage children are pages: a Repeater making them sits among them.
     readonly property var tabPages: Array.from(stack.children).filter(c => c instanceof TabPage)
@@ -88,5 +92,11 @@ QQC2.ApplicationWindow {
             if (f)
                 f()
         }
+    }
+
+    Toast {
+        id: toaster
+        // centred on the pages, not the whole window
+        x: (rail.visible ? rail.width : 0) + (root.width - (rail.visible ? rail.width : 0) - width) / 2
     }
 }

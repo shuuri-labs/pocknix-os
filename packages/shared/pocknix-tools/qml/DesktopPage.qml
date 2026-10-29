@@ -22,7 +22,7 @@ TabPage {
             app.run(qsTr("Choosing %1").arg(d.label), ["/usr/bin/pocknix-desktop-select", d.name], {}, code => {
                 refresh()
                 if (code === 0)
-                    app.notice(qsTr("%1 chosen").arg(d.label), qsTr("Desktop mode starts it from now on."))
+                    app.toast(qsTr("%1 chosen").arg(d.label), qsTr("Desktop mode starts it from now on."))
             })
             return
         }

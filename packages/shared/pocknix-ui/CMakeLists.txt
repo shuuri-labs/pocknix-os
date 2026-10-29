@@ -20,6 +20,7 @@ set(QML_FILES
     qml/Pocknix/Ui/StatusBadge.qml
     qml/Pocknix/Ui/Button.qml
     qml/Pocknix/Ui/Sheet.qml
+    qml/Pocknix/Ui/Toast.qml
     qml/Pocknix/Ui/ConfirmSheet.qml
     qml/Pocknix/Ui/LogSheet.qml
     qml/Pocknix/Ui/FolderSheet.qml)
