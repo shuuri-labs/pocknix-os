@@ -1,0 +1,68 @@
+From d9108bfdb746edacdb05bd27959a4ae63c6c7f3f Mon Sep 17 00:00:00 2001
+From: Shivam Rawat <shivrawa@qti.qualcomm.com>
+Date: Fri, 5 Jun 2026 01:38:17 +0530
+Subject: [PATCH] drm/msm/a6xx: Fix stale rpmh votes after suspend (and leave
+ GPU RSC awake for system poweroff)
+
+There are stale RPMH votes (BCM votes on SH0/MC0/CN0 and ARC rail votes)
+observed on gmu_rsc after GMU suspend because the GMU_STATUS_FW_START
+check in a6xx_rpmh_stop() was inverted, skipping the GPU RSC sleep
+sequence on every runtime and system suspend. Fix the inverted check and
+halt the GMU CM3 core before stopping RPMh.
+
+Also include Michael Burch's follow-up guard for SYSTEM_POWER_OFF /
+SYSTEM_HALT so platforms do not reboot on poweroff when the GPU PDC is
+asleep.
+
+Fixes: f248d5d5159a ("drm/msm/a6xx: Fix PDC sleep sequence")
+Signed-off-by: Shivam Rawat <shivrawa@qti.qualcomm.com>
+Signed-off-by: Akhil P Oommen <akhilpo@oss.qualcomm.com>
+Signed-off-by: Rob Clark <robin.clark@oss.qualcomm.com>
+---
+ drivers/gpu/drm/msm/adreno/a6xx_gmu.c      | 9 ++++++++-
+ drivers/gpu/drm/msm/adreno/adreno_device.c | 5 +++++
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/msm/adreno/a6xx_gmu.c b/drivers/gpu/drm/msm/adreno/a6xx_gmu.c
+--- a/drivers/gpu/drm/msm/adreno/a6xx_gmu.c
++++ b/drivers/gpu/drm/msm/adreno/a6xx_gmu.c
+@@ -642,7 +642,11 @@ static void a6xx_rpmh_stop(struct a6xx_gmu *gmu)
+ 	int ret;
+ 	u32 val;
+ 
+-	if (test_and_clear_bit(GMU_STATUS_FW_START, &gmu->status))
++	if (!test_and_clear_bit(GMU_STATUS_FW_START, &gmu->status))
++		return;
++
++	/* Some platforms reboot instead of powering off if the GPU PDC is asleep */
++	if (system_state == SYSTEM_POWER_OFF || system_state == SYSTEM_HALT)
+ 		return;
+ 
+ 	if (adreno_is_a840(adreno_gpu))
+@@ -1420,6 +1424,9 @@ static void a6xx_gmu_shutdown(struct a6xx_gmu *gmu)
+ 	/* Stop the interrupts and mask the hardware */
+ 	a6xx_gmu_irq_disable(gmu);
+ 
++	/* Halt the gmu cm3 core */
++	gmu_write(gmu, REG_A6XX_GMU_CM3_SYSRESET, 1);
++
+ 	/* Tell RPMh to power off the GPU */
+ 	a6xx_rpmh_stop(gmu);
+ 
+diff --git a/drivers/gpu/drm/msm/adreno/adreno_device.c b/drivers/gpu/drm/msm/adreno/adreno_device.c
+--- a/drivers/gpu/drm/msm/adreno/adreno_device.c
++++ b/drivers/gpu/drm/msm/adreno/adreno_device.c
+@@ -290,6 +290,11 @@ static void adreno_remove(struct platform_device *pdev)
+ 
+ static void adreno_shutdown(struct platform_device *pdev)
+ {
++	/* Resuming wakes the GMU RSC/PDC; the final stop then leaves it awake */
++	if (dev_to_gpu(&pdev->dev) &&
++	    (system_state == SYSTEM_POWER_OFF || system_state == SYSTEM_HALT))
++		pm_runtime_get_sync(&pdev->dev);
++
+ 	WARN_ON_ONCE(adreno_system_suspend(&pdev->dev));
+ }
+ 
+-- 
+2.47.0
