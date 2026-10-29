@@ -1,0 +1,68 @@
+From: transentient <cliff.judge@gmail.com>
+Subject: [PATCH] ASoC: lpass-wsa-macro: the vendor's codec-init register table and full compander CTL7 field
+
+lpass-wsa-macro is a port of the vendor's bolero wsa-macro driver: same
+block, same register offsets, same two speaker-mode tables. The port
+dropped the vendor's codec-init table (wsa_macro_reg_init: smart-boost
+BOOST_CFG1/CFG2, compander CTL7 bits 4:1, BOOST_CTL bits 6:4, TOP_CFG1)
+and narrowed the CTL7 write in the mode tables to bit 0 (the vendor writes
+the whole 5-bit field: 0x18 for mode 1, 0x19 for the default mode).
+
+On the Retroid Pocket 5 (SM8250, two WSA8810 amplifiers = mode 1 in the
+vendor's machine driver, the mode upstream also applies) the speaker
+chain measured with the reset-default boost configuration tops out 10 dB
+below the vendor's Android on the same hardware, with the upstream
+compander dropping 8 dB at 80 % of the slider . Apply the
+vendor's init values before selecting the mode and write the full CTL7
+field. Mode 1 stays, as upstream.
+---
+--- a/sound/soc/codecs/lpass-wsa-macro.c	2026-10-15 14:49:18.466340882 +0900
++++ b/sound/soc/codecs/lpass-wsa-macro.c	2026-10-15 15:00:33.989487253 +0900
+@@ -1135,16 +1135,16 @@
+ 	case WSA_MACRO_SPKR_MODE_1:
+ 		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER0_CTL3, 0x80, 0x00);
+ 		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER1_CTL3, 0x80, 0x00);
+-		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER0_CTL7, 0x01, 0x00);
+-		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER1_CTL7, 0x01, 0x00);
++		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER0_CTL7, 0x1F, 0x18);
++		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER1_CTL7, 0x1F, 0x18);
+ 		snd_soc_component_update_bits(component, CDC_WSA_BOOST0_BOOST_CTL, 0x7C, 0x44);
+ 		snd_soc_component_update_bits(component, CDC_WSA_BOOST1_BOOST_CTL, 0x7C, 0x44);
+ 		break;
+ 	default:
+ 		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER0_CTL3, 0x80, 0x80);
+ 		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER1_CTL3, 0x80, 0x80);
+-		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER0_CTL7, 0x01, 0x01);
+-		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER1_CTL7, 0x01, 0x01);
++		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER0_CTL7, 0x1F, 0x19);
++		snd_soc_component_update_bits(component, CDC_WSA_COMPANDER1_CTL7, 0x1F, 0x19);
+ 		snd_soc_component_update_bits(component, CDC_WSA_BOOST0_BOOST_CTL, 0x7C, 0x58);
+ 		snd_soc_component_update_bits(component, CDC_WSA_BOOST1_BOOST_CTL, 0x7C, 0x58);
+ 		break;
+@@ -2574,6 +2574,26 @@
+ 				CDC_WSA_RX_PATH_SPKR_RATE_MASK,
+ 				CDC_WSA_RX_PATH_SPKR_RATE_FS_2P4_3P072);
+ 
++	/*
++	 * the vendor's bolero wsa-macro programs these at codec init
++	 * (wsa_macro_reg_init: smart-boost configuration, compander CTL7 field,
++	 * boost control, TOP_CFG1), before the machine driver selects the
++	 * speaker mode. The upstream port kept the mode tables but dropped this
++	 * table, so the boost converter runs on reset defaults (BOOST_CFG1 0x89,
++	 * BOOST_CFG2 0x04). Retroid Pocket 5 (WSA8810 amplifiers, mode 1):
++	 * measured ceiling 10 dB below the vendor's Android on the same hardware
++	 * . Values from the vendor source; registers identical.
++	 */
++	snd_soc_component_update_bits(comp, CDC_WSA_BOOST0_BOOST_CFG1, 0x3F, 0x12);
++	snd_soc_component_update_bits(comp, CDC_WSA_BOOST0_BOOST_CFG2, 0x1C, 0x08);
++	snd_soc_component_update_bits(comp, CDC_WSA_COMPANDER0_CTL7, 0x1E, 0x0C);
++	snd_soc_component_update_bits(comp, CDC_WSA_BOOST1_BOOST_CFG1, 0x3F, 0x12);
++	snd_soc_component_update_bits(comp, CDC_WSA_BOOST1_BOOST_CFG2, 0x1C, 0x08);
++	snd_soc_component_update_bits(comp, CDC_WSA_COMPANDER1_CTL7, 0x1E, 0x0C);
++	snd_soc_component_update_bits(comp, CDC_WSA_BOOST0_BOOST_CTL, 0x70, 0x58);
++	snd_soc_component_update_bits(comp, CDC_WSA_BOOST1_BOOST_CTL, 0x70, 0x58);
++	snd_soc_component_update_bits(comp, CDC_WSA_TOP_TOP_CFG1, 0x03, 0x03);
++	/* the vendor's machine driver selects mode 1 for WSA8810 amplifiers */
+ 	wsa_macro_set_spkr_mode(comp, WSA_MACRO_SPKR_MODE_1);
+ 
+ 	switch (wsa->codec_version) {

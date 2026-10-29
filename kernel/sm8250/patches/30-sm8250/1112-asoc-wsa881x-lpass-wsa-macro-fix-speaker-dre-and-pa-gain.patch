@@ -1,0 +1,164 @@
+From: transentient <cliff.judge@gmail.com>
+Subject: [PATCH] ASoC: codecs: wsa881x, lpass-wsa-macro: fix DRE compander gain selection and PA gain persistence
+
+Two bugs in sound/soc/codecs/wsa881x.c broke both the hardware compander
+(DRE) path and the linear speaker PA path on SM8250 (Retroid Pocket 5):
+
+1. wsa881x.c defines WSA881X_PA_GAIN_SEL_DRE (0) and WSA881X_PA_GAIN_SEL_REG
+   (BIT(3)) for WSA881X_SPKR_DRV_GAIN (0x311B), but wsa881x_spkr_pa_event()
+   unconditionally wrote WSA881X_PA_GAIN_SEL_REG on SND_SOC_DAPM_PRE_PMU
+   even when "COMP Switch" (wsa881x->port_enable[WSA881X_PORT_COMP]) was
+   enabled. With PA_GAIN_SEL_REG set, the WSA8810 amplifier ignores the
+   per-sample DRE analog PA gain word transmitted by lpass-wsa-macro over
+   SoundWire Data Port 2 (WSA881X_PORT_COMP) and holds its analog PA gain
+   fixed. When WSA_COMP1/2 was enabled in lpass-wsa-macro, the digital half
+   of the compander applied +12 dB of low-level boost and then ramped the
+   digital gain down by 8-12 dB above the compander knee (slider 0.8-1.0)
+   expecting the WSA8810 DRE expander to simultaneously ramp the analog PA
+   gain up from +6 dB to +18 dB; because WSA8810 ignored DRE, the output
+   dropped 8 dB at 0.8 and pumped 12 dB at 1.0.
+
+2. In wsa881x_spkr_pa_event(), SND_SOC_DAPM_PRE_PMU writes
+   wsa881x_pre_pmu_pa_2_0 ({ WSA881X_SPKR_DRV_GAIN, 0x41, 0 }), which
+   resets bits [7:4] (WSA881X_SPKR_PAG_GAIN_MASK) to G_12DB (+12 dB) on
+   every stream start, overwriting the +18 dB (PA Volume = 12 -> G_18DB)
+   set earlier by UCM via wsa881x_put_pa_gain(). In linear mode (COMP off),
+   this cost 6 dB of analog PA headroom and forced UCM to push
+   WSA_RX0/1 Digital Volume to 102 (+18 dB), causing digital saturation in
+   the WSA interpolator across the top of the volume range.
+
+Select WSA881X_PA_GAIN_SEL_DRE when WSA881X_PORT_COMP is enabled, and
+preserve/ramp wsa881x->pa_gain in SND_SOC_DAPM_POST_PMU when
+WSA881X_PORT_COMP is disabled (matching Qualcomm's downstream wsa881x
+driver). Also enable MCLK and FS_CNT before regcache_sync() in
+wsa_macro_mclk_enable() (matching downstream bolero/wsa-macro.c) so that
+compander, boost, and softclip registers are synced with the internal macro
+clock active.
+
+Signed-off-by: transentient <cliff.judge@gmail.com>
+---
+ sound/soc/codecs/lpass-wsa-macro.c |  4 ++--
+ sound/soc/codecs/wsa881x.c         | 49 +++++++++++++++++++++---------
+ 2 files changed, 37 insertions(+), 16 deletions(-)
+
+--- a/sound/soc/codecs/lpass-wsa-macro.c
++++ b/sound/soc/codecs/lpass-wsa-macro.c
+@@ -1415,8 +1415,6 @@
+ 
+ 	if (mclk_enable) {
+ 		if (wsa->wsa_mclk_users == 0) {
+-			regcache_mark_dirty(regmap);
+-			regcache_sync(regmap);
+ 			/* 9.6MHz MCLK, set value 0x00 if other frequency */
+ 			regmap_update_bits(regmap, CDC_WSA_TOP_FREQ_MCLK, 0x01, 0x01);
+ 			regmap_update_bits(regmap,
+@@ -1427,6 +1425,8 @@
+ 					   CDC_WSA_CLK_RST_CTRL_FS_CNT_CONTROL,
+ 					   CDC_WSA_FS_CNT_EN_MASK,
+ 					   CDC_WSA_FS_CNT_ENABLE);
++			regcache_mark_dirty(regmap);
++			regcache_sync(regmap);
+ 		}
+ 		wsa->wsa_mclk_users++;
+ 	} else {
+--- a/sound/soc/codecs/wsa881x.c
++++ b/sound/soc/codecs/wsa881x.c
+@@ -678,6 +678,7 @@
+ 	 */
+ 	unsigned int sd_n_val;
+ 	int active_ports;
++	int pa_gain;
+ 	bool hw_init;
+ 	bool port_prepared[WSA881X_MAX_SWR_PORTS];
+ 	bool port_enable[WSA881X_MAX_SWR_PORTS];
+@@ -741,29 +742,11 @@
+ 	return 0;
+ }
+ 
+-static int wsa881x_put_pa_gain(struct snd_kcontrol *kc,
+-			       struct snd_ctl_elem_value *ucontrol)
++static void wsa881x_ramp_pa_gain(struct snd_soc_component *comp,
++				 int min_gain, int max_gain)
+ {
+-	struct snd_soc_component *comp = snd_kcontrol_chip(kc);
+-	struct soc_mixer_control *mc =
+-			(struct soc_mixer_control *)kc->private_value;
+-	int max = mc->max;
+-	unsigned int mask = (1 << fls(max)) - 1;
+-	int val, ret, min_gain, max_gain;
+-
+-	ret = pm_runtime_resume_and_get(comp->dev);
+-	if (ret < 0 && ret != -EACCES)
+-		return ret;
+-
+-	max_gain = (max - ucontrol->value.integer.value[0]) & mask;
+-	/*
+-	 * Gain has to set incrementally in 4 steps
+-	 * as per HW sequence
+-	 */
+-	if (max_gain > G_4P5DB)
+-		min_gain = G_0DB;
+-	else
+-		min_gain = max_gain + 3;
++	int val, ret;
++
+ 	/*
+ 	 * 1ms delay is needed before change in gain
+ 	 * as per HW requirement.
+@@ -780,6 +763,35 @@
+ 
+ 		usleep_range(1000, 1010);
+ 	}
++}
++
++static int wsa881x_put_pa_gain(struct snd_kcontrol *kc,
++			       struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_soc_component *comp = snd_kcontrol_chip(kc);
++	struct wsa881x_priv *wsa881x = snd_soc_component_get_drvdata(comp);
++	struct soc_mixer_control *mc =
++			(struct soc_mixer_control *)kc->private_value;
++	int max = mc->max;
++	unsigned int mask = (1 << fls(max)) - 1;
++	int ret, min_gain, max_gain;
++
++	ret = pm_runtime_resume_and_get(comp->dev);
++	if (ret < 0 && ret != -EACCES)
++		return ret;
++
++	max_gain = (max - ucontrol->value.integer.value[0]) & mask;
++	wsa881x->pa_gain = max_gain;
++	/*
++	 * Gain has to set incrementally in 4 steps
++	 * as per HW sequence
++	 */
++	if (max_gain > G_4P5DB)
++		min_gain = G_0DB;
++	else
++		min_gain = max_gain + 3;
++
++	wsa881x_ramp_pa_gain(comp, min_gain, max_gain);
+ 
+ 	pm_runtime_put_autosuspend(comp->dev);
+ 
+@@ -931,9 +935,19 @@
+ 
+ 		snd_soc_component_update_bits(comp, WSA881X_SPKR_DRV_GAIN,
+ 					      WSA881X_PA_GAIN_SEL_MASK,
+-					      WSA881X_PA_GAIN_SEL_REG);
++					      wsa881x->port_enable[WSA881X_PORT_COMP] ?
++					      WSA881X_PA_GAIN_SEL_DRE :
++					      WSA881X_PA_GAIN_SEL_REG);
+ 		break;
+ 	case SND_SOC_DAPM_POST_PMU:
++		if (!wsa881x->port_enable[WSA881X_PORT_COMP]) {
++			int max_gain = wsa881x->pa_gain;
++			int min_gain = (max_gain > G_4P5DB) ?
++				       G_0DB : max_gain + 3;
++
++			wsa881x_ramp_pa_gain(comp, min_gain, max_gain);
++		}
++
+ 		if (wsa881x->port_prepared[WSA881X_PORT_VISENSE]) {
+ 			wsa881x_visense_txfe_ctrl(comp, true);
+ 			snd_soc_component_update_bits(comp,
