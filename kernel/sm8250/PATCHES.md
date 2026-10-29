@@ -45,6 +45,16 @@ Last rebased: 2026-10-27 (battery time remaining).
   charging reads positive. Source: ours, fixing ROCKNIX's own 0011; goes to ROCKNIX. Drop: once
   their 0011 carries it (the sync's apply check then fails it as already applied).
 
+### Audio
+
+- **1111** The RP5 speaker boost and compander run with the vendor's register init table and full
+  5-bit `CTL7` mode field in `lpass-wsa-macro`, restoring the 10 dB headroom lost on reset
+  defaults. Source: ours.
+- **1112** The RP5 speaker compander (DRE) no longer pumps 8-12 dB and linear mode keeps its
+  configured PA gain: `wsa881x` selects `WSA881X_PA_GAIN_SEL_DRE` when `COMP Switch` is on,
+  restores `pa_gain` in `POST_PMU` when `COMP Switch` is off, and `lpass-wsa-macro` enables MCLK
+  before `regcache_sync()`. Source: ours.
+
 ## Edits to synced files
 
 The local delta `kernel/sm8250/sync-keep` restores after each make sync.
