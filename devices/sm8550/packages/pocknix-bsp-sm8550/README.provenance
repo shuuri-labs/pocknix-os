@@ -9,6 +9,11 @@ was last synced. make sync covers none of them; re-diff by hand on a ROCKNIX pin
 Source: ROCKNIX alsa-ucm-conf patches/SM8550/0001_Add-AYN-Odin2 + 0005_Add-AYN-Thor,
 hand-ported; author credits kept in the files.
 
+Ours:
+  - HiFi.conf inlines the Headphones EnableSequence in CLS_AB with all four compander switches off
+    and unity digital/analog gains (84 / 20), and drops PlaybackMixerElem so PipeWire attenuates
+    in software before the DAC instead of clipping the half-companded CLS_H_ULP rail.
+
 Last synced: never (hand-ported).
 
 
