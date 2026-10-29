@@ -1,0 +1,411 @@
+From: transentient <cliff.judge@gmail.com>
+Date: Wed, 14 Oct 2026 12:00:00 +0900
+Subject: [PATCH] usb: typec: qcom-pmic-typec: re-synchronise Type-C and PD state after system suspend
+
+The SPMI interrupt controller (spmi-pmic-arb) carries IRQCHIP_MASK_ON_SUSPEND:
+every PMIC interrupt that is not a wakeup source is masked at the peripheral
+(INT_EN_CLR) in the noirq phase of system suspend, and qpnpint_irq_unmask()
+clears the peripheral's LATCHED status together with INT_EN_SET on resume so
+that a stale edge cannot fire. An edge that arrived while the system slept is
+discarded, and none of this driver's interrupts are wakeup sources.
+
+For the PD PHY that is fatal. A message the PHY receives during suspend sits
+in its receive buffer, which stays owned by software until it is acknowledged
+(RX_ACKNOWLEDGE token = 1). With the msg-rx edge gone nobody reads it: the
+PHY refuses every later message and every transmit fails with -EBUSY ("RX
+message pending"). PD is dead until the cable is replugged.
+
+Measured on a Retroid Pocket 5 (pm8150b) docked on a UGREEN CM828: DRM
+suspend drops the DisplayPort link, the dock answers with a DP Attention
+(HPD high + IRQ_HPD), processed, then sends it again after the interrupts
+are masked. After the wake the token reads 1 with the Attention still in the
+buffer, LATCHED/PENDING read 0, the tcpm log is a column of "RX message
+pending", and the docked display stays dark (the sink's retrain request was
+never serviced). Same picture after a 9.5 h overnight sleep and after a 3 min
+RTC-timed one. The vendor kernel makes sig-rx and msg-rx wakeup interrupts
+so a PD message always wakes the SoC; this port keeps the sleep and
+re-synchronises on resume instead.
+
+Add system PM callbacks to the typec platform driver:
+
+ - resume_noirq (before the unmask) reads INT_LATCHED_STS of the typec and
+   PD PHY peripherals for the log, so a wake shows which edges were lost.
+
+ - complete (every device resumed) delivers a message left in the PD PHY
+   receive buffer to tcpm (receive enabled + token owned by software can
+   only be an unread message; the irq handler returns the buffer after
+   reading) and lets tcpm re-read CC and VBUS through the same calls the
+   port interrupt handler makes (tcpm acts only on what changed).
+
+qcom_pmic_typec_pdphy_pd_receive() now checks the buffer token under its
+lock before reading, so a message that arrives while both the interrupt
+thread and the resume path want the buffer is delivered by whichever takes
+the lock first and never twice (a duplicate Soft_Reset would not be caught
+by tcpm's message-ID filter). The latched-status log covers only the lines
+this driver requested (a line nobody acknowledges stays latched for good)
+and is cleared after each reading (complete() also follows an aborted
+suspend).
+
+While at it, qcom_pmic_typec_pdphy_pd_receive() handed tcpm an unread
+pd_message when RX_SIZE was out of range (ret stayed 0) and left the buffer
+owned by software, which is the same dead-PD outcome for a single corrupt
+frame; drop the frame and return the buffer instead.
+
+
+---
+diff -ur a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.c b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.c
+--- a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.c
++++ b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.c
+@@ -43,7 +43,7 @@
+ 	struct regmap *regmap;
+ 	struct auxiliary_device *bridge_dev;
+ 	u32 base;
+-	int ret;
++	int i, ret;
+ 
+ 	res = of_device_get_match_data(dev);
+ 	if (!res)
+@@ -66,6 +66,11 @@
+ 	if (ret)
+ 		return ret;
+ 
++	tcpm->regmap = regmap;
++	tcpm->port_base = base;
++	for (i = 0; i < res->port_res->nr_irqs; i++)
++		tcpm->port_irq_mask |= BIT(res->port_res->irq_params[i].virq);
++
+ 	ret = qcom_pmic_typec_port_probe(pdev, tcpm,
+ 					 res->port_res, regmap, base);
+ 	if (ret)
+@@ -76,6 +81,9 @@
+ 		if (ret)
+ 			return ret;
+ 
++		tcpm->pdphy_base = base;
++		for (i = 0; i < res->pdphy_res->nr_irqs; i++)
++			tcpm->pdphy_irq_mask |= BIT(res->pdphy_res->irq_params[i].virq);
+ 		ret = qcom_pmic_typec_pdphy_probe(pdev, tcpm,
+ 						  res->pdphy_res, regmap, base);
+ 		if (ret)
+@@ -140,6 +148,77 @@
+ 	fwnode_handle_put(tcpm->tcpc.fwnode);
+ }
+ 
++/*
++ * System suspend loses PMIC Type-C and PD interrupts.
++ *
++ * The SPMI interrupt controller (spmi-pmic-arb) carries
++ * IRQCHIP_MASK_ON_SUSPEND: every PMIC interrupt that is not a wakeup source
++ * is masked at the peripheral (INT_EN_CLR) for the noirq phase of system
++ * suspend, and when it is unmasked again on resume the controller clears
++ * the peripheral's LATCHED status together with INT_EN_SET so that a stale
++ * edge cannot fire. An edge that arrived while the system slept is thereby
++ * discarded, and none of the interrupts of this driver are wakeup sources.
++ *
++ * For the PD PHY that is fatal: a message the PHY received during suspend
++ * (a dock sending a DisplayPort Attention when the link was dropped for
++ * suspend, a source re-advertising its capabilities) sits in the receive
++ * buffer, which stays owned by software until it is acknowledged. The PHY
++ * refuses every later message and every transmit fails with -EBUSY
++ * ("RX message pending"): PD is dead until the cable is replugged. For the
++ * Type-C port a CC or VBUS change nobody acted on leaves tcpm with a stale
++ * attach state.
++ *
++ * Read the latched bits before the unmask (resume_noirq) so the log shows
++ * what happened (only the lines this driver requested: a line nobody acks
++ * stays latched for good), and re-synchronise once every device has resumed
++ * (complete): deliver the message left in the PD PHY, and let tcpm re-read
++ * CC and VBUS.
++ */
++#define QPNPINT_REG_LATCHED_STS		0x18
++
++static int qcom_pmic_typec_resume_noirq(struct device *dev)
++{
++	struct pmic_typec *tcpm = dev_get_drvdata(dev);
++	unsigned int val;
++
++	tcpm->port_latched = 0;
++	tcpm->pdphy_latched = 0;
++
++	if (!regmap_read(tcpm->regmap,
++			 tcpm->port_base + QPNPINT_REG_LATCHED_STS, &val))
++		tcpm->port_latched = val & tcpm->port_irq_mask;
++
++	if (tcpm->pdphy_base &&
++	    !regmap_read(tcpm->regmap,
++			 tcpm->pdphy_base + QPNPINT_REG_LATCHED_STS, &val))
++		tcpm->pdphy_latched = val & tcpm->pdphy_irq_mask;
++
++	return 0;
++}
++
++static void qcom_pmic_typec_complete(struct device *dev)
++{
++	struct pmic_typec *tcpm = dev_get_drvdata(dev);
++
++	/* complete() also follows an aborted suspend: log each reading once */
++	if (tcpm->port_latched || tcpm->pdphy_latched)
++		dev_info(dev, "interrupts latched during suspend: typec 0x%02x pdphy 0x%02x\n",
++			 tcpm->port_latched, tcpm->pdphy_latched);
++	tcpm->port_latched = 0;
++	tcpm->pdphy_latched = 0;
++
++	if (tcpm->pdphy_resume)
++		tcpm->pdphy_resume(tcpm);
++
++	if (tcpm->port_resume)
++		tcpm->port_resume(tcpm);
++}
++
++static const struct dev_pm_ops qcom_pmic_typec_pm_ops = {
++	.resume_noirq = pm_sleep_ptr(qcom_pmic_typec_resume_noirq),
++	.complete = pm_sleep_ptr(qcom_pmic_typec_complete),
++};
++
+ static const struct pmic_typec_resources pm8150b_typec_res = {
+ 	.pdphy_res = &pm8150b_pdphy_res,
+ 	.port_res = &pm8150b_port_res,
+@@ -161,6 +240,7 @@
+ 	.driver = {
+ 		.name = "qcom,pmic-typec",
+ 		.of_match_table = qcom_pmic_typec_table,
++		.pm = pm_sleep_ptr(&qcom_pmic_typec_pm_ops),
+ 	},
+ 	.probe = qcom_pmic_typec_probe,
+ 	.remove = qcom_pmic_typec_remove,
+diff -ur a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.h b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.h
+--- a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.h
++++ b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.h
+@@ -13,13 +13,24 @@
+ 	struct pmic_typec_pdphy	*pmic_typec_pdphy;
+ 	struct pmic_typec_port	*pmic_typec_port;
+ 
++	/* system suspend bookkeeping, see qcom_pmic_typec_pm_ops */
++	struct regmap		*regmap;
++	u32			port_base;
++	u32			pdphy_base;
++	u8			port_irq_mask;		/* lines requested, per peripheral */
++	u8			pdphy_irq_mask;
++	u8			port_latched;
++	u8			pdphy_latched;
++
+ 	int (*pdphy_start)(struct pmic_typec *tcpm,
+ 			   struct tcpm_port *tcpm_port);
+ 	void (*pdphy_stop)(struct pmic_typec *tcpm);
++	void (*pdphy_resume)(struct pmic_typec *tcpm);
+ 
+ 	int (*port_start)(struct pmic_typec *tcpm,
+ 			  struct tcpm_port *tcpm_port);
+ 	void (*port_stop)(struct pmic_typec *tcpm);
++	void (*port_resume)(struct pmic_typec *tcpm);
+ };
+ 
+ #define tcpc_to_tcpm(_tcpc_) container_of(_tcpc_, struct pmic_typec, tcpc)
+diff -ur a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec_pdphy.c b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec_pdphy.c
+--- a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec_pdphy.c
++++ b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec_pdphy.c
+@@ -102,6 +102,9 @@
+ 	struct work_struct		receive_work;
+ 	struct regulator		*vdd_pdphy;
+ 	spinlock_t			lock;		/* Register atomicity */
++
++	bool				started;
++	bool				rx_on;		/* set_pd_rx(true), under lock */
+ };
+ 
+ static void qcom_pmic_typec_pdphy_reset_on(struct pmic_typec_pdphy *pmic_typec_pdphy)
+@@ -328,12 +331,30 @@
+ {
+ 	struct device *dev = pmic_typec_pdphy->dev;
+ 	struct pd_message msg;
+-	unsigned int size, rx_status;
++	unsigned int token, size, rx_status;
+ 	unsigned long flags;
+ 	int ret;
+ 
+ 	spin_lock_irqsave(&pmic_typec_pdphy->lock, flags);
+ 
++	/*
++	 * The hardware hands the buffer to software (token set) with every
++	 * message. A buffer we already own nothing for was consumed by the
++	 * other reader (interrupt thread vs. system resume): do not deliver
++	 * its stale contents a second time.
++	 */
++	ret = regmap_read(pmic_typec_pdphy->regmap,
++			  pmic_typec_pdphy->base + USB_PDPHY_RX_ACKNOWLEDGE_REG,
++			  &token);
++	if (ret)
++		goto done;
++
++	if (!(token & RX_BUFFER_TOKEN)) {
++		dev_dbg(dev, "pd_receive: buffer already consumed\n");
++		ret = -ENOENT;
++		goto done;
++	}
++
+ 	ret = regmap_read(pmic_typec_pdphy->regmap,
+ 			  pmic_typec_pdphy->base + USB_PDPHY_RX_SIZE_REG, &size);
+ 	if (ret)
+@@ -341,7 +362,14 @@
+ 
+ 	/* Hardware requires +1 of the real read value to be passed */
+ 	if (size < 1 || size > sizeof(msg.payload) + 1) {
+-		dev_dbg(dev, "pd_receive: invalid size %d\n", size);
++		dev_warn(dev, "pd_receive: invalid size %d, frame dropped\n", size);
++		/*
++		 * Give the buffer back to the hardware or no message is ever
++		 * received again, and do not hand tcpm an unread msg.
++		 */
++		regmap_write(pmic_typec_pdphy->regmap,
++			     pmic_typec_pdphy->base + USB_PDPHY_RX_ACKNOWLEDGE_REG, 0);
++		ret = -EINVAL;
+ 		goto done;
+ 	}
+ 
+@@ -416,6 +444,8 @@
+ 
+ 	ret = regmap_write(pmic_typec_pdphy->regmap,
+ 			   pmic_typec_pdphy->base + USB_PDPHY_RX_ACKNOWLEDGE_REG, !on);
++	if (!ret)
++		pmic_typec_pdphy->rx_on = on;
+ 
+ 	spin_unlock_irqrestore(&pmic_typec_pdphy->lock, flags);
+ 
+@@ -424,6 +454,51 @@
+ 	return ret;
+ }
+ 
++/*
++ * System resume: a message the PHY received while msg-rx was masked for
++ * suspend had its interrupt discarded (see qcom_pmic_typec_pm_ops) and is
++ * still sitting in the receive buffer, which we own until it is acknowledged.
++ * Deliver it now. With receive enabled, a software-owned buffer can only mean
++ * an unread message: the interrupt handler returns the buffer after reading.
++ * A message that arrives right now instead is read by whichever of the
++ * interrupt thread and this path takes the lock first; the other finds the
++ * buffer consumed (pd_receive checks the token) and delivers nothing.
++ */
++static void qcom_pmic_typec_pdphy_resume(struct pmic_typec *tcpm)
++{
++	struct pmic_typec_pdphy *pmic_typec_pdphy = tcpm->pmic_typec_pdphy;
++	struct device *dev = pmic_typec_pdphy->dev;
++	u8 hdr[2] = { 0, 0 };
++	unsigned int token;
++	unsigned long flags;
++	bool pending;
++	int ret;
++
++	if (!pmic_typec_pdphy->started)
++		return;
++
++	spin_lock_irqsave(&pmic_typec_pdphy->lock, flags);
++
++	ret = regmap_read(pmic_typec_pdphy->regmap,
++			  pmic_typec_pdphy->base + USB_PDPHY_RX_ACKNOWLEDGE_REG,
++			  &token);
++	pending = !ret && pmic_typec_pdphy->rx_on && (token & RX_BUFFER_TOKEN);
++	if (pending)
++		regmap_bulk_read(pmic_typec_pdphy->regmap,
++				 pmic_typec_pdphy->base + USB_PDPHY_RX_BUFFER_REG,
++				 hdr, sizeof(hdr));
++
++	spin_unlock_irqrestore(&pmic_typec_pdphy->lock, flags);
++
++	if (!pending)
++		return;
++
++	dev_warn(dev, "PD message (header 0x%02x%02x) received during suspend, delivering it now\n",
++		 hdr[1], hdr[0]);
++
++	qcom_pmic_typec_pdphy_pd_receive(pmic_typec_pdphy);
++}
++
+ static int qcom_pmic_typec_pdphy_set_roles(struct tcpc_dev *tcpc, bool attached,
+ 					   enum typec_role power_role,
+ 					   enum typec_data_role data_role)
+@@ -528,6 +603,8 @@
+ 	for (i = 0; i < pmic_typec_pdphy->nr_irqs; i++)
+ 		enable_irq(pmic_typec_pdphy->irq_data[i].irq);
+ 
++	pmic_typec_pdphy->started = true;
++
+ 	return 0;
+ 
+ err_disable_vdd_pdhy:
+@@ -541,6 +618,8 @@
+ 	struct pmic_typec_pdphy *pmic_typec_pdphy = tcpm->pmic_typec_pdphy;
+ 	int i;
+ 
++	pmic_typec_pdphy->started = false;
++
+ 	for (i = 0; i < pmic_typec_pdphy->nr_irqs; i++)
+ 		disable_irq(pmic_typec_pdphy->irq_data[i].irq);
+ 
+@@ -610,6 +689,7 @@
+ 
+ 	tcpm->pdphy_start = qcom_pmic_typec_pdphy_start;
+ 	tcpm->pdphy_stop = qcom_pmic_typec_pdphy_stop;
++	tcpm->pdphy_resume = qcom_pmic_typec_pdphy_resume;
+ 
+ 	return 0;
+ }
+diff -ur a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec_port.c b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec_port.c
+--- a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec_port.c
++++ b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec_port.c
+@@ -181,6 +181,8 @@
+ 	struct delayed_work		cc_debounce_dwork;
+ 
+ 	spinlock_t			lock;	/* Register atomicity */
++
++	bool				started;
+ };
+ 
+ static const char * const typec_cc_status_name[] = {
+@@ -682,6 +684,8 @@
+ 	for (i = 0; i < pmic_typec_port->nr_irqs; i++)
+ 		enable_irq(pmic_typec_port->irq_data[i].irq);
+ 
++	pmic_typec_port->started = true;
++
+ done:
+ 	return ret;
+ }
+@@ -691,10 +695,30 @@
+ 	struct pmic_typec_port *pmic_typec_port = tcpm->pmic_typec_port;
+ 	int i;
+ 
++	pmic_typec_port->started = false;
++
+ 	for (i = 0; i < pmic_typec_port->nr_irqs; i++)
+ 		disable_irq(pmic_typec_port->irq_data[i].irq);
+ }
+ 
++/*
++ * System resume: CC and VBUS edges that arrived while the interrupts were
++ * masked for suspend were discarded (see qcom_pmic_typec_pm_ops). Let tcpm
++ * re-read both from the hardware; it acts only on what changed.
++ */
++static void qcom_pmic_typec_port_resume(struct pmic_typec *tcpm)
++{
++	struct pmic_typec_port *pmic_typec_port = tcpm->pmic_typec_port;
++
++	if (!pmic_typec_port->started)
++		return;
++
++	tcpm_vbus_change(pmic_typec_port->tcpm_port);
++
++	if (!pmic_typec_port->debouncing_cc)
++		tcpm_cc_change(pmic_typec_port->tcpm_port);
++}
++
+ int qcom_pmic_typec_port_probe(struct platform_device *pdev,
+ 			       struct pmic_typec *tcpm,
+ 			       const struct pmic_typec_port_resources *res,
+@@ -766,6 +790,7 @@
+ 
+ 	tcpm->port_start = qcom_pmic_typec_port_start;
+ 	tcpm->port_stop = qcom_pmic_typec_port_stop;
++	tcpm->port_resume = qcom_pmic_typec_port_resume;
+ 
+ 	return 0;
+ }
