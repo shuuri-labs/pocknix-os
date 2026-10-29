@@ -12,6 +12,7 @@ TabPage {
     readonly property string runner: "/usr/bin/pocknix-tools-run"
     // key=value probes: pocknix-update-abl --status, pocknix-install-internal --detect
     property var abl: ({})
+    readonly property int androidDefaultGib: 32
     property var internal: ({})
     property string baseMode: ""
     // Android's share of the internal disk, in whole GB within what the installer allows
@@ -51,7 +52,7 @@ TabPage {
             page.internal = code === 0 ? Util.kv(output) : ({})
             if (page.internal.mode === "fresh") {
                 const lo = parseInt(page.internal.android_min_gib), hi = parseInt(page.internal.android_max_gib)
-                page.androidGib = hi >= 32 ? Math.max(32, lo) : lo
+                page.androidGib = hi >= page.androidDefaultGib ? Math.max(page.androidDefaultGib, lo) : lo
             }
         }
     }

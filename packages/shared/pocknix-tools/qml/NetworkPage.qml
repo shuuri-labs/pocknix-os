@@ -26,7 +26,7 @@ TabPage {
     property string tsServer: defaultServer
     readonly property bool customServer: tsServer.replace(/\/+$/, "") !== defaultServer
     // empty after `tailscale logout`, which resets every setting: deck then needs root to sign in
-    property string tsOperator: ""
+    property bool tsOperatorSet: false
     property string pendingServer: ""
     // NetworkManager's WireGuard connections: {uuid, name, active}
     property var tunnels: []
@@ -43,7 +43,7 @@ TabPage {
     function tailscaleUp(server) {
         tsUrl = ""
         tsQr = ""
-        if (!tsOperator) {
+        if (!tsOperatorSet) {
             pendingServer = server || tsServer
             operatorJob.start(["/usr/bin/pocknix-store", "setup", "tailscale"], { root: true })
             return
@@ -118,7 +118,7 @@ TabPage {
             try {
                 const prefs = JSON.parse(output)
                 page.tsServer = prefs.ControlURL || page.defaultServer
-                page.tsOperator = prefs.OperatorUser || ""
+                page.tsOperatorSet = !!prefs.OperatorUser
             } catch (e) {
                 page.tsServer = page.defaultServer
             }
@@ -131,7 +131,7 @@ TabPage {
                 page.app.notice(qsTr("Tailscale could not be set up"), error)
                 return
             }
-            page.tsOperator = "restored"
+            page.tsOperatorSet = true
             page.tailscaleUp(page.pendingServer)
         }
     }

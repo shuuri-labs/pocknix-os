@@ -47,6 +47,7 @@ case "${1:-}" in
     exit 0 ;;
   --gui)
     need_root --gui
+    [ -x "${JOB}" ] || die "--gui runs under Pocknix Tools; install pocknix-ui or run it without --gui"
     [ ! -e /var/lib/pacman/db.lck ] || die "another install or update is running" 3
     rolling_note
     exec "${JOB}" run update -- "${PACMAN}" -Syu --noconfirm ;;

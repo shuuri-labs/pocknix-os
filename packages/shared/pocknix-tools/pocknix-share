@@ -1,6 +1,6 @@
 #!/bin/bash
 # pocknix-share - SMB share on/off, login as deck with deck's password. status stays
-# unprivileged (the menu polls it every draw); the rest arrives via pkexec under
+# unprivileged (Pocknix Tools reads it on every visit); the rest arrives via pkexec under
 # 55-pocknix-share.rules.
 set -euo pipefail
 

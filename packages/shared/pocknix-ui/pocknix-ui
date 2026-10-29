@@ -7,6 +7,7 @@ if [ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" ] && [ -z "${QT_SCALE_FACTOR:-}" ]; the
   for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
     [ -r "${_dc}" ] && . "${_dc}"
   done
+  # the RP6 and Odin 2 scale, for a board whose device.conf has none
   export QT_SCALE_FACTOR="${POCKNIX_DESKTOP_SCALE:-2.5}"
 fi
 exec env -u LD_PRELOAD -u LD_LIBRARY_PATH /usr/lib/pocknix-ui/pocknix-ui-host "$@"

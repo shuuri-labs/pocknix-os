@@ -7,7 +7,7 @@ pkgdesc="Pocknix Store: install and remove emulators and other optional extras"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('pocknix-ui' 'python' 'polkit')
+depends=('pocknix-ui' 'python')
 
 package() {
   install -Dm755 "${startdir}/pocknix-store" "${pkgdir}/usr/bin/pocknix-store"

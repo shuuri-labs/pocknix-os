@@ -7,7 +7,7 @@ pkgdesc="Pocknix touch UI host and components shared by Pocknix Tools and the Po
 arch=('aarch64')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'kirigami' 'breeze-icons' 'systemd' 'python')
+depends=('qt6-base' 'qt6-declarative' 'qt6-svg' 'kirigami' 'breeze-icons' 'systemd' 'python' 'polkit')
 makedepends=('cmake' 'ninja')
 
 build() {
