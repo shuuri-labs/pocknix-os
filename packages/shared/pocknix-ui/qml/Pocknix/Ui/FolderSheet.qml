@@ -18,6 +18,7 @@ Sheet {
 
     property var place: null
     property string folder: ""
+    property bool naming: false
     readonly property bool browsing: place !== null
     // FolderListModel lists the working directory in place of a folder that is not there (a
     // card taken out), so check what it actually loaded.
@@ -48,8 +49,6 @@ Sheet {
         close()
         picked(path)
     }
-    property bool naming: false
-
     height: parent ? parent.height - Theme.spacing * 4 : 0
     onOpened: {
         place = null
