@@ -1,0 +1,74 @@
+From: transentient <cliff.judge@gmail.com>
+Subject: [PATCH] clk: qcom: rpmh: always program sleep state on first command send
+
+RPMh hardware retains the ACTIVE state of an ARC/VRM clock resource across
+system sleep/wake transitions unless its SLEEP and WAKE TCS states have been
+explicitly programmed. In drivers/soc/qcom/rpmh.c, cache_rpm_request()
+initializes req->sleep_val and req->wake_val to UINT_MAX, and is_req_valid()
+only flushes a resource into SLEEP_TCS and WAKE_TCS if both sleep_val and
+wake_val are != UINT_MAX and differ from each other.
+
+In drivers/clk/qcom/clk-rpmh.c, struct clk_rpmh previously zero-initialized
+last_sent_aggr_state to 0. When an active-only (_ao) clock such as
+bi_tcxo_ao (RPMH_CXO_CLK_A) or rf_clk1_ao (RPMH_RF_CLK1_A) is prepared
+without its non-_ao sibling having been prepared and unprepared first,
+aggr_state becomes BIT(RPMH_WAKE_ONLY_STATE) | BIT(RPMH_ACTIVE_ONLY_STATE)
+(0x6). Because (last_sent_aggr_state & BIT(RPMH_SLEEP_STATE)) == 0 and
+(aggr_state & BIT(RPMH_SLEEP_STATE)) == 0, has_state_changed(c,
+RPMH_SLEEP_STATE) returned false and clk_rpmh_send(c, RPMH_SLEEP_STATE, ...)
+was never called. Consequently, req->sleep_val remained UINT_MAX in rpmh.c,
+rpmh_flush() skipped programming SLEEP_TCS/WAKE_TCS for xo.lvl and rfclka1,
+and the 38.4 MHz XO crystal remained forced on across s2idle, preventing
+AOSS sleep (aosd / XO shutdown).
+
+Additionally, clk_rpmh_send_aggregate_command() did not reset cmd.data to 0
+across iterations of the state loop.
+
+Initialize last_sent_aggr_state to UINT_MAX in __DEFINE_CLK_RPMH, treat
+UINT_MAX as changed in has_state_changed() so all three RPMh states (SLEEP,
+WAKE, ACTIVE) are explicitly cached/sent on the first state transition, and
+set cmd.data = (cmd_state & BIT(state)) ? on_val : 0 on each iteration.
+
+Signed-off-by: transentient <cliff.judge@gmail.com>
+---
+ drivers/clk/qcom/clk-rpmh.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+--- a/drivers/clk/qcom/clk-rpmh.c
++++ b/drivers/clk/qcom/clk-rpmh.c
+@@ -84,6 +84,7 @@
+ 		.res_on_val = _res_on,					\
+ 		.div = _div,						\
+ 		.peer = &clk_rpmh_##_clk_name##_ao,			\
++		.last_sent_aggr_state = UINT_MAX,			\
+ 		.valid_state_mask = (BIT(RPMH_WAKE_ONLY_STATE) |	\
+ 				      BIT(RPMH_ACTIVE_ONLY_STATE) |	\
+ 				      BIT(RPMH_SLEEP_STATE)),		\
+@@ -102,6 +103,7 @@
+ 		.res_on_val = _res_on,					\
+ 		.div = _div,						\
+ 		.peer = &clk_rpmh_##_clk_name,				\
++		.last_sent_aggr_state = UINT_MAX,			\
+ 		.valid_state_mask = (BIT(RPMH_WAKE_ONLY_STATE) |	\
+ 					BIT(RPMH_ACTIVE_ONLY_STATE)),	\
+ 		.hw.init = &(struct clk_init_data){			\
+@@ -140,6 +142,9 @@ static inline struct clk_rpmh *to_clk_rpmh(struct clk_hw *_hw)
+ 
+ static inline bool has_state_changed(struct clk_rpmh *c, u32 state)
+ {
++	if (c->last_sent_aggr_state == UINT_MAX)
++		return true;
++
+ 	return (c->last_sent_aggr_state & BIT(state))
+ 		!= (c->aggr_state & BIT(state));
+ }
+@@ -167,8 +172,7 @@ static int clk_rpmh_send_aggregate_command(struct clk_rpmh *c)
+ 
+ 	for (; state <= RPMH_ACTIVE_ONLY_STATE; state++) {
+ 		if (has_state_changed(c, state)) {
+-			if (cmd_state & BIT(state))
+-				cmd.data = on_val;
++			cmd.data = (cmd_state & BIT(state)) ? on_val : 0;
+ 
+ 			wait = cmd_state && state == RPMH_ACTIVE_ONLY_STATE;
+ 			ret = clk_rpmh_send(c, state, &cmd, wait);

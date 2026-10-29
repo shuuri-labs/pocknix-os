@@ -52,6 +52,9 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
 - **1080** Waking with the power button no longer puts the device straight back to sleep:
   pm8941-pwrkey drops the wake press and its release (the first event within 1 s of resume),
   as ACPI buttons do. Source: ours.
+- **1091** Active-only (`_ao`) RPMh clocks no longer leave the 38.4 MHz XO crystal forced on
+  in s2idle: `clk-rpmh` always programs the sleep state on the first command send so
+  `SLEEP_TCS` does not stay at `UINT_MAX`. Source: ours.
 
 ### PCIe and wifi
 
@@ -122,6 +125,10 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
   armada 0621.
 - **1078** The HFI interrupt is masked before the GMU boots, so a late delivery after resume
   cannot race the GMU's first requests. Source: armada 0622.
+- **1090** `gmu_rsc` no longer holds stale SH0/MC0/CN0 and ARC rail votes across suspend (which
+  blocked CXSD and DDR sleep after any GPU activity): fixes the inverted `GMU_STATUS_FW_START`
+  check in `a6xx_rpmh_stop()` and leaves the GPU RSC awake for system poweroff. Source: LKML
+  (Shivam Rawat / Michael Burch).
 
 ### Battery
 
