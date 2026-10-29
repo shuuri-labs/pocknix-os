@@ -22,7 +22,7 @@ Three front-ends, one mechanism - pick whichever still works when things go wron
 - **CLI (terminal/ssh):**
 
 ```bash
-pocknix-snapshots list          # what you can roll back to
+pocknix-snapshots list          # what you can roll back to (--json for scripts, UTC times)
 pocknix-snapshots status        # running root / boots-next / free space
 sudo pocknix-rollback           # newest snapshot, interactive confirm
 sudo pocknix-rollback --to 0003 # jump straight to a specific snapshot

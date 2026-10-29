@@ -41,3 +41,11 @@ snap_mounted_subvol() {  # toplevel path of the subvol mounted at / (e.g. "@", "
 snap_default_subvol() {  # toplevel path of the fs default subvol (what boots next)
   btrfs subvolume get-default / 2>/dev/null | sed -n 's/.* path //p'
 }
+
+# The snapshot list for programs (Pocknix Tools), oldest first: the table is for people.
+snap_list_json() {  # $1 = the snapshots dir
+  local infos=("$1"/[0-9][0-9][0-9][0-9]/info.json)
+  [ -f "${infos[0]}" ] || { echo '[]'; return; }
+  jq -s '[.[] | {id, created, ok: .transaction_ok, kernel: .kernel_in_transaction,
+                 targets: .targets_head, more: ([.targets_count - (.targets_head | length), 0] | max)}]' "${infos[@]}"
+}

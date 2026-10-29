@@ -12,8 +12,9 @@ snap_fmt_date() {  # stored ISO-8601 UTC -> local DD-MM-YYYY HH:MM
   date -d "$1" +"%d-%m-%Y %H:%M" 2>/dev/null || echo "$1"
 }
 
-cmd_list() {
+cmd_list() {  # $1 = --json or empty
   pocknix_snap_supported || die "snapshots unsupported here (root is not btrfs)"
+  [ "${1:-}" = --json ] && { snap_list_json "${SNAP_DIR}"; return; }
   printf '%-6s %-17s %-4s %-8s %s\n' "ID" "CREATED" "OK" "KERNEL" "TARGETS"
   local info id created ok kern targets
   for info in "${SNAP_DIR}"/[0-9][0-9][0-9][0-9]/info.json; do
@@ -94,9 +95,9 @@ cmd_session() {
 }
 
 case "${1:-list}" in
-  list)    cmd_list ;;
+  list)    cmd_list "${2:-}" ;;
   status)  cmd_status ;;
   prune)   cmd_prune "${2:-}" ;;
   session) shift; cmd_session "$@" ;;
-  *) echo "usage: pocknix-snapshots [list|status|prune [--quiet]|session <command> [args...]]" >&2; exit 1 ;;
+  *) echo "usage: pocknix-snapshots [list [--json]|status|prune [--quiet]|session <command> [args...]]" >&2; exit 1 ;;
 esac
