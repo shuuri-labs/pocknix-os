@@ -82,11 +82,13 @@ TabPage {
         id: romsSet
         onFinished: code => {
             page.refresh()
-            page.app.notice(code === 0 ? qsTr("ROMs folder changed") : qsTr("ROMs folder not changed"),
-                            code !== 0 ? page.reason(error)
-                            : romsCheck.names.indexOf("Steam ROM Manager") >= 0
-                              ? qsTr("Game tiles you made with Steam ROM Manager still point at the old folder: open it, then Add Games and Save to Steam again.")
-                              : qsTr("ES-DE and the emulators look there from now on."))
+            if (code !== 0)
+                page.app.notice(qsTr("ROMs folder not changed"), page.reason(error))
+            else if (romsCheck.names.indexOf("Steam ROM Manager") >= 0)
+                page.app.notice(qsTr("ROMs folder changed"),
+                    qsTr("Game tiles you made with Steam ROM Manager still point at the old folder: open it, then Add Games and Save to Steam again."))
+            else
+                page.app.toast(qsTr("ROMs folder changed"), qsTr("ES-DE and the emulators look there from now on."))
         }
     }
 

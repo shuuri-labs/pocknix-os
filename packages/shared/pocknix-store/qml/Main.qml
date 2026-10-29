@@ -181,7 +181,7 @@ AppWindow {
         property int count
         onFinished: code => {
             if (code === 0)
-                app.notice(count === 1 ? qsTr("Tile added") : qsTr("Tiles added"),
+                app.toast(count === 1 ? qsTr("Tile added") : qsTr("Tiles added"),
                            qsTr("It is in your Steam library."))
             else
                 app.notice(qsTr("Tiles not added"), app.tileFailure(code, error))
@@ -200,8 +200,12 @@ AppWindow {
     Job {
         id: resetJob
         property string name
-        onFinished: code => app.notice(code === 0 ? qsTr("Default settings restored") : qsTr("Restore failed"),
-                                       code === 0 ? qsTr("%1 starts with the Pocknix defaults.").arg(name) : error)
+        onFinished: code => {
+            if (code === 0)
+                app.toast(qsTr("Default settings restored"), qsTr("%1 starts with the Pocknix defaults.").arg(name))
+            else
+                app.notice(qsTr("Restore failed"), error)
+        }
     }
 
     // One page per section. Until the status is in (or when it lists nothing) a single page
