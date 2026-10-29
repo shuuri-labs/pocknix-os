@@ -1,0 +1,84 @@
+From: transentient <cliff.judge@gmail.com>
+Subject: [PATCH] hwmon: (pwm-fan) quiesce tach IRQs/timer and disable fan-supply in suspend
+
+Quiesce the 1 Hz RPM sampling timer and tachometer IRQs across system
+sleep (from Armada / Kettle Linux 1410), and unconditionally disable
+fan-supply (ctx->reg_en, vreg_fan_pwr 5V boost converter on TLMM GPIO 7
+on the Retroid Pocket 5) in pwm_fan_suspend().
+
+Previously, pwm_fan_probe() defaulted ctx->enable_mode to
+pwm_disable_reg_enable, so setting PWM to 0 set ctx->enabled = false
+while keeping vreg_fan_pwr enabled, and pwm_fan_suspend() returned early
+on !ctx->enabled without ever turning off the 5V fan boost converter.
+---
+--- a/drivers/hwmon/pwm-fan.c
++++ b/drivers/hwmon/pwm-fan.c
+@@ -707,16 +707,66 @@
+ 	pwm_fan_cleanup(ctx);
+ }
+ 
++/*
++ * The 1 Hz RPM sampling timer wakes a CPU every second and a coasting fan can
++ * keep raising tach IRQs, so neither runs across system sleep.
++ */
++static void pwm_fan_quiesce_tachs(struct pwm_fan_ctx *ctx)
++{
++	int i;
++
++	timer_delete_sync(&ctx->rpm_timer);
++
++	for (i = 0; i < ctx->tach_count; i++)
++		if (ctx->tachs[i].irq > 0)
++			disable_irq(ctx->tachs[i].irq);
++}
++
++static void pwm_fan_rearm_tachs(struct pwm_fan_ctx *ctx)
++{
++	int i;
++
++	for (i = 0; i < ctx->tach_count; i++) {
++		if (ctx->tachs[i].irq > 0) {
++			atomic_set(&ctx->tachs[i].pulses, 0);
++			enable_irq(ctx->tachs[i].irq);
++		}
++	}
++
++	if (ctx->tach_count > 0) {
++		ctx->sample_start = ktime_get();
++		mod_timer(&ctx->rpm_timer, jiffies + HZ);
++	}
++}
++
+ static int pwm_fan_suspend(struct device *dev)
+ {
+ 	struct pwm_fan_ctx *ctx = dev_get_drvdata(dev);
+-
+-	return pwm_fan_power_off(ctx, true);
++	int ret;
++
++	pwm_fan_quiesce_tachs(ctx);
++
++	ret = pwm_fan_power_off(ctx, true);
++	if (ret) {
++		pwm_fan_rearm_tachs(ctx);
++		return ret;
++	}
++
++	/*
++	 * Ensure fan-supply (e.g. vreg_fan_pwr 5V boost on RP5) is disabled in
++	 * system sleep even when enable_mode is pwm_disable_reg_enable or the
++	 * fan was already at PWM 0 (ctx->enabled == false) before suspend.
++	 */
++	pwm_fan_switch_power(ctx, false);
++
++	return 0;
+ }
+ 
+ static int pwm_fan_resume(struct device *dev)
+ {
+ 	struct pwm_fan_ctx *ctx = dev_get_drvdata(dev);
++
++	pwm_fan_rearm_tachs(ctx);
+ 
+ 	return set_pwm(ctx, ctx->pwm_value);
+ }

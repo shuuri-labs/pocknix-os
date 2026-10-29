@@ -1,0 +1,95 @@
+From: transentient <cliff.judge@gmail.com>
+Date: Fri, 16 Oct 2026 15:00:00 +0900
+Subject: [PATCH] drm/msm/dsi/phy: release the AHB clock prepare in runtime suspend
+
+The DSI PHY manages its "iface" (MDSS AHB) clock with pm_clk.  pm_clk
+prepares a clock when it is added and only enables/disables it from the
+runtime PM callbacks, so the clock stays prepared for the lifetime of the
+device.  On sm8250 its parent chain is disp_cc_mdss_ahb_clk_src -> the RPMh
+XO "bi_tcxo", and clk-rpmh votes XO on prepare: XO stays voted on in the
+RPMh sleep set and the SoC can never shut it down in suspend.
+
+Measured on the Retroid Pocket 5 with the clk core transition events traced
+through a suspend: every display clock is released except
+disp_cc_mdss_ahb_clk, held by the PHY's pm_clk entry, and bi_tcxo never
+reaches zero; no xo.lvl entry is ever programmed into the sleep TCS.
+
+Take and release the clock in the PHY's own runtime PM callbacks instead
+(same enable state while the PHY is active, no prepare while it is
+suspended), and force them at system suspend, when the PM core blocks
+runtime suspend.
+---
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h	2026-10-16 13:50:27.239573787 +0900
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h	2026-10-16 13:51:02.721240921 +0900
+@@ -120,6 +120,8 @@
+ 
+ 	struct clk_hw_onecell_data *provided_clocks;
+ 
++	struct clk *ahb_clk;
++
+ 	bool state_saved;
+ };
+ 
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c	2026-10-16 13:50:27.239530492 +0900
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c	2026-10-16 13:51:02.721262946 +0900
+@@ -5,7 +5,7 @@
+ 
+ #include <linux/clk-provider.h>
+ #include <linux/platform_device.h>
+-#include <linux/pm_clock.h>
++#include <linux/clk.h>
+ #include <linux/pm_runtime.h>
+ #include <dt-bindings/phy/phy.h>
+ 
+@@ -685,13 +685,17 @@
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = devm_pm_clk_create(dev);
+-	if (ret)
+-		return ret;
+-
+-	ret = pm_clk_add(dev, "iface");
+-	if (ret < 0)
+-		return dev_err_probe(dev, ret, "Unable to get iface clk\n");
++	/*
++	 * The AHB clock is taken and released in the runtime PM callbacks
++	 * instead of through the PM clock framework, which prepares a clock
++	 * when it is added and keeps it prepared for the lifetime of the
++	 * device. This clock's parent is the RPMh XO, which votes on prepare:
++	 * a permanently prepared display AHB clock kept XO voted on in the
++	 * RPMh sleep set and the SoC could never shut XO down in suspend.
++	 */
++	phy->ahb_clk = devm_clk_get(dev, "iface");
++	if (IS_ERR(phy->ahb_clk))
++		return dev_err_probe(dev, PTR_ERR(phy->ahb_clk), "Unable to get iface clk\n");
+ 
+ 	if (phy->cfg->ops.pll_init) {
+ 		ret = phy->cfg->ops.pll_init(phy);
+@@ -709,8 +713,25 @@
+ 	return 0;
+ }
+ 
++static int dsi_phy_runtime_suspend(struct device *dev)
++{
++	struct msm_dsi_phy *phy = dev_get_drvdata(dev);
++
++	clk_disable_unprepare(phy->ahb_clk);
++
++	return 0;
++}
++
++static int dsi_phy_runtime_resume(struct device *dev)
++{
++	struct msm_dsi_phy *phy = dev_get_drvdata(dev);
++
++	return clk_prepare_enable(phy->ahb_clk);
++}
++
+ static const struct dev_pm_ops dsi_phy_pm_ops = {
+-	SET_RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++	SET_RUNTIME_PM_OPS(dsi_phy_runtime_suspend, dsi_phy_runtime_resume, NULL)
++	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+ };
+ 
+ static struct platform_driver dsi_phy_platform_driver = {

@@ -1,0 +1,57 @@
+From: transentient <cliff.judge@gmail.com>
+Subject: [PATCH] leds: htr3212: assert hardware shutdown (SDB) and disable vdd across system sleep
+
+The two Heroic HTR3212 12-channel PWM LED controllers on the Retroid
+Pocket 5 (htr3212l on i2c5, sdb TLMM GPIO 5; htr3212r on i2c3, sdb TLMM
+GPIO 6) share vdd-supply = <&vreg_mcu_3v3> (TLMM GPIO 3) with the
+gamepad MCU and Hall-effect sensors. Without system sleep PM callbacks,
+both SDB pins stayed high and vreg_mcu_3v3 stayed enabled across s2idle.
+
+Pull SDB low and disable vdd in suspend (after the LED core suspends the
+child LED classdevs), and re-enable vdd + SDB + re-init registers in
+resume before the LED core restores brightness.
+---
+--- a/drivers/leds/leds-htr3212.c
++++ b/drivers/leds/leds-htr3212.c
+@@ -274,6 +274,33 @@
+ 	regulator_disable(priv->vdd);
+ }
+ 
++static int htr3212_suspend(struct device *dev)
++{
++	struct htr3212_priv *priv = dev_get_drvdata(dev);
++
++	gpiod_set_value_cansleep(priv->sdb, 0);
++	regulator_disable(priv->vdd);
++
++	return 0;
++}
++
++static int htr3212_resume(struct device *dev)
++{
++	struct htr3212_priv *priv = dev_get_drvdata(dev);
++	int ret;
++
++	ret = regulator_enable(priv->vdd);
++	if (ret < 0)
++		return ret;
++
++	gpiod_set_value_cansleep(priv->sdb, 1);
++	usleep_range(10000, 11000);
++
++	return htr3212_init_regs(priv);
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(htr3212_pm_ops, htr3212_suspend, htr3212_resume);
++
+ static const struct i2c_device_id htr3212_id[] = {
+ 	{ "htr3212" },
+ 	{},
+@@ -285,6 +312,7 @@
+ 	.driver = {
+ 		.name	= "htr3212",
+ 		.of_match_table = of_htr3212_match,
++		.pm	= pm_sleep_ptr(&htr3212_pm_ops),
+ 	},
+ 	.probe		= htr3212_probe,
+ 	.remove		= htr3212_remove,
