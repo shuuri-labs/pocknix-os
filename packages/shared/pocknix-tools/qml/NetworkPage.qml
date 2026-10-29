@@ -270,18 +270,15 @@ TabPage {
             .filter(a => a).map(a => a.split("/")[0]).join(" ")
     }
 
-    ActionRow {
+    SwitchRow {
         title: qsTr("Remote login (SSH)")
         description: page.ssh.state === "on" ? qsTr("On. Log in as deck%1.").arg(page.addresses ? qsTr(" at %1").arg(page.addresses) : "")
                                              : qsTr("Off")
-        QQC2.Switch {
-            checkable: false
-            checked: page.ssh.state === "on"
-            enabled: !page.app.logJobRunning && page.ssh.state !== undefined
-            onClicked: checked ? page.toggle("/usr/bin/pocknix-ssh", false) : page.sshOn()
-        }
+        checked: page.ssh.state === "on"
+        toggleEnabled: !page.app.logJobRunning && page.ssh.state !== undefined
+        onToggled: checked ? page.toggle("/usr/bin/pocknix-ssh", false) : page.sshOn()
     }
-    ActionRow {
+    SwitchRow {
         id: shareRow
         title: qsTr("File sharing (SMB)")
         // On from before sign-in passwords: Samba refuses every login until one is set.
@@ -295,12 +292,9 @@ TabPage {
             kind: Button.Primary
             onClicked: shareSheet.open()
         }
-        QQC2.Switch {
-            checkable: false
-            checked: page.share.state === "on"
-            enabled: !page.app.logJobRunning && !shareOnJob.running && page.share.state !== undefined
-            onClicked: checked ? page.toggle("/usr/bin/pocknix-share", false) : page.shareOn()
-        }
+        checked: page.share.state === "on"
+        toggleEnabled: !page.app.logJobRunning && !shareOnJob.running && page.share.state !== undefined
+        onToggled: checked ? page.toggle("/usr/bin/pocknix-share", false) : page.shareOn()
     }
 
     QQC2.Label {
@@ -310,7 +304,7 @@ TabPage {
         font.bold: true
         font.pointSize: Theme.titleFontSize
     }
-    ActionRow {
+    SwitchRow {
         id: tsRow
         readonly property string tsState: page.ts.BackendState || ""
         readonly property var tsSelf: page.ts.Self || {}
@@ -336,13 +330,10 @@ TabPage {
             enabled: !ownServer.checked || /^https?:\/\/\S+$/.test(serverField.text.trim())
             onClicked: page.tailscaleUp(ownServer.checked ? serverField.text.trim() : page.defaultServer)
         }
-        QQC2.Switch {
-            visible: tsRow.tsState === "Running" || tsRow.tsState === "Stopped"
-            checkable: false
-            checked: tsRow.tsState === "Running"
-            enabled: !upJob.running && !quickJob.running
-            onClicked: checked ? page.quick(["/usr/bin/tailscale", "down"]) : page.tailscaleUp()
-        }
+        toggleVisible: tsRow.tsState === "Running" || tsRow.tsState === "Stopped"
+        checked: tsRow.tsState === "Running"
+        toggleEnabled: !upJob.running && !quickJob.running
+        onToggled: checked ? page.quick(["/usr/bin/tailscale", "down"]) : page.tailscaleUp()
     }
     ColumnLayout {
         visible: tsRow.visible && tsRow.tsState === "NeedsLogin" && !upJob.running
@@ -429,17 +420,14 @@ TabPage {
     }
     Repeater {
         model: page.tunnels
-        ActionRow {
+        SwitchRow {
             required property var modelData
             title: modelData.name
             description: modelData.active ? qsTr("Connected") : qsTr("Off")
             busy: quickJob.running
-            QQC2.Switch {
-                checkable: false
-                checked: modelData.active
-                enabled: !quickJob.running
-                onClicked: page.quick(["/usr/bin/nmcli", "connection", checked ? "down" : "up", "uuid", modelData.uuid])
-            }
+            checked: modelData.active
+            toggleEnabled: !quickJob.running
+            onToggled: page.quick(["/usr/bin/nmcli", "connection", checked ? "down" : "up", "uuid", modelData.uuid])
         }
     }
     ActionRow {

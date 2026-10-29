@@ -82,7 +82,7 @@ Sheet {
             }
         }
 
-        ActionRow {
+        SwitchRow {
             visible: sheet.tileState !== ""
             title: qsTr("Tile in the Steam library")
             description: sheet.tileState === "busy"
@@ -90,14 +90,9 @@ Sheet {
                 : sheet.tileState === "no-account" ? qsTr("Sign in to Steam first.")
                 : sheet.tileState === "error" ? sheet.tileError : ""
             busy: tileJob.running
-
-            QQC2.Switch {
-                // The state comes back from Steam: a tap asks, the answer flips the switch.
-                checkable: false
-                checked: sheet.tileState === "enabled"
-                enabled: !tileJob.running && (sheet.tileState === "enabled" || sheet.tileState === "disabled")
-                onClicked: tileJob.run(checked ? "disable" : "enable")
-            }
+            checked: sheet.tileState === "enabled"
+            toggleEnabled: !tileJob.running && (sheet.tileState === "enabled" || sheet.tileState === "disabled")
+            onToggled: tileJob.run(checked ? "disable" : "enable")
         }
 
         RowLayout {

@@ -17,6 +17,7 @@ set(QML_FILES
     qml/Pocknix/Ui/TabPage.qml
     qml/Pocknix/Ui/Tile.qml
     qml/Pocknix/Ui/ActionRow.qml
+    qml/Pocknix/Ui/SwitchRow.qml
     qml/Pocknix/Ui/StatusBadge.qml
     qml/Pocknix/Ui/Button.qml
     qml/Pocknix/Ui/Sheet.qml

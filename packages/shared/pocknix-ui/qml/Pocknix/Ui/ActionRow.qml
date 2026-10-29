@@ -9,12 +9,14 @@ Rectangle {
     property string title
     property string description
     property bool busy: false
+    property bool tappable: false
+    signal tapped()
     default property alias trailing: slot.data
 
     Layout.fillWidth: true
     implicitHeight: Math.max(Theme.touchTarget, layout.implicitHeight + Theme.spacing * 2)
     radius: Theme.radius
-    color: Theme.surface
+    color: tappable && tap.pressed ? Theme.surfaceHigh : Theme.surface
 
     RowLayout {
         id: layout
@@ -25,7 +27,14 @@ Rectangle {
 
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.fillHeight: true
             spacing: 0
+            // over the text only: a Button in the row would hand its tap to a row-wide handler too
+            TapHandler {
+                id: tap
+                enabled: row.tappable
+                onTapped: row.tapped()
+            }
             QQC2.Label {
                 Layout.fillWidth: true
                 text: row.title
