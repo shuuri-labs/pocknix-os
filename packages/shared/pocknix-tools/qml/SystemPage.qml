@@ -10,6 +10,8 @@ TabPage {
     icon: "system-software-update-symbolic"
 
     property var base: ({})
+    property bool baseLoaded: false
+    property string baseError: ""
     // null = not checked yet; else [[name, from, to], ...]
     property var updates: null
     property var snapshots: []
@@ -79,8 +81,17 @@ TabPage {
     Job {
         id: baseJob
         onFinished: code => {
-            if (code === 0)
+            page.baseLoaded = true
+            if (code !== 0) {
+                page.baseError = error
+                return
+            }
+            try {
                 page.base = JSON.parse(output)
+                page.baseError = ""
+            } catch (e) {
+                page.baseError = qsTr("pocknix-base gave a reply Tools cannot read.")
+            }
         }
     }
     Job {
@@ -111,7 +122,17 @@ TabPage {
         }
     }
 
+    LoadState {
+        loading: !page.baseLoaded
+        error: page.baseError
+        onRetry: {
+            page.baseLoaded = false
+            page.baseError = ""
+            page.refresh()
+        }
+    }
     ActionRow {
+        visible: page.baseLoaded && page.baseError === ""
         title: page.base.version ? qsTr("Pocknix %1").arg(page.base.version) : qsTr("Pocknix")
         description: page.base.mode === "locked" ? qsTr("Tested package base %1").arg(page.base.snapshot)
             : page.base.mode === "rolling" ? qsTr("Rolling: live Arch Linux ARM packages, unsupported")
@@ -123,7 +144,7 @@ TabPage {
         }
     }
     ActionRow {
-        visible: !!page.base.blocked
+        visible: page.baseError === "" && !!page.base.blocked
         title: qsTr("Base update blocked")
         description: qsTr("Remove %1, then return to locked mode.").arg(page.base.blocked || "")
         StatusBadge { text: qsTr("Blocked"); tone: "negative" }

@@ -30,7 +30,8 @@ never changes.
   each page's `title` and `icon` (a `-symbolic` theme name: only those draw in the rail's tint).
 - The window owns the confirm sheet: a page calls `app.ask({ title, text, confirmText, hold,
   danger, yes })` or `app.notice(title, text)`, and `app.toast(title, text)` for a success with
-  nothing to read or act on (failures always get a notice). Paths and `key=value` parsing are in `Util`.
+  nothing to read or act on (failures always get a notice). A page whose content rests on one
+  status read shows a `LoadState` (spinner, or the error with Try again) until it lands. Paths and `key=value` parsing are in `Util`.
 - Controls use Qt's Basic style, coloured from `Theme.qml` through the window palette. A reskin
   edits `Theme.qml` (and the components), never a CLI. Buttons are `Button` with a `kind`
   (`Button.Primary`, `Button.Danger`, else secondary), never a palette set at the call site.
