@@ -7,7 +7,7 @@ pkgdesc="Pocknix Tools: updates, snapshot rollback, SSH + file sharing, ROMs fol
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('pocknix-ui' 'pocknix-snapshots' 'pocknix-base>=0.2.0-10' 'samba' 'qrencode')
+depends=('pocknix-ui' 'pocknix-snapshots>=0.1.0-9' 'pocknix-base>=0.2.0-10' 'samba' 'qrencode')
 install=pocknix-tools.install
 source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-tools-run' '58-pocknix-tools-run.rules' 'pocknix-wg-import'
         'pocknix-install-internal' 'pocknix-uninstall-internal' '54-pocknix-installer.rules'

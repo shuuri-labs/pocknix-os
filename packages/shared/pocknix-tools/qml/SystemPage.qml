@@ -19,18 +19,18 @@ TabPage {
     property bool showAll: false
     readonly property bool busy: app.logJobRunning || checkJob.running
 
-    // pocknix-rollback --list: ID, date, time, OK, KERNEL (yes or -), then the update's targets
+    // newest first, as the list shows them
     function parseSnapshots(text) {
-        return text.split("\n").slice(1).filter(l => /^\d/.test(l)).map(l => {
-            const f = l.trim().split(/\s+/)
-            const d = f[1].split("-"), t = f[2].split(":")
-            return { id: f[0], when: new Date(d[2], d[1] - 1, d[0], t[0], t[1]), ok: f[3] === "yes",
-                     kernel: f[4] === "yes", targets: f.slice(5).join(" ") }
-        }).reverse()
+        try {
+            return JSON.parse(text).map(s => ({ id: s.id, when: new Date(s.created), ok: s.ok, kernel: s.kernel,
+                targets: s.targets.join(" ") + (s.more > 0 ? " " + qsTr("(+%1 more)").arg(s.more) : "") })).reverse()
+        } catch (e) {
+            return []
+        }
     }
     function refresh() {
         baseJob.start(["/usr/bin/pocknix-base", "status", "--json"])
-        snapJob.start(["/usr/bin/pocknix-rollback", "--list"])
+        snapJob.start(["/usr/bin/pocknix-rollback", "--list", "--json"])
     }
     function update() {
         app.run(qsTr("Updating"), ["/usr/bin/pocknix-update", "--gui"], { root: true, detached: true }, code => {
@@ -64,7 +64,7 @@ TabPage {
 
     Component.onCompleted: {
         refresh()
-        internalJob.start(["/usr/bin/pocknix-rollback", "--internal", "--list"], { root: true })
+        internalJob.start(["/usr/bin/pocknix-rollback", "--internal", "--list", "--json"], { root: true })
         updateState.start([app.jobRunner, "status", "update"])
     }
 
