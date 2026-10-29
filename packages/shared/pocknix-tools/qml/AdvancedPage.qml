@@ -14,7 +14,7 @@ TabPage {
     property var abl: ({})
     readonly property int androidDefaultGib: 32
     property var internal: ({})
-    property string baseMode: ""
+    readonly property string baseMode: app.base.mode || ""
     // Android's share of the internal disk, in whole GB within what the installer allows
     property int androidGib: 0
     readonly property int minGib: parseInt(internal.android_min_gib) || 0
@@ -23,7 +23,7 @@ TabPage {
     function refresh() {
         ablJob.start(["/usr/bin/pocknix-update-abl", "--status"], { root: true })
         detectJob.start(["/usr/bin/pocknix-install-internal", "--detect"], { root: true })
-        baseJob.start(["/usr/bin/pocknix-base", "status", "--json"])
+        app.refreshBase()
     }
     function step(title, args, done) {
         app.run(title, [runner].concat(args), { root: true, detached: true }, code => {
@@ -55,10 +55,6 @@ TabPage {
                 page.androidGib = hi >= page.androidDefaultGib ? Math.max(page.androidDefaultGib, lo) : lo
             }
         }
-    }
-    Job {
-        id: baseJob
-        onFinished: code => page.baseMode = code === 0 ? JSON.parse(output).mode : ""
     }
     // Reopened while a step runs: show it again.
     Job {

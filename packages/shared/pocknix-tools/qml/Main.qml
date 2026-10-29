@@ -7,6 +7,16 @@ AppWindow {
 
     readonly property string jobRunner: "/usr/lib/pocknix-ui/pocknix-job"
     readonly property bool logJobRunning: logJob.running
+    // pocknix-base status --json, read once for System and Advanced
+    property var base: ({})
+    property bool baseLoaded: false
+    property string baseError: ""
+
+    // A read in flight began after whatever change asked for this one, so it is fresh enough.
+    function refreshBase() {
+        if (!baseJob.running)
+            baseJob.start(["/usr/bin/pocknix-base", "status", "--json"])
+    }
 
 
     // A change with a log: `done(code)` runs when it ends. A detached one (pacman under
@@ -69,5 +79,21 @@ AppWindow {
     LogSheet {
         id: log
         job: logJob
+    }
+    Job {
+        id: baseJob
+        onFinished: code => {
+            app.baseLoaded = true
+            if (code !== 0) {
+                app.baseError = error
+                return
+            }
+            try {
+                app.base = JSON.parse(output)
+                app.baseError = ""
+            } catch (e) {
+                app.baseError = qsTr("pocknix-base gave a reply Tools cannot read.")
+            }
+        }
     }
 }
