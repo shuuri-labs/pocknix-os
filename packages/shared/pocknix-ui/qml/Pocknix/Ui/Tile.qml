@@ -10,8 +10,7 @@ Rectangle {
     property alias icon: icon.source
     property string title
     property string subtitle
-    property string badge
-    property string badgeTone: "neutral"
+    property bool checked: false
     property bool busy: false
     signal clicked()
 
@@ -22,6 +21,8 @@ Rectangle {
     border.width: activeFocus ? 2 : 1
     border.color: activeFocus ? Theme.accent : Theme.border
     activeFocusOnTab: true
+    Accessible.name: title
+    Accessible.description: checked ? qsTr("Installed") : ""
     Keys.onReturnPressed: clicked()
     Keys.onSpacePressed: clicked()
 
@@ -56,11 +57,27 @@ Rectangle {
             maximumLineCount: 2
             elide: Text.ElideRight
         }
-        StatusBadge {
-            Layout.alignment: Qt.AlignHCenter
-            visible: tile.badge !== ""
-            text: tile.badge
-            tone: tile.badgeTone
+        // a grid cell can be taller than this tile: stack from the top so titles line up in a row
+        Item {
+            Layout.fillHeight: true
+        }
+    }
+
+    // Drawn, not a theme icon: a symbolic icon takes Plasma's text colour on the desktop.
+    Rectangle {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: Theme.smallSpacing
+        visible: tile.checked
+        width: Theme.iconSize * 0.45
+        height: width
+        radius: width / 2
+        color: Theme.positive
+        QQC2.Label {
+            anchors.centerIn: parent
+            text: "\u2713"
+            color: Theme.background
+            font.bold: true
         }
     }
 

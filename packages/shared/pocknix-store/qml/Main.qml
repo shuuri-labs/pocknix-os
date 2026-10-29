@@ -304,20 +304,25 @@ AppWindow {
                 wrapMode: Text.WordWrap
             }
 
-            Flow {
+            GridLayout {
                 Layout.fillWidth: true
-                spacing: Theme.spacing
+                columns: Math.max(1, Math.floor((width + columnSpacing) / (Theme.tileWidth + columnSpacing)))
+                columnSpacing: Theme.spacing
+                rowSpacing: Theme.spacing
+                uniformCellWidths: true
+                uniformCellHeights: true
 
                 Repeater {
                     model: app.inSection(section.modelData.id)
 
                     Tile {
                         required property var modelData
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
                         icon: modelData.icon
                         title: modelData.name
                         subtitle: modelData.description
-                        badge: modelData.installed ? qsTr("Installed") : ""
-                        badgeTone: "positive"
+                        checked: modelData.installed
                         busy: actionJob.running && (app.acting.includes(modelData.id)
                             || (app.actingKind.endsWith("-all") && section.emulation))
                         onClicked: {
