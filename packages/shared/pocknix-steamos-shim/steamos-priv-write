@@ -1,0 +1,35 @@
+#!/bin/bash
+# pocknix steamos-priv-write — Steam's fallback when it cannot write a sysfs node itself. Serves only
+# backlight brightness: a board with POCKNIX_PANEL_BACKLIGHT gets every write on that node, rescaled
+# from the node Steam named, so the slider drives the main panel. Runs as root via pkexec.
+set -u
+
+self=/usr/bin/steamos-polkit-helpers/steamos-priv-write
+path="${1:-}"
+value="${2:-}"
+
+refuse() { echo "steamos-priv-write: refusing: ${path} ${value}" >&2; exit 1; }
+
+[[ "${path}" =~ ^/sys/class/backlight/([[:alnum:]_:-][[:alnum:]_.:-]*)/brightness$ ]] || refuse
+src="${BASH_REMATCH[1]}"
+[[ "${value}" =~ ^[0-9]{1,6}$ ]] || refuse
+
+# The exact path, not $0: 50-pocknix-steamos.rules authorizes this program by its path.
+[ "${EUID}" -eq 0 ] || exec pkexec --disable-internal-agent "${self}" "$@"
+
+for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
+  [ -r "${_dc}" ] && . "${_dc}"
+done
+
+src_dir="/sys/class/backlight/${src}"
+tgt_dir="/sys/class/backlight/${POCKNIX_PANEL_BACKLIGHT:-${src}}"
+src_max="$(cat "${src_dir}/max_brightness" 2>/dev/null)" || refuse
+tgt_max="$(cat "${tgt_dir}/max_brightness" 2>/dev/null)" || refuse
+[ "${src_max}" -gt 0 ] || refuse
+
+v=$((10#${value}))
+[ "${v}" -le "${src_max}" ] || v="${src_max}"
+out=$(( (v * tgt_max + src_max / 2) / src_max ))
+
+echo "${out}" > "${tgt_dir}/brightness" || exit 1
+logger -t steamos-priv-write "${path} ${value} -> ${tgt_dir}/brightness ${out}"

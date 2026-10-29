@@ -1,5 +1,5 @@
-// The Deck UI's power, Wi-Fi, timezone and SD-format actions, promptless for wheel: the gamescope
-// session cannot show a polkit dialog.
+// The Deck UI's power, Wi-Fi, timezone, SD-format and brightness actions, promptless for wheel:
+// the gamescope session cannot show a polkit dialog.
 polkit.addRule(function(action, subject) {
     if (!subject.isInGroup("wheel")) { return; }
     if (action.id.indexOf("org.freedesktop.login1.")         == 0 ||
@@ -8,7 +8,8 @@ polkit.addRule(function(action, subject) {
         return polkit.Result.YES;
     }
     if (action.id == "org.freedesktop.policykit.exec" &&
-        action.lookup("program") == "/usr/lib/hwsupport/format-device.sh") {
+        (action.lookup("program") == "/usr/lib/hwsupport/format-device.sh" ||
+         action.lookup("program") == "/usr/bin/steamos-polkit-helpers/steamos-priv-write")) {
         return polkit.Result.YES;
     }
 });
