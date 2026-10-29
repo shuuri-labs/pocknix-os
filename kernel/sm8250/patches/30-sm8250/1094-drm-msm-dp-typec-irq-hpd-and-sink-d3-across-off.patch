@@ -1,0 +1,87 @@
+From: transentient <cliff.judge@gmail.com>
+Date: Wed, 14 Oct 2026 13:40:00 +0900
+Subject: [PATCH] drm/msm/dp: service the sink's IRQ_HPD over USB-C and put the sink in D3 across a DRM-initiated off
+
+across a docked sleep, yet the resume's link training hit nothing but AUX timeouts; and holding the DP link down for
+3 min WITHOUT sleeping (drm connector force off, USB host alive, alt mode entered) did the same: the dock sent IRQ_HPD
+Attentions every 10 s, bounced HPD after ~30 s and its EDID could no longer be read. Exit + Enter Mode over PD revived
+it at once. The sink was never told to power down (no DP_SET_POWER D3 on a DRM-initiated off) and its IRQ_HPD was
+never serviced; both are below.
+
+Two things the downstream driver (msm-4.19 techpack dp_display.c) does that upstream does not:
+
+1. Over USB-C the sink's IRQ_HPD arrives as a DisplayPort Attention VDM with HPD still high.
+   typec_displayport only forwards "connected"/"disconnected" to DRM, and msm_dp_bridge_hpd_notify()
+   ignores a "connected" while link_ready. The UGREEN CM828 sends exactly that when the link is
+   dropped for suspend (status 0x19a = HPD high + IRQ_HPD), and again later. Map it to
+   EV_IRQ_HPD_INT: msm_dp_irq_hpd_handle() -> msm_dp_display_usbpd_attention_cb() reads the sink's
+   status and runs link maintenance only when the sink asks (DP_LINK_STATUS_UPDATED), which is the
+   path the HPD-pin boards already take. Dropped while ST_DISPLAY_OFF, deferred while the link is
+   coming up (existing handler).
+
+2. When DRM turns the output off with the sink still attached (system suspend, DPMS off),
+   msm_dp_display_disable() takes the "dongle unplugged" branch (sink_count != 0): mainlink off,
+   PHY exit, no DP_SET_POWER. Downstream dp_display_unprepare() puts the sink in D3 first
+   (psm_config(true)). Do the same in atomic_post_disable when hpd_state is ST_CONNECTED, and
+   write D0 again in atomic_enable's ST_DISPLAY_OFF re-entry before the forced link training
+   (today only msm_dp_display_process_hpd_high() writes D0, which a resume never runs).
+
+
+---
+--- a/drivers/gpu/drm/msm/dp/dp_display.c
++++ b/drivers/gpu/drm/msm/dp/dp_display.c
+@@ -869,6 +869,8 @@
+ 
+ 	rate = dp->link->link_params.rate;
+ 
++	dp->audio_supported = dp->msm_dp_display.connector->display_info.has_audio;
++
+ 	if (dp->audio_supported) {
+ 		dp->audio->bw_code = drm_dp_link_rate_to_bw_code(rate);
+ 		dp->audio->lane_count = dp->link->link_params.num_lanes;
+@@ -1633,6 +1635,10 @@
+ 
+ 	if (hpd_state == ST_DISPLAY_OFF) {
+ 		msm_dp_display_host_phy_init(msm_dp_display);
++		/* the sink was put in D3 by atomic_post_disable: wake it before training */
++		if (!dp->is_edp)
++			msm_dp_link_psm_config(msm_dp_display->link,
++					       &msm_dp_display->panel->link_info, false);
+ 		force_link_train = true;
+ 	}
+ 
+@@ -1683,6 +1689,19 @@
+ 		drm_dbg_dp(dp->drm_dev, "type=%d wrong hpd_state=%d\n",
+ 			   dp->connector_type, hpd_state);
+ 
++	/*
++	 * ST_CONNECTED here means the sink is still attached and DRM is
++	 * turning the output off (system suspend, DPMS off): put the sink in
++	 * D3 while the link is still up, as the downstream driver does in
++	 * dp_display_unprepare(), so it does not spend the sleep requesting a
++	 * retrain over PD. msm_dp_display_disable() does this on its own only
++	 * when the dongle lost its monitor (sink_count == 0).
++	 */
++	if (!dp->is_edp && hpd_state == ST_CONNECTED &&
++	    msm_dp_display->link->sink_count)
++		msm_dp_link_psm_config(msm_dp_display->link,
++				       &msm_dp_display->panel->link_info, true);
++
+ 	msm_dp_display_disable(msm_dp_display);
+ 
+ 	hpd_state =  msm_dp_display->hpd_state;
+@@ -1799,4 +1818,13 @@
+ 		msm_dp_add_event(dp, EV_HPD_PLUG_INT, 0, 0);
+ 	else if (msm_dp_display->link_ready && status == connector_status_disconnected)
+ 		msm_dp_add_event(dp, EV_HPD_UNPLUG_INT, 0, 0);
++	else if (msm_dp_display->link_ready && status == connector_status_connected)
++		/*
++		 * Over USB-C the sink's IRQ_HPD arrives as a DisplayPort
++		 * Attention VDM with HPD still high; the altmode driver
++		 * reports it as another "connected". Service it like the
++		 * HPD-pin path does: read the sink's status and retrain if
++		 * it asks for it (msm_dp_display_usbpd_attention_cb).
++		 */
++		msm_dp_add_event(dp, EV_IRQ_HPD_INT, 0, 0);
+ }
+--- a/drivers/gpu/drm/msm/dp/dp_panel.c

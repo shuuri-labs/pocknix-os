@@ -1,0 +1,44 @@
+From: transentient <cliff.judge@gmail.com>
+Date: Sun, 12 Oct 2026 19:15:00 +0900
+Subject: [PATCH] phy: qcom-qmp-combo: set the DP PHY orientation mode before the first AUX transaction
+
+qmp_combo_configure_dp_mode() writes QSERDES_DP_PHY_MODE (0x5c normal /
+0x4c reversed plug) from phy_configure(), which the msm DP driver calls at
+link training. The driver reads the sink's DPCD over AUX right after
+phy_init() though, and on the v4 PHY (sm8250) nothing had told the DP
+block the plug orientation by then: on a reversed USB-C plug every AUX
+transaction timed out (phy_calibrate cycled the four AUX_CFG1 settings for
+3.5 s), msm_dp gave up with hpd_state=0 and the dock showed no picture in
+one of its two orientations, while USB SuperSpeed on the same lanes was
+fine (the Type-C port manager had set the orientation at attach).
+
+Write the mode register in qmp_v4_dp_aux_init() as well. The orientation
+is known there: tcpm sets it at attach and qmp_combo_typec_switch_set()
+re-runs dp_aux_init on a change.
+
+Retroid Pocket 5 (sm8250, Elecom DST-090BP1SV / UGREEN CM828 docks),
+
+---
+--- a/drivers/phy/qualcomm/phy-qcom-qmp-combo.c
++++ b/drivers/phy/qualcomm/phy-qcom-qmp-combo.c
+@@ -3318,6 +3318,20 @@
+ 	writel(0x03, qmp->dp_dp_phy + QSERDES_DP_PHY_AUX_CFG9);
+ 	qmp->dp_aux_cfg = 0;
+ 
++	/*
++	 * tell the DP block which way round the plug is BEFORE the
++	 * first AUX transaction. qmp_combo_configure_dp_mode() writes
++	 * QSERDES_DP_PHY_MODE only at phy_configure(), i.e. at link training,
++	 * but the display driver reads the sink's DPCD over AUX right after
++	 * phy_init(); on a reversed USB-C plug that read ran with the AUX pair
++	 * in the normal-orientation mode and every transaction timed out, so a
++	 * dock gave no picture in one of its two orientations (Retroid Pocket 5,
++	 * sm8250, 2026-10-12). The orientation is already known here: the port
++	 * manager sets it at attach, and a later flip re-runs this init.
++	 */
++	writel(qmp->orientation == TYPEC_ORIENTATION_REVERSE ? 0x4c : 0x5c,
++	       qmp->dp_dp_phy + QSERDES_DP_PHY_MODE);
++
+ 	writel(PHY_AUX_STOP_ERR_MASK | PHY_AUX_DEC_ERR_MASK |
+ 	       PHY_AUX_SYNC_ERR_MASK | PHY_AUX_ALIGN_ERR_MASK |
+ 	       PHY_AUX_REQ_ERR_MASK,

@@ -45,6 +45,18 @@ Last rebased: 2026-10-27 (battery time remaining).
   charging reads positive. Source: ours, fixing ROCKNIX's own 0011; goes to ROCKNIX. Drop: once
   their 0011 carries it (the sync's apply check then fails it as already applied).
 
+### USB-C and DisplayPort
+
+- **1092** USB-C DisplayPort works in both plug orientations: `qmp_v4_dp_aux_init()` writes
+  `QSERDES_DP_PHY_MODE` before the first AUX transaction instead of waiting for `phy_configure()`
+  at link training. Source: ours.
+- **1093** Type-C and PD state re-syncs after s2idle: `qcom_pmic_typec` re-evaluates port status
+  and clears stale PD PHY TX state on resume after `spmi-pmic-arb` masks non-wake PMIC IRQs.
+  Source: ours.
+- **1094** Docked DP sinks survive DRM off and s2idle: `msm_dp` puts the sink in D3 across
+  `atomic_post_disable`, wakes it to D0 before retraining, and services USB-C Attention IRQ_HPD
+  events while connected. Source: ours.
+
 ## Edits to synced files
 
 The local delta `kernel/sm8250/sync-keep` restores after each make sync.
