@@ -12,6 +12,7 @@ AppWindow {
     property string romsDir: ""
     property var store: ({ mode: "none", job: "none", sections: [], entries: [] })
     property bool loaded: false
+    property string loadError: ""
     property bool attached: false
     // what the running store job works on: its tiles show busy
     property var acting: []
@@ -118,13 +119,14 @@ AppWindow {
     Job {
         id: statusJob
         onFinished: code => {
+            app.loadError = code === 0 ? "" : error
             if (code === 0) {
                 try {
                     app.store = JSON.parse(output)
                     if (JSON.stringify(app.store.sections) !== JSON.stringify(app.sections))
                         app.sections = app.store.sections
                 } catch (e) {
-                    console.warn("pocknix-store status:", e)
+                    app.loadError = qsTr("pocknix-store gave a reply the Store cannot read.")
                 }
             }
             app.loaded = true
@@ -222,11 +224,19 @@ AppWindow {
             title: modelData.name
             icon: app.sectionIcons[modelData.id] || "applications-other-symbolic"
 
+            LoadState {
+                loading: !app.loaded
+                error: app.loadError
+                onRetry: {
+                    app.loaded = false
+                    app.loadError = ""
+                    app.refresh()
+                }
+            }
             QQC2.Label {
-                visible: section.modelData.id === ""
+                visible: section.modelData.id === "" && app.loaded && app.loadError === ""
                 Layout.fillWidth: true
-                text: !app.loaded ? qsTr("Loading…")
-                    : qsTr("Nothing to show. Run an update first: the store lists what the Pocknix repository offers.")
+                text: qsTr("Nothing to show. Run an update first: the store lists what the Pocknix repository offers.")
                 color: Theme.textMuted
                 wrapMode: Text.WordWrap
             }

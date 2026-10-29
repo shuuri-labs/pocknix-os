@@ -12,6 +12,7 @@ TabPage {
     // pocknix-desktop-select list: name TAB label TAB active|""
     property var desktops: []
     property bool loaded: false
+    property string loadError: ""
 
     function refresh() {
         listJob.start(["/usr/bin/pocknix-desktop-select", "list"])
@@ -39,17 +40,28 @@ TabPage {
 
     Job {
         id: listJob
-        onFinished: {
-            page.desktops = output.split("\n").filter(l => l).map(l => {
+        onFinished: code => {
+            page.loaded = true
+            page.loadError = code === 0 ? "" : error
+            page.desktops = code !== 0 ? [] : output.split("\n").filter(l => l).map(l => {
                 const f = l.split("\t")
                 return { name: f[0], label: f[1] || f[0], active: f[2] === "active" }
             })
-            page.loaded = true
         }
     }
 
+    LoadState {
+        loading: !page.loaded
+        error: page.loadError
+        onRetry: {
+            page.loaded = false
+            page.loadError = ""
+            page.refresh()
+        }
+    }
     QQC2.Label {
         Layout.fillWidth: true
+        visible: page.loaded && page.loadError === ""
         text: page.loaded && page.desktops.length === 0 ? qsTr("Desktop mode is not installed.")
                                                         : qsTr("The desktop that desktop mode starts.")
         color: Theme.textMuted

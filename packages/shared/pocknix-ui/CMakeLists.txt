@@ -23,6 +23,7 @@ set(QML_FILES
     qml/Pocknix/Ui/Toast.qml
     qml/Pocknix/Ui/ConfirmSheet.qml
     qml/Pocknix/Ui/LogSheet.qml
+    qml/Pocknix/Ui/LoadState.qml
     qml/Pocknix/Ui/FolderSheet.qml)
 # The module is served from its URI path, not from where the files sit in this tree.
 foreach(f IN LISTS QML_FILES)
