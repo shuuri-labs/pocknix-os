@@ -1,0 +1,68 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: aean0x <3682177+aean0x@users.noreply.github.com>
+Date: Tue, 21 Oct 2026 12:40:00 +0200
+Subject: [PATCH] ASoC: qcom: q6afe: send DisplayPort stream and controller
+ index
+
+Android q6afe sends two parameters before HDMI port start on port
+0x6020. Linux sent the HDMI config and DEVICE_START and left both out.
+The DSP then copied Front Left to both speakers.
+
+Send 0x000102b5 and 0x000102b6 first, only for that port. Each payload
+is minor version 1 and index 0. A set_param error fails the start.
+Other ports are unchanged.
+---
+ sound/soc/qcom/qdsp6/q6afe.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/sound/soc/qcom/qdsp6/q6afe.c b/sound/soc/qcom/qdsp6/q6afe.c
+--- a/sound/soc/qcom/qdsp6/q6afe.c
++++ b/sound/soc/qcom/qdsp6/q6afe.c
+@@ -81,6 +81,8 @@
+ #define AFE_API_VERSION_HDMI_CONFIG	0x1
+ #define AFE_PORT_ID_MULTICHAN_HDMI_RX	0x100E
+ #define AFE_PORT_ID_HDMI_OVER_DP_RX	0x6020
++#define AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG	0x000102b5
++#define AFE_PARAM_ID_HDMI_DPTX_IDX_CFG		0x000102b6
+ 
+ /* USB AFE port */
+ #define AFE_PORT_ID_USB_RX                       0x7000
+@@ -1673,6 +1675,36 @@ int q6afe_port_start(struct q6afe_port *port)
+ 	int ret, param_id = port->cfg_type;
+ 	struct apr_pkt *pkt;
+ 	int pkt_size;
++
++	if (port_id == AFE_PORT_ID_HDMI_OVER_DP_RX) {
++		struct {
++			u32 minor_version;
++			u32 idx;
++		} __packed dp_idx = {
++			.minor_version = 1,
++			.idx = 0,
++		};
++
++		ret = q6afe_port_set_param_v2(port, &dp_idx,
++					      AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG,
++					      AFE_MODULE_AUDIO_DEV_INTERFACE,
++					      sizeof(dp_idx));
++		if (ret) {
++			dev_err(afe->dev, "AFE DP stream idx for port 0x%x failed %d\n",
++				port_id, ret);
++			return ret;
++		}
++
++		ret = q6afe_port_set_param_v2(port, &dp_idx,
++					      AFE_PARAM_ID_HDMI_DPTX_IDX_CFG,
++					      AFE_MODULE_AUDIO_DEV_INTERFACE,
++					      sizeof(dp_idx));
++		if (ret) {
++			dev_err(afe->dev, "AFE DP ctl idx for port 0x%x failed %d\n",
++				port_id, ret);
++			return ret;
++		}
++	}
+ 
+ 	ret  = q6afe_port_set_param_v2(port, &port->port_cfg, param_id,
+ 				       AFE_MODULE_AUDIO_DEV_INTERFACE,
+-- 
+2.46.0

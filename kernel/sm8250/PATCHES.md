@@ -45,6 +45,13 @@ Last rebased: 2026-10-27 (battery time remaining).
   charging reads positive. Source: ours, fixing ROCKNIX's own 0011; goes to ROCKNIX. Drop: once
   their 0011 carries it (the sync's apply check then fails it as already applied).
 
+### Display and audio
+
+- **1079** Dock stereo survives on USB-C DisplayPort: q6afe sends the HDMI-over-DP stream index
+  and controller index (both 0) before it starts port 0x6020, as Android's q6afe does. Without
+  them the DSP copied front left to both channels. Source: ours, from Android's q6afe; goes
+  upstream (ASoC).
+
 ## Edits to synced files
 
 The local delta `kernel/sm8250/sync-keep` restores after each make sync.
