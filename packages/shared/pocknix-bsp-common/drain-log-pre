@@ -1,7 +1,8 @@
 #!/bin/sh
-# Realtime, not monotonic: the monotonic clock stops during s2idle.
+# Realtime, not monotonic: the monotonic clock stops during s2idle. The pm8150b gauge here
+# exposes charge_now and no charge_counter; both are uAh, so either reads the same way.
 mkdir -p /run/pocknix
-printf '%s %s\n' "$(date +%s)" \
-  "$(cat /sys/class/power_supply/battery/charge_counter 2>/dev/null)" \
-  > /run/pocknix/drain-log
-exit 0
+charge() { cat "/sys/class/power_supply/battery/$1" 2>/dev/null; }
+c=$(charge charge_counter); [ -n "$c" ] || c=$(charge charge_now)
+v=$(charge voltage_now)
+printf '%s %s %s\n' "$(date +%s)" "$c" "$v" > /run/pocknix/drain-log

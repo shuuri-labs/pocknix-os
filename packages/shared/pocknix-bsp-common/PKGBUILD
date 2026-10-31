@@ -3,7 +3,7 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=29
+pkgrel=30
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump storage cap, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -18,7 +18,7 @@ conflicts=('linux-pocknix-sm8550<7.2.10-3' 'linux-pocknix-sm8250<7.2.10-4')
 optdepends=('scx-scheds: scx_lavd for pocknix-lavd.service (unit self-skips without it)')
 install=pocknix-bsp-common.install
 backup=('etc/security/limits.d/60-pocknix-deck.conf')
-source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
+source=('pocknix-sleep'
         'drain-log-pre' 'drain-log-post'
         'usb-role-sleep-pre' 'usb-role-sleep-post'
         '20-pocknix-powerkey.conf' '50-pocknix-coredump.conf'
@@ -44,7 +44,7 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -55,10 +55,6 @@ package() {
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/002-usb-role"
   install -Dm755 "${srcdir}/usb-role-sleep-post" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/post/002-usb-role"
-  install -Dm755 "${srcdir}/sdam-debug-pre" \
-    "${pkgdir}/usr/lib/pocknix/sleep.d/pre/003-sdam-debug"
-  install -Dm755 "${srcdir}/sdam-debug-post" \
-    "${pkgdir}/usr/lib/pocknix/sleep.d/post/003-sdam-debug"
   install -Dm755 "${srcdir}/drain-log-pre" \
     "${pkgdir}/usr/lib/pocknix/sleep.d/pre/004-drain-log"
   install -Dm755 "${srcdir}/drain-log-post" \
