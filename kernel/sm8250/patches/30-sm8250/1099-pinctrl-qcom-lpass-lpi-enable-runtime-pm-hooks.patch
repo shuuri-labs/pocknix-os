@@ -1,0 +1,432 @@
+From f0c565076d56407b4a1b9e75328df0f3adaa0194 Mon Sep 17 00:00:00 2001
+From: Ajay Kumar Nandam <ajay.nandam@oss.qualcomm.com>
+Date: Sat, 23 May 2026 02:16:43 +0530
+Subject: pinctrl: qcom: lpass-lpi: Enable runtime PM hooks on LPASS LPI SoCs
+
+The LPASS LPI core conversion to PM clock framework relies on variant
+drivers wiring runtime PM callbacks.
+
+Hook up runtime PM callbacks for the LPASS LPI variant drivers touched
+in this patch so they are prepared for the shared core conversion.
+
+This commit is a preparatory NOP on its own, as runtime PM is still
+disabled on these devices until the following core conversion patch.
+
+This is a mechanical per-variant driver update that relies on the
+same generic PM clock flow (of_pm_clk_add_clks() + pm_clk_suspend/
+pm_clk_resume()) and DT-provided clocks.
+
+Runtime behavior was validated on Kodiak (sc7280).
+
+Suggested-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Ajay Kumar Nandam <ajay.nandam@oss.qualcomm.com>
+Signed-off-by: Linus Walleij <linusw@kernel.org>
+[holodor: backported to 7.1.2 unchanged except the hunk for pinctrl-sm6350-lpass-lpi.c, a variant that 7.1 does not have]
+---
+ drivers/pinctrl/qcom/pinctrl-milos-lpass-lpi.c    |  7 +++++++
+ drivers/pinctrl/qcom/pinctrl-sc7280-lpass-lpi.c   | 19 +++++++++++++------
+ drivers/pinctrl/qcom/pinctrl-sc8280xp-lpass-lpi.c | 15 +++++++++++----
+ drivers/pinctrl/qcom/pinctrl-sdm660-lpass-lpi.c   |  7 +++++++
+ drivers/pinctrl/qcom/pinctrl-sdm670-lpass-lpi.c   |  7 +++++++
+ drivers/pinctrl/qcom/pinctrl-sm4250-lpass-lpi.c   |  7 +++++++
+ drivers/pinctrl/qcom/pinctrl-sm6115-lpass-lpi.c   |  7 +++++++
+ drivers/pinctrl/qcom/pinctrl-sm6350-lpass-lpi.c   |  7 +++++++
+ drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c   | 15 +++++++++++----
+ drivers/pinctrl/qcom/pinctrl-sm8450-lpass-lpi.c   | 15 +++++++++++----
+ drivers/pinctrl/qcom/pinctrl-sm8550-lpass-lpi.c   | 15 +++++++++++----
+ drivers/pinctrl/qcom/pinctrl-sm8650-lpass-lpi.c   | 15 +++++++++++----
+ 12 files changed, 110 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/pinctrl/qcom/pinctrl-milos-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-milos-lpass-lpi.c
+index 3bf6fe0cf1bbe..72b8ffd97860b 100644
+--- a/drivers/pinctrl/qcom/pinctrl-milos-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-milos-lpass-lpi.c
+@@ -7,6 +7,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -203,10 +205,15 @@ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+ 		.name = "qcom-milos-lpass-lpi-pinctrl",
+ 		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sc7280-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sc7280-lpass-lpi.c
+index 750f410311a8f..a61df10d46cb3 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sc7280-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sc7280-lpass-lpi.c
+@@ -7,6 +7,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -129,20 +131,25 @@ static const struct lpi_pinctrl_variant_data sc7280_lpi_data = {
+ 
+ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ 	{
+-	       .compatible = "qcom,sc7280-lpass-lpi-pinctrl",
+-	       .data = &sc7280_lpi_data,
++		.compatible = "qcom,sc7280-lpass-lpi-pinctrl",
++		.data = &sc7280_lpi_data,
+ 	}, {
+-	       .compatible = "qcom,sm8350-lpass-lpi-pinctrl",
+-	       .data = &sc7280_lpi_data,
++		.compatible = "qcom,sm8350-lpass-lpi-pinctrl",
++		.data = &sc7280_lpi_data,
+ 	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+-		   .name = "qcom-sc7280-lpass-lpi-pinctrl",
+-		   .of_match_table = lpi_pinctrl_of_match,
++		.name = "qcom-sc7280-lpass-lpi-pinctrl",
++		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sc8280xp-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sc8280xp-lpass-lpi.c
+index 0e839b6aaaf4b..27c47710365ef 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sc8280xp-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sc8280xp-lpass-lpi.c
+@@ -6,6 +6,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -166,17 +168,22 @@ static const struct lpi_pinctrl_variant_data sc8280xp_lpi_data = {
+ 
+ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ 	{
+-	       .compatible = "qcom,sc8280xp-lpass-lpi-pinctrl",
+-	       .data = &sc8280xp_lpi_data,
++		.compatible = "qcom,sc8280xp-lpass-lpi-pinctrl",
++		.data = &sc8280xp_lpi_data,
+ 	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+-		   .name = "qcom-sc8280xp-lpass-lpi-pinctrl",
+-		   .of_match_table = lpi_pinctrl_of_match,
++		.name = "qcom-sc8280xp-lpass-lpi-pinctrl",
++		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sdm660-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sdm660-lpass-lpi.c
+index 65411abfbfaca..7b5aacaae7d7c 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sdm660-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sdm660-lpass-lpi.c
+@@ -10,6 +10,8 @@
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ #include <linux/pinctrl/pinctrl.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+@@ -145,10 +147,15 @@ static const struct of_device_id sdm660_lpi_pinctrl_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, sdm660_lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver sdm660_lpi_pinctrl_driver = {
+ 	.driver = {
+ 		.name = "qcom-sdm660-lpass-lpi-pinctrl",
+ 		.of_match_table = sdm660_lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sdm670-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sdm670-lpass-lpi.c
+index 858146c408d0c..0a31f7ad2e0d6 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sdm670-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sdm670-lpass-lpi.c
+@@ -7,6 +7,8 @@
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ #include <linux/pinctrl/pinctrl.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+@@ -151,10 +153,15 @@ static const struct of_device_id sdm670_lpi_pinctrl_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, sdm670_lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver sdm670_lpi_pinctrl_driver = {
+ 	.driver = {
+ 		.name = "qcom-sdm670-lpass-lpi-pinctrl",
+ 		.of_match_table = sdm670_lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sm4250-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sm4250-lpass-lpi.c
+index c0e178be9cfc3..75bafa62426a2 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sm4250-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sm4250-lpass-lpi.c
+@@ -7,6 +7,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -221,10 +223,15 @@ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+ 		.name = "qcom-sm4250-lpass-lpi-pinctrl",
+ 		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sm6115-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sm6115-lpass-lpi.c
+index b7d9186861a2f..05435ea6e17a6 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sm6115-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sm6115-lpass-lpi.c
+@@ -7,6 +7,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -141,10 +143,15 @@ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+ 		.name = "qcom-sm6115-lpass-lpi-pinctrl",
+ 		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c
+index c27452eece3e6..454de788be215 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c
+@@ -7,6 +7,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -127,17 +129,22 @@ static const struct lpi_pinctrl_variant_data sm8250_lpi_data = {
+ 
+ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ 	{
+-	       .compatible = "qcom,sm8250-lpass-lpi-pinctrl",
+-	       .data = &sm8250_lpi_data,
++		.compatible = "qcom,sm8250-lpass-lpi-pinctrl",
++		.data = &sm8250_lpi_data,
+ 	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+-		   .name = "qcom-sm8250-lpass-lpi-pinctrl",
+-		   .of_match_table = lpi_pinctrl_of_match,
++		.name = "qcom-sm8250-lpass-lpi-pinctrl",
++		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sm8450-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sm8450-lpass-lpi.c
+index 439f6541622e9..834eee8dcce92 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sm8450-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sm8450-lpass-lpi.c
+@@ -6,6 +6,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -195,17 +197,22 @@ static const struct lpi_pinctrl_variant_data sm8450_lpi_data = {
+ 
+ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ 	{
+-	       .compatible = "qcom,sm8450-lpass-lpi-pinctrl",
+-	       .data = &sm8450_lpi_data,
++		.compatible = "qcom,sm8450-lpass-lpi-pinctrl",
++		.data = &sm8450_lpi_data,
+ 	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+-		   .name = "qcom-sm8450-lpass-lpi-pinctrl",
+-		   .of_match_table = lpi_pinctrl_of_match,
++		.name = "qcom-sm8450-lpass-lpi-pinctrl",
++		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sm8550-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sm8550-lpass-lpi.c
+index 73065919c8c26..875e04e5d2b90 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sm8550-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sm8550-lpass-lpi.c
+@@ -6,6 +6,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -203,17 +205,22 @@ static const struct lpi_pinctrl_variant_data sm8550_lpi_data = {
+ 
+ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ 	{
+-	       .compatible = "qcom,sm8550-lpass-lpi-pinctrl",
+-	       .data = &sm8550_lpi_data,
++		.compatible = "qcom,sm8550-lpass-lpi-pinctrl",
++		.data = &sm8550_lpi_data,
+ 	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+-		   .name = "qcom-sm8550-lpass-lpi-pinctrl",
+-		   .of_match_table = lpi_pinctrl_of_match,
++		.name = "qcom-sm8550-lpass-lpi-pinctrl",
++		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sm8650-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sm8650-lpass-lpi.c
+index f9fcedf5a65d7..bc7889c993d05 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sm8650-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sm8650-lpass-lpi.c
+@@ -6,6 +6,8 @@
+ #include <linux/gpio/driver.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_clock.h>
++#include <linux/pm_runtime.h>
+ 
+ #include "pinctrl-lpass-lpi.h"
+ 
+@@ -210,17 +212,22 @@ static const struct lpi_pinctrl_variant_data sm8650_lpi_data = {
+ 
+ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ 	{
+-	       .compatible = "qcom,sm8650-lpass-lpi-pinctrl",
+-	       .data = &sm8650_lpi_data,
++		.compatible = "qcom,sm8650-lpass-lpi-pinctrl",
++		.data = &sm8650_lpi_data,
+ 	},
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
++static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++};
++
+ static struct platform_driver lpi_pinctrl_driver = {
+ 	.driver = {
+-		   .name = "qcom-sm8650-lpass-lpi-pinctrl",
+-		   .of_match_table = lpi_pinctrl_of_match,
++		.name = "qcom-sm8650-lpass-lpi-pinctrl",
++		.of_match_table = lpi_pinctrl_of_match,
++		.pm = pm_ptr(&lpi_pinctrl_pm_ops),
+ 	},
+ 	.probe = lpi_pinctrl_probe,
+ 	.remove = lpi_pinctrl_remove,
+-- 
+cgit 1.3.1-korg
+

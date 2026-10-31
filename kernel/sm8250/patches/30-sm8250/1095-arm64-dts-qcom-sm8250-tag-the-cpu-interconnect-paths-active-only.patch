@@ -1,0 +1,96 @@
+From: transentient <cliff.judge@gmail.com>
+Date: Fri, 16 Oct 2026 13:00:00 +0900
+Subject: [PATCH] arm64: dts: qcom: sm8250: tag the CPU interconnect paths ACTIVE_ONLY
+
+The CPU nodes' bandwidth paths to DDR carry no tag, which the RPMh
+interconnect driver treats as QCOM_ICC_TAG_ALWAYS: the last bandwidth the
+cpufreq governor voted stays in the AMC, WAKE and SLEEP buckets alike, so
+the BCM voter never programs a sleep value and the CPUs' DDR vote (SH0,
+SH4, MC0, ACV) stands through suspend-to-idle.  Measured on the Retroid
+Pocket 5: the RSC sleep TCS holds a single entry (MM0 off), DDR never
+enters self-refresh and the SoC never reaches cxsd/aosd (qcom_stats 0).
+sm8550 and sm8650 tag the same paths QCOM_ICC_TAG_ACTIVE_ONLY; do the
+same here so the sleep bucket drops to zero when the APSS sleeps.
+---
+--- a/arch/arm64/boot/dts/qcom/sm8250.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8250.dtsi
+@@ -12,6 +12,7 @@
+ #include <dt-bindings/dma/qcom-gpi.h>
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/interconnect/qcom,osm-l3.h>
++#include <dt-bindings/interconnect/qcom,icc.h>
+ #include <dt-bindings/interconnect/qcom,sm8250.h>
+ #include <dt-bindings/mailbox/qcom-ipcc.h>
+ #include <dt-bindings/phy/phy-qcom-qmp.h>
+@@ -107,7 +108,7 @@
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 0>;
+ 			operating-points-v2 = <&cpu0_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_0: l2-cache {
+@@ -138,7 +139,7 @@
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 0>;
+ 			operating-points-v2 = <&cpu0_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_100: l2-cache {
+@@ -163,7 +164,7 @@
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 0>;
+ 			operating-points-v2 = <&cpu0_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_200: l2-cache {
+@@ -188,7 +189,7 @@
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 0>;
+ 			operating-points-v2 = <&cpu0_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_300: l2-cache {
+@@ -213,7 +214,7 @@
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 1>;
+ 			operating-points-v2 = <&cpu4_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_400: l2-cache {
+@@ -238,7 +239,7 @@
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 1>;
+ 			operating-points-v2 = <&cpu4_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_500: l2-cache {
+@@ -263,7 +264,7 @@
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 1>;
+ 			operating-points-v2 = <&cpu4_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_600: l2-cache {
+@@ -288,7 +289,7 @@
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 2>;
+ 			operating-points-v2 = <&cpu7_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_700: l2-cache {
