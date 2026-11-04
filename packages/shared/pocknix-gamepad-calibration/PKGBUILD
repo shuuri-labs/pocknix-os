@@ -2,7 +2,7 @@
 # driver's module parameters at boot, before InputPlumber claims the pad.
 pkgname=pocknix-gamepad-calibration
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc="pocknix gamepad calibration: replays the saved stick/trigger calibration at boot"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
