@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# steamos-priv-write — the privileged-write helper the Steam client shells out to for brightness.
+#
+# Steam runs this with /sys/class/backlight/<node>/brightness and a raw 0..max value, and falls
+# back to `echo <value> | sudo -n tee <path>` when the binary is missing. It writes the node it
+# names first; on a board where that is not the panel gamescope drives (a second, darker screen
+# upstream in the class list), the slider then moves the wrong panel. So rescale the value onto
+# the board's primary node, write it as the session (logind, no password) when sysfs is not
+# writable, and finally keep the node Steam named on the same percentage so its readback is sane.
+set -euo pipefail
+
+path="${1-}"
+value="${2-}"
+
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+# Empty on a single-panel board: the node Steam named is the one to write.
+primary="${POCKNIX_PRIMARY_BACKLIGHT:-}"
+
+if [[ ! $path =~ ^/sys/class/backlight/([[:alnum:]_.:-]+)/brightness$ ]]; then
+    echo "steamos-priv-write: unsupported path: ${path}" >&2
+    exit 1
+fi
+# Capture now: the value check below resets BASH_REMATCH.
+device="${BASH_REMATCH[1]}"
+[[ -n $primary ]] || primary="$device"
+if [[ ! $value =~ ^[0-9]+$ ]]; then
+    echo "steamos-priv-write: invalid backlight value: ${value}" >&2
+    exit 1
+fi
+
+source_dev="/sys/class/backlight/${device}"
+target_dev="/sys/class/backlight/${primary}"
+for f in "${source_dev}/max_brightness" "${target_dev}/max_brightness"; do
+    [[ -r $f ]] || { echo "steamos-priv-write: cannot read ${f}" >&2; exit 1; }
+done
+
+source_max="$(<"${source_dev}/max_brightness")"
+target_max="$(<"${target_dev}/max_brightness")"
+if (( source_max <= 0 || target_max <= 0 )); then
+    echo "steamos-priv-write: invalid backlight range" >&2
+    exit 1
+fi
+
+# Steam truncates its request; clamp, then rescale across the two panels' ranges.
+(( value > source_max )) && value="$source_max"
+scaled=$(( value * target_max / source_max ))
+(( scaled < 1 )) && scaled=1
+
+set_brightness() { # device, raw value
+    local dev="/sys/class/backlight/${1}" raw="$2"
+    # Some panel drivers answer EINVAL while still applying the value, so judge by the readback.
+    printf '%s' "$raw" >"${dev}/brightness" 2>/dev/null || true
+    [[ "$(<"${dev}/brightness")" == "$raw" ]] && return 0
+
+    busctl --system call org.freedesktop.login1 \
+        /org/freedesktop/login1/session/auto org.freedesktop.login1.Session \
+        SetBrightness ssu backlight "${1}" "${raw}" >/dev/null 2>&1 || true
+    [[ "$(<"${dev}/brightness")" == "$raw" ]]
+}
+
+if ! set_brightness "${primary}" "${scaled}"; then
+    echo "steamos-priv-write: cannot set ${primary} to ${scaled}" >&2
+    exit 1
+fi
+
+# Steam reads the slider position back from the node it named, so that one follows.
+if [[ $device != "$primary" ]]; then
+    (( value < 1 )) && value=1
+    set_brightness "${device}" "${value}" || true
+fi

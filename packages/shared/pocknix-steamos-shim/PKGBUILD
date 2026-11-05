@@ -2,16 +2,17 @@
 # (-steamos3 -steamdeck) shells out to; without them the OOBE "required update" step dead-ends.
 pkgname=pocknix-steamos-shim
 pkgver=0.1.0
-pkgrel=8
+pkgrel=9
 pkgdesc="SteamOS update/branch/timezone/format helper stubs for the Steam Deck UI on a non-SteamOS base (until real OTA)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
 # The format shims pkexec /usr/lib/hwsupport/format-device.sh, shipped by pocknix-sdcard-automount.
-depends=('pocknix-sdcard-automount' 'polkit')
+depends=('bash' 'pocknix-sdcard-automount' 'polkit')
 source=('steamos-update' 'steamos-select-branch' 'steamos-set-timezone'
-        'steamos-format-device' 'steamos-format-sdcard' 'jupiter-biosupdate')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'steamos-format-device' 'steamos-format-sdcard' 'jupiter-biosupdate'
+        'steamos-priv-write')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   # Steam calls these helpers by their FULL /usr/bin/steamos-polkit-helpers/ path, not via PATH,
@@ -29,6 +30,9 @@ package() {
   # jupiter-biosupdate needs its OWN always-exit-0 stub, not steamos-update: see its header.
   install -Dm755 "${srcdir}/jupiter-biosupdate"    "${pkgdir}/usr/bin/steamos-polkit-helpers/jupiter-biosupdate"
   install -Dm755 "${srcdir}/jupiter-biosupdate"    "${pkgdir}/usr/bin/jupiter-biosupdate"
+  # Brightness: Steam runs this by full path and falls back to sudo when it is missing.
+  install -Dm755 "${srcdir}/steamos-priv-write" \
+    "${pkgdir}/usr/bin/steamos-polkit-helpers/steamos-priv-write"
   # Do NOT add a jupiter-dock-updater stub: its presence makes Steam believe a dock is attached
   # and prompt for a dock update.
 }
