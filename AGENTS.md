@@ -26,7 +26,8 @@ the same rules with the detail; read it before your first change.
 ## The PR
 
 - The body is the template's sections and nothing else: What, How, Tested, How to test, the
-  checklist. Short and casual, about 200 words outside code blocks ("What the PR must contain").
+  checklist. Short and casual: most fit in about 200 words outside code blocks, and every line
+  of a longer one earns its place ("What the PR must contain").
 - **How to test** is required: exact build and install commands, numbered steps, what the
   reviewer should see, how to roll back.
 - **Tested** shows the change ran on real hardware, with evidence (a log excerpt, a screenshot,

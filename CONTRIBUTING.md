@@ -146,17 +146,18 @@ The template's sections are the whole body: **What**, **How**, **Tested**, **How
 the checklist. `.github/PULL_REQUEST_TEMPLATE.md` lays them out.
 
 **Short and casual.** Write it like a comment to a person, not a report: plain words, short
-sentences, nothing I can already read in the diff. Rough sizes:
+sentences, nothing I can already read in the diff.
 
-- **What:** 2-3 sentences, what changes and why.
-- **How:** up to 5 one-line bullets, only for choices a reviewer wouldn't guess, written as
-  "**the choice.** why".
+- **What:** a few sentences, what changes and why.
+- **How:** one line per choice a reviewer wouldn't guess, as "**the choice.** why". No
+  background.
 - **Tested:** device and SoC, install method, what you exercised, the evidence, and what you
   didn't test.
 - **How to test:** as long as it needs (below).
 - **Checklist:** tick what applies, delete the rest.
 
-Outside code blocks, aim for about 200 words.
+Most PRs fit in about 200 words outside code blocks. A big change can run longer, but every
+line should be something I need.
 
 **How to test is required.** Steps I can follow on my own device, assuming I have the repo and
 a build host but know nothing about your change: the build or CI download command (or "docs

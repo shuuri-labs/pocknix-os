@@ -5,11 +5,11 @@ one short and plain. How to test is required; without it the PR stalls.
 
 ## What
 
-<!-- What changes and why, in 2-3 sentences. -->
+<!-- What changes and why, in a few sentences. -->
 
 ## How
 
-<!-- Up to 5 one-line bullets for choices a reviewer wouldn't guess: "**the choice.** why". -->
+<!-- One line per choice a reviewer wouldn't guess: "**the choice.** why". No background. -->
 
 ## Tested
 
