@@ -2,7 +2,7 @@
 # stay in step: same wordmark, same #202126 field, so boot -> splash reads as one surface.
 pkgname=pocknix-branding
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc="Pocknix OS branding: plymouth boot theme, Plasma splash"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
