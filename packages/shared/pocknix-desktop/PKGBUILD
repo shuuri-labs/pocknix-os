@@ -2,7 +2,7 @@
 # provider. Build with ./nodeps: the flavour dep would drag a whole DE into the chroot.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=33
+pkgrel=34
 pkgdesc="pocknix desktop session launcher, Flathub seeding and flatpak fixes"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -17,8 +17,9 @@ optdepends=('pocknix-desktop-plasma-mobile: Plasma Mobile flavour (default)'
 install='pocknix-desktop.install'
 source=('pocknix-desktop' 'pocknix-desktop-select' 'return-to-gamemode.desktop'
         'pocknix-flathub-setup' 'pocknix-flathub.service' 'pocknix-flathub-dispatcher'
-        'pocknix-fontcache-prune' 'zz-pocknix-fontcache.hook')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'pocknix-fontcache-prune' 'zz-pocknix-fontcache.hook'
+        'gnome.list' 'cosmic.list' 'hyprland.list' 'devtools.list')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop"          "${pkgdir}/usr/bin/pocknix-desktop"
@@ -35,4 +36,6 @@ package() {
   install -Dm755 "${srcdir}/pocknix-fontcache-prune" "${pkgdir}/usr/bin/pocknix-fontcache-prune"
   install -Dm644 "${srcdir}/zz-pocknix-fontcache.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/zz-pocknix-fontcache.hook"
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix/desktop-apps" \
+    "${srcdir}"/{gnome,cosmic,hyprland,devtools}.list
 }

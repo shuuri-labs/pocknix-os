@@ -1,0 +1,11 @@
+# Developer and diagnostic tools that dependencies drag in: no session is named devtools,
+# so these are hidden in every desktop.
+assistant.desktop
+designer.desktop
+linguist.desktop
+qdbusviewer.desktop
+qv4l2.desktop
+qvidcap.desktop
+lstopo.desktop
+xgps.desktop
+xgpsspeed.desktop

@@ -1,0 +1,4 @@
+# Plasma Mobile has its own Settings app.
+systemsettings.desktop
+kdesystemsettings.desktop
+org.kde.plasma.emojier.desktop

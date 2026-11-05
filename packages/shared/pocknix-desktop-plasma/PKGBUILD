@@ -1,7 +1,7 @@
 # Build with ./nodeps: makepkg -s would drag all of KDE/Qt into the chroot for a data package.
 pkgname=pocknix-desktop-plasma
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="pocknix desktop flavour: Plasma (desktop shell)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -14,11 +14,12 @@ depends=('pocknix-desktop>=0.1.0-30'   # first picker that offers the plasma ses
          'polkit-kde-agent'
          'plasma-keyboard')
 provides=('pocknix-desktop-flavour')
-source=('kwinrc')
-sha256sums=('SKIP')
+source=('kwinrc' 'plasma.list')
+sha256sums=('SKIP' 'SKIP')
 
 package() {
   # /etc/xdg is the lowest layer, so a keyboard the user picks wins; Plasma Mobile marks
   # this key immutable in its own kwinrc, so the default never reaches that session.
   install -Dm644 "${srcdir}/kwinrc" "${pkgdir}/etc/xdg/kwinrc"
+  install -Dm644 "${srcdir}/plasma.list" "${pkgdir}/usr/share/pocknix/desktop-apps/plasma.list"
 }

@@ -53,6 +53,37 @@ export XDG_SESSION_DESKTOP="${desktops%%;*}"
 export XDG_SESSION_DESKTOP="${XDG_SESSION_DESKTOP:-${session}}"
 [ -n "${desktops}" ] && export XDG_CURRENT_DESKTOP="${desktops//;/:}"
 
+# Both Plasmas are DesktopNames=KDE, so OnlyShowIn cannot separate them: other desktops' apps
+# are shadowed per session. KDE drops a Hidden=true stub and shows the next copy, so NoDisplay.
+hide_other_apps() {  # <dir> <data dirs> <own list names, space-separated>
+  local list id src d _
+  local -a dirs
+  rm -rf "$1" && mkdir -p "$1/applications" || return 1
+  IFS=: read -ra dirs <<< "$2"
+  for list in /usr/share/pocknix/desktop-apps/*.list; do
+    [ -r "${list}" ] || continue
+    [[ " $3 " == *" $(basename "${list}" .list) "* ]] && continue
+    while read -r id _ || [ -n "${id}" ]; do
+      [[ -z "${id}" || "${id}" == \#* ]] && continue
+      [[ "${id}" == *.desktop && "${id}" != */* ]] || continue
+      src=""
+      for d in "${dirs[@]}"; do
+        [ -r "${d%/}/applications/${id}" ] && { src="${d%/}/applications/${id}"; break; }
+      done
+      [ -n "${src}" ] || continue
+      awk '/^\[/ { g = $0 } g == "[Desktop Entry]" && /^NoDisplay=/ { next } { print }
+           $0 == "[Desktop Entry]" { print "NoDisplay=true" }' "${src}" > "$1/applications/${id}" || return 1
+    done < "${list}"
+  done
+}
+hide_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pocknix-desktop/share"
+data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+if hide_other_apps "${hide_dir}" "${data_dirs}" "${session} $(tr '[:upper:];' '[:lower:] ' <<< "${desktops}")"; then
+  export XDG_DATA_DIRS="${hide_dir}:${data_dirs}"
+else
+  echo "pocknix-desktop: could not hide other desktops' apps" >&2
+fi
+
 # Flavours drop pre-start hooks here: some DE config is only read when its session starts. Run,
 # not sourced, so a failing hook can never keep the desktop from starting.
 for _hook in /usr/lib/pocknix/desktop.d/*.sh; do
