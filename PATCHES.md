@@ -11,11 +11,11 @@ is not taken, retired numbers); files ported from another project record theirs 
 | kernel (sm8550) | [kernel/sm8550/PATCHES.md](kernel/sm8550/PATCHES.md) | Stock 7.2.10 + ROCKNIX `next` 6103571f67 (2026-10-11) |
 | kernel (sm8250) | [kernel/sm8250/PATCHES.md](kernel/sm8250/PATCHES.md) | Stock 7.2.10 + ROCKNIX `next` 6103571f67 (2026-10-11) |
 | gamescope | [packages/soc/gamescope/PATCHES.md](packages/soc/gamescope/PATCHES.md) | Valve `3.16.31` (f6916aa, 2026-09-27) |
-| mesa | [packages/soc/mesa/PATCHES.md](packages/soc/mesa/PATCHES.md) | 26.2.4 tarball, epoch=2 |
+| mesa | [packages/soc/mesa/PATCHES.md](packages/soc/mesa/PATCHES.md) | 26.2.6 tarball, epoch=2 |
 | pocknix-turnip-arm | [packages/soc/pocknix-turnip-arm/PATCHES.md](packages/soc/pocknix-turnip-arm/PATCHES.md) | Pinned Mesa release tarballs plus one main snapshot, listed in the PKGBUILD |
 | mangohud | [packages/shared/mangohud/PATCHES.md](packages/shared/mangohud/PATCHES.md) | v0.8.4, one shared untuned build |
 | fex-emu | [packages/shared/fex-emu/PATCHES.md](packages/shared/fex-emu/PATCHES.md) | `896a8691` (FEX-2610 + its clang 23 thunkgen fix, 2026-10-12), one shared build |
-| pocknix-mesa-android | [packages/shared/pocknix-mesa-android/PATCHES.md](packages/shared/pocknix-mesa-android/PATCHES.md) | 26.2.4 tarball (mesa's pin), epoch=2 |
+| pocknix-mesa-android | [packages/shared/pocknix-mesa-android/PATCHES.md](packages/shared/pocknix-mesa-android/PATCHES.md) | 26.2.6 tarball (mesa's pin), epoch=2 |
 | steamos-manager | [packages/shared/steamos-manager/PATCHES.md](packages/shared/steamos-manager/PATCHES.md) | upstream `8e2883d` (v26.4.1-12, 2026-09-17), pinned upstream Rust 1.99.0 |
 | scx-scheds | [packages/shared/scx-scheds/PATCHES.md](packages/shared/scx-scheds/PATCHES.md) | upstream `v1.1.3` (c8728c6, 2026-08-19), pinned upstream Rust 1.99.0 |
 | powerdevil | [packages/shared/powerdevil/PATCHES.md](packages/shared/powerdevil/PATCHES.md) | 6.8.1 tarball (Arch's build, no kdoctools) |
