@@ -5,7 +5,7 @@
 # wording is a licence attribution, or for a file an unmerged branch still owns (the Unswept
 # block), never for a ledger fact.
 kernel/*/kernel.conf :: ROCKNIX's
-scripts/build-kernel.sh :: common-skip
+scripts/lib.sh :: common-skip
 scripts/build-kernel.sh :: __assign_str
 packages/shared/pocknix-steam/pocknix-game-launch :: c000007b
 packages/shared/pocknix-tools/pocknix-internal-boot-rename :: from ROCKNIX to POCKNIX

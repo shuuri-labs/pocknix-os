@@ -1,26 +1,37 @@
-# CI: fast checks on every push/PR; the heavy package/kernel build is manual
-# (workflow_dispatch) until it has had a supervised first run — the full build
-# needs an ALARM chroot + loop devices + ~1h of kernel compile, all of which the
-# aarch64 ubuntu-24.04-arm hosted runners CAN do, but which is wasteful to run
-# blind on every push. Signing/publishing NEVER happens in CI (the GPG key stays
-# on the build VM).
+# CI: lint and the PR rules on every push/PR, a kernel patch apply check when the series moves,
+# and a manual full userspace build. Nothing is signed or published here: the GPG key stays on
+# the build VM.
 name: build
 on:
   push:
-    branches: [main, refactor]
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
       full_build:
-        description: "Run the full packages+kernel build (aarch64, ~1-2h)"
+        description: "Build every userspace package for every SoC (aarch64, hours; no kernel, no image)"
         type: boolean
         default: false
+
+permissions:
+  contents: read
+
+# bash -eo pipefail, so a failing command on the left of a pipe fails the step
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Shell syntax (bash -n) for every script + PKGBUILD
         run: |
           set -e
@@ -33,26 +44,101 @@ jobs:
           shellcheck -S warning scripts/*.sh || true
       - name: make check (every SoC family, perfd profiles, package placement)
         run: bash scripts/check.sh
+      - name: PR rules (patch files, pkgrel, commit subjects, description)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        # the live base tip, not base.sha (main as of the PR's last push)
+        run: bash scripts/check-pr.sh "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      kernel_apply: ${{ steps.diff.outputs.kernel_apply }}
+      kernel_build: ${{ steps.diff.outputs.kernel_build }}
+      builds: ${{ steps.diff.outputs.builds }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          case "${EVENT}" in
+            pull_request) base="${PR_BASE}" head="${PR_HEAD}" ;;
+            # a new branch's first push has an all-zero before
+            push) base="${PUSH_BEFORE}" head="${GITHUB_SHA}"
+                  git cat-file -e "${base}^{commit}" 2>/dev/null || base="${GITHUB_SHA}~1" ;;
+            *) base="${GITHUB_SHA}" head="${GITHUB_SHA}" ;;
+          esac
+          bash scripts/ci.sh changes "${base}" "${head}" | tee -a "${GITHUB_OUTPUT}"
+
+  kernel-patches:
+    needs: changes
+    if: ${{ needs.changes.outputs.kernel_apply != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        soc: ${{ fromJSON(needs.changes.outputs.kernel_apply) }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        run: |
+          v="$(. "kernel/${{ matrix.soc }}/kernel.conf" && echo "${KERNEL_VERSION}")"
+          echo "kernel=${v}" >> "${GITHUB_OUTPUT}"
+      - uses: actions/cache@v4
+        with:
+          path: build/cache/linux-${{ steps.ver.outputs.kernel }}.tar.xz
+          key: kernel-src-${{ steps.ver.outputs.kernel }}
+      - name: Apply the ${{ matrix.soc }} kernel patch series (no compile)
+        run: bash scripts/check-kernel-apply.sh ${{ matrix.soc }}
 
   full-build:
-    # aarch64 hosted runner: native chroot + makepkg + kernel build, no qemu.
-    # First runs will need iteration (chroot bootstrap inside the runner) — treat
-    # this job as scaffolding to be hardened on its first supervised run.
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_build }}
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 300
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        # shared packages build once, in the default DEVICE's run
+        include:
+          - soc: sm8550
+            shared: --shared
+          - soc: sm8250
+            shared: ""
     steps:
       - uses: actions/checkout@v4
       - name: Host deps (the build bootstraps its own ALARM chroot)
-        run: sudo apt-get install -y -qq libarchive-tools curl rsync flex bison bc python3 git
-      - name: Bootstrap + packages + kernel
-        run: |
-          sudo make bootstrap
-          sudo make kernel
-          sudo make packages
-      - name: Upload localrepo as artifact (unsigned — sign locally with make publish)
-        uses: actions/upload-artifact@v4
+        run: sudo apt-get install -y -qq libarchive-tools curl rsync >/dev/null
+      - uses: actions/cache@v4
         with:
-          name: localrepo
-          path: build/localrepo/
-          retention-days: 14
+          path: build/cache/ArchLinuxARM-*.tar.gz
+          key: alarm-${{ hashFiles('config/pocknix.conf') }}
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/ccache
+          key: ccache-${{ matrix.soc }}-${{ github.run_id }}
+          restore-keys: ccache-${{ matrix.soc }}-
+      - run: df -h / && nproc && free -g
+      - name: Build packages
+        run: |
+          pkgs="$(bash scripts/ci.sh soc-pkgs ${{ matrix.soc }} ${{ matrix.shared }})"
+          echo "PKGS=${pkgs}" >> "${GITHUB_ENV}"
+          sudo env POCKNIX_CCACHE_SIZE=3G make packages DEVICE=${{ matrix.soc }} PKG="${pkgs}"
+      - name: Every package built
+        if: ${{ !cancelled() && env.PKGS != '' }}
+        run: |
+          read -ra pkgs <<<"${PKGS}"
+          bash scripts/ci.sh verify ${{ matrix.soc }} "${pkgs[@]}"
+      - name: Package sizes
+        if: ${{ !cancelled() }}
+        run: ls -l build/localrepo/*/*.pkg.tar.* && df -h /
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() }}
+        with:
+          path: build/ccache
+          key: ccache-${{ matrix.soc }}-${{ github.run_id }}

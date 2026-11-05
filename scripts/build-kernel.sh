@@ -25,7 +25,7 @@ source "$(dirname "$0")/lib.sh"
 need_linux
 # pahole (pkg: dwarves) is required for CONFIG_DEBUG_INFO_BTF; without it olddefconfig
 # silently drops BTF and the config gate dies late with a confusing message.
-for t in curl tar xz gzip make gcc bc flex bison python3 git rsync patch pahole; do need_tool "$t"; done
+for t in curl tar xz gzip make gcc bc flex bison python3 git rsync pahole; do need_tool "$t"; done
 
 KBUILD="${KERNEL_BUILD_DIR}"   # per-SoC: build/kernel/${SOC} (set in lib.sh)
 KSRC="${KBUILD}/linux-${KERNEL_VERSION}"
@@ -42,49 +42,8 @@ else
 fi
 kmake() { make -C "${KSRC}" ARCH=arm64 ${CROSS:+CROSS_COMPILE=${CROSS}} "$@"; }
 
-fetch_source() {
-  mkdir -p "${CACHE_DIR}" "${KBUILD}"
-  local tb="${CACHE_DIR}/linux-${KERNEL_VERSION}.tar.xz"
-  if [ ! -f "${tb}" ]; then
-    log "downloading kernel source: ${KERNEL_SOURCE_URL}"
-    curl -fL --retry 3 -o "${tb}" "${KERNEL_SOURCE_URL}"
-  else
-    log "using cached kernel source: ${tb}"
-  fi
-  if [ -n "${KERNEL_SOURCE_SHA256}" ]; then
-    echo "${KERNEL_SOURCE_SHA256}  ${tb}" | sha256sum -c - || die "kernel source sha256 mismatch"
-    ok "kernel source checksum verified"
-  else
-    warn "KERNEL_SOURCE_SHA256 unset — build is NOT reproducible (pin it for releases)"
-  fi
-  log "extracting source -> ${KSRC}"
-  rm -rf "${KSRC}"
-  tar -C "${KBUILD}" -xf "${tb}"
-}
-
-# kernel/common goes last: its patches sit on top of SoC-dir prerequisites
-# (1062 needs the SoC dir's 0504). kernel/<soc>/common-skip lists common patches a
-# SoC leaves out because they don't apply, aren't validated or regress there; SoC-specific
-# behaviour belongs gated inside the patch, the skip list is the fallback.
-apply_patches() {
-  local d p n skip=""
-  [ -f "${KERNEL_DIR}/common-skip" ] && \
-    skip="$(sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "${KERNEL_DIR}/common-skip")"
-  for d in "${KERNEL_DIR}"/patches/*/ "${POCKNIX_ROOT}/kernel/common/patches/"; do
-    [ -d "${d}" ] || continue
-    n=0
-    for p in "${d}"*.patch; do
-      [ -f "${p}" ] || continue
-      if [ "${d}" = "${POCKNIX_ROOT}/kernel/common/patches/" ] && grep -qxF "${p##*/}" <<<"${skip}"; then
-        log "  skipped ${p##*/} (${SOC} common-skip)"; continue
-      fi
-      patch -p1 -d "${KSRC}" < "${p}" >/dev/null || die "patch failed to apply: ${p}"
-      n=$((n+1))
-    done
-    d="${d%/}"
-    log "applied ${d#"${POCKNIX_ROOT}"/kernel/}: ${n} patches"
-  done
-}
+fetch_source() { fetch_kernel_source "${KBUILD}"; }
+apply_patches() { apply_kernel_patches "${KSRC}" "${KERNEL_DIR}"; }
 
 install_dts() {
   log "installing ${SOC} device trees + ensuring Makefile entries"
