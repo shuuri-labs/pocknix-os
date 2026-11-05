@@ -1,0 +1,77 @@
+# Unsigned kernel package builds for a PR carrying the build-kernel label (1-2 h per SoC), apart
+# from build.yml so that adding or removing other labels never re-runs or cancels its jobs.
+name: kernel-build
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: kernel-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'build-kernel') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'build-kernel')
+    runs-on: ubuntu-latest
+    outputs:
+      kernel_build: ${{ steps.diff.outputs.kernel_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        run: bash scripts/ci.sh changes "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}" | tee -a "${GITHUB_OUTPUT}"
+
+  kernel:
+    needs: changes
+    if: ${{ needs.changes.outputs.kernel_build != '[]' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        soc: ${{ fromJSON(needs.changes.outputs.kernel_build) }}
+    env:
+      KPKG: linux-pocknix-${{ matrix.soc }}
+      ARTIFACT: pr-${{ github.event.pull_request.number }}-kernel-${{ matrix.soc }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/build-host
+        with:
+          soc: ${{ matrix.soc }}
+      - name: Kernel build deps
+        run: sudo apt-get install -y -qq build-essential bc flex bison libssl-dev libelf-dev dwarves cpio python3 git >/dev/null
+      - id: ver
+        run: |
+          v="$(. "kernel/${{ matrix.soc }}/kernel.conf" && echo "${KERNEL_VERSION}")"
+          echo "kernel=${v}" >> "${GITHUB_OUTPUT}"
+      - uses: actions/cache@v4
+        with:
+          path: build/cache/linux-${{ steps.ver.outputs.kernel }}.tar.xz
+          key: kernel-src-${{ steps.ver.outputs.kernel }}
+      - name: Build the ${{ matrix.soc }} kernel
+        run: make kernel DEVICE=${{ matrix.soc }}
+      - name: Package it with a scratch pkgrel below the next release
+        run: |
+          rel="$(bash scripts/ci.sh kernel-pkgrel "origin/${{ github.base_ref }}" ${{ matrix.soc }} "${{ github.run_number }}")"
+          sudo env KERNEL_PKGREL="${rel}" make packages DEVICE=${{ matrix.soc }} PKG="${KPKG}"
+      - name: Collect
+        run: bash scripts/ci.sh collect ${{ matrix.soc }} "${{ github.run_number }}" ci-out "${KPKG}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: ci-out/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

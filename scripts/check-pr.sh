@@ -43,14 +43,7 @@ lint A --headers
 lint M
 
 # --- pkgrel ---------------------------------------------------------------------------------------
-# A moved pkgver/epoch line, or a _var one of them is built from, is a version bump: pkgrel may
-# then restart. Otherwise pkgrel must go above the base's.
-version_lines() {
-  local pb vars; pb="$(cat)"
-  vars="$(grep -E '^(pkgver|epoch)=' <<<"${pb}" | grep -oE '_[A-Za-z0-9_]+' | sort -u | paste -sd'|' - || true)"
-  grep -E "^(pkgver|epoch${vars:+|${vars}})=" <<<"${pb}" || true
-}
-pkgrel_of() { sed -n 's/^pkgrel=["'\'']\{0,1\}\([0-9][0-9.]*\).*/\1/p' | head -1; }
+# pkgrel must go above the base's unless the version moved (version_lines, in ci.sh).
 gt() { awk -v a="$1" -v b="$2" 'BEGIN { exit !(a + 0 > b + 0) }'; }
 
 declare -A pkgdirs=()
@@ -71,7 +64,6 @@ for d in "${!pkgdirs[@]}"; do
   gt "${nrel}" "${orel}" || fail "${d}: bump pkgrel above main's ${orel} (it is ${nrel:-unset}): its contents changed"
 done
 
-kconf_get() { sed -n "s/^: \"\${$1:=\([^}]*\)}\".*/\1/p" | head -1; }
 for s in $(cmd_changes "${base}" "${head}" | sed -n 's/^kernel_build=//p' | jq -r '.[]'); do
   c="kernel/${s}/kernel.conf"
   git cat-file -e "${head}:${c}" 2>/dev/null || continue

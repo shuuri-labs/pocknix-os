@@ -1,0 +1,24 @@
+name: build-host
+description: Host deps and the caches build-packages.sh reuses on an aarch64 runner (save ccache yourself at the end)
+inputs:
+  soc:
+    description: SoC family whose ccache to restore
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Host deps (the build bootstraps its own ALARM chroot)
+      shell: bash
+      run: sudo apt-get install -y -qq libarchive-tools curl rsync >/dev/null
+    - id: alarm
+      shell: bash
+      run: echo "tarball=$(grep -o 'ArchLinuxARM-aarch64-[0-9]*\.tar\.gz' config/pocknix.conf | head -1)" >> "${GITHUB_OUTPUT}"
+    - uses: actions/cache@v4
+      with:
+        path: build/cache/${{ steps.alarm.outputs.tarball }}
+        key: alarm-${{ steps.alarm.outputs.tarball }}
+    - uses: actions/cache/restore@v4
+      with:
+        path: build/ccache
+        key: ccache-${{ inputs.soc }}-${{ github.run_id }}
+        restore-keys: ccache-${{ inputs.soc }}-

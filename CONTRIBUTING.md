@@ -109,6 +109,9 @@ Silicon or an ARM cloud box both work):
 sudo make packages PKG="pocknix-decky"    # -> build/localrepo/shared/ (per-SoC packages: build/localrepo/<soc>/)
 ```
 
+Without one, open the PR anyway: CI builds every package it changes (see
+[Testing on a device](#testing-on-a-device)).
+
 **A full image** (same aarch64 Linux host with root; the kernel build is 1-2 hours):
 
 ```bash
@@ -136,6 +139,19 @@ scp build/localrepo/shared/pocknix-decky-*.pkg.tar.* root@<device-ip>:/tmp/
 pacman -U /tmp/pocknix-decky-*.pkg.tar.*
 systemctl restart <the-unit-you-touched>      # if applicable
 journalctl -b -u <the-unit-you-touched>       # check it came up clean
+```
+
+**No aarch64 build host? Use the PR's CI build.** Every PR that changes a package gets an
+unsigned build of each changed package as a workflow artifact named `pr-<N>-<repo>` (`shared`,
+`sm8550` or `sm8250`), kept for 14 days; the run's summary prints the exact commands. Its pkgrel
+sits below the next release (`29.412` while `main` has 29), so the release upgrades over it.
+Kernel packages build only once the maintainer adds the `build-kernel` label (1-2 hours per SoC).
+The package is the PR's code built as written: install builds only of PRs you trust.
+
+```bash
+gh run download <run-id> -R shuuri-labs/pocknix-os -n pr-<N>-<repo> -D pr-build   # or the run page's Artifacts list
+scp pr-build/*.pkg.tar.* root@<device-ip>:/tmp/
+ssh root@<device-ip> 'pacman -U /tmp/*.pkg.tar.*'
 ```
 
 **Keep a rollback.** Every `pacman -U` takes a snapshot first, and the package cache is emptied
@@ -359,7 +375,8 @@ works against the locked base.
   (`kernel/common` affects every SoC), a commit subject not shaped `area: summary`, and a
   description missing the template's What, How, Tested or How to test section. A PR that touches
   `kernel/` also runs `scripts/check-kernel-apply.sh`, which applies each affected SoC's series
-  to the pinned kernel.org source.
+  to the pinned kernel.org source, and one that changes a package builds it (`pr-build`, see
+  [Testing on a device](#testing-on-a-device)).
 - **No unrelated reformatting.** It makes the real change unreviewable.
 
 ## AI assistance

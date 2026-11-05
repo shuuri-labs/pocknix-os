@@ -1,6 +1,6 @@
 # CI: lint and the PR rules on every push/PR, a kernel patch apply check when the series moves,
-# and a manual full userspace build. Nothing is signed or published here: the GPG key stays on
-# the build VM.
+# an unsigned build of each package a PR changes, and a manual full userspace build. Nothing is
+# signed or published here: the GPG key stays on the build VM. Kernel builds: kernel-build.yml.
 name: build
 on:
   push:
@@ -97,6 +97,64 @@ jobs:
       - name: Apply the ${{ matrix.soc }} kernel patch series (no compile)
         run: bash scripts/check-kernel-apply.sh ${{ matrix.soc }}
 
+  pr-build:
+    needs: changes
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.builds != '[]' }}
+    name: pr-build (${{ matrix.repo }})
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.builds) }}
+    env:
+      PKGS: ${{ matrix.pkgs }}
+      ARTIFACT: pr-${{ github.event.pull_request.number }}-${{ matrix.repo }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/build-host
+        with:
+          soc: ${{ matrix.soc }}
+      - name: Seed the live siblings these packages build against
+        run: |
+          read -ra pkgs <<<"${PKGS}"
+          bash scripts/ci.sh seed ${{ matrix.soc }} "${pkgs[@]}"
+      - name: Scratch pkgrel below the next release
+        run: |
+          read -ra pkgs <<<"${PKGS}"
+          bash scripts/ci.sh scratch "origin/${{ github.base_ref }}" "${{ github.run_number }}" "${pkgs[@]}"
+      - name: Build ${{ matrix.pkgs }}
+        run: sudo env POCKNIX_CCACHE_SIZE=3G make packages DEVICE=${{ matrix.soc }} PKG="${PKGS}"
+      - name: Collect this run's packages
+        if: ${{ !cancelled() }}
+        run: |
+          read -ra pkgs <<<"${PKGS}"
+          bash scripts/ci.sh collect ${{ matrix.soc }} "${{ github.run_number }}" ci-out "${pkgs[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: ci-out/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: How to install
+        run: |
+          {
+            echo "### ${ARTIFACT}"
+            echo "Unsigned test build of this PR (pkgrel below the next release). On the build host:"
+            echo '```bash'
+            echo "gh run download ${GITHUB_RUN_ID} -R ${GITHUB_REPOSITORY} -n ${ARTIFACT} -D ${ARTIFACT}"
+            echo "scp ${ARTIFACT}/*.pkg.tar.* root@<device>:/tmp/ && ssh root@<device> 'pacman -U /tmp/*.pkg.tar.*'"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() }}
+        with:
+          path: build/ccache
+          key: ccache-${{ matrix.soc }}-${{ github.run_id }}
+
   full-build:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_build }}
     runs-on: ubuntu-24.04-arm
@@ -112,17 +170,9 @@ jobs:
             shared: ""
     steps:
       - uses: actions/checkout@v4
-      - name: Host deps (the build bootstraps its own ALARM chroot)
-        run: sudo apt-get install -y -qq libarchive-tools curl rsync >/dev/null
-      - uses: actions/cache@v4
+      - uses: ./.github/actions/build-host
         with:
-          path: build/cache/ArchLinuxARM-*.tar.gz
-          key: alarm-${{ hashFiles('config/pocknix.conf') }}
-      - uses: actions/cache/restore@v4
-        with:
-          path: build/ccache
-          key: ccache-${{ matrix.soc }}-${{ github.run_id }}
-          restore-keys: ccache-${{ matrix.soc }}-
+          soc: ${{ matrix.soc }}
       - run: df -h / && nproc && free -g
       - name: Build packages
         run: |
