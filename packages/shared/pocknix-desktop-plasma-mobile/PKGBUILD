@@ -2,7 +2,7 @@
 # ./nodeps: makepkg -s would drag all of KDE/Qt into the chroot for a data package.
 pkgname=pocknix-desktop-plasma-mobile
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc="pocknix desktop flavour: Plasma Mobile"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -19,8 +19,10 @@ provides=('pocknix-desktop-flavour')
 conflicts=('pocknix-desktop<0.1.0-27')
 install='pocknix-desktop-plasma-mobile.install'
 source=('pocknix-desktop-remove-taskpanel' 'pocknix-desktop-remove-taskpanel.desktop'
-        'pocknix-panel-touchfix' '98-pocknix-panel-touchfix.hook')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'pocknix-panel-touchfix' '98-pocknix-panel-touchfix.hook'
+        '10-after-powerdevil.conf'
+        'quicksetting-brightness.json' 'quicksetting-brightness.qml')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop-remove-taskpanel" \
@@ -30,4 +32,13 @@ package() {
   install -Dm755 "${srcdir}/pocknix-panel-touchfix" "${pkgdir}/usr/bin/pocknix-panel-touchfix"
   install -Dm644 "${srcdir}/98-pocknix-panel-touchfix.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/98-pocknix-panel-touchfix.hook"
+  # Order the shell after PowerDevil so the quick-settings brightness slider exists from the
+  # start of the session; see the fragment's own header for why ordering and not Wants=.
+  install -Dm644 "${srcdir}/10-after-powerdevil.conf" \
+    "${pkgdir}/usr/lib/systemd/user/plasma-plasmashell.service.d/10-after-powerdevil.conf"
+  # Shipped, not enabled: a tile stays the user's choice, so this only enters the picker.
+  install -Dm644 "${srcdir}/quicksetting-brightness.json" \
+    "${pkgdir}/usr/share/plasma/quicksettings/org.kde.plasma.quicksetting.brightness/metadata.json"
+  install -Dm644 "${srcdir}/quicksetting-brightness.qml" \
+    "${pkgdir}/usr/share/plasma/quicksettings/org.kde.plasma.quicksetting.brightness/contents/ui/main.qml"
 }

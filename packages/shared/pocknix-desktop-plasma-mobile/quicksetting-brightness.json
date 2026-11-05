@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "KPackage/GenericQML",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "deck"
+            }
+        ],
+        "Description": "Cycle screen brightness from the quick settings",
+        "Icon": "brightness-high",
+        "Id": "org.kde.plasma.quicksetting.brightness",
+        "License": "GPL-2.0+",
+        "Name": "Brightness"
+    }
+}
