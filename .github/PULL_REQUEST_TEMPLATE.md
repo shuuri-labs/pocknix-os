@@ -32,11 +32,9 @@ hardware before merging, and without steps the PR stalls.
      to roll back. "Docs only, no build needed" is a fine answer for docs PRs. -->
 
 ```bash
-# build
-sudo make packages PKG=""
-
-# install
-scp build/localrepo/<pkg>-*.pkg.tar.* root@<device>:/tmp/
+# install this PR's CI build (the pr-build run's summary has the exact command)
+gh run download <run-id> -R shuuri-labs/pocknix-os -n pr-<N>-<repo> -D pr-build
+scp pr-build/<pkg>-*.pkg.tar.* root@<device>:/tmp/
 ssh root@<device> 'pacman -U /tmp/<pkg>-*.pkg.tar.*'
 ```
 
@@ -57,5 +55,5 @@ Rollback: `pacman -U /var/cache/pacman/pkg/<previous>.pkg.tar.xz`
 - [ ] Degrades quietly on devices without the hardware it drives
 - [ ] Gamepad-navigable, if it adds UI to the Steam session
 - [ ] Docs that describe what changed (a README, `CONTRIBUTING.md`, the component's `PATCHES.md` or `README.provenance`, `docs/`) are updated in this PR
-- [ ] CI lint is green (it includes `make check`), commits follow `area: summary`
+- [ ] CI is green (lint, the PR rules, and pr-build for a package change), commits follow `area: summary`
 - [ ] AI assistance disclosed, if used
