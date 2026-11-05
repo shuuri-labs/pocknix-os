@@ -8,6 +8,8 @@ User guides for pocknix-os. New here? Start with the [project README](../README.
 - [pocknix-control.md](pocknix-control.md) - the in-game control panel: per-game tweaks, fan/CPU
   modes, adding non-Steam games, file sharing, controller calibration and stick lights, and
   system updates
+- [steam-games.md](steam-games.md) - Steam games: writing your own launch options, and what to try when
+  a game won't run
 - [emulation-setup.md](emulation-setup.md) - where to put ROMs, BIOS, and firmware, how to launch
   games, and how to tweak emulator settings
 - [waydroid.md](waydroid.md) - running Android apps: setup, installing apps, and app shortcuts

@@ -60,7 +60,8 @@ Per game, either can stay on the global value.
 - **Disable Xalia**: on by default. Xalia is Proton's controller-navigation helper and costs
   CPU in every game; turn this off only for a game that needs it.
 - **Environment Variables**: extra variables for the game's launch, the same as a Steam
-  launch option.
+  launch option. To write your own launch options, see
+  [Launch options](steam-games.md#launch-options).
 
 ### Sharing a game's config
 
