@@ -352,6 +352,13 @@ works against the locked base.
   READMEs carry no versions or counts; a line that must keep one carries
   `docs-check: allow`) and the code comments against the tree (`scripts/check-comments.py`,
   see above). A doc that describes what you changed moves in the same PR. It is fast; there is no excuse for a red PR.
+  On a PR, `scripts/check-pr.sh` (run it locally the same way) also fails: a changed `.patch`
+  without `From:`/`Subject:` headers or with a diff cut short (`scripts/patch-lint.py`), a changed
+  package whose `pkgrel` is not above `main`'s, a kernel change without a `KERNEL_PKGREL` bump in
+  each affected `kernel/<soc>/kernel.conf` (`kernel/common` affects every SoC), a commit subject
+  not shaped `area: summary`, and a description missing the template's What, How, Tested or How
+  to test section. A PR that touches `kernel/` also runs `scripts/check-kernel-apply.sh`, which
+  applies every SoC's series to the pinned kernel.org source.
 - **No unrelated reformatting.** It makes the real change unreviewable.
 
 ## AI assistance

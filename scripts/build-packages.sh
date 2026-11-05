@@ -457,7 +457,8 @@ main() {
 
   [ "${built}" -gt 0 ] || die "no packages built"
   ok "local repos ready -> ${LOCALREPO} + ${LOCALREPO_SHARED}"
-  ls -1 "${LOCALREPO}"/*.pkg.tar.* "${LOCALREPO_SHARED}"/*.pkg.tar.* 2>/dev/null | sed 's#.*/#  #'
+  # A PKG= run leaves the other repo empty: its unmatched glob must not fail a good build.
+  ls -1 "${LOCALREPO}"/*.pkg.tar.* "${LOCALREPO_SHARED}"/*.pkg.tar.* 2>/dev/null | sed 's#.*/#  #' || true
 }
 
 main "$@"

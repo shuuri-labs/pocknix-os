@@ -166,6 +166,57 @@ fetch_alarm_tarball() {
   fi
 }
 
+# --- kernel source + patch stack --------------------------------------------
+# One implementation for build-kernel.sh and CI's apply check, so the check applies exactly
+# what the build applies.
+fetch_kernel_source() {  # $1 = dir to extract linux-${KERNEL_VERSION}/ into
+  local tb="${CACHE_DIR}/linux-${KERNEL_VERSION}.tar.xz"
+  mkdir -p "${CACHE_DIR}" "$1"
+  if [ ! -f "${tb}" ]; then
+    log "downloading kernel source: ${KERNEL_SOURCE_URL}"
+    curl -fL --retry 3 -o "${tb}" "${KERNEL_SOURCE_URL}"
+  else
+    log "using cached kernel source: ${tb}"
+  fi
+  if [ -n "${KERNEL_SOURCE_SHA256}" ]; then
+    echo "${KERNEL_SOURCE_SHA256}  ${tb}" | sha256sum -c - || die "kernel source sha256 mismatch"
+    ok "kernel source checksum verified"
+  else
+    warn "KERNEL_SOURCE_SHA256 unset — build is NOT reproducible (pin it for releases)"
+  fi
+  log "extracting source -> $1/linux-${KERNEL_VERSION}"
+  rm -rf "$1/linux-${KERNEL_VERSION}"
+  tar -C "$1" -xf "${tb}"
+}
+
+# kernel/common goes last (its patches sit on SoC-dir prerequisites); kernel/<soc>/common-skip
+# names common patches a SoC leaves out, the fallback when gating inside the patch can't work.
+apply_kernel_patches() {  # $1 = source tree, $2 = kernel/<soc> dir
+  local ksrc="$1" kdir="$2" d p n out skip="" gnu_patch=patch
+  # Apple's patch rejects hunks GNU patch applies with fuzz. --forward fails a patch already
+  # in the source instead of prompting to reverse it.
+  [ "$(uname -s)" = Darwin ] && gnu_patch=gpatch
+  need_tool "${gnu_patch}"
+  [ -f "${kdir}/common-skip" ] && \
+    skip="$(sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' "${kdir}/common-skip")"
+  for d in "${kdir}"/patches/*/ "${POCKNIX_ROOT}/kernel/common/patches/"; do
+    [ -d "${d}" ] || continue
+    n=0
+    for p in "${d}"*.patch; do
+      [ -f "${p}" ] || continue
+      if [ "${d}" = "${POCKNIX_ROOT}/kernel/common/patches/" ] && grep -qxF "${p##*/}" <<<"${skip}"; then
+        log "  skipped ${p##*/} (${kdir##*/} common-skip)"; continue
+      fi
+      out="$("${gnu_patch}" --forward -p1 -d "${ksrc}" < "${p}" 2>&1)" \
+        || die "patch failed to apply: ${p#"${POCKNIX_ROOT}"/}
+${out}"
+      n=$((n+1))
+    done
+    d="${d%/}"
+    log "applied ${d#"${POCKNIX_ROOT}"/kernel/}: ${n} patches"
+  done
+}
+
 # Render the base pacman.conf: with a pinned snapshot, the only package source
 # is the frozen [pocknix-base] repo (ALARM's per-package .sig files are kept in
 # the snapshot, so package SigLevel stays Required; the repo-add DB is unsigned,
