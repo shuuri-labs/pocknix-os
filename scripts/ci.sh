@@ -158,7 +158,8 @@ cmd_seed() {
   [ "${#deps[@]}" -gt 0 ] || return 0
   # shellcheck source=../config/pocknix.conf
   POCKNIX_ROOT="${ci_root}" source config/pocknix.conf
-  python3 scripts/seed-localrepo.py "${POCKNIX_REPO_URL}" "${s}" build/localrepo --skip "$*" "${deps[@]}"
+  # options first: older argparse leaves positionals after an option unparsed
+  python3 scripts/seed-localrepo.py --skip "$*" "${POCKNIX_REPO_URL}" "${s}" build/localrepo "${deps[@]}"
 }
 
 cmd_scratch() {

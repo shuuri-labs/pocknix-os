@@ -128,7 +128,6 @@ jobs:
       - name: Build ${{ matrix.pkgs }}
         run: sudo env POCKNIX_CCACHE_SIZE=3G make packages DEVICE=${{ matrix.soc }} PKG="${PKGS}"
       - name: Collect this run's packages
-        if: ${{ !cancelled() }}
         run: |
           read -ra pkgs <<<"${PKGS}"
           bash scripts/ci.sh collect ${{ matrix.soc }} "${{ github.run_number }}" ci-out "${pkgs[@]}"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """seed-localrepo.py - put the live builds of a partial build's pocknix siblings into build/localrepo.
 
-    scripts/seed-localrepo.py REPO_URL SOC LOCALREPO --skip "a b" DEP...
+    scripts/seed-localrepo.py --skip "a b" REPO_URL SOC LOCALREPO DEP...
 
 CI builds only the packages a PR changes, but `makepkg -s` resolves depends= and makedepends=
 from [pocknix]/[pocknix-shared] too: a sibling missing from the local repo aborts the build.
