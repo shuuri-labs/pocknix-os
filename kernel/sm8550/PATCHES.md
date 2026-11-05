@@ -57,6 +57,18 @@ Last rebased: 2026-10-27 (RP6 LRA haptics).
   ROCKNIX's fixed 185-215 Hz window and forced 205 Hz (the RP6 LRA calibrates at ~173 Hz).
   Source: ours.
 
+### Brightness
+
+- **1097** The Thor's two panels stop lighting up differently at the same percentage: the bottom
+  AMOLED's level is bent through a per-panel gamma (`pocknix,brightness-gamma-milli`, 2.7 here)
+  inside the driver's only brightness write, so PowerDevil/kwin, Steam's sysfs write and a plain
+  `echo` are all right with one write and nothing flashes (a userspace correction cannot: one
+  write to that node costs ~33 ms on the DSI link, #152/#80). `pocknix,brightness-min` keeps a
+  1 % request dim instead of black — at gamma 2.7 it rounds to 0/255, which is the #108 darkness
+  floor at its worst. A requested 0 still writes 0. Boards without the properties are unchanged.
+  The patch also restores `MIPI_DSI_MODE_LPM` when the DCS write fails, so one `EINVAL` (#80) no
+  longer leaves the link in HS mode for every later write. Source: ours.
+
 ## Edits to synced files
 
 The local delta `kernel/sm8550/sync-keep` restores after each make sync.
@@ -68,7 +80,9 @@ The local delta `kernel/sm8550/sync-keep` restores after each make sync.
   the panel draws over a watt in sleep with its IO supply cut).
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-thor.dts`: touchscreens without `touchscreen-swapped-x-y`
   / `touchscreen-inverted-x` (armada's Thor dts patch: gamescope and kwin rotate touch by the
-  panel orientation, so a kernel-side rotation landed touch 90 degrees off).
+  panel orientation, so a kernel-side rotation landed touch 90 degrees off). The bottom panel
+  (`&mdss_dsi0`'s `panel@0`) carries the brightness calibration 1097 reads:
+  `pocknix,brightness-gamma-milli = <2700>` and `pocknix,brightness-min = <1>`.
 - `kernel/sm8550/dts/qcom/qcs8550-retroidpocket-rp6.dts`: haptics driven as an LRA (no
   `use-erm`, 1300 mV node and effect drive, effect auto-res off, stock effect_0 pattern; armada
   PR #694, values from the stock Android board-id 0x1001f overlay). Nova and top-dpad include

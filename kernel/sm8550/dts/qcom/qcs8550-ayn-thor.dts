@@ -419,6 +419,16 @@
 
 		rotation = <90>;
 
+		/*
+		 * This AMOLED is much brighter than the top panel at the same raw
+		 * percentage. Bend the level in the driver so every writer (Plasma,
+		 * Steam, echo) is right with one write; a userspace correction
+		 * flashes, because a write here costs ~33 ms on the DSI link.
+		 * gamma 2.7 measured on this unit; min keeps 1 % dim, not black.
+		 */
+		pocknix,brightness-gamma-milli = <2700>;
+		pocknix,brightness-min = <1>;
+
 		port {
 			panel0_in: endpoint {
 				remote-endpoint = <&mdss_dsi0_out>;
