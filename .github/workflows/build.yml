@@ -16,6 +16,11 @@ on:
 permissions:
   contents: read
 
+# bash -eo pipefail, so a failing command on the left of a pipe fails the step
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -41,7 +46,8 @@ jobs:
         run: bash scripts/check.sh
       - name: PR rules (patch files, pkgrel, commit subjects, description)
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
-        run: bash scripts/check-pr.sh "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+        # the live base tip, not base.sha (main as of the PR's last push)
+        run: bash scripts/check-pr.sh "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
 
   changes:
     runs-on: ubuntu-latest
@@ -101,9 +107,9 @@ jobs:
         # shared packages build once, in the default DEVICE's run
         include:
           - soc: sm8550
-            all: true
+            shared: --shared
           - soc: sm8250
-            all: false
+            shared: ""
     steps:
       - uses: actions/checkout@v4
       - name: Host deps (the build bootstraps its own ALARM chroot)
@@ -120,9 +126,14 @@ jobs:
       - run: df -h / && nproc && free -g
       - name: Build packages
         run: |
-          pkgs=""
-          [ "${{ matrix.all }}" = true ] || pkgs="$(bash scripts/ci.sh soc-pkgs ${{ matrix.soc }})"
+          pkgs="$(bash scripts/ci.sh soc-pkgs ${{ matrix.soc }} ${{ matrix.shared }})"
+          echo "PKGS=${pkgs}" >> "${GITHUB_ENV}"
           sudo env POCKNIX_CCACHE_SIZE=3G make packages DEVICE=${{ matrix.soc }} PKG="${pkgs}"
+      - name: Every package built
+        if: ${{ !cancelled() && env.PKGS != '' }}
+        run: |
+          read -ra pkgs <<<"${PKGS}"
+          bash scripts/ci.sh verify ${{ matrix.soc }} "${pkgs[@]}"
       - name: Package sizes
         if: ${{ !cancelled() }}
         run: ls -l build/localrepo/*/*.pkg.tar.* && df -h /

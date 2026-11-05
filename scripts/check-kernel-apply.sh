@@ -4,8 +4,8 @@
 #
 #   scripts/check-kernel-apply.sh [soc...]     # default: every SoC with a kernel/<soc>/kernel.conf
 #
-# Runs patch-lint.py over the series first: GNU patch applies the hunks before a truncation
-# and exits 0, so a cut-short file passes the apply. Any host with bash, curl, xz and GNU patch.
+# Lints the series (scripts/patch-lint.py) before applying it. Any host with bash, curl, xz and
+# GNU patch.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -20,22 +20,25 @@ fi
 failed=()
 for soc in "${socs[@]}"; do
   # A subshell per SoC: lib.sh's := defaults would otherwise carry one SoC's paths into the next.
-  if ! (
+  # Run outside a condition: an if or || around it would switch set -e off inside.
+  set +e
+  (
     DEVICE="${soc}"
     source "${root}/scripts/lib.sh"
+    work="${BUILD_DIR}/kernel-apply/${soc}"
+    trap 'rm -rf "${work}"' EXIT
     rc=0
     log "${soc}: linting the patch series"
     python3 "${root}/scripts/patch-lint.py" "${KERNEL_DIR}"/patches/*/*.patch "${root}"/kernel/common/patches/*.patch \
       || { warn "${soc}: a patch is malformed (above); regenerate it with git format-patch"; rc=1; }
-    work="${BUILD_DIR}/kernel-apply/${soc}"
     fetch_kernel_source "${work}"
     apply_kernel_patches "${work}/linux-${KERNEL_VERSION}" "${KERNEL_DIR}"
-    rm -rf "${work}"
     [ "${rc}" -eq 0 ] && ok "${soc}: every patch applies to linux-${KERNEL_VERSION}"
     exit "${rc}"
-  ); then
-    failed+=("${soc}")
-  fi
+  )
+  rc=$?
+  set -e
+  [ "${rc}" -eq 0 ] || failed+=("${soc}")
 done
 
 if [ "${#failed[@]}" -gt 0 ]; then

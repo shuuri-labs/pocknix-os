@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# ci.sh — helpers for .github/workflows/build.yml; each prints or does one thing.
+# ci.sh — helpers for .github/workflows/build.yml; check-pr.sh sources it for the same path rules.
 #
-#   scripts/ci.sh changes BASE HEAD      # key=JSON lines for $GITHUB_OUTPUT: what the diff needs
-#
-#   kernel_apply   SoCs whose kernel patch series must re-apply
-#   kernel_build   SoCs whose kernel package contents changed
-#   builds         [{repo, soc, pkgs}]: package dirs to build, per target repo; shared ones build
-#                  once, in the default DEVICE's chroot
-#   scripts/ci.sh soc-pkgs SOC          # the per-SoC package dirs SOC builds, the kernel aside
+#   scripts/ci.sh changes BASE HEAD        # key=JSON lines for $GITHUB_OUTPUT: what the diff needs
+#       kernel_apply   SoCs whose kernel patch series must re-apply
+#       kernel_build   SoCs whose kernel package contents changed
+#       builds         [{repo, soc, pkgs}]: package dirs to build per target repo; shared ones
+#                      build once, in the default DEVICE's chroot
+#   scripts/ci.sh soc-pkgs SOC [--shared]  # every package SOC builds, the kernel aside
+#   scripts/ci.sh verify SOC PKG...        # fail unless each PKG has an artifact in build/localrepo
 #
 # A doc-only change (*.md, README*) never triggers anything.
 set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd)"
-cd "${root}"
+ci_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ci_root}"
 
 is_doc() { case "${1##*/}" in *.md|README*) return 0 ;; esac; return 1; }
 gpu_of() { sed -n 's/.*GPU_GEN:=\([A-Za-z0-9]*\).*/\1/p' "devices/$1/profile.conf" | head -1; }
@@ -21,8 +21,20 @@ all_socs=()
 for p in devices/*/profile.conf; do all_socs+=("$(basename "$(dirname "${p}")")"); done
 default_soc="$(sed -n 's/^: "${DEVICE:=\([a-z0-9]*\)}".*/\1/p' config/pocknix.conf)"
 
+tuned_dirs() {  # $1 = soc: the dirs built with its devices/<soc>/tuning.conf, the kernel aside
+  local s="$1" d g; g="$(gpu_of "${s}")"
+  for d in packages/soc/*/; do
+    d="${d%/}"; [ "${d##*/}" = linux-pocknix ] && continue
+    case " $(cat "${d}/socs") " in *" all "*|*" ${s} "*) echo "${d}" ;; esac
+  done
+  for d in packages/gpu/*/; do
+    d="${d%/}"
+    case " $(cat "${d}/gpus") " in *" ${g} "*) echo "${d}" ;; esac
+  done
+}
+
 cmd_changes() {
-  local base="$1" head="$2" mb f n s d g
+  local base="$1" head="$2" mb f s d g
   mb="$(git merge-base "${base}" "${head}")"
   declare -A apply=() kbuild=() want=()
   at() { git show "${head}:$1" 2>/dev/null; }
@@ -34,7 +46,7 @@ cmd_changes() {
   while IFS= read -r f; do
     is_doc "${f}" && continue
     case "${f}" in
-      kernel/common/*|packages/soc/linux-pocknix/*)
+      kernel/common/*|packages/soc/linux-pocknix/*|scripts/build-kernel.sh)
         for s in "${all_socs[@]}"; do apply[$s]=1; kbuild[$s]=1; done ;;
       kernel/*/*)
         s="$(cut -d/ -f2 <<<"${f}")"
@@ -45,6 +57,9 @@ cmd_changes() {
         for s in "${all_socs[@]}"; do bsps "${s}"; done ;;
       devices/*/profile.conf)
         bsps "$(cut -d/ -f2 <<<"${f}")" ;;
+      devices/*/tuning.conf)
+        s="$(cut -d/ -f2 <<<"${f}")"
+        while IFS= read -r d; do add "${s}" "${d}"; done < <(tuned_dirs "${s}") ;;
       packages/shared/*/*)
         add shared "$(cut -d/ -f1-3 <<<"${f}")" ;;
       packages/soc/*/*)
@@ -62,7 +77,7 @@ cmd_changes() {
         s="$(cut -d/ -f2 <<<"${f}")"
         add "${s}" "$(cut -d/ -f1-4 <<<"${f}")" ;;
     esac
-  done < <(git diff --name-only "${mb}" "${head}")
+  done < <(git diff --no-renames --name-only "${mb}" "${head}")
 
   local builds="[]" repo pkgs
   for repo in shared "${all_socs[@]}"; do
@@ -77,20 +92,37 @@ cmd_changes() {
 }
 
 cmd_soc_pkgs() {
-  local s="$1" d g; g="$(gpu_of "${s}")"
-  for d in packages/soc/*/; do
-    d="${d%/}"; [ "${d##*/}" = linux-pocknix ] && continue
-    case " $(cat "${d}/socs") " in *" all "*|*" ${s} "*) echo "${d##*/}" ;; esac
-  done
-  for d in packages/gpu/*/; do
-    d="${d%/}"
-    case " $(cat "${d}/gpus") " in *" ${g} "*) echo "${d##*/}" ;; esac
-  done
-  for d in "devices/${s}"/packages/*/; do d="${d%/}"; echo "${d##*/}"; done
+  local s="$1" d
+  if [ "${2:-}" = --shared ]; then
+    for d in packages/shared/*/; do [ -f "${d}PKGBUILD" ] && basename "${d}"; done
+  fi
+  tuned_dirs "${s}" | xargs -n1 basename
+  for d in "devices/${s}"/packages/*/; do basename "${d}"; done
 }
 
-case "${1:-}" in
-  changes) shift; cmd_changes "$@" ;;
-  soc-pkgs) shift; cmd_soc_pkgs "$@" | xargs ;;
-  *) echo "usage: scripts/ci.sh changes BASE HEAD | soc-pkgs SOC" >&2; exit 2 ;;
-esac
+# build-packages.sh exits 0 once anything built, so a failed package shows only as a missing file.
+cmd_verify() {
+  local s="$1" p f n missing=()
+  shift
+  declare -A have=()
+  for f in build/localrepo/shared/*.pkg.tar.* "build/localrepo/${s}"/*.pkg.tar.*; do
+    [ -e "${f}" ] || continue
+    n="${f##*/}"; n="${n%-*}"; n="${n%-*}"; n="${n%-*}"  # strip -<ver>-<rel>-<arch>.pkg.tar.*
+    have[$n]=1
+  done
+  for p in "$@"; do [ -n "${have[$p]:-}" ] || missing+=("${p}"); done
+  if [ "${#missing[@]}" -gt 0 ]; then
+    echo "error: no package built for: ${missing[*]} (its makepkg error is in the build log above)" >&2
+    return 1
+  fi
+  echo "verify: all $# packages built"
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  case "${1:-}" in
+    changes) shift; cmd_changes "$@" ;;
+    soc-pkgs) shift; cmd_soc_pkgs "$@" | xargs ;;
+    verify) shift; cmd_verify "$@" ;;
+    *) echo "usage: scripts/ci.sh changes BASE HEAD | soc-pkgs SOC [--shared] | verify SOC PKG..." >&2; exit 2 ;;
+  esac
+fi

@@ -11,28 +11,39 @@ Prints one line per problem; exit 1 if any.
 """
 import re
 import sys
+from pathlib import Path
 
 HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+# git header lines that complete a `diff --git` block with no hunk (rename, mode, binary, empty file)
+NO_HUNK_CHANGE = ("rename to ", "old mode ", "new mode ", "deleted file mode ", "new file mode ",
+                  "Binary files ", "GIT binary patch")
 
 
 def lint(path, headers):
     try:
-        lines = open(path, encoding="utf-8", errors="replace").read().split("\n")
+        lines = Path(path).read_text(encoding="utf-8", errors="replace").split("\n")
     except OSError as e:
         return [f"{path}: cannot read ({e.strerror})"]
     if lines and lines[-1] == "":
         lines.pop()
-    problems, hunks, i, n = [], 0, 0, len(lines)
-    preamble = []
+    problems, hunks, other_changes, i, n = [], 0, 0, 0, len(lines)
+    preamble, open_diff = [], None  # open_diff: line of a `diff --git` still owed its change
     while i < n:
         line = lines[i]
+        if line.startswith("diff --git "):
+            if open_diff is not None:
+                break
+            open_diff = i
+        elif open_diff is not None and line.startswith(NO_HUNK_CHANGE):
+            open_diff, other_changes = None, other_changes + 1
         if line.startswith("--- ") and not (i + 1 < n and lines[i + 1].startswith("+++ ")):
             # a commit message line starting "--- " is legal only before the first file header
-            if hunks or (i + 1 >= n) or lines[i - 1].startswith(("index ", "diff ")):
+            if hunks or (i + 1 >= n) or (i and lines[i - 1].startswith(("index ", "diff "))):
                 problems.append(f"{path}:{i + 1}: '{line[:70]}' has no '+++' line: the patch is cut short")
                 break
         if line.startswith("--- ") and i + 1 < n and lines[i + 1].startswith("+++ "):
             target = lines[i + 1][4:].split("\t")[0]
+            open_diff = None
             i += 2
             if i >= n or not HUNK.match(lines[i]):
                 problems.append(f"{path}:{i}: {target} has a file header but no hunk")
@@ -64,7 +75,9 @@ def lint(path, headers):
         if not hunks:
             preamble.append(line)
         i += 1
-    if not hunks and not problems:
+    if open_diff is not None and not problems:
+        problems.append(f"{path}:{open_diff + 1}: '{lines[open_diff][:70]}' has no change after it: the patch is cut short")
+    if not hunks and not other_changes and not problems:
         problems.append(f"{path}: no diff hunk: the file changes nothing")
     if headers:
         head = "\n".join(preamble)
