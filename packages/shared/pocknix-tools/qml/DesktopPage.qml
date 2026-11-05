@@ -87,7 +87,7 @@ TabPage {
     }
     QQC2.Label {
         Layout.fillWidth: true
-        text: qsTr("Get more desktops (Plasma Desktop, GNOME, COSMIC, Hyprland) from the Pocknix Store, under Desktop mode.")
+        text: qsTr("Get Plasma Desktop from the Pocknix Store, under Desktop mode. This page can also start other desktops, like GNOME or Hyprland: install one in rolling mode (Advanced) and it will appear here.")
         color: Theme.textMuted
         wrapMode: Text.WordWrap
     }

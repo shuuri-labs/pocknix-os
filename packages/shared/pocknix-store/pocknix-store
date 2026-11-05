@@ -266,7 +266,7 @@ def remove_marked(targets: list[str], flipped: list[str]) -> None:
 
 
 def do_remove(ids: list[str], found: dict, local: set[str]) -> None:
-    # A package another installed entry lists stays (gnome-keyring serves every desktop).
+    # A package another installed entry lists stays.
     kept = {p for i, e in found.items() if i not in ids and installed(e, local) for p in e["packages"]}
     targets = [p for i in ids for p in found[i]["packages"] if p in local and p not in kept]
     if not targets:

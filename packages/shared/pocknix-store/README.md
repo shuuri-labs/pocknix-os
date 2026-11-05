@@ -63,8 +63,7 @@ pocknix-store/
   catalogue plus the `pocknix-emu-*` set is the whole allowlist. The meta and the
   `pocknix-emulation` alias are only reached through `install-all`, `remove-all` and the switch
   below.
-- **Shared packages stay.** A removal never takes a package another installed entry lists
-  (gnome-keyring belongs to GNOME, COSMIC and Hyprland alike).
+- **Shared packages stay.** A removal never takes a package another installed entry lists.
 - **All and Pick.** All = the meta is installed. Removing one emulator in All mode marks the other
   installed members explicit, then removes the meta and the alias with it: the device is in Pick
   mode and keeps the rest.
