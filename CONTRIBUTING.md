@@ -1,48 +1,30 @@
 # Contributing to pocknix-os
 
 Contributions are very welcome. pocknix-os is maintained by one person with a small pile of
-hardware, so the most valuable thing a PR can bring is **evidence it works on a real device**
-and **instructions that let me reproduce that on mine**.
+hardware, so the most useful thing a PR brings is **proof it works on a real device** and
+**steps that let me check it on mine**.
 
-Questions, ideas, or "is this worth doing?" chats: the
-[pocknix Discord](https://discord.gg/jEpwudj4Fx) or a GitHub issue. For anything large
-(a new device family, a new session, a kernel bump, a new packaging approach), open an issue
-first so we can agree the shape before you spend the time.
+Questions or "is this worth doing?": the [pocknix Discord](https://discord.gg/jEpwudj4Fx) or an
+issue. For anything large (a new device family, a new session, a kernel bump, a new packaging
+approach), open an issue first so we agree the shape before you spend the time.
 
-Especially welcome:
-
-- **Emulator configs** that you have dialled in on a device.
-- **Device support and testing** for hardware I do not own (AYN Odin 2 family, Thor, Nova).
-- **Pocknix Control features and fixes.**
-- **Docs corrections** - these need no hardware and no build.
-
-## Contents
-
-- [Ground rules](#ground-rules)
-- [Where changes go](#where-changes-go)
-- [Building](#building)
-- [Testing on a device](#testing-on-a-device)
-- [What your testing should cover](#what-your-testing-should-cover)
-- [What the PR must contain](#what-the-pr-must-contain)
-- [Package rules](#package-rules)
-- [Requesting a package](#requesting-a-package)
-- [Commits and PR hygiene](#commits-and-pr-hygiene)
-- [AI assistance](#ai-assistance)
-- [Review and merge](#review-and-merge)
+Especially welcome: emulator configs you've dialled in, testing on hardware I don't own (AYN
+Odin 2 family, Thor, Nova), Pocknix Control features and fixes, and docs fixes.
 
 ## Ground rules
 
 1. **One topic per PR.** A fix, a feature, or a config set. Not three.
-2. **Test on hardware, or say plainly that you could not.** Untested is acceptable when
-   declared and justified ("no Odin 2 to hand"). Silently untested is not.
-3. **Tell me how to test it.** Every PR includes reproduction steps I can follow on my
-   device. This is a hard requirement, see
+2. **Test your own code on real hardware, and show it.** A log, a screenshot, before and after
+   numbers. No build host? CI builds the PR's packages. No device? Find a tester in Discord.
+   Docs need no test.
+3. **Tell me how to test it.** Every PR has steps I can follow on my device, see
    [What the PR must contain](#what-the-pr-must-contain).
-4. **Bump `pkgrel`** when you change what a package ships, otherwise existing users never
-   get your change through `pacman -Syu`.
-5. **Fixes go in robust locations.** A change that only survives until the next `make sync`,
-   the next session restart, or the next reboot is not a fix. See
-   [Where changes go](#where-changes-go).
+4. **Bump `pkgrel`** when you change what a package ships, or existing installs never get it.
+5. **Fix it where it sticks.** A change that only lasts until the next `make sync`, session
+   restart or reboot is not a fix.
+6. **Keep the PR body short.** The template's sections, filled in plainly. No essays.
+7. **CI is green.** It runs `make check`, the PR rules (`scripts/check-pr.sh`) and, for a
+   package change, a build of that package.
 
 ## Where changes go
 
@@ -63,179 +45,124 @@ Especially welcome:
 | `build/` | Build output (gitignored): rootfs, images, `localrepo/<soc>` and `localrepo/shared`. |
 | `vendor/` | **Do not edit.** Regenerated wholesale by `make sync` from ROCKNIX. |
 
-Three rules that catch most first-time contributors:
+Four rules that catch most first-time contributors:
 
-- **Kernel config changes go in a delta**, not in `kernel/<soc>/config` - that file is a
-  synced ROCKNIX snapshot and `make sync` overwrites it. Use the delta block in
-  `scripts/build-kernel.sh` for every SoC, or `kernel/<soc>/config-delta` (plus
-  `config-assert` for options that must survive `olddefconfig`) for one.
-- **Anything in `overlay/` or the image scripts only reaches people who reflash.** It does not
-  ship through `pacman -Syu`. If a fix needs to reach existing installs, it belongs in a
-  package with a bumped `pkgrel`. If it genuinely cannot, say so in the PR.
-- **Runtime state that a session or service can clobber must be re-asserted** where it will
-  stick (a systemd unit, the session launch path), not set once at install time.
-- **A new Arch Linux ARM package is not installable on existing devices until it is hosted
-  in the frozen base.** Installs are locked to `[pocknix-base]`, so `pacman -S <name>` fails
-  until I add it. List the name in `config/packages/base-extras.list`, say so in the PR, and
-  I host it with `make extend-base` (its dependencies must already be in the base) or at the
-  next base cut.
+- **Kernel config changes go in a delta**, never `kernel/<soc>/config` (a synced snapshot that
+  `make sync` overwrites): the delta block in `scripts/build-kernel.sh` for every SoC, or
+  `kernel/<soc>/config-delta` (plus `config-assert` to survive `olddefconfig`) for one.
+- **`overlay/` and the image scripts only reach people who reflash.** A fix existing installs
+  need goes in a package with a bumped `pkgrel`.
+- **Runtime state a session or service can clobber is re-asserted where it sticks** (a systemd
+  unit, the session launch path), not set once at install time.
+- **A new Arch Linux ARM package can't be installed on existing devices until the base hosts
+  it.** Add the name to `config/packages/base-extras.list` and say so in the PR; I host it.
 
 ## Building
 
-You do **not** need to build a full image to contribute. Match the smallest thing that
-covers your change:
-
-**Anywhere (macOS, x86 Linux, no root):**
+You don't need a full image to contribute. Build the smallest thing your change needs.
 
 ```bash
-make check      # preflight: validates the harness and any built artifacts
-make help       # every target
+# anywhere (macOS, x86 Linux, no root)
+make check                            # preflight: the harness, the docs, the comments
 git config core.hooksPath .githooks   # once per clone: the doc check runs before each commit
+
+# Pocknix Control frontend (any host with Node); dist/ is committed
+cd packages/shared/pocknix-decky/pocknix-control && npm ci && npm run build && npx tsc --noEmit
+
+# aarch64 Linux with root (an Arch or Fedora VM on Apple Silicon, or an ARM cloud box)
+sudo make packages PKG="pocknix-decky"                      # one package -> build/localrepo/
+sudo make kernel && sudo make build && sudo make sd-image   # full image; the kernel takes 1-2 hours
 ```
 
-**Pocknix Control frontend** (any host with Node, no aarch64 needed):
-
-```bash
-cd packages/shared/pocknix-decky/pocknix-control
-npm ci
-npm run build         # regenerates dist/index.js - this IS committed, see Package rules
-npx tsc --noEmit      # must be clean
-```
-
-**A single package** (needs an **aarch64 Linux host with root** - an Arch/Fedora VM on Apple
-Silicon or an ARM cloud box both work):
-
-```bash
-sudo make packages PKG="pocknix-decky"    # -> build/localrepo/shared/ (per-SoC packages: build/localrepo/<soc>/)
-```
-
-Without one, open the PR anyway: CI builds every package it changes (see
-[Testing on a device](#testing-on-a-device)).
-
-**A full image** (same aarch64 Linux host with root; the kernel build is 1-2 hours):
-
-```bash
-sudo make kernel
-sudo make build
-sudo make sd-image      # -> build/image/<soc>/
-```
-
-The SoC family defaults to `sm8550`; pass `DEVICE=sm8250` to any target for the RP5 / Flip 2.
-
-Packages compress as `.pkg.tar.xz`, so glob `*.pkg.tar.*`. Never sign or publish anything -
-releases go through the maintainer's staged publish flow.
+No aarch64 host? Open the PR anyway: CI builds every package it changes (see
+[Testing on a device](#testing-on-a-device)). `make help` lists every target. Targets build the default SoC family; pass `DEVICE=<soc>` for
+another (the families are the dirs under `devices/`). Packages are `.pkg.tar.xz`, so glob
+`*.pkg.tar.*`. Never sign or publish anything: releases go through my staged publish flow.
 
 ## Testing on a device
 
-The normal loop is **build the package, copy it over, `pacman -U`, exercise it**. You do not
-need to reflash an image for a package change. SSH is off by default: turn it on in Pocknix
-Tools, or build your image with `SD_SSH=on`.
+Build the package, copy it over, `pacman -U`, exercise it. A package change needs no reflash.
+SSH is off by default: turn it on in Pocknix Tools, or build the image with `SD_SSH=on`.
 
 ```bash
-# on the build host
+# build host (per-SoC packages land in build/localrepo/<soc>/)
 scp build/localrepo/shared/pocknix-decky-*.pkg.tar.* root@<device-ip>:/tmp/
 
-# on the device (default password for root and deck is 'pocknix')
+# device (default password for root and deck is 'pocknix')
 pacman -U /tmp/pocknix-decky-*.pkg.tar.*
-systemctl restart <the-unit-you-touched>      # if applicable
-journalctl -b -u <the-unit-you-touched>       # check it came up clean
+systemctl restart <unit>; journalctl -b -u <unit>
 ```
 
-**No aarch64 build host? Use the PR's CI build.** Every PR that changes a package gets an
-unsigned build of each changed package as a workflow artifact named `pr-<N>-<repo>` (`shared`,
-`sm8550` or `sm8250`), kept for 14 days; the run's summary prints the exact commands. Its pkgrel
-sits below the next release (`29.412` while `main` has 29), so the release upgrades over it.
-Kernel packages build only once the maintainer adds the `build-kernel` label (1-2 hours per SoC).
-The package is the PR's code built as written: install builds only of PRs you trust.
+**No build host? Use the PR's CI build.** Every PR that changes a package gets an unsigned
+build of each one as a workflow artifact named `pr-<N>-<repo>` (`shared` or a SoC family), kept
+for 14 days; the run's summary prints the exact commands. Its pkgrel sits below the next
+release, so the release upgrades over it. Kernel packages build only once I add the
+`build-kernel` label. Install builds only of PRs you trust.
 
 ```bash
-gh run download <run-id> -R shuuri-labs/pocknix-os -n pr-<N>-<repo> -D pr-build   # or the run page's Artifacts list
+gh run download <run-id> -R shuuri-labs/pocknix-os -n pr-<N>-<repo> -D pr-build
 scp pr-build/*.pkg.tar.* root@<device-ip>:/tmp/
 ssh root@<device-ip> 'pacman -U /tmp/*.pkg.tar.*'
 ```
 
-**Keep a rollback.** Every `pacman -U` takes a snapshot first, and the package cache is emptied
-afterwards, so the way back is `sudo pocknix-rollback` and a reboot (see
-[docs/snapshots.md](docs/snapshots.md)). A reboot back into a known-good state beats debugging a
-wedged session.
+Every `pacman -U` takes a snapshot first, so the way back is `sudo pocknix-rollback` and a
+reboot ([docs/snapshots.md](docs/snapshots.md)).
 
-Notes that will save you an hour:
-
-- **The Steam session runs as the `deck` user (uid 1001)**, not root. If you are poking at
-  session state over SSH you need `XDG_RUNTIME_DIR=/run/user/1001`.
-- **Never `scp` over a script that is currently executing.** Bash re-reads the file by offset
-  and resumes in the middle of the new contents. Copy to `/tmp` and `mv` into place.
-- **`scp`ing a script does not install its dependencies.** Install those separately, and make
-  sure any new dependency is declared in the `PKGBUILD` before you submit.
-- **Pocknix Control can be iterated without building a package**: copy your plugin directory
-  over `/home/deck/homebrew/plugins/PocknixControl` (`chown -R deck:deck` it) and reload the
-  plugin. Do not restart the Decky loader mid-session. Note that
-  `pocknix-decky-sync.service` re-copies the OS-shipped plugin from `/usr/share/decky-plugins`
-  on every boot, so a hand-copied plugin is replaced at reboot - fine for iteration, but the
-  final verification must be from an installed package.
-- **No device or no Linux host?** Still submit. Docs and configs need neither. For code, say
-  what you could not test and I will run it.
+- **The Steam session runs as `deck` (uid 1001).** Over SSH, poke session state with
+  `XDG_RUNTIME_DIR=/run/user/1001`.
+- **Never `scp` over a running script.** Bash reads it by offset and resumes mid-file. Copy to
+  `/tmp`, then `mv` it into place.
+- **`scp`ing a script doesn't install its dependencies.** Declare new ones in the `PKGBUILD`.
+- **Pocknix Control iterates without a package:** copy your plugin over
+  `/home/deck/homebrew/plugins/PocknixControl` (`chown -R deck:deck` it) and reload the plugin,
+  never the Decky loader. A reboot restores the shipped copy, so test the final version from
+  an installed package.
 
 ## What your testing should cover
 
-Not everything applies to every PR. Cover what is relevant, and say which items you skipped.
+Cover what applies, and say what you skipped.
 
-1. **The happy path, on named hardware.** Which device, which SoC family, and how you
-   installed it (`pacman -U` a built package, hand-copied files, or a fresh image).
-2. **Cold boot.** Reboot and confirm the behaviour survives, state restores, and the unit
-   starts clean in `journalctl -b`. A feature that only works until you power off is not done.
-3. **The update path, not just a fresh image.** Confirm the change actually arrives via
-   `pacman -U` on an existing install with the bumped `pkgrel`. If the change is image-only,
-   say so explicitly.
-4. **The other SoC family**, if you touched shared code. sm8550 (RP6, Odin 2 family) and
-   sm8250 (RP5, Flip 2) differ in GPU generation, bootloader, and audio. If you only have
-   one, test it and declare the other untested.
-5. **Devices that lack the hardware you are driving.** Not every board has the LEDs, the fan,
-   or the sensor. Probe for the thing and degrade quietly when it is missing; never error the
-   session. If you cannot test the absent-hardware path on hardware, at least show the code
-   path that handles it.
-6. **Failure paths.** No network, missing config file, service disabled, permission denied.
-   Especially: anything gated behind Decky or the network can be late or never arrive, so a
-   feature that depends on it should not be the only thing restoring important state.
-7. **Neighbouring features.** Exercise the rest of the tab, service, or script you touched to
-   show you did not regress it.
-8. **Game mode reality**, for anything in the Steam session. It must be **fully
-   gamepad-navigable** (no touch-only or mouse-only controls), readable at handheld distance,
-   and it must not steal focus from the game.
-9. **Perf claims need numbers.** Before and after, same scene, same settings, from MangoHud or
-   an fps counter. Two traps: `ps` `%CPU` is a **lifetime average**, not current load, and a
-   paused or menu scene hides jitter.
-10. **Kernel changes**: boots on real hardware, no new errors in `dmesg`, suspend/resume still
-    works, and the patch series still applies from a clean tree.
-11. **Emulator configs**: emulator version, the exact ROM or title you tested, before/after
-    behaviour, and any CPU core pinning (`taskset`) the emulator needed to perform well.
+1. **Happy path, on named hardware:** device, SoC family, and how you installed it.
+2. **Cold boot:** reboot; the behaviour survives and the unit starts clean in `journalctl -b`.
+3. **Update path:** it arrives via `pacman -U` on an existing install, or you say it's image-only.
+4. **The other SoC families**, if you touched shared code. They differ in GPU, bootloader and
+   audio: test the ones you have and declare the rest untested.
+5. **Missing hardware:** on a board without the LEDs, fan or sensor it degrades quietly and never
+   errors the session.
+6. **Failure paths:** no network, missing config, service disabled, permission denied. Anything
+   behind Decky or the network can arrive late or never.
+7. **Neighbours:** the rest of the tab, service or script you touched still works.
+8. **Game mode:** fully gamepad-navigable, readable at handheld distance, never steals focus.
+9. **Perf claims:** before and after numbers, same scene and settings (MangoHud or an fps
+   counter). `ps` `%CPU` is a lifetime average, and a paused scene hides jitter.
+10. **Kernel:** boots, no new `dmesg` errors, suspend/resume works, the series applies to a
+    clean tree.
+11. **Emulator configs:** emulator version, the exact title, before and after, and any `taskset`
+    pinning it needed.
 
 ## What the PR must contain
 
-A PR description with four sections. `.github/PULL_REQUEST_TEMPLATE.md` fills these in for
-you.
+The template's sections are the whole body: **What**, **How**, **Tested**, **How to test** and
+the checklist. `.github/PULL_REQUEST_TEMPLATE.md` lays them out.
 
-**What** - what changes, in a couple of sentences, and why.
+**Short and casual.** Write it like a comment to a person, not a report: plain words, short
+sentences, nothing I can already read in the diff. Rough sizes:
 
-**How** - the approach, and anything non-obvious a reviewer would otherwise have to
-reverse-engineer. Call out deliberate choices that look wrong at a glance.
+- **What:** 2-3 sentences, what changes and why.
+- **How:** up to 5 one-line bullets, only for choices a reviewer wouldn't guess, written as
+  "**the choice.** why".
+- **Tested:** device and SoC, install method, what you exercised, the evidence, and what you
+  didn't test.
+- **How to test:** as long as it needs (below).
+- **Checklist:** tick what applies, delete the rest.
 
-**Tested** - device, SoC family, install method, and what you actually exercised, mapped to
-the list above. Include what you could **not** test and why.
+Outside code blocks, aim for about 200 words.
 
-**How to test** - **required.** Step-by-step instructions I can follow on my own device to
-reproduce your result. Assume I have the repo and a build host but know nothing about your
-change. Include:
-
-- the exact build command for the affected package (or "docs only, no build");
-- the install and restart commands;
-- what to click, run, or launch, in order;
-- **what I should see** if it works, and what the old behaviour looked like;
-- any setup your test needs (a specific game, ROM, emulator, SD card state, a device with
-  particular hardware, a network condition);
-- how to get back to a known-good state if it goes wrong.
-
-Concretely:
+**How to test is required.** Steps I can follow on my own device, assuming I have the repo and
+a build host but know nothing about your change: the build or CI download command (or "docs
+only, no build"),
+install and restart, what to do in order, **what I should see** and what it looked like
+before, any setup (a game, ROM, SD card state, hardware), and how to roll back. For example:
 
 ```markdown
 ## How to test
@@ -250,75 +177,50 @@ Concretely:
    0% lost the colour permanently.
 3. Reboot. Expected: the rings come back at the same colour and brightness.
 
-Rollback: `pacman -U /var/cache/pacman/pkg/pocknix-decky-<old>.pkg.tar.xz`
+Rollback: `sudo pocknix-rollback`, then reboot.
 ```
 
-"It works on my device" without these steps means the PR sits until I can work out how to
-check it, which is the single biggest reason a PR stalls.
+Without these steps the PR waits until I work out how to check it. That's the biggest reason
+PRs stall.
 
 ## Package rules
 
-- **Bump `pkgrel`** whenever a package's shipped contents change. Without it, `pacman -Syu`
-  is a no-op for existing users and only fresh images get your work. Bump `pkgver` only for
-  an upstream version change, and reset `pkgrel=1` when you do.
-- **Never republish an existing package filename with different contents.** In practice this
-  means: always bump, never quietly rebuild.
-- **Committed build output must be reproducible.** `packages/shared/pocknix-decky/pocknix-control/dist/`
-  is committed and I rebuild it from your sources during review; it should come out
-  byte-identical with the pinned toolchain (`npm ci && npm run build`), and `npx tsc --noEmit`
-  should be clean. Commit `dist/index.js` and `dist/index.js.map` alongside the `src/` change.
-- **Patch series**: numbered files in the package directory, added to `source=()` with
-  matching checksums, applying cleanly against the pinned base. Each patched component keeps
-  a `PATCHES.md` next to its patches, listed in the root `PATCHES.md`. A patch you add gets an
-  entry under Carried: the symptom it fixes in plain words, then `Applies:`, `Needs:`,
-  `Trap:`, `Source:` and `Drop:` where they say something. How the patch works goes in its
-  own header. Anything deliberately not taken goes under Not taken with a one-clause reason.
-  A dropped patch loses its entry; its number goes under Retired numbers (kept when the
-  PKGBUILD says numbers are never reused) and, only where a sync or rebase would bring it
-  back, a one-clause Not taken note; the commit message says why. Plain history
-  (upstreamed, replaced, renamed, moved) lives in git: `git log --follow -- <patch>` and the
-  ledger's own log. A ledger never restates another project's state (what armada or ROCKNIX
-  pin or carry, who is ahead): it goes stale the day they move and nobody re-checks. Read
-  theirs live: armada = `packages/kernel/PATCHES.md` + `patches/series` in armada-os/armada;
-  ROCKNIX = the `vendor/rocknix-<soc>` sync (the kernel ledgers record the synced commit,
-  `kernel/<soc>/kernel.conf` pins the stock version). A file ported from another project
-  without a patch (a UCM profile, an InputPlumber map, an EQ curve, a vendored binary) records
-  its source and our changes in a `README.provenance` in its package dir, listed in the root
-  `PATCHES.md`. `make check` (`scripts/check-patches.py`) fails when a ledger and its patches
-  drift: a patch with no Carried entry, an entry with no file, a retired number back in use, a
-  number used twice (kernel numbers are one series across `kernel/common` and every SoC tree),
-  a `sync-keep` line the SoC ledger's Edits to synced files does not name, or an index row
-  missing or out of step with its ledger's first Base line. In a SoC's synced `30-<soc>` dir only
-  1000+ names count as ours; a ROCKNIX patch in that range goes on the ledger's
-  `ROCKNIX 1000+ (synced, not ours):` line.
-- **License**: a package you author for pocknix-os declares `license=('GPL-2.0-or-later')`.
-  One that repackages third-party content keeps the upstream license and names it in a
-  comment on the same line (`license=('zlib')   # Valve's DXVK build, repackaged`). `make check`
-  enforces both.
-- **New dependencies** should come from the Arch Linux ARM repos or `[pocknix]`. Flag anything
-  large - image size matters on a handheld.
+- **Bump `pkgrel`** whenever what a package ships changes; bump `pkgver` only for an upstream
+  version, and reset `pkgrel=1` when you do. Never rebuild an existing filename with different
+  contents.
+- **Committed build output is reproducible.** I rebuild
+  `packages/shared/pocknix-decky/pocknix-control/dist/` from your sources, so commit `dist/`
+  together with the `src/` change.
 - **A new package name needs a `depends=` edge** from the layer metapackage that owns it
-  (`pocknix-core`, `pocknix-{steam,desktop,emulation}-full`) or from `pocknix-device-<soc>`,
-  in the same PR. `pacman -Syu` never installs a name nothing depends on, so without the edge
-  only fresh images get it. Renaming a package needs `replaces=` + `conflicts=` for the old
-  name. The maintainer's publish gate (`scripts/stage-check.sh`) rejects both omissions, so
-  fixing them up front saves a round trip.
-- **A `replaces=` or `conflicts=` entry in a `packages/shared/` PKGBUILD** acts on every SoC's
-  devices in one publish (`replaces=` uninstalls the old package on `-Syu`), so each entry gets
-  a row with its reason in `scripts/shared-conflicts.allow`
-  (`<package dir> :: <field>=<entry> :: <reason>`). `make check` fails on an entry without a row
-  and on a row whose entry is gone.
-- **A device.conf consumer's fallback** (`${POCKNIX_<key>:-<value>}`) is the RP6 value for a
-  key devices/README.md marks required and 0 or empty for an optional one; an exception gets a
-  row with its reason in `scripts/fallbacks.allow` (`<key> :: <reason>`). `make check` fails on
-  a fallback that breaks the rule without a row and on a row that matches no fallback.
-- **Shared code does not name a chip.** A code line outside `devices/`, `kernel/`, the family
-  docs and `packages/soc/<name>-<soc>/` that names an SoC (`sm8550`) handles today's chips and
-  mishandles the next one. Make it chip-neutral (read device.conf or the build's `SOC`); a
-  deliberate exception gets a row in `scripts/soc-ids.allow` (`<path glob> :: <regex> ::
-  <reason>`). `make check` fails on an uncovered chip id and on a row that matches nothing, so
-  fixing a leak deletes its row.
-- **Do not touch `vendor/`.** `make sync` regenerates it.
+  (`pocknix-core`, `pocknix-{steam,desktop,emulation}-full`) or from `pocknix-device-<soc>`, in
+  the same PR: `pacman -Syu` never installs a name nothing depends on. A rename needs
+  `replaces=` + `conflicts=` for the old name.
+- **New dependencies** come from the Arch Linux ARM repos or `[pocknix]`. Flag anything large;
+  image size matters on a handheld.
+- **License:** a package you author declares `license=('GPL-2.0-or-later')`. A repackage keeps
+  the upstream license and names it in a comment on the same line.
+- **Shared code doesn't name a chip.** Read device.conf or the build's `SOC` instead.
+- **Don't touch `vendor/`.** `make sync` regenerates it.
+- **`make check` enforces the rest** and says what's wrong. A deliberate exception is a row with
+  its reason in the matching `scripts/*.allow` file; each file's header gives the format.
+
+### Patch series
+
+Numbered files in the package dir, in `source=()` with checksums, applying cleanly to the
+pinned base (`kernel/README.md` covers kernel patches). Each patched component keeps a
+`PATCHES.md` next to its patches, indexed in the root `PATCHES.md`:
+
+- **Carried:** one entry per patch: the symptom it fixes in plain words, then `Applies:`,
+  `Needs:`, `Trap:`, `Source:` and `Drop:` where they say something. How it works goes in the
+  patch's own header.
+- **Not taken:** anything deliberately skipped, with a one-clause reason.
+- **Retired numbers:** a dropped patch's number (plus a Not taken line if a sync would bring it
+  back). The commit says why; git keeps the history.
+- **Never another project's state** (what it pins or carries): it goes stale the day it moves.
+
+A file ported without a patch (a UCM profile, an InputPlumber map) records its source and our
+changes in a `README.provenance` in its package dir, listed in the root `PATCHES.md`.
+`make check` fails when a ledger and its patches drift.
 
 ## Requesting a package
 
@@ -333,72 +235,53 @@ Open one with the **Package request** issue form; it asks for exactly this.
 | not in Arch Linux ARM, or needs patches | only if it is part of what pocknix does: games, emulation, the two sessions, the device itself | `mesa`, `fex-emu` |
 | anything else | install it yourself, unsupported: Flatpak via Discover, `pacman -U` straight from the Arch Linux ARM mirror, `makepkg` from the AUR (`base-devel` and `git` are in the base), or `sudo pocknix-base rolling` for live Arch Linux ARM | editors, toolchains, AUR helpers |
 
-AUR helpers (`yay`, `paru`) are not hosted: AUR recipes mostly target x86_64, self-built
-packages break silently when the base rotates, and a tool whose job is updating everything
-works against the locked base.
+AUR helpers (`yay`, `paru`) aren't hosted: AUR recipes mostly target x86_64, self-built packages
+break silently when the base rotates, and an update-everything tool works against the locked
+base.
 
 ## Commits and PR hygiene
 
-- **Subject**: `area: concise summary`, lowercase after the colon, under about 65 characters.
-  Areas in use: `build`, `kernel`, `image`, `sd-image`, `steam`, `desktop`, `emulation`,
-  `input`, `audio`, `wifi`, `suspend`, `perf`, `gamescope`, `mesa`, `fex-emu`, `bsp`,
-  `devices`, `repo`, `ci`, `docs`, `cleanup`, or a package name.
-- **Milestone granularity.** Squash the "try X", "revert X", "fix typo" churn before you
-  submit. A commit should be a complete, verified change.
-- **Rebase on `main`** rather than merging it in, and re-test after the rebase.
-- **Code comments: one line, and only the WHY.** Two lines only when a trap needs its cause;
-  longer only in a file's leading header. Before writing one, ask what a competent reader would
-  get wrong without it; if nothing, leave it out. Cut what the file's location or a key's name
-  already says, walk-throughs of a mechanism the reader can look up (state the trap instead), and
-  anything a ledger holds (the component's `PATCHES.md` entry, the commit message). Status, plan, and
-  validation narrative do not belong in comments or commit bodies. A comment is self-contained: it may point at a file
-  in this repo, never at anything outside it. `make check` enforces the mechanical part
-  (`scripts/check-comments.py`): a repo path a comment names must exist, and a comment carries
-  no lineage or validation wording, no version, pkgrel, commit hash or date, and no pointer to
-  documents outside the repo. It also fails a block of more than 2 adjacent comment lines
-  (`long comment`; a line over 100 characters counts as 2, a `# --- section ---` rule counts as
-  none). A file's leading header, starting on line 1 or after a shebang or `<?xml` line, is
-  exempt from that limit. An exception
-  whose number or path IS the mechanism goes in `scripts/check-comments.allow`
-  (`<glob> :: <regex>` or `<glob> :: <kind> :: <regex>`, one per line).
-- **CI must be green.** The `lint` job runs `bash -n` over every script and `PKGBUILD`,
-  resolves each device profile chain, checks that the kernel cmdline lives only in
-  `profile.conf`, and checks the docs against the tree (`scripts/check-docs.sh`:
-  every path and `make` target they name exists, layout blocks match their dirs, structural
-  READMEs carry no versions or counts; a line that must keep one carries
-  `docs-check: allow`) and the code comments against the tree (`scripts/check-comments.py`,
-  see above). A doc that describes what you changed moves in the same PR. It is fast; there is no excuse for a red PR.
-  On a PR, `scripts/check-pr.sh` (run it locally the same way) also fails: a changed `.patch`
-  whose diff is cut short, or a new one without `From:`/`Subject:` headers
-  (`scripts/patch-lint.py`), a changed package whose `pkgrel` is not above `main`'s, a kernel
-  change without a `KERNEL_PKGREL` bump in each affected `kernel/<soc>/kernel.conf`
-  (`kernel/common` affects every SoC), a commit subject not shaped `area: summary`, and a
-  description missing the template's What, How, Tested or How to test section. A PR that touches
-  `kernel/` also runs `scripts/check-kernel-apply.sh`, which applies each affected SoC's series
-  to the pinned kernel.org source, and one that changes a package builds it (`pr-build`, see
-  [Testing on a device](#testing-on-a-device)).
-- **No unrelated reformatting.** It makes the real change unreviewable.
+- **Subject:** `area: concise summary`, lowercase after the colon, under about 65 characters.
+  The area is a subsystem (`kernel`, `steam`, `desktop`, `emulation`, `audio`, `devices`,
+  `docs`, ...) or a package name.
+- **Milestone commits.** Squash the "try X", "revert X", "fix typo" churn before you submit.
+- **Rebase on `main`** instead of merging it in, and re-test after.
+- **Code comments: one line, WHY only.** Two when a trap needs its cause; longer only in a file's
+  leading header. If a competent reader wouldn't get anything wrong without it, leave it out.
+  `make check` (`scripts/check-comments.py`) enforces the length and what a comment may name.
+- **Docs move with the code.** A doc that describes what you changed is updated in the same PR.
+- **CI checks the PR too.** `scripts/check-pr.sh` (run it locally with `PR_BODY_FILE=<body>`)
+  fails on a cut-short or headerless `.patch` (`scripts/patch-lint.py`), a `pkgrel` or
+  `KERNEL_PKGREL` not above `main`'s, a subject not shaped `area: summary`, or a description
+  missing What, How, Tested or How to test. A `kernel/` change also runs
+  `scripts/check-kernel-apply.sh`, which applies each affected series to the pinned source.
+- **No unrelated reformatting.** It hides the real change.
 
 ## AI assistance
 
-Using an AI assistant is fine, and the maintainer is open about using one too. Three
-conditions:
+Fine, and I use it too. Three conditions:
 
-- **Say so in the PR.** It genuinely helps me target the review, and it has done so before.
-- **You understand what you submit.** That means the code itself, what it changes on the
-  device, and what else it might affect. If you cannot answer "why this way?", it is not ready.
-- **It is tested on hardware.** Plausible-looking code that has never run is worse than no PR.
+- **Say so in the PR.** It helps me aim the review.
+- **You understand what you submit:** the code, what it changes on the device, and what else it
+  might touch. If you can't answer "why this way?", it isn't ready.
+- **It's tested on hardware**, like any other code PR.
+
+Coding agents pick up [AGENTS.md](AGENTS.md) on their own: the same rules, as a checklist.
 
 ## Review and merge
 
-I read every PR. Device-testable changes merge **after I have run them on my own hardware**,
-so expect a few days, and expect specific review comments - `pkgrel` bumps, per-device
-coverage, whether a fix lives somewhere durable. If a requested change is outside your comfort
-zone (systemd wiring, packaging, the kernel), say so and I will do that part; a PR does not
-have to be perfect to be worth merging.
+I review every PR. Whether I also run it myself depends on what it can break:
 
-Once merged, the change ships to users as a package update in the next release, or in the next
-image if it is image-only.
+| The PR touches | It merges after |
+|---|---|
+| docs | review |
+| emulator configs, Pocknix Control, desktop apps | review + your evidence |
+| the kernel, `devices/`, boot, session startup, `pocknix-core`, packaging (new names, `replaces=`) | review + your evidence + my own run on hardware |
+
+On a device I don't own, your test (or a second tester's) is the hardware pass. A code PR
+nobody has run on hardware waits until someone has. If a requested change is outside your
+comfort zone (systemd, packaging, the kernel), say so and I'll do that part. Merged changes ship
+as a package update in the next release, or in the next image if they're image-only.
 
 pocknix-os is [GPL-2.0-or-later](LICENSE.md). By contributing you agree your work ships under
 the same licence.

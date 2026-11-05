@@ -1,35 +1,30 @@
 <!--
-Thanks for contributing! Please read CONTRIBUTING.md first - especially
-"What your testing should cover" and "What the PR must contain".
-The "How to test" section below is required: I re-verify changes on my own
-hardware before merging, and without steps the PR stalls.
+See "What the PR must contain" in CONTRIBUTING.md. These sections are the whole body: keep each
+one short and plain. How to test is required; without it the PR stalls.
 -->
 
 ## What
 
-<!-- What changes, and why. A couple of sentences. -->
+<!-- What changes and why, in 2-3 sentences. -->
 
 ## How
 
-<!-- The approach. Call out anything non-obvious or anything that looks wrong at a glance
-     but is deliberate. -->
+<!-- Up to 5 one-line bullets for choices a reviewer wouldn't guess: "**the choice.** why". -->
 
 ## Tested
 
-<!-- Device(s), SoC family (sm8550 / sm8250), and how you installed it (pacman -U a built
-     package / hand-copied files / fresh image). Then what you actually exercised. -->
+<!-- What ran on real hardware, with evidence. Code nobody has run waits until someone has. -->
 
 - Device / SoC:
-- Installed via:
+- Installed via: <!-- pacman -U a built package / hand-copied files / fresh image -->
 - Exercised:
+- Evidence: <!-- a log excerpt, a screenshot, before and after numbers -->
 - **Not** tested (and why):
 
 ## How to test  <!-- required -->
 
-<!-- Steps I can follow on my device to reproduce your result. Assume I have the repo and a
-     build host, and know nothing about your change. Include the expected result at each
-     step, any setup your test needs (specific game/ROM/emulator/SD state/hardware), and how
-     to roll back. "Docs only, no build needed" is a fine answer for docs PRs. -->
+<!-- Steps I can follow on my device knowing nothing about your change, with what I should see.
+     "Docs only, no build needed" is fine for docs PRs. -->
 
 ```bash
 # install this PR's CI build (the pr-build run's summary has the exact command)
@@ -44,16 +39,18 @@ ssh root@<device> 'pacman -U /tmp/<pkg>-*.pkg.tar.*'
 
 Expected:
 
-Rollback: `pacman -U /var/cache/pacman/pkg/<previous>.pkg.tar.xz`
+Rollback: `sudo pocknix-rollback`, then reboot.
 
 ## Checklist
 
-- [ ] `pkgrel` bumped for every package whose contents changed (or: no package contents changed)
-- [ ] Committed build output regenerated and committed (e.g. `pocknix-control/dist/` via `npm ci && npm run build`, `npx tsc --noEmit` clean)
-- [ ] Survives a reboot / cold boot, where relevant
-- [ ] Reaches existing installs through `pacman -U` / `-Syu`, not only a fresh image (or noted as image-only)
+<!-- Tick what applies, delete the rest. -->
+
+- [ ] `pkgrel` bumped for every package whose contents changed
+- [ ] Committed build output regenerated (e.g. `pocknix-control/dist/`, `npx tsc --noEmit` clean)
+- [ ] Survives a cold boot
+- [ ] Reaches existing installs through `pacman -Syu`, not only a fresh image (or noted as image-only)
 - [ ] Degrades quietly on devices without the hardware it drives
 - [ ] Gamepad-navigable, if it adds UI to the Steam session
-- [ ] Docs that describe what changed (a README, `CONTRIBUTING.md`, the component's `PATCHES.md` or `README.provenance`, `docs/`) are updated in this PR
+- [ ] Docs that describe what changed are updated in this PR
 - [ ] CI is green (lint, the PR rules, and pr-build for a package change), commits follow `area: summary`
 - [ ] AI assistance disclosed, if used

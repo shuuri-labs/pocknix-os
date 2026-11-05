@@ -6,7 +6,8 @@ title: "area: short summary"
 labels: specced
 ---
 
-<!-- Also pasted over the body of a raw bug report when converting it into a spec. -->
+<!-- Also pasted over the body of a raw bug report when converting it into a spec.
+     Keep each section to a few short, plain bullets. -->
 
 ## What and why
 
@@ -29,7 +30,7 @@ labels: specced
 
 - [ ] `pkgrel` bump, so installed devices get the change via `pacman -Syu`
 - [ ] Lives in a robust location (survives `make sync`, session restart, reboot)
-- [ ] Covers both SoC families, or states why it is scoped to one
+- [ ] Covers every SoC family it reaches, or states why it is scoped to fewer
 
 ## Acceptance
 

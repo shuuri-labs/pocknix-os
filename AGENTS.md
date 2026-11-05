@@ -21,6 +21,7 @@ the same rules with the detail; read it before your first change.
 - Run `make check` before every commit and fix what it reports. Never work around a check; an
   allow-file row needs a real reason.
 - Commits: `area: concise summary`, one finished change each.
+- Before opening the PR, run `PR_BODY_FILE=<body> scripts/check-pr.sh`: CI runs the same rules.
 
 ## The PR
 
@@ -29,6 +30,7 @@ the same rules with the detail; read it before your first change.
 - **How to test** is required: exact build and install commands, numbered steps, what the
   reviewer should see, how to roll back.
 - **Tested** shows the change ran on real hardware, with evidence (a log excerpt, a screenshot,
-  numbers). Never claim a device test that didn't happen; code nobody ran isn't ready for a PR.
+  numbers). Never claim a device test that didn't happen. Until a person has run it on hardware
+  (CI's build of the PR works for that), say so: it won't merge before then.
 - Say the PR was written with AI assistance.
 - Never sign or publish packages; releases are the maintainer's.

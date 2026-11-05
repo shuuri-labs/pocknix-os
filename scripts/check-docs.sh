@@ -12,7 +12,7 @@ DOCS="$(git ls-files 'README.md' 'CONTRIBUTING.md' 'AGENTS.md' 'PATCHES.md' '*/R
 # Structure + rules only: their volatile facts belong in a PATCHES.md, kernel.conf or a PKGBUILD.
 STRUCTURAL="kernel/README.md devices/README.md docs/README.md CONTRIBUTING.md AGENTS.md"
 # Backticked paths that name another tree's files, not ours (file:token).
-FOREIGN="CONTRIBUTING.md:packages/kernel/PATCHES.md kernel/README.md:scripts/config"
+FOREIGN="kernel/README.md:scripts/config"
 # Tracked only as a .gitkeep: what docs name under them is build output.
 GENERATED="build vendor"
 ALLOW_MARK="docs-check: allow"
