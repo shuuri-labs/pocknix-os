@@ -32,6 +32,7 @@ Last rebased: 2026-11-06 (s2idle stack 3).
   Source: mkp/scsi d1fa5cea5dcd via armada 0535.
 - **1018** A UFS device that rejects the timestamp attribute stops getting it written on every boot
   and resume. Source: mkp/scsi 00eec343c730 via armada 0536.
+- **1110** A failed UFS ICE resume no longer leaves its clocks enabled. Source: armada 0510.
 
 ### Suspend and wake
 
@@ -86,7 +87,7 @@ Last rebased: 2026-11-06 (s2idle stack 3).
   is unreadable after PME_Turn_Off there. Applies: SM8550 only, gated by `qcom,pcie-sm8550`.
   Source: armada 0512.
 - **1048** PCIe keeps a suspend OPP as its memory floor in s2idle. Applies: does nothing without a
-  DT suspend OPP, which only sm8550.dtsi has (via sm8550's 1049). Source: armada 0513.
+  DT suspend OPP, which no SoC dtsi marks since sm8550 retired 1049. Source: armada 0513.
 - **1054** The PCIe host can power down in s2idle: only endpoints veto D3cold.
   Applies: every SoC (the sm8250 pcie-qcom path reaches the same D3cold check). Source: armada 0522.
 - **1060, 1061** Wifi comes up: pcie-qcom's BDF-to-SID table and the OF devlink parser read the

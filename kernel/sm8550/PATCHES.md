@@ -12,7 +12,7 @@ Pins are in `kernel/sm8550/kernel.conf`. Stack: `patches/10-mainline`, `20-versi
 
 ROCKNIX 1000+ (synced, not ours): 1000, 1002, 1003, 1005, 1020.
 
-Last rebased: 2026-10-27 (RP6 LRA haptics).
+Last rebased: 2026-11-06 (s2idle stack 3).
 
 ## Carried
 
@@ -40,8 +40,11 @@ Last rebased: 2026-10-27 (RP6 LRA haptics).
 - **1057, 1058, 1059** The ADSP graphs are released across suspend, so an open sound no longer
   keeps the ADSP awake. Trap: 1059 is rebased onto ROCKNIX 0612 and needs 1058, so 1057-1059
   stay together. Source: armada PR #545.
-- **1049** sm8550.dtsi marks a PCIe suspend OPP, the one kernel/common 1048 keeps as the memory
-  floor in s2idle. Source: armada.
+- **1116** The SoC reaches CX collapse and DDR self-refresh in sleep: the gcc-sm8550 PCIe
+  controller and PHY GDSCs power off instead of holding retention, whose NoC vote kept DDR awake.
+  Needs: kernel/common 1101-1108 (the LPASS votes must go too). Trap: it replaced the PCIe suspend
+  OPP floor (1049), which made s2idle safe; a wake hang after this points here.
+  Source: armada 0566.
 
 ### Display, touch, GPU
 
@@ -56,6 +59,9 @@ Last rebased: 2026-10-27 (RP6 LRA haptics).
   period against the board's `qcom,lra-period-us` (10%) and falls back to it, instead of
   ROCKNIX's fixed 185-215 Hz window and forced 205 Hz (the RP6 LRA calibrates at ~173 Hz).
   Source: ours.
+- **1117** A gain update queued just before sleep no longer runs into resume: haptics suspend
+  cancels the set-gain work with the playback and stop work. Needs: ROCKNIX 1005. Source: the
+  suspend hunk of armada 1003.
 
 ## Edits to synced files
 
@@ -83,4 +89,4 @@ None.
 
 ## Retired numbers
 
-None.
+- 1049 (PCIe suspend OPP in sm8550.dtsi)
