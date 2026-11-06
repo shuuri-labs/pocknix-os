@@ -69,12 +69,15 @@ The local delta `kernel/sm8550/sync-keep` restores after each make sync.
 
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-common.dtsi`: sdhc_2 without `sdhci-caps-mask` (UHS-I
   SDR104 on stock sdhci-msm, as armada carries it); rail and WAKE# constraints, bob1 LPM, and the
-  gamepad MCU on vdd_mcu_3v3 without always-on (armada PR #545).
+  gamepad MCU on vdd_mcu_3v3 without always-on (armada PR #545); volume up is no wake source, so
+  a press in a bag no longer wakes the device (armada's ayn-common dts patch).
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-odin2.dts`: `&vreg_l12b_1p8` always-on (armada 8675d40:
   the panel draws over a watt in sleep with its IO supply cut).
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-thor.dts`: touchscreens without `touchscreen-swapped-x-y`
   / `touchscreen-inverted-x` (armada's Thor dts patch: gamescope and kwin rotate touch by the
-  panel orientation, so a kernel-side rotation landed touch 90 degrees off).
+  panel orientation, so a kernel-side rotation landed touch 90 degrees off); the lid wakes only
+  on opening, with a pull-up on its open-drain hall line, so closing it on a sleeping Thor no
+  longer wakes it (same armada patch).
 - `kernel/sm8550/dts/qcom/qcs8550-retroidpocket-rp6.dts`: haptics driven as an LRA (no
   `use-erm`, 1300 mV node and effect drive, effect auto-res off, stock effect_0 pattern; armada
   PR #694, values from the stock Android board-id 0x1001f overlay). Nova and top-dpad include
