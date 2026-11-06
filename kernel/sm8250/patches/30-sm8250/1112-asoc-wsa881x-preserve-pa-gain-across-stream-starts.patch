@@ -1,0 +1,121 @@
+From: transentient <cliff.judge@gmail.com>
+Subject: [PATCH] ASoC: codecs: wsa881x: preserve PA Volume across stream starts
+
+In wsa881x_spkr_pa_event(), SND_SOC_DAPM_PRE_PMU writes
+wsa881x_pre_pmu_pa_2_0 ({ WSA881X_SPKR_DRV_GAIN, 0x41, 0 }), which resets
+bits [7:4] (WSA881X_SPKR_PAG_GAIN_MASK) to G_12DB (+12 dB, ALSA PA Volume
+8) on every stream start, overwriting any PA Volume configured earlier via
+wsa881x_put_pa_gain().
+
+Cache the configured gain in wsa881x->pa_gain (initialized to G_12DB to
+match wsa881x_pre_pmu_pa_2_0) and ramp WSA881X_SPKR_DRV_GAIN back to
+wsa881x->pa_gain in SND_SOC_DAPM_POST_PMU on each stream start, matching
+Qualcomm's downstream wsa881x driver.
+
+Signed-off-by: transentient <cliff.judge@gmail.com>
+---
+ sound/soc/codecs/wsa881x.c | 45 +++++++++++++++++++++++++++-----------
+ 1 file changed, 32 insertions(+), 13 deletions(-)
+
+--- a/sound/soc/codecs/wsa881x.c
++++ b/sound/soc/codecs/wsa881x.c
+@@ -681,6 +681,7 @@ struct wsa881x_priv {
+ 	 */
+ 	unsigned int sd_n_val;
+ 	int active_ports;
++	int pa_gain;
+ 	bool hw_init;
+ 	bool port_prepared[WSA881X_MAX_SWR_PORTS];
+ 	bool port_enable[WSA881X_MAX_SWR_PORTS];
+@@ -744,29 +745,11 @@ static int wsa881x_component_probe(struct snd_soc_component *comp)
+ 	return 0;
+ }
+ 
+-static int wsa881x_put_pa_gain(struct snd_kcontrol *kc,
+-			       struct snd_ctl_elem_value *ucontrol)
++static void wsa881x_ramp_pa_gain(struct snd_soc_component *comp,
++				 int min_gain, int max_gain)
+ {
+-	struct snd_soc_component *comp = snd_kcontrol_chip(kc);
+-	struct soc_mixer_control *mc =
+-			(struct soc_mixer_control *)kc->private_value;
+-	int max = mc->max;
+-	unsigned int mask = (1 << fls(max)) - 1;
+-	int val, ret, min_gain, max_gain;
+-
+-	ret = pm_runtime_resume_and_get(comp->dev);
+-	if (ret < 0 && ret != -EACCES)
+-		return ret;
+-
+-	max_gain = (max - ucontrol->value.integer.value[0]) & mask;
+-	/*
+-	 * Gain has to set incrementally in 4 steps
+-	 * as per HW sequence
+-	 */
+-	if (max_gain > G_4P5DB)
+-		min_gain = G_0DB;
+-	else
+-		min_gain = max_gain + 3;
++	int val, ret;
++
+ 	/*
+ 	 * 1ms delay is needed before change in gain
+ 	 * as per HW requirement.
+@@ -783,6 +766,35 @@ static int wsa881x_put_pa_gain(struct snd_kcontrol *kc,
+ 
+ 		usleep_range(1000, 1010);
+ 	}
++}
++
++static int wsa881x_put_pa_gain(struct snd_kcontrol *kc,
++			       struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_soc_component *comp = snd_kcontrol_chip(kc);
++	struct wsa881x_priv *wsa881x = snd_soc_component_get_drvdata(comp);
++	struct soc_mixer_control *mc =
++			(struct soc_mixer_control *)kc->private_value;
++	int max = mc->max;
++	unsigned int mask = (1 << fls(max)) - 1;
++	int ret, min_gain, max_gain;
++
++	ret = pm_runtime_resume_and_get(comp->dev);
++	if (ret < 0 && ret != -EACCES)
++		return ret;
++
++	max_gain = (max - ucontrol->value.integer.value[0]) & mask;
++	wsa881x->pa_gain = max_gain;
++	/*
++	 * Gain has to set incrementally in 4 steps
++	 * as per HW sequence
++	 */
++	if (max_gain > G_4P5DB)
++		min_gain = G_0DB;
++	else
++		min_gain = max_gain + 3;
++
++	wsa881x_ramp_pa_gain(comp, min_gain, max_gain);
+ 
+ 	pm_runtime_put_autosuspend(comp->dev);
+ 
+@@ -937,6 +949,13 @@ static int wsa881x_spkr_pa_event(struct snd_soc_dapm_widget *w,
+ 					      WSA881X_PA_GAIN_SEL_REG);
+ 		break;
+ 	case SND_SOC_DAPM_POST_PMU:
++		{
++			int max_gain = wsa881x->pa_gain;
++			int min_gain = (max_gain > G_4P5DB) ?
++				       G_0DB : max_gain + 3;
++
++			wsa881x_ramp_pa_gain(comp, min_gain, max_gain);
++		}
+ 		if (wsa881x->port_prepared[WSA881X_PORT_VISENSE]) {
+ 			wsa881x_visense_txfe_ctrl(comp, true);
+ 			snd_soc_component_update_bits(comp,
+@@ -1152,6 +1170,7 @@ static int wsa881x_probe(struct sdw_slave *pdev,
+ 	dev_set_drvdata(dev, wsa881x);
+ 	wsa881x->slave = pdev;
+ 	wsa881x->dev = dev;
++	wsa881x->pa_gain = G_12DB;
+ 	wsa881x->sconfig.ch_count = 1;
+ 	wsa881x->sconfig.bps = 1;
+ 	wsa881x->sconfig.frame_rate = 48000;
