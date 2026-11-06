@@ -92,25 +92,6 @@ export interface SnapshotStatus {
   snapshots: SnapshotInfo[];
 }
 
-export interface ConfigExportResult {
-  /** true = target file already exists and nothing was written (rename/overwrite flow). */
-  exists: boolean;
-  base: string;
-  path: string;
-}
-
-export interface ConfigPreview {
-  device: string;
-  exported: string;
-  games: { appid: string; name: string; protonTool: string }[];
-}
-
-export interface ConfigImportResult {
-  protonTool: string;
-  fexProfile?: string;
-  enabled?: boolean;
-}
-
 export interface LedSide {
   r: number;
   g: number;
@@ -129,12 +110,6 @@ export interface LedConfig {
   left: LedSide;
   right: LedSide;
 }
-
-export type ShareStatus = {
-  installed: boolean;
-  on: boolean;
-  active: boolean;
-};
 
 export interface CalibrationLive {
   lx: number;

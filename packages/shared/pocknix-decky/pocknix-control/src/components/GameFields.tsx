@@ -1,4 +1,4 @@
-import { ButtonItem, ConfirmModal, PanelSectionRow, TextField, ToggleField, showModal } from "@decky/ui";
+import { PanelSectionRow, ToggleField } from "@decky/ui";
 import { useEffect, useState } from "react";
 import { availableCompatTools, registerForCompatTool, setCompatTool } from "../lib/compat";
 import type { CompatTool } from "../lib/compat";
@@ -24,38 +24,6 @@ export const lavdOptions = [
   { data: "performance", label: "Performance" },
 ];
 const globalChoice = { data: "", label: "Use global" };
-
-export function EnvVarsModal({ initial, onSave, closeModal }: { initial: string; onSave: (value: string) => void; closeModal?: () => void }) {
-  const [value, setValue] = useState(initial);
-  return (
-    <ConfirmModal
-      strTitle="Environment Variables"
-      strDescription={'Space-separated KEY=VALUE pairs; quote values with spaces, e.g. DXVK_CONFIG="dxgi.customDeviceDesc = GTX 480". Steam launch options win over these.'}
-      strOKButtonText="Save"
-      onCancel={() => closeModal?.()}
-      onOK={() => {
-        onSave(value.trim());
-        closeModal?.();
-      }}
-    >
-      <TextField label="Variables" value={value} onChange={(event) => setValue(event.target.value)} />
-    </ConfirmModal>
-  );
-}
-
-export function EnvVarsButton({ value, onSave }: { value: string; onSave: (next: string) => void }) {
-  return (
-    <PanelSectionRow>
-      <ButtonItem
-        layout="below"
-        description={value ? value : "None set"}
-        onClick={() => showModal(<EnvVarsModal initial={value} onSave={onSave} />)}
-      >
-        Environment Variables
-      </ButtonItem>
-    </PanelSectionRow>
-  );
-}
 
 export function XaliaToggle({ values, patch }: {
   values: Record<string, any>;
@@ -168,7 +136,6 @@ export function TweakFields({ config, appid, values, patch }: {
       <SelectEdit label="Mesa Version" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
       <XaliaToggle values={values} patch={patch} />
       <TouchField values={values} patch={patch} />
-      <EnvVarsButton value={String(values.envVars ?? "")} onSave={(next) => patch({ envVars: next })} />
     </>
   );
 }

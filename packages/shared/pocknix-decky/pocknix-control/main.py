@@ -2,10 +2,8 @@ import asyncio
 
 from pocknix_control import calibration
 from pocknix_control.config import build_config
-from pocknix_control.configio import apply_config, config_dir, export_config, read_config
 from pocknix_control.led import restore_led, set_led, set_led_enabled, set_led_linked, set_led_sides
 from pocknix_control.modes import set_fan_mode, set_lavd_mode
-from pocknix_control.sharing import install_samba, set_share, share_status
 from pocknix_control.snapshots import reboot_system, snapshot_status, start_rollback
 from pocknix_control.touch import sync_touch
 from pocknix_control.tweaks import patch_tweaks
@@ -38,15 +36,6 @@ class Plugin:
             self._running_appid = None
         await asyncio.to_thread(sync_touch, self._running_appid)
 
-    async def share_status(self):
-        return await asyncio.to_thread(share_status)
-
-    async def set_share(self, on):
-        return await asyncio.to_thread(set_share, on)
-
-    async def install_samba(self):
-        return await asyncio.to_thread(install_samba)
-
     async def set_fan_mode(self, mode):
         await asyncio.to_thread(set_fan_mode, mode)
         return await self.get_config()
@@ -59,18 +48,6 @@ class Plugin:
         tweaks = await asyncio.to_thread(patch_tweaks, appid, fields)
         await asyncio.to_thread(sync_touch, self._running_appid)
         return tweaks
-
-    async def export_config(self, appid, name, basename, allow_overwrite):
-        return await asyncio.to_thread(export_config, appid, name, basename, allow_overwrite)
-
-    async def config_dir(self):
-        return await asyncio.to_thread(config_dir)
-
-    async def read_config(self, path):
-        return await asyncio.to_thread(read_config, path)
-
-    async def apply_config(self, path, source_appid, target_appid, target_name):
-        return await asyncio.to_thread(apply_config, path, source_appid, target_appid, target_name)
 
     # Not get_config(): that re-parses the whole Steam library, and a colour slider
     # commits repeatedly while it is being dialled in.

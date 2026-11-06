@@ -63,7 +63,7 @@ STEPS = [
 
 
 def _host(args, timeout=10):
-    # busctl under PID 1, like every host tool (see sharing.py).
+    # busctl under PID 1: a loader restart cannot kill it mid-call.
     return run_cmd(["systemd-run", "--quiet", "--collect", "--wait", "--pipe", *args], timeout=timeout)
 
 

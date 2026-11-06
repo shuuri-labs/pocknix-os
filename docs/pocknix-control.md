@@ -11,7 +11,7 @@ tapping the icons:
 | Tab | What it does |
 |---|---|
 | 🎮 Games | Fan curve, CPU scheduler and game tweaks, globally or per game |
-| 📚 Library | Add non-Steam games, share your files over the network |
+| 📚 Library | Add non-Steam games |
 | 🕹️ Controller | Stick and trigger calibration, stick lights |
 | 🔄 Updater | Check for and install system updates, roll back the last update |
 
@@ -63,9 +63,9 @@ Per game, either can stay on the global value.
   default works with ARM Proton versions only; an x86 Proton always uses its default driver.
 - **Disable Xalia**: on by default. Xalia is Proton's controller-navigation helper and costs
   CPU in every game; turn this off only for a game that needs it.
-- **Environment Variables**: extra variables for the game's launch, the same as a Steam
-  launch option. To write your own launch options, see
-  [Launch options](steam-games.md#launch-options).
+
+To set other variables for a game, use its launch options: see
+[Launch options](steam-games.md#launch-options).
 
 ### Adding your own Turnip driver
 
@@ -84,12 +84,6 @@ You can try a community Turnip build on one game without replacing the system dr
 If the game then fails to start or shows no picture, set Mesa Version back to the default.
 Deleting the folder removes the driver; a game still set to it falls back to the default.
 
-### Sharing a game's config
-
-With per-game settings on, the **Config** section exports the game's settings to a
-`<name>.pocknix.json` file, and imports one, so a tuned setup can be passed to other Pocknix
-users. Importing overwrites that game's settings.
-
 ## Library
 
 ### Adding non-Steam games
@@ -105,17 +99,6 @@ Steam's own **Add a Non-Steam Game** dialog does not work on pocknix-os, so add 
    automatically for `.exe` files - Windows programs need it, native Linux ones do not.
 4. Press **Add to Library**. The game appears in your Steam library right away, and also
    shows up in the tweaks dropdown above so you can give it its own FEX/audio settings.
-
-### File sharing
-
-**Share my home folder** turns the device into a network share, so you can drag ROMs, BIOS files
-and emulator firmware onto it from another computer. Turn it on the first time in **Pocknix
-Tools** → **Network**, which asks for deck's password: you sign in to the share as deck with it.
-
-> Anyone on the same network who knows deck's password can read and write your home folder, so
-> turn it off when you are done. See
-> [copying files over the network](emulation-setup.md#copying-files-over-the-network) for how to
-> connect.
 
 ## Controller
 

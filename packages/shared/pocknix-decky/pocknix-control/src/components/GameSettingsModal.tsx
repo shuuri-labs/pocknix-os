@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { getConfig } from "../backend";
 import { usePatchTweaks } from "../hooks/usePatchTweaks";
 import type { Config } from "../types";
-import { ConfigSection } from "./ConfigSection";
 import { PerfFields, TweakFields } from "./GameFields";
 
 /** Standalone per-game settings, opened from the library context menu. */
@@ -35,7 +34,6 @@ export function GameSettingsModal({ appid, name, closeModal }: { appid: string; 
         <>
           <PerfFields values={values} patch={patch} />
           <TweakFields config={config} appid={appid} values={values} patch={patch} />
-          <ConfigSection game={{ appid, name }} reload={reload} />
         </>
       ) : null}
     </ModalRoot>

@@ -103,8 +103,8 @@ share and drag files straight onto it from another computer. It works out of the
 Finder, Windows Explorer and Linux file managers - no extra software on either end.
 
 Turn it on the first time in **Pocknix Tools** (game or desktop mode): **Network** → *File sharing
-(SMB)*. It asks for deck's password, which is also the share's password. After that, Quick
-Access Menu → **Pocknix Control** → **Library** → *Share my home folder* turns it on and off too.
+(SMB)*. It asks for deck's password, which is also the share's password. The same switch turns it
+off again.
 
 It stays on across reboots until you turn it off. If you change deck's password, turn sharing off
 and on again in Pocknix Tools so the share takes the new one.

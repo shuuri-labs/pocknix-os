@@ -1,8 +1,7 @@
 import { PanelSection, ToggleField } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
 import { setFanMode, setLavdMode } from "../backend";
-import { ConfigSection } from "../components/ConfigSection";
-import { EnvVarsButton, PerfFields, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
+import { PerfFields, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
 import { SelectEdit } from "../components/widgets";
 import { availableGames, editTargetOptions } from "../lib/games";
 import type { Config } from "../types";
@@ -90,15 +89,11 @@ export function Games({ config, setConfig, patch, reload }: {
               <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patchSettings({ audioLatency: id })} />
               <XaliaToggle values={values} patch={patchSettings} />
               <TouchField values={values} patch={patchSettings} />
-              <EnvVarsButton value={String(values.envVars ?? "")} onSave={(next) => patchSettings({ envVars: next })} />
             </>
           ) : (
             <TweakFields config={config} appid={game!.appid} values={values} patch={patchSettings} />
           )}
         </PanelSection>
-      ) : null}
-      {!editingDefault && perGameEnabled ? (
-        <ConfigSection game={{ appid: game!.appid, name: game!.name || "" }} reload={reload} />
       ) : null}
     </>
   );
