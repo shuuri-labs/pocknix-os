@@ -1,0 +1,10 @@
+#!/bin/sh
+# Undo exactly what sleep-power-pre blocked: a radio the user had already switched off stays off.
+f=/run/pocknix/deep-sleep.blocked
+[ -f "${f}" ] || exit 0
+while read -r n; do
+  [ -n "${n}" ] || continue
+  [ -e "/sys/class/rfkill/${n}/soft" ] && echo 0 > "/sys/class/rfkill/${n}/soft"
+done < "${f}"
+rm -f "${f}"
+exit 0

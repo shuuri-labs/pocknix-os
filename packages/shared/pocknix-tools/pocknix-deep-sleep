@@ -1,0 +1,26 @@
+#!/bin/bash
+# pocknix-deep-sleep — keep the Wi-Fi radio down for the duration of a suspend. status runs
+# unprivileged because the menu polls it on every draw; on/off come through pkexec
+# (57-pocknix-deep-sleep.rules). The work itself is done by the sleep.d hooks.
+set -euo pipefail
+
+MARK=/etc/pocknix/deep-sleep
+
+need_root() { [ "$(id -u)" -eq 0 ] || { echo "pocknix-deep-sleep: must run as root" >&2; exit 1; }; }
+
+case "${1:-status}" in
+  status)
+    if [ -e "${MARK}" ]; then echo state=on; else echo state=off; fi ;;
+  on)
+    need_root
+    mkdir -p "$(dirname "${MARK}")"
+    : > "${MARK}"
+    echo state=on ;;
+  off)
+    need_root
+    rm -f "${MARK}"
+    echo state=off ;;
+  *)
+    echo "usage: pocknix-deep-sleep [status|on|off]" >&2
+    exit 2 ;;
+esac

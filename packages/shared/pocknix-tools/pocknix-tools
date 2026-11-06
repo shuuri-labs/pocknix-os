@@ -313,6 +313,27 @@ do_status() {
   kdialog --title "$TITLE" --msgbox "<html>${status}<pre>${list}</pre></html>" || true
 }
 
+deepsleep_state() { pocknix-deep-sleep status 2>/dev/null | sed -n 's/^state=//p'; }
+
+do_deepsleep() {
+  local out rc=0
+  if [ "$(deepsleep_state)" = on ]; then
+    out="$(pkexec /usr/bin/pocknix-deep-sleep off 2>&1)" || rc=$?
+    [ "${rc}" -eq 0 ] || { gui_err "Could not turn deep sleep off:\n\n$(printf '%s' "${out}" | tail -3)"; return 0; }
+    kdialog --title "$TITLE" --msgbox "Deep sleep is off. Wi-Fi stays up while the device sleeps." || true
+    return 0
+  fi
+  kdialog --title "$TITLE" --warningcontinuecancel \
+    "Switch Wi-Fi off while the device sleeps?\n\nMeasured on a Retroid Pocket 5, standby drain drops from about 100 mA to about 50 mA, which roughly doubles how long it lasts asleep. The radio comes back a few seconds after it wakes.\n\nWhile asleep there are no downloads and wake-on-WLAN does not work. It stays on, across reboots, until you turn it off here." \
+    || return 0
+  out="$(pkexec /usr/bin/pocknix-deep-sleep on 2>&1)" || rc=$?
+  if [ "${rc}" -ne 0 ]; then
+    gui_err "Could not turn deep sleep on:\n\n$(printf '%s' "${out}" | tail -3)"
+    return 0
+  fi
+  kdialog --title "$TITLE" --msgbox "Deep sleep is on. The next time the device sleeps, Wi-Fi turns off and returns when it wakes." || true
+}
+
 while :; do
   mode="$(base_mode)"
   # a missed tap returns the FIRST row: keep the read-only item there
@@ -329,6 +350,8 @@ while :; do
   else items+=(ssh "Remote access (SSH) is off - turn it on..."); fi
   if [ "$(share_state)" = on ]; then items+=(share "File sharing (SMB) is ON - turn it off")
   else items+=(share "File sharing (SMB) is off - turn it on..."); fi
+  if [ "$(deepsleep_state)" = on ]; then items+=(deepsleep "Deep sleep (Wi-Fi off asleep) is ON - turn it off")
+  else items+=(deepsleep "Deep sleep (Wi-Fi off asleep) is off - turn it on..."); fi
   if layer_installed; then items+=(emulation "Emulation layer is installed - remove it...")
   else items+=(emulation "Install the emulation layer (ES-DE + emulators)..."); fi
   [ -n "$(emulators_present)" ] && items+=(defaults "Restore emulator default settings...")
@@ -346,6 +369,7 @@ while :; do
     abl)               do_abl ;;
     ssh)               do_ssh ;;
     share)             do_share ;;
+    deepsleep)         do_deepsleep ;;
     emulation)         do_layer ;;
     defaults)          do_defaults ;;
     desktop)           do_desktop ;;

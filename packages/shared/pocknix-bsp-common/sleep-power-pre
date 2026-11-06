@@ -1,0 +1,18 @@
+#!/bin/sh
+# Deep sleep: drop the Wi-Fi radio once the suspend has started. sm8250 only, because ath12k on
+# sm8550 already powers down in suspend and the toggle is unmeasured there.
+[ -e /etc/pocknix/deep-sleep ] || exit 0
+case "$(tr '\0' ' ' < /proc/device-tree/compatible 2>/dev/null)" in
+  *qcom,sm8250*) ;;
+  *) exit 0 ;;
+esac
+mkdir -p /run/pocknix
+: > /run/pocknix/deep-sleep.blocked
+for d in /sys/class/rfkill/rfkill*; do
+  [ -r "${d}/type" ] || continue
+  [ "$(cat "${d}/type")" = wlan ] || continue
+  [ "$(cat "${d}/soft")" = 1 ] && continue
+  echo "$(basename "${d}")" >> /run/pocknix/deep-sleep.blocked
+  echo 1 > "${d}/soft"
+done
+exit 0
