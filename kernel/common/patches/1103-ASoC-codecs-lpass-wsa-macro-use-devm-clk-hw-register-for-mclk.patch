@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ajay Kumar Nandam <ajay.nandam@oss.qualcomm.com>
+Date: Thu, 2 Jul 2026 00:14:59 +0530
+Subject: [PATCH] ASoC: codecs: lpass-wsa-macro: Use devm_clk_hw_register() for
+ MCLK output
+
+Switch WSA MCLK output registration to devm_clk_hw_register() so the clk
+hw is automatically unregistered on probe failure and remove.
+
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Signed-off-by: Ajay Kumar Nandam <ajay.nandam@oss.qualcomm.com>
+Reviewed-by: Srinivas Kandagatla <srinivas.kandagatla@oss.qualcomm.com>
+Tested-by: Srinivas Kandagatla <srinivas.kandagatla@oss.qualcomm.com>
+Link: https://patch.msgid.link/20260702-xo-sd-codec-v7-b4-v8-3-d39d0fdb7859@oss.qualcomm.com
+Signed-off-by: Mark Brown <broonie@kernel.org>
+---
+ sound/soc/codecs/lpass-wsa-macro.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sound/soc/codecs/lpass-wsa-macro.c b/sound/soc/codecs/lpass-wsa-macro.c
+index eee8ea4da..b1913a55e 100644
+--- a/sound/soc/codecs/lpass-wsa-macro.c
++++ b/sound/soc/codecs/lpass-wsa-macro.c
+@@ -2661,7 +2661,7 @@ static int wsa_macro_register_mclk_output(struct wsa_macro *wsa)
+ 	init.num_parents = 1;
+ 	wsa->hw.init = &init;
+ 	hw = &wsa->hw;
+-	ret = clk_hw_register(wsa->dev, hw);
++	ret = devm_clk_hw_register(wsa->dev, hw);
+ 	if (ret)
+ 		return ret;
+ 

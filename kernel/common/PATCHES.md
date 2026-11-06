@@ -65,6 +65,21 @@ Last rebased: 2026-11-06 (s2idle stack 3).
 - **1099** smp2p resets its inbound state only after a remote restart, so the ADSP ready and
   handover bits are no longer replayed on every notification. Source: armada 0569.
 
+### Audio across sleep
+
+- **1101-1106** The LPASS WSA, VA, TX and RX macros hand their clocks to the PM clock framework,
+  so a runtime suspend drops their votes. Source: Ajay Kumar Nandam's series, queued for 7.3, via
+  armada 0557-0562. Drop: at a 7.3 base.
+- **1107** The LPASS macros runtime-suspend across system sleep, so their clock votes no longer
+  keep the ADSP out of island in s2idle. Needs: 1101-1106. Source: armada 0563.
+- **1108** SoundWire masters that support clock stop runtime-suspend across system sleep; a bus
+  without it (the sm8250 WSA881x speaker bus) is left alone so the speakers play after wake.
+  Trap: sm8250's 99-wcd938x-nosleep.rules pins the headphone codec active, and its master is
+  still force-suspended; check jack detection after wake. Source: armada 0564 (with PR #759).
+- **1109** A SoundWire slave that never finishes the clock-stop handshake (the PMIC haptics port
+  0217:f002) is skipped, so it no longer stalls the bus on wake (heard as a speaker pop).
+  Needs: 1108 to matter. Source: armada 0570.
+
 ### PCIe and wifi
 
 - **1045** SM8550 suspend no longer wedges: the PCIe L2/L3-ready poll is skipped, since PARF_LTSSM
