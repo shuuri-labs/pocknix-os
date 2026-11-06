@@ -1,0 +1,8 @@
+// Promptless pkexec of pocknix-deep-sleep for wheel, same trust as 50-pocknix-deck.rules.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/pocknix-deep-sleep") {
+        return polkit.Result.YES;
+    }
+});
