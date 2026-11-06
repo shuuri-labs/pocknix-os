@@ -664,6 +664,115 @@ function setCompatTool(appid, tool) {
         ensureLaunchWrapper(appid);
 }
 
+const shaderModels = ["6_8", "6_7", "6_6", "6_5", "6_4", "6_3", "6_2", "6_1", "6_0"].map((v) => ({ data: v, label: v.replace("_", ".") }));
+const envPresets = [
+    {
+        key: "VKD3D_FEATURE_LEVEL",
+        label: "DirectX 12 feature level",
+        description: "For DirectX 12 games that won't start or say your graphics card isn't supported. 12.1 fixes most.",
+        values: ["12_1", "12_2", "12_0", "11_1", "11_0"].map((v) => ({ data: v, label: v.replace("_", ".") })),
+    },
+    {
+        key: "VKD3D_SHADER_MODEL",
+        label: "DirectX 12 shader model",
+        description: "Lower it if a DirectX 12 game crashes or shows broken graphics.",
+        values: shaderModels,
+    },
+    {
+        key: "PROTON_LOG",
+        label: "Write a Proton log",
+        description: "Saves steam-<game id>.log in your home folder for troubleshooting. Remove it afterwards: it slows the game.",
+        values: [{ data: "1", label: "On" }],
+    },
+];
+const presetFor = (key) => envPresets.find((preset) => preset.key === key);
+/** POSIX-shell word splitting, the same rules as the launcher's shlex.split. */
+function parseEnvVars(raw) {
+    if (typeof raw !== "string")
+        return [];
+    const words = [];
+    let word = "";
+    let inWord = false;
+    let quote = "";
+    for (let i = 0; i < raw.length; i++) {
+        const c = raw[i];
+        if (quote === "'") {
+            if (c === "'")
+                quote = "";
+            else
+                word += c;
+        }
+        else if (quote === '"') {
+            if (c === '"')
+                quote = "";
+            else if (c === "\\" && i + 1 < raw.length && '"\\$`'.includes(raw[i + 1]))
+                word += raw[++i];
+            else
+                word += c;
+        }
+        else if (c === "'" || c === '"') {
+            quote = c;
+            inWord = true;
+        }
+        else if (c === "\\" && i + 1 < raw.length) {
+            word += raw[++i];
+            inWord = true;
+        }
+        else if (/\s/.test(c)) {
+            if (inWord)
+                words.push(word);
+            word = "";
+            inWord = false;
+        }
+        else {
+            word += c;
+            inWord = true;
+        }
+    }
+    if (quote)
+        return [];
+    if (inWord)
+        words.push(word);
+    const vars = new Map();
+    for (const w of words) {
+        const at = w.indexOf("=");
+        const key = w.slice(0, at);
+        // First one wins, as in the launcher, so the list shows what a launch applies.
+        if (at > 0 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !vars.has(key))
+            vars.set(key, w.slice(at + 1));
+    }
+    return Array.from(vars.entries());
+}
+const quoteValue = (value) => (/^[A-Za-z0-9_.,:=\/+@%-]*$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`);
+/** "" -> null so an emptied list removes the key instead of storing a blank. */
+function serializeEnvVars(vars) {
+    return vars.length ? vars.map(([key, value]) => `${key}=${quoteValue(value)}`).join(" ") : null;
+}
+
+function AddEnvVarModal({ current, onAdd, closeModal }) {
+    const [key, setKey] = SP_REACT.useState(envPresets[0].key);
+    const preset = presetFor(key);
+    const existing = current.find(([k]) => k === key)?.[1];
+    const [value, setValue] = SP_REACT.useState(null);
+    const picked = value ?? (preset.values.some((v) => v.data === existing) ? existing : preset.values[0].data);
+    return (SP_JSX.jsxs(DFL.ConfirmModal, { strTitle: "Add Environment Variable", strDescription: preset.description, strOKButtonText: "Add", onCancel: () => closeModal?.(), onOK: () => {
+            onAdd(key, picked);
+            closeModal?.();
+        }, children: [SP_JSX.jsx(DFL.DropdownItem, { label: "Variable", selectedOption: key, rgOptions: envPresets.map((p) => ({ data: p.key, label: p.label })), onChange: (option) => {
+                    setKey(String(option.data));
+                    setValue(null);
+                } }), preset.values.length > 1 ? (SP_JSX.jsx(DFL.DropdownItem, { label: "Value", selectedOption: picked, rgOptions: preset.values, onChange: (option) => setValue(String(option.data)) })) : null] }));
+}
+const describe = ([key, value]) => `${key}=${value}`;
+/** own = this scope's envVars; inherited = the Default list a game adds its own on top of.
+ *  Default has no Add: only variables saved there before can be seen and removed. */
+function EnvVarsField({ own, inherited, canAdd = true, onChange }) {
+    const vars = parseEnvVars(own);
+    const fromDefault = parseEnvVars(inherited).filter(([key]) => !vars.some(([k]) => k === key));
+    const save = (next) => onChange(serializeEnvVars(next));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [vars.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { label: presetFor(entry[0])?.label || entry[0], description: describe(entry), onClick: () => save(vars.filter(([key]) => key !== entry[0])), children: "Remove" }) }, entry[0]))), fromDefault.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: presetFor(entry[0])?.label || entry[0], description: `${describe(entry)} (from Default)` }) }, `default-${entry[0]}`))), canAdd ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => DFL.showModal(SP_JSX.jsx(AddEnvVarModal, { current: vars, onAdd: (key, value) => save([...vars.filter(([k]) => k !== key), [key, value]]) })), children: "Add Environment Variable" }) })) : null] }));
+}
+
 function SelectEdit({ label, value, options, onChange }) {
     const rgOptions = options.map((option) => (typeof option === "string" ? { data: option, label: option } : option));
     return (SP_JSX.jsx(DFL.PanelSectionRow, { children: label === undefined ? (SP_JSX.jsx(DFL.Dropdown, { selectedOption: value, rgOptions: rgOptions, onChange: (option) => onChange(option.data) })) : (SP_JSX.jsx(DFL.DropdownItem, { label: label, selectedOption: value, rgOptions: rgOptions, onChange: (option) => onChange(option.data) })) }));
@@ -744,7 +853,7 @@ function TweakFields({ config, appid, values, patch }) {
     return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "Proton Version", value: compatValue, options: compatOptions, onChange: (name) => {
                     setCurrentTool(String(name));
                     setCompatTool(appid, String(name));
-                } }), SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patch({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patch({ audioLatency: id }) }), SP_JSX.jsx(SelectEdit, { label: "Mesa Version", value: mesaValue, options: mesaOptions, onChange: (id) => patch({ mesaVersion: id }) }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patch }), SP_JSX.jsx(TouchField, { values: values, patch: patch })] }));
+                } }), SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patch({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patch({ audioLatency: id }) }), SP_JSX.jsx(SelectEdit, { label: "Mesa Version", value: mesaValue, options: mesaOptions, onChange: (id) => patch({ mesaVersion: id }) }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patch }), SP_JSX.jsx(TouchField, { values: values, patch: patch }), SP_JSX.jsx(EnvVarsField, { own: config.tweaks.games[appid]?.envVars, inherited: config.tweaks.global.envVars, onChange: (envVars) => patch({ envVars }) })] }));
 }
 
 function Games({ config, setConfig, patch, reload }) {
@@ -795,7 +904,7 @@ function Games({ config, setConfig, patch, reload }) {
     const storedLatency = String(values.audioLatency ?? "");
     const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
     const showFields = editingDefault || perGameEnabled;
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), showFields ? (SP_JSX.jsx(DFL.PanelSection, { title: "PERFORMANCE", children: editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) })] })) : (SP_JSX.jsx(PerfFields, { values: values, patch: patchSettings })) })) : null, showFields ? (SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx("div", { className: "pocknix-note", children: "Changes apply on next game launch" }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patchSettings }), SP_JSX.jsx(TouchField, { values: values, patch: patchSettings })] })) : (SP_JSX.jsx(TweakFields, { config: config, appid: game.appid, values: values, patch: patchSettings }))] })) : null] }));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), showFields ? (SP_JSX.jsx(DFL.PanelSection, { title: "PERFORMANCE", children: editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) })] })) : (SP_JSX.jsx(PerfFields, { values: values, patch: patchSettings })) })) : null, showFields ? (SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx("div", { className: "pocknix-note", children: "Changes apply on next game launch" }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patchSettings }), SP_JSX.jsx(TouchField, { values: values, patch: patchSettings }), SP_JSX.jsx(EnvVarsField, { own: tweaks.global.envVars, canAdd: false, onChange: (envVars) => patchSettings({ envVars }) })] })) : (SP_JSX.jsx(TweakFields, { config: config, appid: game.appid, values: values, patch: patchSettings }))] })) : null] }));
 }
 
 // Replaces the stock "Add a Non-Steam Game" flow: Steam's file browser cannot open a new

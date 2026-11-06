@@ -63,9 +63,17 @@ Per game, either can stay on the global value.
   default works with ARM Proton versions only; an x86 Proton always uses its default driver.
 - **Disable Xalia**: on by default. Xalia is Proton's controller-navigation helper and costs
   CPU in every game; turn this off only for a game that needs it.
+- **Environment Variables** (per game only): **Add Environment Variable** picks from common
+  fixes, applied at the next launch:
+  - **DirectX 12 feature level**: for DirectX 12 games that won't start or say your graphics card
+    isn't supported. 12.1 fixes most.
+  - **DirectX 12 shader model**: lower it if a DirectX 12 game crashes or shows broken graphics.
+  - **Write a Proton log**: saves `steam-<game id>.log` in your home folder. Remove it when you're
+    done, as logging slows the game down.
 
-To set other variables for a game, use its launch options: see
-[Launch options](steam-games.md#launch-options).
+  **Remove** takes one off. Variables saved on **Default** by an older version still apply to every
+  game and show there with a **Remove** button. For anything not in the list, use the game's
+  [launch options](steam-games.md#launch-options), which win over both.
 
 ### Adding your own Turnip driver
 

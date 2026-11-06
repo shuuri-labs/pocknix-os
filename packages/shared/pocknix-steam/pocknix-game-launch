@@ -112,7 +112,11 @@ def merged_settings(tweaks, game_id):
     if game_id:
         game_settings = tweaks.get("games", {}).get(str(game_id))
         if isinstance(game_settings, dict) and game_settings.get("enabled") is True:
+            base_env = settings.get("envVars")
             settings.update(game_settings)
+            # A game's variables add to Default's; apply_env_vars keeps the first of a key, so they go first.
+            if isinstance(base_env, str) and base_env and isinstance(game_settings.get("envVars"), str):
+                settings["envVars"] = f"{game_settings['envVars']} {base_env}"
     return settings
 
 
@@ -277,8 +281,8 @@ def pin_defaults():
 
 
 def apply_env_vars(settings):
-    # Free-form per-game env ("Environment Variables" tweak). shlex so quoted values with spaces
-    # survive. Launch options win; we only fill in unset, except over our own pin defaults.
+    # shlex so quoted values with spaces survive. Launch options win: only unset keys are filled,
+    # plus our own pin defaults, and the first of a repeated key counts.
     raw = settings.get("envVars")
     if not isinstance(raw, str) or not raw.strip():
         return

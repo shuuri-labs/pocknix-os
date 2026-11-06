@@ -6,7 +6,7 @@ export interface GameTweak {
   audioLatency?: string;
   /** Turnip series pin ("25.2"); pocknix-game-launch picks arch + point release. "" = default. */
   mesaVersion?: string;
-  /** Space-separated KEY=VALUE pairs applied at launch; launch options win over these. */
+  /** Shell-quoted KEY=VALUE words, added to the Default list (a game's value wins); launch options win over both. */
   envVars?: string;
   /** Per-game fan curve override, applied for the game session only; "" = use global. */
   fanMode?: string;

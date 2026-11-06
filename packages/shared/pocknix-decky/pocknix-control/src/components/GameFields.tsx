@@ -2,6 +2,7 @@ import { PanelSectionRow, ToggleField } from "@decky/ui";
 import { useEffect, useState } from "react";
 import { availableCompatTools, registerForCompatTool, setCompatTool } from "../lib/compat";
 import type { CompatTool } from "../lib/compat";
+import { EnvVarsField } from "./EnvVars";
 import { SelectEdit } from "./widgets";
 import type { Config } from "../types";
 
@@ -136,6 +137,11 @@ export function TweakFields({ config, appid, values, patch }: {
       <SelectEdit label="Mesa Version" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
       <XaliaToggle values={values} patch={patch} />
       <TouchField values={values} patch={patch} />
+      <EnvVarsField
+        own={config.tweaks.games[appid]?.envVars}
+        inherited={config.tweaks.global.envVars}
+        onChange={(envVars) => patch({ envVars })}
+      />
     </>
   );
 }
