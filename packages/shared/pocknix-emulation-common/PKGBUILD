@@ -1,19 +1,20 @@
 pkgname=pocknix-emulation-common
 pkgver=0.1.0
-pkgrel=5
+pkgrel=6
 pkgdesc="pocknix emulation base: ~/Emulation layout, config seeder, pocknix-play launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('bash' 'pocknix-bsp-common>=0.1.0-24')
+depends=('bash' 'python' 'pocknix-bsp-common>=0.1.0-24')
 install=pocknix-emulation-common.install
-source=('pocknix-roms-init' 'pocknix-roms-init.service' 'pocknix-seed-users' '60-pocknix-emulation-seed.hook'
+source=('pocknix-roms-init' 'pocknix-roms-retarget' 'pocknix-roms-init.service' 'pocknix-seed-users' '60-pocknix-emulation-seed.hook'
         'pocknix-play' 'emu-resolve.sh' 'es-eden' 'es-ryujinx' 'ROMS-README.txt'
         'eden-qt-config.ini.in' 'ryujinx-Config.json.in')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-roms-init"  "${pkgdir}/usr/bin/pocknix-roms-init"
+  install -Dm755 "${srcdir}/pocknix-roms-retarget" "${pkgdir}/usr/lib/pocknix/pocknix-roms-retarget"
   install -Dm755 "${srcdir}/pocknix-seed-users" "${pkgdir}/usr/lib/pocknix/pocknix-seed-users"
   install -Dm644 "${srcdir}/60-pocknix-emulation-seed.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/60-pocknix-emulation-seed.hook"

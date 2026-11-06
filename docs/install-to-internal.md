@@ -19,8 +19,8 @@ under **ABL Settings**:
 Two entries do the work in this guide: **Switch boot source** and **Uninstall CFW**.
 
 Boot-source switching needs the ROCKNIX ABL **v1.1.7 or newer**. If yours is older, update it from
-the running system: **Pocknix Tools → Bootloader: install or update to …**, or `pocknix-update-abl`
-in a terminal.
+the running system: **Pocknix Tools → Advanced → Bootloader → Install**, or `pocknix-update-abl` in
+a terminal.
 
 ---
 
@@ -37,8 +37,8 @@ included, in the space Android does not keep. The installer checks this before t
 and tells you how much to free if it does not fit: uninstall games or move ROMs off the card first,
 and reinstall them onto internal storage afterwards.
 
-Desktop mode: **Pocknix Tools → Install or remove internal Pocknix…**, pick how much internal
-storage Android keeps, and let it run. Or from a terminal:
+**Pocknix Tools → Advanced → Internal storage** (game or desktop mode): pick how much internal
+storage Android keeps, press and hold **Install**, and let it run. Or from a terminal:
 
 ```bash
 # 1. dry-run - prints the exact partition plan, makes NO changes. Review it.
@@ -100,8 +100,8 @@ and grows Android's partition back to its full size in one step - no SD card, no
 ### From a running pocknix SD
 
 You **can't repartition the disk you're booted from**, so this has to run from the SD. Set **Switch
-boot source** to **SD Card** in the boot menu, boot it, then use **Pocknix Tools → Install or
-remove internal Pocknix… → Remove, restore Android**, or a terminal:
+boot source** to **SD Card** in the boot menu, boot it, then use **Pocknix Tools → Advanced →
+Internal storage → Remove**, or a terminal:
 
 ```bash
 pocknix-uninstall-internal --dry-run     # review the plan
@@ -122,8 +122,8 @@ boot menu -> Switch boot source: SD Card, and boot the SD carrying your new buil
   -> boot menu -> Switch boot source: Internal
 ```
 
-**Pocknix Tools → *Install or remove internal Pocknix…* → Reinstall Pocknix** does the two middle
-steps in one go.
+**Pocknix Tools → Advanced → Internal storage** does the two middle steps: **Remove**, then
+**Install**.
 
 ---
 

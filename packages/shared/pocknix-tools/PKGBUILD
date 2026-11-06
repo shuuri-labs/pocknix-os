@@ -1,28 +1,33 @@
-# pocknix-tools — the desktop maintenance app. It also ships the internal-install CLIs,
+# pocknix-tools - the Pocknix Tools app (QML on pocknix-ui). It also ships the internal-install CLIs,
 # which live here rather than in the image overlay so fixes reach fielded SDs on -Syu (#34).
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=22
-pkgdesc="Pocknix maintenance app: snapshot rollback, base mode switch, internal install, SSH + file sharing toggles, emulation layer, desktop picker"
+pkgrel=23
+pkgdesc="Pocknix Tools: updates, snapshot rollback, SSH + file sharing, ROMs folder, desktop picker, internal install"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('pocknix-snapshots' 'pocknix-base' 'kdialog')
+depends=('pocknix-ui' 'pocknix-snapshots>=0.1.0-9' 'pocknix-base>=0.2.0-10' 'samba' 'qrencode')
 install=pocknix-tools.install
-source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-installer-gui'
+source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-tools-run' '58-pocknix-tools-run.rules' 'pocknix-wg-import'
         'pocknix-install-internal' 'pocknix-uninstall-internal' '54-pocknix-installer.rules'
         'pocknix-internal-boot-rename' 'pocknix-internal-boot-rename.service'
         'pocknix-ssh' '53-pocknix-ssh.rules' '10-pocknix-no-root-login.conf'
         'pocknix-share' '55-pocknix-share.rules' 'smb.conf' 'pocknix-smb.service'
         'pocknix-layer' '56-pocknix-layer.rules')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 backup=('etc/ssh/sshd_config.d/10-pocknix-no-root-login.conf'
         'etc/samba/smb.conf')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-tools" "${pkgdir}/usr/bin/pocknix-tools"
-  install -Dm755 "${srcdir}/pocknix-installer-gui" "${pkgdir}/usr/bin/pocknix-installer-gui"
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix-tools/qml" "${startdir}"/qml/*.qml
+  install -Dm644 -t "${pkgdir}/usr/share/pocknix/tiles" "${startdir}"/tiles/*.conf
+  install -Dm755 "${srcdir}/pocknix-tools-run" "${pkgdir}/usr/bin/pocknix-tools-run"
+  install -Dm755 "${srcdir}/pocknix-wg-import" "${pkgdir}/usr/lib/pocknix-tools/pocknix-wg-import"
+  install -Dm644 "${srcdir}/58-pocknix-tools-run.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/58-pocknix-tools-run.rules"
   install -Dm755 "${srcdir}/pocknix-install-internal" "${pkgdir}/usr/bin/pocknix-install-internal"
   install -Dm755 "${srcdir}/pocknix-uninstall-internal" "${pkgdir}/usr/bin/pocknix-uninstall-internal"
   # ROCKNIX->POCKNIX boot-partition migration, statically enabled via wants symlink

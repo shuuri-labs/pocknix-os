@@ -14,7 +14,7 @@ INT_FLASH="${RUN}/rollback-flash"
 
 die() { echo "pocknix-rollback: $*" >&2; exit 1; }
 
-target="" assume_yes="" internal="" action=rollback
+target="" assume_yes="" internal="" action=rollback json=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --to)       target="${2:?--to needs a snapshot id}"; shift 2 ;;
@@ -22,14 +22,15 @@ while [ $# -gt 0 ]; do
     --internal) internal=1; shift ;;
     --list)     action=list; shift ;;
     --status)   action=status; shift ;;
-    *) die "unknown argument '$1' (usage: pocknix-rollback [--internal] [--to <id>] [--yes] [--list] [--status])" ;;
+    --json)     json=1; shift ;;
+    *) die "unknown argument '$1' (usage: pocknix-rollback [--internal] [--to <id>] [--yes] [--list [--json]] [--status])" ;;
   esac
 done
 
 # --list/--status need no root, so the running system delegates them.
 if [ -z "${internal}" ]; then
   case "${action}" in
-    list)   exec pocknix-snapshots list ;;
+    list)   exec pocknix-snapshots list ${json:+--json} ;;
     status) exec pocknix-snapshots status ;;
   esac
 fi
@@ -93,7 +94,7 @@ list_snaps() {
 }
 
 case "${action}" in
-  list)   list_snaps; exit 0 ;;
+  list)   if [ -n "${json}" ]; then snap_list_json "${SNAPS}"; else list_snaps; fi; exit 0 ;;
   status) echo "internal default: $(btrfs subvolume get-default "${TOP}" | sed -n 's/.* path //p')"; list_snaps; exit 0 ;;
 esac
 

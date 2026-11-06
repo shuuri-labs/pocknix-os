@@ -3,9 +3,10 @@
 Operation = Remove
 Type = Path
 Target = usr/share/pocknix-emulation/steam/*.conf
+Target = usr/share/pocknix/tiles/*.conf
 
 [Action]
-Description = pocknix: removing Steam tiles of removed emulators...
+Description = pocknix: removing Steam tiles of removed apps...
 When = PreTransaction
 Exec = /usr/lib/pocknix/pocknix-tiles-users
 NeedsTargets

@@ -59,6 +59,9 @@ if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhe
   pkill -u "${uid}" -KILL -f steamwebhelper 2>/dev/null || true
 fi
 
+# Before Steam starts, so the write goes to shortcuts.vdf; at most a few seconds, never fatal.
+timeout 15 pocknix-tiles auto || true
+
 # Do NOT seed a global default compat tool here: a CompatToolMapping "0" entry makes Steam refuse
 # to install Valve compat tools with "Invalid platform" (steam-for-linux issue 6874).
 

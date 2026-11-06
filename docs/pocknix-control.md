@@ -41,7 +41,8 @@ Per game, either can stay on the global value.
 **Game Tweaks**
 
 - **Proton Version** (per game only): the compatibility tool Steam launches the game with,
-  the same setting as the game's **Properties → Compatibility**.
+  the same setting as the game's **Properties → Compatibility**. Proton-GE and Proton-CachyOS
+  show up in this list once you install them from the **Pocknix Store** (Compatibility).
 - **FEX Preset**: **Default**, **Fast**, or **Compatible**. Trades x86 translation accuracy
   for speed. Try **Fast** for more FPS; switch to **Compatible** if a game misbehaves
   (crashes, glitched physics, odd audio).
@@ -88,10 +89,10 @@ Steam's own **Add a Non-Steam Game** dialog does not work on pocknix-os, so add 
 ### File sharing
 
 **Share my home folder** turns the device into a network share, so you can drag ROMs, BIOS files
-and emulator firmware onto it from another computer. The first time, it offers a small download.
-The same toggle is in **Pocknix Tools** on the desktop side.
+and emulator firmware onto it from another computer. Turn it on the first time in **Pocknix
+Tools** → **Network**, which asks for deck's password: you sign in to the share as deck with it.
 
-> **There is no password.** Anyone on the same network can read and write your home folder, so
+> Anyone on the same network who knows deck's password can read and write your home folder, so
 > turn it off when you are done. See
 > [copying files over the network](emulation-setup.md#copying-files-over-the-network) for how to
 > connect.
@@ -118,8 +119,8 @@ System updates, without leaving game mode:
 3. Restart when it finishes to apply everything (**Restart Now** appears right there).
 
 The update keeps running even if you close the Quick Access menu - reopen the tab to check
-on progress. If you prefer, the same update is just `sudo pacman -Syu` in a terminal, or the
-**Pocknix Updater** shortcut in desktop mode.
+on progress. If you prefer, the same update is just `sudo pacman -Syu` in a terminal, or
+**Pocknix Tools** → **System** → **Update now**.
 
 ### Rolling back an update
 

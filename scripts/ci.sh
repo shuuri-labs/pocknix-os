@@ -15,6 +15,7 @@
 #
 # The scratch pkgrel sorts between BASE's release and the next one (29 < 29.412 < 30), so a
 # tester's install upgrades over the live package and the real release upgrades over it.
+# A PR package's dep on a sibling's new pkgrel is rewritten to that sibling's scratch pkgrel.
 #
 # A doc-only change (*.md, README*) never triggers anything.
 set -euo pipefail
@@ -41,6 +42,8 @@ version_lines() {
   grep -E "^(pkgver|epoch${vars:+|${vars}})=" <<<"${pb}" || true
 }
 pkgrel_of() { sed -n 's/^pkgrel=["'\'']\{0,1\}\([0-9][0-9.]*\).*/\1/p' | head -1; }
+pkgver_of() { sed -n 's/^pkgver=["'\'']\{0,1\}\([^"'\'' ]*\).*/\1/p' | head -1; }
+ere_quote() { sed 's/[][\.*^$+?(){}|/]/\\&/g' <<<"$1"; }
 kconf_get() { sed -n "s/^: \"\${$1:=\([^}]*\)}\".*/\1/p" | head -1; }
 # artifact file -> "name rel"
 artifact_fields() { local n="${1##*/}"; n="${n%-*}"; local rel="${n##*-}"; n="${n%-*}"; echo "${n%-*} ${rel}"; }
@@ -163,7 +166,7 @@ cmd_seed() {
 }
 
 cmd_scratch() {
-  local base="$1" run="$2" p d old new rel
+  local base="$1" run="$2" p d old new rel deps=()
   shift 2
   for p in "$@"; do
     d="$(pkg_dir "${p}")"
@@ -174,9 +177,11 @@ cmd_scratch() {
     else
       rel="0.${run}"
     fi
+    deps+=(-e "s/(['\"]$(ere_quote "${p}")(>=|=)$(ere_quote "$(pkgver_of <<<"${new}")"))-$(ere_quote "$(pkgrel_of <<<"${new}")")(['\"])/\1-${rel}\3/")
     sed "s/^pkgrel=.*/pkgrel=${rel}/" <<<"${new}" > "${d}/PKGBUILD"
     echo "${p}: pkgrel ${rel}"
   done
+  for p in "$@"; do sed -E -i "${deps[@]}" "$(pkg_dir "${p}")/PKGBUILD"; done
 }
 
 cmd_kernel_pkgrel() {

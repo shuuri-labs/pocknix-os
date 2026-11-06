@@ -1,0 +1,94 @@
+import QtQuick
+import QtQuick.Controls as QQC2
+import QtQuick.Layouts
+import Pocknix.Ui
+
+TabPage {
+    id: page
+    property var app
+    title: qsTr("Desktop")
+    icon: "monitor-symbolic"
+
+    // pocknix-desktop-select list: name TAB label TAB active|""
+    property var desktops: []
+    property bool loaded: false
+    property string loadError: ""
+
+    function refresh() {
+        listJob.start(["/usr/bin/pocknix-desktop-select", "list"])
+    }
+    // In game mode there is no desktop session to log out of: the pick applies next time.
+    function pick(d) {
+        if (Host.gamescope) {
+            app.run(qsTr("Choosing %1").arg(d.label), ["/usr/bin/pocknix-desktop-select", d.name], {}, code => {
+                refresh()
+                if (code === 0)
+                    app.toast(qsTr("%1 chosen").arg(d.label), qsTr("Desktop mode starts it from now on."))
+            })
+            return
+        }
+        app.ask({
+            title: qsTr("Switch to %1 now?").arg(d.label),
+            text: qsTr("This logs you out of the current desktop and closes open apps, so save your work first. Desktop mode starts %1 from now on.").arg(d.label),
+            confirmText: qsTr("Switch now"),
+            yes: () => app.run(qsTr("Switching to %1").arg(d.label),
+                               ["/usr/bin/pocknix-desktop-select", d.name, "--now"], {}, () => refresh())
+        })
+    }
+
+    Component.onCompleted: refresh()
+
+    Job {
+        id: listJob
+        onFinished: code => {
+            page.loaded = true
+            page.loadError = code === 0 ? "" : error
+            page.desktops = code !== 0 ? [] : output.split("\n").filter(l => l).map(l => {
+                const f = l.split("\t")
+                return { name: f[0], label: f[1] || f[0], active: f[2] === "active" }
+            })
+        }
+    }
+
+    LoadState {
+        loading: !page.loaded
+        error: page.loadError
+        onRetry: {
+            page.loaded = false
+            page.loadError = ""
+            page.refresh()
+        }
+    }
+    QQC2.Label {
+        Layout.fillWidth: true
+        visible: page.loaded && page.loadError === ""
+        text: page.loaded && page.desktops.length === 0 ? qsTr("Desktop mode is not installed.")
+                                                        : qsTr("The desktop that desktop mode starts.")
+        color: Theme.textMuted
+        wrapMode: Text.WordWrap
+    }
+    Repeater {
+        model: page.desktops
+        ActionRow {
+            required property var modelData
+            title: modelData.label
+            StatusBadge {
+                visible: modelData.active
+                text: qsTr("In use")
+                tone: "positive"
+            }
+            Button {
+                visible: !modelData.active
+                text: qsTr("Use")
+                enabled: !page.app.logJobRunning
+                onClicked: page.pick(modelData)
+            }
+        }
+    }
+    QQC2.Label {
+        Layout.fillWidth: true
+        text: qsTr("Get Plasma Desktop from the Pocknix Store, under Desktop mode. This page can also start other desktops, like GNOME or Hyprland: install one in rolling mode (Advanced) and it will appear here.")
+        color: Theme.textMuted
+        wrapMode: Text.WordWrap
+    }
+}

@@ -1,0 +1,16 @@
+# A device meta upgrade can drop a package to optdepends (Proton): adopt keeps it the user's.
+[Trigger]
+Operation = Install
+Type = Package
+Target = pocknix-store
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = pocknix-device-*
+
+[Action]
+Description = pocknix: keeping store packages installed...
+When = PostTransaction
+Exec = /usr/bin/pocknix-store adopt --later

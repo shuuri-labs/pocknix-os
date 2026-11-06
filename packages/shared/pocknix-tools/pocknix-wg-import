@@ -1,0 +1,17 @@
+#!/bin/sh
+# pocknix-wg-import <file.conf> - adds a WireGuard tunnel to NetworkManager, switched off and not
+# connecting on its own: a forgotten tunnel would quietly take over the network. NetworkManager
+# names the interface after the file, so the copy it reads gets a valid name (15 chars, [A-Za-z0-9_-]).
+set -eu
+[ $# -eq 1 ] && [ -r "$1" ] || { echo "usage: pocknix-wg-import <file.conf>" >&2; exit 2; }
+name="$(basename "$1" .conf | tr -cd 'A-Za-z0-9_-' | cut -c1-15)"
+[ -n "${name}" ] || name=wg0
+dir="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/pocknix-wg.XXXXXX")"
+trap 'rm -rf "${dir}"' EXIT
+cp "$1" "${dir}/${name}.conf"
+out="$(nmcli connection import type wireguard file "${dir}/${name}.conf")"
+echo "${out}"
+uuid="$(printf '%s\n' "${out}" | sed -n 's/.*(\([0-9a-f-]\{36\}\)).*/\1/p' | head -n1)"
+[ -n "${uuid}" ] || { echo "pocknix-wg-import: no connection id in nmcli's answer" >&2; exit 1; }
+nmcli connection modify "${uuid}" connection.autoconnect no
+nmcli connection down "${uuid}" >/dev/null 2>&1 || true
