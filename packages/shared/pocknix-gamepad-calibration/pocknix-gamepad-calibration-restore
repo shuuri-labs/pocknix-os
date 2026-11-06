@@ -53,6 +53,15 @@ while IFS='=' read -r key value; do
   fi
 done < "${CONF}"
 
-# The driver only picks up the new values when told to re-read them.
-[ "${applied}" = "1" ] && printf '1' > "${params}/update_params"
+# The driver clears this flag in its input handler, so a read-back of 0 proves the advertised
+# ranges are live; without it the unit returns while InputPlumber is still caching the old ones.
+if [ "${applied}" = "1" ]; then
+  printf '1' > "${params}/update_params"
+  for _ in $(seq 1 50); do
+    [ "$(cat "${params}/update_params" 2>/dev/null)" = 0 ] && break
+    sleep 0.02
+  done
+  [ "$(cat "${params}/update_params" 2>/dev/null)" = 0 ] ||
+    echo "driver did not re-read its parameters; ranges may be stale this boot" >&2
+fi
 exit 0

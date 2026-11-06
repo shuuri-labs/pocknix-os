@@ -121,6 +121,12 @@ def _write_params(params, values):
     (params / "update_params").write_text("1")
 
 
+def _rebuild_pad():
+    # A consumer that already opened the pad keeps the ranges it read then, so InputPlumber has to
+    # rebuild its virtual pad before Steam sees a fresh calibration.
+    _host(["systemctl", "restart", "inputplumber"])
+
+
 def _parse_kv(text):
     values = {}
     for line in text.splitlines():
@@ -429,10 +435,13 @@ def cancel():
         thread.join(timeout=5)
     _name, _info, params = _driver()
     with _session.lock:
-        if _session.phase == "review" and params and _session.backup:
+        restored = bool(_session.phase == "review" and params and _session.backup)
+        if restored:
             _write_params(params, _session.backup)
         _session.phase = "idle"
         _session.result = {}
+    if restored:
+        _rebuild_pad()
     return status()
 
 
@@ -448,6 +457,7 @@ def save():
         _session.phase = "idle"
         _session.result = {}
         _session.backup = {}
+    _rebuild_pad()
     return status()
 
 
@@ -469,6 +479,7 @@ def reset():
     with _session.lock:
         _session.phase = "idle"
         _session.result = {}
+    _rebuild_pad()
     return status()
 
 
@@ -491,3 +502,4 @@ def recover():
     values = {k: v for k, v in values.items() if k in _all_keys() and (params / k).exists()}
     if values:
         _write_params(params, values)
+        _rebuild_pad()
