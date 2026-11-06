@@ -74,7 +74,8 @@ The local delta `kernel/sm8550/sync-keep` restores after each make sync.
   PR #694, values from the stock Android board-id 0x1001f overlay). Nova and top-dpad include
   rp6.dts and inherit it.
 - Deleted: 20-version/0011 adc-tm5 (already in 7.2.x stable), 20-version/9999 (perf rust
-  target, perf not built).
+  target, perf not built), 30-sm8550/0502 IPCC IRQF_NO_SUSPEND removal (kernel/common 1095
+  keeps the doorbell live in s2idle instead).
 
 ## Not taken
 

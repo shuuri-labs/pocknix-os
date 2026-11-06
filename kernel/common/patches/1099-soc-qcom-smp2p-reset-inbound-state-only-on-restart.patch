@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Armada <noreply@armada.local>
+Date: Fri, 6 Nov 2026 19:29:18 +0000
+Subject: [PATCH] soc: qcom: smp2p: reset inbound state only on restart
+
+Commit 42c4cf5d4828 ("soc: qcom: smp2p: Add support for smp2p v2")
+clears the last handled value of every inbound entry so that the values
+a v2 remote writes after a restart are seen as changes. The commit
+message scopes this to a detected restart, but the loop runs on every
+interrupt whenever the SSR ack feature was negotiated.
+
+Every notification from the remote then reports each set bit as a fresh
+rising edge. On SM8550 the ADSP notifies several times a second while
+its sensors stream, so the q6v5 ready and handover interrupts fire at
+that rate and log "Handover signaled, but it already happened" each
+time.
+
+Only clear the inbound state when a restart is detected.
+
+Fixes: 42c4cf5d4828 ("soc: qcom: smp2p: Add support for smp2p v2")
+---
+ drivers/soc/qcom/smp2p.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/soc/qcom/smp2p.c b/drivers/soc/qcom/smp2p.c
+index af0ceeaf6..0d588688a 100644
+--- a/drivers/soc/qcom/smp2p.c
++++ b/drivers/soc/qcom/smp2p.c
+@@ -194,6 +194,9 @@ static bool qcom_smp2p_check_ssr(struct qcom_smp2p *smp2p)
+ 
+ 	restart_done = in->flags & BIT(SMP2P_FLAGS_RESTART_DONE_BIT);
+ 	restart = restart_done != smp2p->ssr_ack;
++	if (!restart)
++		return false;
++
+ 	list_for_each_entry(entry, &smp2p->inbound, node) {
+ 		if (!entry->value)
+ 			continue;

@@ -9,7 +9,7 @@ Each SoC's kernel, after the SoC's own stack
 Applied in number order on the stock kernel that `kernel/<soc>/kernel.conf` pins. A SoC leaves
 a patch out by naming it in its optional `common-skip` file.
 
-Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
+Last rebased: 2026-11-06 (s2idle stack 3).
 
 ## Carried
 
@@ -52,6 +52,18 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
 - **1080** Waking with the power button no longer puts the device straight back to sleep:
   pm8941-pwrkey drops the wake press and its release (the first event within 1 s of resume),
   as ACPI buttons do. Source: ours.
+- **1095** A charger plugged in while the device sleeps starts charging: the IPCC doorbell stays
+  live in s2idle and is masked (unlazy) only for suspend to RAM. Applies: the s2ram mask is gated
+  to the `qcom,sm8550-ipcc` and `qcom,sm8750-ipcc` compatibles. Needs: the SoC dir without
+  ROCKNIX's blanket IRQF_NO_SUSPEND removal (sm8550 deletes its 0502 in sync-keep). Trap: that
+  removal is what stopped battmgr doorbells waking deep sleep; if s2idle self-wakes come back,
+  suspect this first. Source: armada 0504, reworked from ROCKNIX f955f5b.
+- **1096** Unplugging the charger while asleep no longer hard-hangs the SoC: ucsi clears the USB
+  role for a partner without USB data, so the USB power island can drop. Applies: pmic_glink UCSI
+  boards (sm8550); sm8250 runs qcom-pmic-typec. Source: Anze, via ROCKNIX SM8750 0509 and
+  armada 0519.
+- **1099** smp2p resets its inbound state only after a remote restart, so the ADSP ready and
+  handover bits are no longer replayed on every notification. Source: armada 0569.
 
 ### PCIe and wifi
 
@@ -131,6 +143,12 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
   boards; sm8250 builds battmgr but runs qcom_fg. Source: Jan-Michael Brummer's LKML v1 series
   "report charge levels on SM8350-class firmware", 2026-08-29, verbatim. Drop: at a kernel base
   that carries them; swap for a v2 if one is posted.
+
+### Fan
+
+- **1100** The fan can keep running while the device charges asleep: pwm-fan's opt-in
+  `pwm1_sleep_charging` (0-255, 0 = off) holds that speed in s2idle on external power and follows
+  plug and unplug. Applies: s2idle only; pocknix-fancontrol writes it. Source: armada 0532.
 
 ### FEX (x86 emulation)
 
