@@ -95,12 +95,12 @@ systemctl restart <unit>; journalctl -b -u <unit>
 
 **No build host? Use the PR's CI build.** Every PR that changes a package gets an unsigned
 build of each one as a workflow artifact named `pr-<N>-<repo>` (`shared` or a SoC family), kept
-for 14 days; the run's summary prints the exact commands. Its pkgrel sits below the next
-release, so the release upgrades over it. Kernel packages build only once I add the
+for 14 days; a comment on the PR links each download once the run finishes. Its pkgrel sits
+below the next release, so the release upgrades over it. Kernel packages build only once I add the
 `build-kernel` label. Install builds only of PRs you trust.
 
 ```bash
-gh run download <run-id> -R shuuri-labs/pocknix-os -n pr-<N>-<repo> -D pr-build
+gh run download <run-id> -R shuuri-labs/pocknix-os -n pr-<N>-<repo> -D pr-build   # or unzip the linked download
 scp pr-build/*.pkg.tar.* root@<device-ip>:/tmp/
 ssh root@<device-ip> 'pacman -U /tmp/*.pkg.tar.*'
 ```

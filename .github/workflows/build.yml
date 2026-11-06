@@ -131,7 +131,8 @@ jobs:
         run: |
           read -ra pkgs <<<"${PKGS}"
           bash scripts/ci.sh collect ${{ matrix.soc }} "${{ github.run_number }}" ci-out "${pkgs[@]}"
-      - uses: actions/upload-artifact@v4
+      - id: upload
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT }}
           path: ci-out/
@@ -139,9 +140,11 @@ jobs:
           retention-days: 14
           compression-level: 0
       - name: How to install
+        env:
+          URL: ${{ steps.upload.outputs.artifact-url }}
         run: |
           {
-            echo "### ${ARTIFACT}"
+            echo "### [${ARTIFACT}](${URL})"
             echo "Unsigned test build of this PR (pkgrel below the next release). On the build host:"
             echo '```bash'
             echo "gh run download ${GITHUB_RUN_ID} -R ${GITHUB_REPOSITORY} -n ${ARTIFACT} -D ${ARTIFACT}"

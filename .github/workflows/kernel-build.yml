@@ -68,10 +68,15 @@ jobs:
           sudo env KERNEL_PKGREL="${rel}" make packages DEVICE=${{ matrix.soc }} PKG="${KPKG}"
       - name: Collect
         run: bash scripts/ci.sh collect ${{ matrix.soc }} "${{ github.run_number }}" ci-out "${KPKG}"
-      - uses: actions/upload-artifact@v4
+      - id: upload
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT }}
           path: ci-out/
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+      - name: Download link
+        env:
+          URL: ${{ steps.upload.outputs.artifact-url }}
+        run: echo "### [${ARTIFACT}](${URL})" >> "${GITHUB_STEP_SUMMARY}"

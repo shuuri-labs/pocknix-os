@@ -27,7 +27,7 @@ one short and plain. How to test is required; without it the PR stalls.
      "Docs only, no build needed" is fine for docs PRs. -->
 
 ```bash
-# install this PR's CI build (the pr-build run's summary has the exact command)
+# install this PR's CI build (the bot comment on the PR links the download)
 gh run download <run-id> -R shuuri-labs/pocknix-os -n pr-<N>-<repo> -D pr-build
 scp pr-build/<pkg>-*.pkg.tar.* root@<device>:/tmp/
 ssh root@<device> 'pacman -U /tmp/<pkg>-*.pkg.tar.*'

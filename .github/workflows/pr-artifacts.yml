@@ -1,0 +1,66 @@
+# Posts a PR's test-build download links as one comment per workflow, edited on every new run.
+# workflow_run runs main's copy with write access even for fork PRs, so it reads only run and
+# artifact metadata from the API and never checks out or executes anything the PR produced.
+name: pr-artifacts
+on:
+  workflow_run:
+    workflows: [build, kernel-build]
+    types: [completed]
+
+permissions:
+  actions: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+            // workflow_run.pull_requests is empty for fork PRs: find the PR by its head instead
+            const { data: prs } = await github.rest.pulls.list({
+              owner, repo, state: 'open', head: `${run.head_repository.owner.login}:${run.head_branch}`,
+            });
+            const pr = prs.find((p) => p.head.sha === run.head_sha);
+            if (!pr) return core.info(`no open PR has head ${run.head_sha}: closed, or a newer push superseded it`);
+
+            const prefix = `pr-${pr.number}-`;
+            const arts = (await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner, repo, run_id: run.id,
+            })).filter((a) => a.name.startsWith(prefix) && /^[a-z0-9-]+$/.test(a.name) && !a.expired);
+
+            const marker = `<!-- pr-artifacts:${run.name} -->`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: pr.number,
+            });
+            const mine = comments.find((c) => c.user.type === 'Bot' && c.body.startsWith(marker));
+            if (!arts.length && !mine) return core.info('nothing built and nothing to update');
+
+            const size = (b) => (b < 1048576 ? `${Math.ceil(b / 1024)} KB`
+              : `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`);
+            const runUrl = run.html_url;
+            const sha = run.head_sha.slice(0, 7);
+            let body = `${marker}\n`;
+            if (arts.length) {
+              body += `**Test builds** for ${sha} (unsigned, pkgrel ends in \`.${run.run_number}\`, `
+                + `kept 14 days, download needs a GitHub login):\n\n`;
+              for (const a of arts) {
+                body += `- [${a.name}](https://github.com/${owner}/${repo}/actions/runs/${run.id}/artifacts/${a.id}) (${size(a.size_in_bytes)})\n`;
+              }
+              if (run.conclusion !== 'success') body += `\nSome jobs failed, see [the run](${runUrl}).\n`;
+              body += '\nUnzip the download, then:\n\n```bash\n'
+                + 'scp *.pkg.tar.* root@<device-ip>:/tmp/\n'
+                + "ssh root@<device-ip> 'pacman -U /tmp/*.pkg.tar.*'\n```\n";
+            } else {
+              body += `The latest run for ${sha} built nothing to download (${run.conclusion}), see [the run](${runUrl}).\n`;
+            }
+
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body });
+            }
