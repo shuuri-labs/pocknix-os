@@ -51,6 +51,15 @@ Last rebased: 2026-10-27 (battery time remaining).
   and controller index (both 0) before it starts port 0x6020, as Android's q6afe does. Without
   them the DSP copied front left to both channels. Source: ours, from Android's q6afe; goes
   upstream (ASoC).
+- **1092** USB-C DisplayPort docks work in both plug orientations: `qmp_v4_dp_aux_init()` writes
+  `QSERDES_DP_PHY_MODE` (`0x4c` reversed / `0x5c` normal) before the first AUX DPCD read instead
+  of waiting for `phy_configure()` at link training. Source: ours; goes upstream.
+- **1093** USB-C PD and DisplayPort survive across docked suspend: `qcom_pmic_typec` delivers any
+  PD message received while SPMI interrupts were masked in `s2idle` and re-reads CC/VBUS on
+  resume instead of leaving the PD PHY receive buffer wedged (`-EBUSY`). Source: ours.
+- **1094** A docked DisplayPort monitor wakes from suspend and DPMS off without AUX timeouts:
+  `msm_dp` puts the sink in `D3` on a DRM-initiated disable, wakes it to `D0` before re-training,
+  and routes USB-C DisplayPort Attention VDMs (`IRQ_HPD`) to `EV_IRQ_HPD_INT`. Source: ours.
 
 ## Edits to synced files
 
