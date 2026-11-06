@@ -1,0 +1,9 @@
+// The session launchers (running as deck) start and stop this one system unit.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "pocknix-second-screen.service") {
+        var verb = action.lookup("verb");
+        if (verb == "start" || verb == "stop") { return polkit.Result.YES; }
+    }
+});

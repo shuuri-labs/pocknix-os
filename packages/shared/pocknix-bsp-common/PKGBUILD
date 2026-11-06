@@ -3,7 +3,7 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=29
+pkgrel=30
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump storage cap, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -29,7 +29,7 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'pocknix-update-abl' '52-pocknix-abl.rules' 'pocknix-gpt-abl'
         'pocknix-refresh-abl-kit'
         'pocknix-gamepad-target' 'pocknix-gamepad-target.service'
-        'pocknix-second-screen' 'pocknix-second-screen.service'
+        'pocknix-second-screen' 'pocknix-second-screen.service' '50-pocknix-second-screen.rules'
         'iwd-wait-wlan0.conf'
         'pocknix-perfd' 'pocknix_perf.py' 'pocknix-perf' 'pocknix-perfd.service'
         'org.pocknix.Perf.service' 'org.pocknix.Perf.conf' 'power-profiles.conf'
@@ -44,7 +44,7 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -110,6 +110,8 @@ package() {
   install -Dm755 "${srcdir}/pocknix-second-screen" "${pkgdir}/usr/bin/pocknix-second-screen"
   install -Dm644 "${srcdir}/pocknix-second-screen.service" \
     "${pkgdir}/usr/lib/systemd/system/pocknix-second-screen.service"
+  install -Dm644 "${srcdir}/50-pocknix-second-screen.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/50-pocknix-second-screen.rules"
 
   install -Dm644 "${srcdir}/iwd-wait-wlan0.conf" \
     "${pkgdir}/usr/lib/systemd/system/iwd.service.d/10-pocknix-wait-wlan0.conf"

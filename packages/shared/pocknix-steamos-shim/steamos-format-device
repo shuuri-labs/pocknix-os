@@ -1,5 +1,4 @@
 #!/bin/bash
 # pocknix steamos-format-device shim — Steam's Storage UI runs this as the non-root 'deck' user, so
-# it pkexecs the real formatter. 50-pocknix-deck.rules must authorize exactly this program without a
-# password prompt, because the gamescope session cannot show a polkit dialog.
+# it pkexecs the real formatter, which 50-pocknix-steamos.rules authorizes without a prompt.
 exec pkexec /usr/lib/hwsupport/format-device.sh "$@"

@@ -1,6 +1,5 @@
-// Passwordless pkexec of pocknix-rollback for wheel, same trust model as the overlay's
-// 50-pocknix-deck.rules. Covers the desktop/ssh path only: the QAM backend is root
-// already and uses systemd-run.
+// Passwordless pkexec of pocknix-rollback for wheel. Covers the desktop/ssh path only: the QAM
+// backend is root already and uses systemd-run.
 polkit.addRule(function(action, subject) {
     if (!subject.isInGroup("wheel")) { return; }
     if (action.id == "org.freedesktop.policykit.exec" &&

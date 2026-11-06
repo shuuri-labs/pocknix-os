@@ -1,17 +1,23 @@
-# Older images shipped the fan/scheduler daemons as unowned overlay files. /etc units shadow
-# the packaged /usr/lib ones and the old enable symlinks point at /etc, so both must go.
+_enable_fan_lavd() {
+  systemctl enable pocknix-fancontrol.service pocknix-lavd.service 2>/dev/null || true
+}
+
+# Old images' overlay copies (/etc units shadow /usr/lib, enable links point at /etc) must go.
+# Only that migration re-enables: a plain upgrade must keep a unit the user disabled off.
 _migrate_fan_lavd() {
-  rm -f /usr/local/bin/pocknix-fancontrol /usr/local/bin/pocknix-fan-mode \
-        /usr/local/bin/pocknix-lavd-mode \
-        /etc/systemd/system/pocknix-fancontrol.service \
-        /etc/systemd/system/pocknix-lavd.service \
-        /etc/tmpfiles.d/pocknix-game-mode.conf
-  if [ -d /run/systemd/system ]; then
-    systemctl daemon-reload
-    systemd-tmpfiles --create /usr/lib/tmpfiles.d/pocknix-game-mode.conf 2>/dev/null || true
-    systemctl enable pocknix-fancontrol.service pocknix-lavd.service 2>/dev/null || true
-    systemctl try-restart pocknix-fancontrol.service pocknix-lavd.service 2>/dev/null || true
-  fi
+  legacy=
+  for f in /usr/local/bin/pocknix-fancontrol /usr/local/bin/pocknix-fan-mode \
+           /usr/local/bin/pocknix-lavd-mode \
+           /etc/systemd/system/pocknix-fancontrol.service \
+           /etc/systemd/system/pocknix-lavd.service \
+           /etc/tmpfiles.d/pocknix-game-mode.conf; do
+    [ -e "${f}" ] && { legacy=1; rm -f "${f}"; }
+  done
+  [ -d /run/systemd/system ] || return 0
+  systemctl daemon-reload
+  systemd-tmpfiles --create /usr/lib/tmpfiles.d/pocknix-game-mode.conf 2>/dev/null || true
+  [ -n "${legacy}" ] && _enable_fan_lavd
+  systemctl try-restart pocknix-fancontrol.service pocknix-lavd.service 2>/dev/null || true
 }
 
 # pocknix-powerd is retired (logind owns the power key). Stop nothing: until the reboot into the
@@ -43,6 +49,22 @@ _retire_gaming_limits() {
   esac
 }
 
+# The image overlay's 50-pocknix-deck.rules granted wheel every systemd1 action; its parts now
+# ship packaged and narrowed. Only the seven shipped versions go: a user-edited copy stays.
+_retire_deck_polkit() {
+  f=/etc/polkit-1/rules.d/50-pocknix-deck.rules
+  [ -f "${f}" ] || return 0
+  case "$(sha256sum "${f}" | cut -d' ' -f1)" in
+    04c269f5a6692aca3e73e7c59dac83c77a6ebd1e7bbe04f3551494951ca39b20|\
+    0e907c81015d66b9362331f859f49f026d389a1449506763c794192c09fe667d|\
+    327be8461c398755465e063b60e67395a88516280454fd43db1361f1f94c8edf|\
+    70fedc281d17cf28605a9e8c6c9addbd90429435acce252aaaf6c2deb2e880d3|\
+    743d088ad5659580a998b38bf5d54bed5a586c016ac98372cbbe4accce147b1a|\
+    7f1d6e20758e93150e196be6e141ae03b7799f7b9052249b1d731a328b11b5af|\
+    c11c5c5f00825ad2a94e2a611a6decb431c2f00264e5e8360a5c738aa185bef7) rm -f "${f}" ;;
+  esac
+}
+
 # Enabled by its wants symlink; restart picks up a new daemon or profile file without a reboot.
 _perfd() {
   [ -d /run/systemd/system ] || return 0
@@ -59,9 +81,11 @@ _rt_ladder() {
 
 post_install() {
   _migrate_fan_lavd
+  [ -d /run/systemd/system ] && _enable_fan_lavd
   _retire_powerd
   _retire_gamescope_rt
   _retire_gaming_limits
+  _retire_deck_polkit
   _perfd
   _rt_ladder
 }
@@ -71,6 +95,7 @@ post_upgrade() {
   _retire_powerd
   _retire_gamescope_rt
   _retire_gaming_limits
+  _retire_deck_polkit
   _perfd
   _rt_ladder
 }

@@ -1,4 +1,4 @@
-// Passwordless pkexec of these two CLIs for wheel, same trust as 50-pocknix-deck.rules.
+// Passwordless pkexec of these two CLIs for wheel.
 // Shipped by the package so the authorization travels with the binaries it authorizes.
 polkit.addRule(function(action, subject) {
     if (!subject.isInGroup("wheel")) { return; }
