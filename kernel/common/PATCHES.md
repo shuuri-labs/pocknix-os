@@ -122,6 +122,9 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
   armada 0621.
 - **1078** The HFI interrupt is masked before the GMU boots, so a late delivery after resume
   cannot race the GMU's first requests. Source: armada 0622.
+- **1113** System poweroff no longer reboots when the GPU PDC is asleep (`d9108bfdb746` is now in
+  7.2.10): `adreno_shutdown()` wakes the GPU and `a6xx_rpmh_stop()` leaves the GPU RSC awake for
+  `SYSTEM_POWER_OFF` and `SYSTEM_HALT`. Source: ours (after armada / Michael Burch).
 
 ### Battery
 

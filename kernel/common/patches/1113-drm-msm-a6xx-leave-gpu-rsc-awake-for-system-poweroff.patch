@@ -1,0 +1,51 @@
+From: transentient <cliff.judge@gmail.com>
+Date: Fri, 6 Nov 2026 11:50:00 +0900
+Subject: [PATCH] drm/msm/a6xx: leave GPU RSC awake for system poweroff
+
+Some Qualcomm platforms reboot instead of powering off if the GPU PDC is
+asleep when PS_HOLD is dropped during SYSTEM_POWER_OFF or SYSTEM_HALT.
+
+Now that linux-7.2.10 carries d9108bfdb746 ("drm/msm/a6xx: Fix stale rpmh
+votes after suspend") and properly puts the GPU RSC/PDC to sleep on every
+GMU suspend, resume the GPU device in adreno_shutdown() and skip the GPU
+RSC sleep sequence in a6xx_rpmh_stop() when system_state is
+SYSTEM_POWER_OFF or SYSTEM_HALT so the GPU PDC remains awake across
+system poweroff.
+
+Signed-off-by: transentient <cliff.judge@gmail.com>
+---
+ drivers/gpu/drm/msm/adreno/a6xx_gmu.c      | 4 ++++
+ drivers/gpu/drm/msm/adreno/adreno_device.c | 5 +++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/drivers/gpu/drm/msm/adreno/a6xx_gmu.c b/drivers/gpu/drm/msm/adreno/a6xx_gmu.c
+--- a/drivers/gpu/drm/msm/adreno/a6xx_gmu.c
++++ b/drivers/gpu/drm/msm/adreno/a6xx_gmu.c
+@@ -645,6 +645,10 @@ static void a6xx_rpmh_stop(struct a6xx_gmu *gmu)
+ 	if (!test_and_clear_bit(GMU_STATUS_FW_START, &gmu->status))
+ 		return;
+ 
++	/* Some platforms reboot instead of powering off if the GPU PDC is asleep */
++	if (system_state == SYSTEM_POWER_OFF || system_state == SYSTEM_HALT)
++		return;
++
+ 	if (adreno_is_a840(adreno_gpu))
+ 		bitmask = BIT(30);
+ 
+diff --git a/drivers/gpu/drm/msm/adreno/adreno_device.c b/drivers/gpu/drm/msm/adreno/adreno_device.c
+--- a/drivers/gpu/drm/msm/adreno/adreno_device.c
++++ b/drivers/gpu/drm/msm/adreno/adreno_device.c
+@@ -290,6 +290,11 @@ static void adreno_remove(struct platform_device *pdev)
+ 
+ static void adreno_shutdown(struct platform_device *pdev)
+ {
++	/* Resuming wakes the GMU RSC/PDC; the final stop then leaves it awake */
++	if (dev_to_gpu(&pdev->dev) &&
++	    (system_state == SYSTEM_POWER_OFF || system_state == SYSTEM_HALT))
++		pm_runtime_get_sync(&pdev->dev);
++
+ 	WARN_ON_ONCE(adreno_system_suspend(&pdev->dev));
+ }
+ 
+-- 
+2.47.0
