@@ -6,10 +6,13 @@ set -u
 
 MODE_FILE=/var/lib/pocknix/fan-mode
 GAME_MODE_FILE=/run/pocknix/game-mode
+SLEEP_CHARGING_FILE=/var/lib/pocknix/fan-sleep-charging
 
 FAN_PWM="$(ls /sys/class/hwmon/hwmon*/pwm1 2>/dev/null | head -1)"
 [ -n "${FAN_PWM}" ] || { echo "pocknix-fancontrol: no hwmon pwm1 fan found, exiting"; exit 0; }
 FAN_EN="${FAN_PWM}_enable"
+# pwm-fan holds this speed while the device charges in s2idle; 0 (the kernel default) stops it.
+FAN_SLEEP="${FAN_PWM}_sleep_charging"
 
 # gpu* not gpuss*: sm8550 names its zones gpuss-N-thermal, sm8250 gpu-top-thermal.
 SENSORS=""
@@ -54,8 +57,14 @@ FAN_MODE=1
 [ -e "${FAN_EN}" ] && echo "${FAN_MODE}" > "${FAN_EN}" 2>/dev/null
 trap '[ -e "${FAN_EN}" ] && echo 0 > "${FAN_EN}" 2>/dev/null; exit 0' INT TERM
 
-LAST=""; LAST_TH=0; LAST_MODE=""
+LAST=""; LAST_TH=0; LAST_MODE=""; LAST_SC=""
 while :; do
+  if [ -w "${FAN_SLEEP}" ]; then
+    SC="$(cat "${SLEEP_CHARGING_FILE}" 2>/dev/null)"
+    case "${SC}" in ''|*[!0-9]*) SC=0 ;; esac
+    [ "${SC}" -gt 255 ] && SC=255
+    if [ "${SC}" != "${LAST_SC}" ]; then echo "${SC}" > "${FAN_SLEEP}" 2>/dev/null && LAST_SC="${SC}"; fi
+  fi
   MODE="$(effective_mode)"
   TEMPS="$(curve_temps "${MODE}")"
   TEMP="$(awk '{s+=$1;n++} END{printf "%d", (n? s/n : 0)}' ${SENSORS} 2>/dev/null)"

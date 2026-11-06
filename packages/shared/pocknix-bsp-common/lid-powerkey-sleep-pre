@@ -1,0 +1,28 @@
+#!/bin/sh
+# Asleep with the lid shut, only opening the lid wakes the device: a power key press in a bag
+# would otherwise wake it with the lid still closed.
+STATE=/run/pocknix/lid-powerkey
+[ -e "${STATE}" ] && "${0%/pre/*}/post/${0##*/}"
+
+lid=""; key=""
+for e in /sys/class/input/event*; do
+  sw="$(cat "${e}/device/capabilities/sw" 2>/dev/null)" || continue
+  case "${sw}" in *[!0-9a-fA-F]*|"") continue ;; esac
+  [ $((0x${sw} & 1)) -eq 1 ] && [ -z "${lid}" ] && lid="/dev/input/${e##*/}"
+done
+for e in /sys/class/input/event*; do
+  [ "$(cat "${e}/device/name" 2>/dev/null)" = "pm8941_pwrkey" ] || continue
+  key="${e}/device/device/power/wakeup"
+done
+[ -n "${lid}" ] && [ -w "${key}" ] || exit 0
+[ "$(cat "${key}")" = enabled ] || exit 0
+
+# EVIOCGSW(8): bit 0 is SW_LID, set while the lid is closed.
+python3 -c 'import fcntl, sys
+with open(sys.argv[1], "rb") as f:
+    sys.exit(0 if fcntl.ioctl(f, (2 << 30) | (8 << 16) | (0x45 << 8) | 0x1b, bytes(8))[0] & 1 else 1)' "${lid}" || exit 0
+
+mkdir -p /run/pocknix
+echo "pocknix-sleep: lid shut, power key wake off until resume" >&2
+printf '%s\n' "${key}" > "${STATE}" && echo disabled > "${key}"
+exit 0

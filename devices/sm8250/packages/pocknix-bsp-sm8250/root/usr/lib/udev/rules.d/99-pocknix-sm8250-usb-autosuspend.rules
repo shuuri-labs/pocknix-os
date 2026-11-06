@@ -1,0 +1,3 @@
+# The legacy dwc3-qcom glue and its DWC3 core both stay runtime-active when idle, holding the
+# USB-to-DDR vote in the sleep set.
+ACTION=="add", SUBSYSTEM=="platform", KERNEL=="a6f8800.usb|a600000.usb", ATTR{power/control}="auto"

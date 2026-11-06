@@ -1,0 +1,6 @@
+#!/bin/sh
+STATE=/run/pocknix/lid-powerkey
+read -r key 2>/dev/null < "${STATE}" || exit 0
+case "${key}" in /sys/*/power/wakeup) [ -w "${key}" ] && echo enabled > "${key}" ;; esac
+rm -f "${STATE}"
+exit 0

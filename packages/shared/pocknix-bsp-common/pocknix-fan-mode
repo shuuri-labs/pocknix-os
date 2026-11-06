@@ -6,7 +6,9 @@
 #
 #   pocknix-fan-mode                # print the current mode
 #   pocknix-fan-mode moderate       # set a mode (quiet|moderate|performance)
+#   pocknix-fan-mode sleep-charging [0-255]   # get/set the speed kept while charging asleep (0 = off)
 MODE_FILE=/var/lib/pocknix/fan-mode
+SLEEP_CHARGING_FILE=/var/lib/pocknix/fan-sleep-charging
 DEFAULT=quiet
 
 case "${1:-}" in
@@ -23,8 +25,24 @@ case "${1:-}" in
     fi
     echo "fan mode: ${1}"
     ;;
+  sleep-charging)
+    if [ -z "${2:-}" ]; then
+      v="$(cat "${SLEEP_CHARGING_FILE}" 2>/dev/null)"
+      case "${v}" in ''|*[!0-9]*) v=0 ;; esac
+      printf '%s\n' "${v}"
+      exit 0
+    fi
+    case "${2}" in *[!0-9]*) echo "pocknix-fan-mode: sleep-charging takes 0-255" >&2; exit 2 ;; esac
+    [ "${2}" -le 255 ] || { echo "pocknix-fan-mode: sleep-charging takes 0-255" >&2; exit 2; }
+    mkdir -p "$(dirname "${SLEEP_CHARGING_FILE}")" 2>/dev/null
+    if ! printf '%s\n' "${2}" > "${SLEEP_CHARGING_FILE}" 2>/dev/null; then
+      echo "pocknix-fan-mode: cannot write ${SLEEP_CHARGING_FILE} (run as root)" >&2
+      exit 1
+    fi
+    echo "fan speed while charging asleep: ${2}"
+    ;;
   *)
-    echo "usage: pocknix-fan-mode [quiet|moderate|performance]" >&2
+    echo "usage: pocknix-fan-mode [quiet|moderate|performance | sleep-charging [0-255]]" >&2
     exit 2
     ;;
 esac
