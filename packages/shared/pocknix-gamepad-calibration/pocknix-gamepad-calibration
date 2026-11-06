@@ -1,0 +1,679 @@
+#!/usr/bin/python3
+"""pocknix-gamepad-calibration - guided stick and trigger calibration of the built-in gamepad.
+
+  status --json   availability and state, one JSON object (no root)
+  live            POCKNIX:{"live":{...}} lines until stdin closes
+  calibrate       guided capture, then review; stdin: `save`, `discard`, any line = heartbeat
+                  (piped stdin silent for 3 s during capture = abort)
+  reset           drop the saved calibration, back to this boot's driver defaults
+  recover         undo an intercept a killed calibrate left behind, re-apply the saved values
+
+All but status need root: InputPlumber hides the pad's own input node (mode 000).
+Changing the driver's values restarts InputPlumber, so the pad drops for about a second: the
+driver re-advertises its ranges without notifying anyone, and InputPlumber keeps the ones it read at open.
+The conf is replayed at boot by pocknix-gamepad-calibration-restore, before InputPlumber claims the pad.
+A run that worked but may not reach Steam ends with POCKNIX:{..."warning":"<plain text>"}.
+Exit: 0 done (saved or discarded), 1 error, 2 usage, 3 a calibration is already running.
+"""
+
+import fcntl
+import glob
+import json
+import os
+import signal
+import struct
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+
+CONF = Path("/etc/pocknix/gamepad-calibration.conf")
+DEFAULTS = Path("/run/pocknix/gamepad-calibration.defaults")
+# composite left in intercept, for recover() after a killed calibrate. Not Pocknix Control's
+# calibration-intercept: its recover() on every plugin load would end a running capture.
+INTERCEPT_MARK = Path("/run/pocknix/gamepad-calibration.intercept")
+# held by calibrate/reset/recover; the kernel releases it however the holder dies
+LOCK = Path("/run/pocknix/gamepad-calibration.lock")
+
+# coupled: the driver converts triggers as trigger_*_max - raw, so max is also the zero
+# reference (retroid, mangmi). rsinput carries a fixed 0x610 reference (kernel 1064).
+DRIVERS = {
+    "rsinput": {"phys": "rsinput-gamepad/", "triggers": (2, 5), "coupled": False},
+    "retroid": {"phys": "retroid-pocket-gamepad/", "triggers": (20, 21), "coupled": True},
+    "mangmi_pocket_max": {"phys": "mangmi-pocket-max/", "triggers": (20, 21), "coupled": True},
+}
+STICK_CODES = {"axis_leftx": 0, "axis_lefty": 1, "axis_rightx": 3, "axis_righty": 4}
+AXIS_SUFFIXES = ("max", "min", "center", "deadzone", "antideadzone")
+TRIGGER_SUFFIXES = ("max", "deadzone", "antideadzone")
+
+AXIS_MAX_PERCENT = 95
+AXIS_DEADZONE_PERCENT = 150
+AXIS_DEADZONE_PERCENT_MINI = 5
+AXIS_ANTIDEADZONE_PERCENT = 80
+TRIGGER_MAX_PERCENT = 100
+TRIGGER_DEADZONE_PERCENT = 105
+TRIGGER_ANTIDEADZONE_PERCENT = 80
+# Above any raw reading, so a coupled-trigger capture is not cut short.
+COUPLED_TRIGGER_CAPTURE_MAX = 0x755
+
+HOLD_S = 0.5
+HOLD_TOLERANCE = 0.03
+SAMPLE_S = 0.01
+EMIT_S = 0.1
+REREAD_S = 1.0
+# A frozen app keeps stdin open: without its heartbeat the pad must not stay diverted from Steam.
+# A terminal has Ctrl+C instead.
+WATCHDOG_S = 3.0
+
+EVIOCGABS = 0x80184540
+INTERCEPT_ALWAYS = 2
+INTERCEPT_NONE = 0
+
+# (kind, control, name, direction)
+STEPS = [
+    ("stick", "axis_leftx", "left_stick", "right"),
+    ("stick", "axis_leftx", "left_stick", "left"),
+    ("stick", "axis_lefty", "left_stick", "down"),
+    ("stick", "axis_lefty", "left_stick", "up"),
+    ("stick", "axis_rightx", "right_stick", "right"),
+    ("stick", "axis_rightx", "right_stick", "left"),
+    ("stick", "axis_righty", "right_stick", "down"),
+    ("stick", "axis_righty", "right_stick", "up"),
+    ("trigger", "trigger_left", "left_trigger", ""),
+    ("trigger", "trigger_right", "right_trigger", ""),
+]
+
+
+class Cancelled(Exception):
+    pass
+
+
+class Failed(Exception):
+    def __init__(self, text, code=1):
+        super().__init__(text)
+        self.code = code
+
+
+# A signal only asks: raising from the handler could cut a restore short.
+STOP = threading.Event()
+
+
+def _stop(_sig, _frame):
+    STOP.set()
+
+
+WARNINGS = []
+
+
+def warn(text):
+    if text not in WARNINGS:
+        WARNINGS.append(text)
+    try:
+        print("warning: " + text, file=sys.stderr)
+    except OSError:
+        pass
+
+
+def emit(data):
+    # The app went away: same as closing stdin.
+    try:
+        sys.stdout.write("POCKNIX:" + json.dumps(data, separators=(",", ":")) + "\n")
+        sys.stdout.flush()
+    except OSError:
+        # else the exit-time flush reports the broken pipe as an error
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
+        raise Cancelled()
+
+
+def driver():
+    for name, info in DRIVERS.items():
+        params = Path(f"/sys/module/{name}/parameters")
+        if (params / "axis_leftx_max").exists() and (params / "update_params").exists():
+            return name, info, params
+    return None, None, None
+
+
+def event_node(phys_prefix):
+    for d in sorted(glob.glob("/sys/class/input/event*")):
+        try:
+            if Path(d, "device/phys").read_text().strip().startswith(phys_prefix):
+                return "/dev/input/" + os.path.basename(d)
+        except OSError:
+            continue
+    return None
+
+
+def absinfo(fd, code):
+    buf = bytearray(24)
+    fcntl.ioctl(fd, EVIOCGABS + code, buf)
+    value, minimum, maximum, _fuzz, _flat, _res = struct.unpack("iiiiii", buf)
+    return value, minimum, maximum
+
+
+def param_keys(control):
+    suffixes = TRIGGER_SUFFIXES if control.startswith("trigger_") else AXIS_SUFFIXES
+    return [f"{control}_{s}" for s in suffixes]
+
+
+def all_keys():
+    keys = []
+    for control in ("axis_leftx", "axis_lefty", "axis_rightx", "axis_righty", "trigger_left", "trigger_right"):
+        keys += param_keys(control)
+    return keys
+
+
+def read_params(params):
+    values = {}
+    for key in all_keys():
+        try:
+            values[key] = int((params / key).read_text().strip())
+        except (OSError, ValueError):
+            pass
+    return values
+
+
+def write_params(params, values):
+    flag = params / "update_params"
+    try:
+        for key, value in values.items():
+            (params / key).write_text(str(int(value)))
+        # the driver re-reads only on this, and clears it once the new ranges are live
+        flag.write_text("1")
+        deadline = time.monotonic() + REREAD_S
+        while flag.read_text().strip() != "0":
+            if time.monotonic() > deadline:
+                warn("The controller didn't confirm its new settings. Restart the device if the "
+                     "sticks don't reach their edges in Steam.")
+                return
+            time.sleep(0.02)
+    except OSError as error:
+        raise Failed(f"Could not change the controller's settings: {error.strerror}")
+
+
+def parse_kv(text):
+    values = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if not sep or not key or key.startswith("#"):
+            continue
+        try:
+            values[key] = int(value)
+        except ValueError:
+            continue
+    return values
+
+
+def defaults(params):
+    try:
+        values = parse_kv(DEFAULTS.read_text())
+    except OSError:
+        values = {}
+    return {k: v for k, v in values.items() if k in all_keys() and (params / k).exists()}
+
+
+def busctl(*args):
+    try:
+        return subprocess.run(["/usr/bin/busctl", *args], check=False, text=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def composite_for(node):
+    proc = busctl("--list", "tree", "org.shadowblip.InputPlumber")
+    if proc is None or proc.returncode != 0:
+        return None
+    for path in proc.stdout.split():
+        if not path.rsplit("/", 1)[-1].startswith("CompositeDevice"):
+            continue
+        prop = busctl("--json=short", "get-property", "org.shadowblip.InputPlumber", path,
+                      "org.shadowblip.Input.CompositeDevice", "SourceDevicePaths")
+        if prop is None or prop.returncode != 0:
+            continue
+        try:
+            if node in json.loads(prop.stdout).get("data", []):
+                return path
+        except ValueError:
+            continue
+    return None
+
+
+def restart_inputplumber():
+    try:
+        ok = subprocess.run(["/usr/bin/systemctl", "restart", "inputplumber.service"], check=False,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    if not ok:
+        warn("The controller couldn't reconnect. Restart the device so Steam picks up the new range.")
+
+
+def finish(data=None):
+    data = dict(data or {})
+    if WARNINGS:
+        data["warning"] = " ".join(WARNINGS)
+    if data:
+        try:
+            emit(data)
+        except Cancelled:
+            pass
+
+
+def set_intercept(path, mode):
+    proc = busctl("set-property", "org.shadowblip.InputPlumber", path,
+                  "org.shadowblip.Input.CompositeDevice", "InterceptMode", "u", str(mode))
+    return proc is not None and proc.returncode == 0
+
+
+def stick_params(control, pos_extreme, pos_settle, neg_extreme, neg_settle):
+    center = (pos_settle + neg_settle) / 2
+    pos_extreme, pos_settle = pos_extreme - center, pos_settle - center
+    neg_extreme, neg_settle = neg_extreme - center, neg_settle - center
+    axis_max = AXIS_MAX_PERCENT * min(abs(neg_extreme), pos_extreme) / 100
+    deadzone = AXIS_DEADZONE_PERCENT * (abs(neg_settle) + abs(pos_settle)) / 200
+    if axis_max > 0 and 100 * deadzone / axis_max < AXIS_DEADZONE_PERCENT_MINI:
+        deadzone = AXIS_DEADZONE_PERCENT_MINI * axis_max / 100
+    return {
+        f"{control}_max": int(axis_max),
+        f"{control}_min": -int(axis_max),
+        f"{control}_center": -int(center),
+        f"{control}_deadzone": int(deadzone),
+        f"{control}_antideadzone": int(AXIS_ANTIDEADZONE_PERCENT * deadzone / 100),
+    }
+
+
+def trigger_params(control, full, settle, coupled):
+    if coupled:
+        # max is also the zero reference here, so it moves down to the rest point.
+        maximum = TRIGGER_MAX_PERCENT * (full - settle) / 100
+        deadzone = (TRIGGER_DEADZONE_PERCENT - 100) * settle / 100
+    else:
+        # Fixed reference: rest still reads `settle`, so the deadzone must cover it.
+        maximum = TRIGGER_MAX_PERCENT * full / 100
+        deadzone = TRIGGER_DEADZONE_PERCENT * settle / 100
+    return {
+        f"{control}_max": int(maximum),
+        f"{control}_deadzone": int(deadzone),
+        f"{control}_antideadzone": int(TRIGGER_ANTIDEADZONE_PERCENT * deadzone / 100),
+    }
+
+
+def live(fd, info):
+    out = {}
+    for label, code in (("lx", 0), ("ly", 1), ("rx", 3), ("ry", 4)):
+        value, minimum, maximum = absinfo(fd, code)
+        span = max(maximum, -minimum, 1)
+        out[label] = round(max(-1.0, min(1.0, value / span)), 3)
+    for label, code in zip(("lt", "rt"), info["triggers"]):
+        value, _minimum, maximum = absinfo(fd, code)
+        out[label] = round(max(0.0, min(1.0, value / max(maximum, 1))), 3)
+    return out
+
+
+class Input:
+    """EOF is the cancel."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.lines = []
+        self.eof = False
+        self.last = time.monotonic()
+        self.tty = sys.stdin.isatty()
+        threading.Thread(target=self._read, daemon=True).start()
+
+    def _read(self):
+        for raw in sys.stdin:
+            with self.lock:
+                self.lines.append(raw.strip())
+                self.last = time.monotonic()
+        with self.lock:
+            self.eof = True
+
+    def take(self):
+        with self.lock:
+            lines, self.lines = self.lines, []
+            return lines, self.eof
+
+    def beat(self):
+        with self.lock:
+            self.last = time.monotonic()
+
+    def silent_for(self):
+        with self.lock:
+            return time.monotonic() - self.last
+
+
+def lock_or_busy():
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(LOCK, os.O_RDWR | os.O_CREAT, 0o644)
+    # a racing `status` holds it shared for a moment
+    for _ in range(3):
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except BlockingIOError:
+            time.sleep(0.05)
+    os.close(fd)
+    raise Failed("A calibration is already running", 3)
+
+
+def running():
+    try:
+        fd = os.open(LOCK, os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def need_root():
+    if os.geteuid() != 0:
+        raise Failed("must run as root (pkexec pocknix-gamepad-calibration ...)")
+
+
+def need_driver():
+    name, info, params = driver()
+    if not name:
+        raise Failed("This device's controller driver has no calibration settings")
+    return name, info, params
+
+
+def atomically_write(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    finally:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+
+
+def recover_locked(params):
+    """True if it wrote values back (the caller restarts InputPlumber)."""
+    try:
+        path = INTERCEPT_MARK.read_text().strip()
+    except OSError:
+        return False
+    if path:
+        set_intercept(path, INTERCEPT_NONE)
+    INTERCEPT_MARK.unlink(missing_ok=True)
+    if not params:
+        return False
+    try:
+        values = parse_kv(CONF.read_text())
+    except OSError:
+        values = defaults(params)
+    values = {k: v for k, v in values.items() if k in all_keys() and (params / k).exists()}
+    if values:
+        write_params(params, values)
+    return bool(values)
+
+
+def cmd_status():
+    name, _info, _params = driver()
+    busy = running()
+    print(json.dumps({
+        "available": bool(name),
+        "driver": name or "",
+        "saved": CONF.exists(),
+        "defaults_recorded": DEFAULTS.exists(),
+        "running": busy,
+        "stale_intercept": INTERCEPT_MARK.exists() and not busy,
+    }))
+
+
+def cmd_live():
+    need_root()
+    _name, info, _params = need_driver()
+    node = event_node(info["phys"])
+    if not node:
+        raise Failed("The controller's input device was not found")
+    stdin = Input()
+    fd = os.open(node, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        while not stdin.take()[1] and not STOP.is_set():
+            emit({"live": live(fd, info)})
+            time.sleep(EMIT_S)
+    except Cancelled:
+        pass
+    finally:
+        os.close(fd)
+
+
+class Capture:
+    def __init__(self, fd, info, stdin):
+        self.fd = fd
+        self.info = info
+        self.stdin = stdin
+        self.status = {}
+        self.next_emit = 0.0
+
+    def poll(self):
+        lines, eof = self.stdin.take()
+        if eof or "discard" in lines or STOP.is_set():
+            raise Cancelled()
+        if not self.stdin.tty and self.stdin.silent_for() > WATCHDOG_S:
+            raise Failed("Calibration stopped: Pocknix Tools stopped responding")
+        now = time.monotonic()
+        if now >= self.next_emit:
+            self.next_emit = now + EMIT_S
+            emit({**self.status, "live": live(self.fd, self.info)})
+
+    def hold(self, code, accept, scale, stage):
+        """Mean of the first HOLD_S window where accept() held steady."""
+        self.status.update(stage=stage, progress=0.0)
+        window = []
+        while True:
+            self.poll()
+            value = absinfo(self.fd, code)[0]
+            now = time.monotonic()
+            if accept(value) and (not window or abs(value - window[0][1]) <= HOLD_TOLERANCE * scale):
+                window.append((now, value))
+            else:
+                window = [(now, value)] if accept(value) else []
+            held = (window[-1][0] - window[0][0]) if window else 0.0
+            self.status["progress"] = round(min(held / HOLD_S, 1.0), 2)
+            if held >= HOLD_S:
+                return sum(v for _, v in window) / len(window)
+            time.sleep(SAMPLE_S)
+
+    def run(self, neutral_scale):
+        result = {}
+        stick = {}
+        for index, (kind, control, name, direction) in enumerate(STEPS):
+            self.status = {"phase": "capture", "step": index + 1, "steps": len(STEPS),
+                           "control": name, "kind": kind, "direction": direction}
+            self.next_emit = 0.0
+            scale = neutral_scale[control]
+            if kind == "stick":
+                code = STICK_CODES[control]
+                first = control not in stick
+                # Axis sign conventions differ per driver: accept either way first, then the opposite.
+                if first:
+                    accept = lambda v, s=scale: abs(v) > s / 2
+                else:
+                    sign = -1 if stick[control]["first_sign"] > 0 else 1
+                    accept = lambda v, s=scale, g=sign: g * v > s / 2
+                extreme = self.hold(code, accept, scale, "push")
+                settle = self.hold(code, lambda v, s=scale: abs(v) < s / 2, scale, "release")
+                if first:
+                    stick[control] = {"first_sign": 1 if extreme > 0 else -1, "a": (extreme, settle)}
+                else:
+                    a_ext, a_set = stick[control]["a"]
+                    if a_ext > 0:
+                        pos, neg = (a_ext, a_set), (extreme, settle)
+                    else:
+                        pos, neg = (extreme, settle), (a_ext, a_set)
+                    result.update(stick_params(control, pos[0], pos[1], neg[0], neg[1]))
+            else:
+                code = self.info["triggers"][0 if control == "trigger_left" else 1]
+                full = self.hold(code, lambda v, s=scale: v > s / 2, scale, "push")
+                settle = self.hold(code, lambda v, s=scale: v < s / 2, scale, "release")
+                result.update(trigger_params(control, full, settle, self.info["coupled"]))
+        return result
+
+
+def neutral_for(info, backup, dflt):
+    # Measure on neutral parameters so a recalibration never builds on the last one.
+    neutral = {}
+    scale = {}
+    for control in STICK_CODES:
+        rng = abs(dflt.get(f"{control}_max", backup.get(f"{control}_max", 0x580)))
+        neutral.update({f"{control}_max": rng, f"{control}_min": -rng, f"{control}_center": 0,
+                        f"{control}_deadzone": 0, f"{control}_antideadzone": 0})
+        scale[control] = rng
+    for control in ("trigger_left", "trigger_right"):
+        if info["coupled"]:
+            ref = COUPLED_TRIGGER_CAPTURE_MAX
+        else:
+            ref = dflt.get(f"{control}_max", backup.get(f"{control}_max", 0x610))
+        neutral.update({f"{control}_max": ref, f"{control}_deadzone": 0, f"{control}_antideadzone": 0})
+        scale[control] = ref
+    return neutral, scale
+
+
+def review(fd, info, stdin, result):
+    """Live readings on the new values until `save` (True) or `discard` / EOF (False)."""
+    while True:
+        lines, eof = stdin.take()
+        if "save" in lines:
+            return True
+        if eof or "discard" in lines or STOP.is_set():
+            return False
+        emit({"phase": "review", "result": result, "live": live(fd, info)})
+        time.sleep(EMIT_S)
+
+
+def cmd_calibrate():
+    need_root()
+    _name, info, params = need_driver()
+    lock = lock_or_busy()
+    # a killed run left neutral params, which must not become this run's backup; restarting now
+    # would replace the composite looked up below, so only an early failure restarts
+    recovered = recover_locked(params)
+    try:
+        node = event_node(info["phys"])
+        if not node:
+            raise Failed("The controller's input device was not found")
+        composite = composite_for(node)
+        if not composite:
+            raise Failed("InputPlumber is not managing the controller")
+    except Failed:
+        if recovered:
+            restart_inputplumber()
+        raise
+    stdin = Input()
+    backup = read_params(params)
+    neutral, scale = neutral_for(info, backup, defaults(params))
+    fd = os.open(node, os.O_RDONLY | os.O_NONBLOCK)
+    saved = False
+    try:
+        try:
+            # mark first: a kill between the two still leaves recover() something to undo
+            INTERCEPT_MARK.write_text(composite)
+            write_params(params, neutral)
+            try:
+                if not set_intercept(composite, INTERCEPT_ALWAYS):
+                    raise Failed("Could not take the controller from Steam for calibration")
+                stdin.beat()
+                result = Capture(fd, info, stdin).run(scale)
+            finally:
+                set_intercept(composite, INTERCEPT_NONE)
+                INTERCEPT_MARK.unlink(missing_ok=True)
+            write_params(params, result)
+            if review(fd, info, stdin, result):
+                lines = ["# Written by pocknix-gamepad-calibration: gamepad driver parameters, replayed at boot."]
+                lines += [f"{key}={result[key]}" for key in all_keys() if key in result]
+                try:
+                    atomically_write(CONF, "\n".join(lines) + "\n")
+                except OSError as error:
+                    raise Failed(f"Could not save the calibration: {error.strerror}")
+                saved = True
+        except Cancelled:
+            pass
+    finally:
+        if not saved:
+            try:
+                write_params(params, backup)
+            except Failed as error:
+                warn(str(error))
+        restart_inputplumber()
+        os.close(fd)
+        os.close(lock)
+    finish({"phase": "saved" if saved else "discarded"})
+
+
+def cmd_reset():
+    need_root()
+    _name, _info, params = need_driver()
+    lock = lock_or_busy()
+    try:
+        dflt = defaults(params)
+        if not dflt:
+            raise Failed("The driver defaults were not recorded this boot: restart and try again")
+        write_params(params, dflt)
+        CONF.unlink(missing_ok=True)
+        restart_inputplumber()
+    finally:
+        os.close(lock)
+    finish()
+
+
+def cmd_recover():
+    need_root()
+    lock = lock_or_busy()
+    try:
+        if recover_locked(driver()[2]):
+            restart_inputplumber()
+    finally:
+        os.close(lock)
+    finish()
+
+
+COMMANDS = {
+    ("status", "--json"): cmd_status,
+    ("live",): cmd_live,
+    ("calibrate",): cmd_calibrate,
+    ("reset",): cmd_reset,
+    ("recover",): cmd_recover,
+}
+
+
+def main():
+    command = COMMANDS.get(tuple(sys.argv[1:]))
+    if not command:
+        print("usage: pocknix-gamepad-calibration status --json|live|calibrate|reset|recover", file=sys.stderr)
+        return 2
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGHUP, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    try:
+        command()
+    except Cancelled:
+        pass
+    except Failed as error:
+        try:
+            print(str(error), file=sys.stderr)
+        except OSError:
+            pass
+        return error.code
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,9 @@
+// Promptless pkexec of pocknix-gamepad-calibration for wheel: it touches only the built-in pad's
+// driver parameters, its saved calibration and its InputPlumber intercept.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/pocknix-gamepad-calibration") {
+        return polkit.Result.YES;
+    }
+});
