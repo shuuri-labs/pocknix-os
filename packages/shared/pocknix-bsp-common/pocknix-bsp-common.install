@@ -50,7 +50,7 @@ _retire_gaming_limits() {
 }
 
 # The image overlay's 50-pocknix-deck.rules granted wheel every systemd1 action; its parts now
-# ship packaged and narrowed. Only the seven shipped versions go: a user-edited copy stays.
+# ship packaged and narrowed. Only shipped versions go: a user-edited copy stays.
 _retire_deck_polkit() {
   f=/etc/polkit-1/rules.d/50-pocknix-deck.rules
   [ -f "${f}" ] || return 0
@@ -102,7 +102,7 @@ _rt_ladder() {
 
 post_install() {
   _migrate_fan_lavd
-  [ -d /run/systemd/system ] && _enable_fan_lavd
+  _enable_fan_lavd
   _retire_powerd
   _retire_gamescope_rt
   _retire_gaming_limits

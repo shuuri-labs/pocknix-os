@@ -3,7 +3,7 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=31
+pkgrel=32
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump and journal storage caps, latency sysctls, zram swap, iwd Wi-Fi backend, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -11,7 +11,7 @@ license=('GPL-2.0-or-later')
 # pocknix-core rides along so a plain -Syu delivers the mandatory layer to devices that
 # predate it: a new package name only reaches installed devices via a dep edge.
 # swh-plugins: the LADSPA lookahead limiter at the end of the speaker DSP chain.
-depends=('sudo' 'pocknix-core' 'python' 'python-gobject' 'cpio' 'swh-plugins' 'zram-generator')
+depends=('sudo' 'pocknix-core' 'python' 'python-gobject' 'cpio' 'swh-plugins' 'zram-generator' 'polkit')
 # Older kernels own the /flash deploy files: the versioned conflict makes pacman upgrade the
 # kernel in the same transaction instead of failing on file conflicts.
 conflicts=('linux-pocknix-sm8550<7.2.10-3' 'linux-pocknix-sm8250<7.2.10-4')

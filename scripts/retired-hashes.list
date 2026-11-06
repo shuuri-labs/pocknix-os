@@ -1,0 +1,13 @@
+# Every install script that deletes a retired image-overlay file only when it is unedited, one row
+# per file: "<install script> :: <overlay path the file shipped from>". A version git history
+# cannot show gets its own row: "<install script> :: sha256=<hash> :: <reason>".
+# check-retired-hashes.py fails unless each script's list is exactly its rows' versions.
+packages/shared/pocknix-bsp-common/pocknix-bsp-common.install :: overlay/etc/security/limits.d/60-pocknix-gaming.conf
+packages/shared/pocknix-bsp-common/pocknix-bsp-common.install :: overlay/etc/polkit-1/rules.d/50-pocknix-deck.rules
+packages/shared/pocknix-bsp-common/pocknix-bsp-common.install :: overlay/etc/systemd/zram-generator.conf
+packages/shared/pocknix-bsp-common/pocknix-bsp-common.install :: overlay/etc/NetworkManager/conf.d/20-wifi-backend.conf
+packages/shared/pocknix-session/pocknix-session.install :: overlay/etc/systemd/system/getty@tty1.service.d/autologin.conf
+packages/shared/pocknix-session/pocknix-session.install :: overlay/home/deck/.bash_profile
+packages/shared/pocknix-waydroid/pocknix-waydroid.install :: overlay/etc/systemd/system/pocknix-waydroid-tuning.service
+packages/shared/pocknix-waydroid/pocknix-waydroid.install :: overlay/home/deck/.local/share/applications/waydroid-apk-install.desktop
+packages/shared/pocknix-session/pocknix-session.install :: sha256=98bb25f0af470cdbabdbe2218c30a12dbb283429bd81269f96d158ccf59b476b :: a .bash_profile images shipped before the public history begins

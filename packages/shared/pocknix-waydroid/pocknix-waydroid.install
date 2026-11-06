@@ -1,17 +1,22 @@
 # Older images shipped these as unowned overlay files: the /etc unit shadows the packaged one and
-# the per-user seed's Exec names the /usr/local/bin copy. Only unedited copies go.
+# the per-user seed's Exec names the /usr/local/bin copy. An edited copy stays, with the script it runs.
 _retire_overlay_waydroid() {
-  rm -f /usr/local/bin/pocknix-waydroid-tuning /usr/local/bin/pocknix-waydroid-apk-install
   f=/etc/systemd/system/pocknix-waydroid-tuning.service
-  if [ -f "${f}" ] && [ "$(sha256sum "${f}" | cut -d' ' -f1)" = \
+  if [ ! -e "${f}" ] || [ "$(sha256sum "${f}" | cut -d' ' -f1)" = \
        67f839e9c73ec0e2479c9f88ab66b5381f5f3fc7483d874067f8a34e2687c6cf ]; then
-    rm -f "${f}"
+    rm -f "${f}" /usr/local/bin/pocknix-waydroid-tuning
   fi
+  kept=
   for f in /home/*/.local/share/applications/waydroid-apk-install.desktop; do
     [ -f "${f}" ] || continue
-    [ "$(sha256sum "${f}" | cut -d' ' -f1)" = \
-      19c55a459b1a7733b62159ed539381909b8b0cdd60ddecd0ee6798ae8478a8ce ] && rm -f "${f}"
+    if [ "$(sha256sum "${f}" | cut -d' ' -f1)" = \
+         19c55a459b1a7733b62159ed539381909b8b0cdd60ddecd0ee6798ae8478a8ce ]; then
+      rm -f "${f}"
+    else
+      kept=1
+    fi
   done
+  [ -n "${kept}" ] || rm -f /usr/local/bin/pocknix-waydroid-apk-install
 }
 
 # A device with the old overlay unit but no enable link had it disabled by the user: keep it off.

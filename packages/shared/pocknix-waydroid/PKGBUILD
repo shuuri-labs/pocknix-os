@@ -3,7 +3,7 @@
 # Build with ./nodeps: makepkg -s would drag Waydroid's LXC/Python stack into the chroot.
 pkgname=pocknix-waydroid
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="pocknix Waydroid integration: Android-side tuning and an APK install handler"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
