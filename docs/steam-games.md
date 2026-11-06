@@ -22,6 +22,13 @@ An environment variable placed after `pocknix-game-launch` stops the game from s
 A variable set in the launch options wins over the same variable in Pocknix Control's
 **Environment Variables** tweak.
 
+`pocknix-game-launch` always goes directly in front of `%command%`, even when `%command%` sits
+inside quotes, as in launch options that rewrite the game's command:
+
+```
+echo "pocknix-game-launch %command%" | sed 's|isaac-ng.exe|REPENTOGONLauncher/REPENTOGONLauncher.exe|' | sh
+```
+
 ## If a game won't run
 
 ### Try another Proton
