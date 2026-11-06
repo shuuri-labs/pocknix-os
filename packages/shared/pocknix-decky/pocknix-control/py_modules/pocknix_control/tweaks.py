@@ -1,6 +1,5 @@
 import copy
 import json
-import re
 from pathlib import Path
 
 from .system import atomically_write
@@ -10,42 +9,6 @@ from .system import atomically_write
 TWEAKS_CONFIG = Path("/etc/pocknix/game-tweaks.json")
 FEX_PROFILES_CONFIG = Path("/usr/share/pocknix/fex-profiles.json")
 PLUGIN_FEX_PROFILES_CONFIG = Path(__file__).resolve().parent.parent.parent / "fex-profiles.json"
-TURNIP_DIRS = {"arm": Path("/usr/share/pocknix/vk-arm"), "x86": Path("/usr/share/pocknix/vk-x86")}
-CONTAINER_VK_LIST = Path("/usr/share/fex-emu/vk-x86-container.list")
-
-
-def mesa_versions():
-    # One entry per series ("25.2"); pocknix-game-launch picks the point release per Proton flavor.
-    # An x86 payload not embedded in the FEX rootfs is a pin SLR refuses at launch.
-    try:
-        embedded = set(CONTAINER_VK_LIST.read_text().split())
-    except OSError:
-        embedded = set()
-    series = {}
-    for arch, base in TURNIP_DIRS.items():
-        try:
-            versions = [p.name for p in base.iterdir() if (p / "icd.json").is_file()]
-        except OSError:
-            continue
-        for v in versions:
-            if arch == "x86" and v not in embedded:
-                continue
-            m = re.match(r"([0-9]+)\.([0-9]+)", v)
-            if not m:
-                continue
-            entry = series.setdefault(f"{m.group(1)}.{m.group(2)}", {"archs": set(), "rc": True, "devel": True})
-            entry["archs"].add(arch)
-            entry["rc"] = entry["rc"] and "rc" in v
-            entry["devel"] = entry["devel"] and "devel" in v
-    choices = []
-    for key, entry in series.items():
-        # "git" marks an unreleased main snapshot, so a devel payload can't read as a
-        # shipped release (the series key alone would show a bare "26.3").
-        label = key + (" RC" if entry["rc"] else "") + (" git" if entry["devel"] else "")
-        if entry["archs"] != {"arm", "x86"}:
-            label += f" ({'ARM' if 'arm' in entry['archs'] else 'x86'} only)"
-        choices.append({"data": key, "label": label})
-    return sorted(choices, key=lambda c: tuple(int(x) for x in c["data"].split(".")))
 
 
 def load_fex_contract():
@@ -94,6 +57,9 @@ def load_tweaks():
         if not isinstance(game, dict):
             continue
         game["enabled"] = bool(game.get("enabled", False))
+        # Shim: "26.3" was the git payload's series before mesa main moved to 27.0.
+        if game.get("mesaVersion") == "26.3":
+            game["mesaVersion"] = "devel"
     return data
 
 

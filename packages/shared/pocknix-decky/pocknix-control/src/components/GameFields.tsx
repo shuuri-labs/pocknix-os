@@ -143,7 +143,7 @@ export function TweakFields({ config, appid, values, patch }: {
   const fexOptions = Object.entries(presets).map(([id, profile]) => ({ data: id, label: profile.label }));
   const storedLatency = String(values.audioLatency ?? "");
   const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
-  const mesaOptions = [{ data: "", label: "System default" }, ...(config.mesaVersions || [])];
+  const mesaOptions = config.mesaVersions?.length ? config.mesaVersions : [{ data: "", label: "System default" }];
   const storedMesa = String(values.mesaVersion ?? "");
   const mesaValue = mesaOptions.some((option) => option.data === storedMesa) ? storedMesa : "";
 

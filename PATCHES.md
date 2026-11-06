@@ -12,7 +12,7 @@ is not taken, retired numbers); files ported from another project record theirs 
 | kernel (sm8250) | [kernel/sm8250/PATCHES.md](kernel/sm8250/PATCHES.md) | Stock 7.2.10 + ROCKNIX `next` 6103571f67 (2026-10-11) |
 | gamescope | [packages/soc/gamescope/PATCHES.md](packages/soc/gamescope/PATCHES.md) | Valve `3.16.31` (f6916aa, 2026-09-27) |
 | mesa | [packages/soc/mesa/PATCHES.md](packages/soc/mesa/PATCHES.md) | 26.2.6 tarball, epoch=2 |
-| pocknix-turnip-arm | [packages/soc/pocknix-turnip-arm/PATCHES.md](packages/soc/pocknix-turnip-arm/PATCHES.md) | Pinned Mesa release tarballs plus one main snapshot, listed in the PKGBUILD |
+| pocknix-turnip-arm | [packages/soc/pocknix-turnip-arm/PATCHES.md](packages/soc/pocknix-turnip-arm/PATCHES.md) | One pinned Mesa main snapshot, named in the PKGBUILD |
 | mangohud | [packages/shared/mangohud/PATCHES.md](packages/shared/mangohud/PATCHES.md) | v0.8.4, one shared untuned build |
 | fex-emu | [packages/shared/fex-emu/PATCHES.md](packages/shared/fex-emu/PATCHES.md) | `896a8691` (FEX-2610 + its clang 23 thunkgen fix, 2026-10-12), one shared build |
 | pocknix-mesa-android | [packages/shared/pocknix-mesa-android/PATCHES.md](packages/shared/pocknix-mesa-android/PATCHES.md) | 26.2.6 tarball (mesa's pin), epoch=2 |
