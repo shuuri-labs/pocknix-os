@@ -71,6 +71,9 @@ AppWindow {
     DesktopPage {
         app: app
     }
+    ControllerPage {
+        app: app
+    }
     AdvancedPage {
         app: app
     }

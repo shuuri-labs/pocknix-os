@@ -7,7 +7,7 @@ TabPage {
     id: page
     property var app
     title: qsTr("Emulation")
-    icon: "input-gamepad-symbolic"
+    icon: "media-optical-symbolic"
 
     readonly property string romsInit: "/usr/bin/pocknix-roms-init"
     // "" = emulation is not installed (no pocknix-roms-init to ask)
