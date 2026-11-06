@@ -8,7 +8,7 @@ from pocknix_control.modes import set_fan_mode, set_lavd_mode
 from pocknix_control.sharing import install_samba, set_share, share_status
 from pocknix_control.snapshots import reboot_system, snapshot_status, start_rollback
 from pocknix_control.touch import sync_touch
-from pocknix_control.tweaks import save_tweaks
+from pocknix_control.tweaks import patch_tweaks
 from pocknix_control.updates import check_updates, start_update, update_status
 
 
@@ -55,10 +55,10 @@ class Plugin:
         await asyncio.to_thread(set_lavd_mode, mode)
         return await self.get_config()
 
-    async def save_tweaks(self, data):
-        await asyncio.to_thread(save_tweaks, data)
+    async def patch_tweaks(self, appid, fields):
+        tweaks = await asyncio.to_thread(patch_tweaks, appid, fields)
         await asyncio.to_thread(sync_touch, self._running_appid)
-        return await self.get_config()
+        return tweaks
 
     async def export_config(self, appid, name, basename, allow_overwrite):
         return await asyncio.to_thread(export_config, appid, name, basename, allow_overwrite)

@@ -18,6 +18,7 @@ if (api._version != API_VERSION) {
 const call = api.call;
 const toaster = api.toaster;
 const openFilePicker = api.openFilePicker;
+const useQuickAccessVisible = api.useQuickAccessVisible;
 const definePlugin = (fn) => {
     return (...args) => {
         return fn(...args);
@@ -28,7 +29,7 @@ const getConfig = () => call("get_config");
 const setFanMode = (mode) => call("set_fan_mode", mode);
 const setLavdMode = (mode) => call("set_lavd_mode", mode);
 const gameLifetime = (appid, running) => call("game_lifetime", appid, running);
-const saveTweaks = (data) => call("save_tweaks", data);
+const patchTweaks = (appid, fields) => call("patch_tweaks", appid, fields);
 const exportConfig = (appid, name, basename, allowOverwrite) => call("export_config", appid, name, basename, allowOverwrite);
 const configDir = () => call("config_dir");
 const readConfig = (path) => call("read_config", path);
@@ -52,48 +53,38 @@ const calibrationCancel = () => call("calibration_cancel");
 const calibrationSave = () => call("calibration_save");
 const calibrationReset = () => call("calibration_reset");
 
-function useDebouncedSave(options) {
-    const { config, field, snapshot, save, setConfig, onError, delay = 900 } = options;
-    const value = config ? config[field] : undefined;
-    // Latest unsaved edit; written by the debounce timer or the unmount flush below.
-    const pending = SP_REACT.useRef(null);
-    const flush = SP_REACT.useCallback(async () => {
-        const entry = pending.current;
-        if (!entry)
-            return;
-        pending.current = null;
-        try {
-            const next = await save(entry.value);
-            snapshot.current = JSON.stringify(next[field]);
-            setConfig((stored) => {
-                if (!stored)
-                    return next;
-                if (JSON.stringify(stored[field]) !== entry.serialized)
-                    return stored;
-                return { ...stored, [field]: next[field] };
-            });
-        }
-        catch (error) {
-            onError?.(error);
-        }
-    }, [save, field, snapshot, setConfig, onError]);
-    const flushRef = SP_REACT.useRef(flush);
-    flushRef.current = flush;
-    SP_REACT.useEffect(() => {
-        if (!config || !snapshot.current)
-            return;
-        const current = JSON.stringify(value);
-        if (current === snapshot.current) {
-            pending.current = null;
-            return;
-        }
-        pending.current = { value, serialized: current };
-        const timer = window.setTimeout(() => flushRef.current(), delay);
-        return () => window.clearTimeout(timer);
-    }, [value]);
-    // QAM panels unmount the moment the menu closes, and the cleanup above clears the only
-    // pending timer: without this flush, any edit made <delay ms before closing is dropped.
-    SP_REACT.useEffect(() => () => void flushRef.current(), []);
+function clone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+
+function applyPatch(config, appid, fields) {
+    const next = clone(config);
+    if (appid && !next.tweaks.games[appid])
+        next.tweaks.games[appid] = {};
+    const target = appid ? next.tweaks.games[appid] : next.tweaks.global;
+    for (const [key, value] of Object.entries(fields)) {
+        if (value === null)
+            delete target[key];
+        else
+            target[key] = value;
+    }
+    return next;
+}
+/** Shows the edit at once and sends only the changed fields ("" = Default). */
+function usePatchTweaks(setConfig, onError, seq) {
+    // Replies can arrive out of order; only the newest may replace what is on screen.
+    const own = SP_REACT.useRef(0);
+    const latest = seq ?? own;
+    return SP_REACT.useCallback((appid, fields) => {
+        setConfig((current) => (current ? applyPatch(current, appid, fields) : current));
+        const seq = ++latest.current;
+        patchTweaks(appid, fields)
+            .then((tweaks) => {
+            if (seq === latest.current)
+                setConfig((current) => (current ? { ...current, tweaks } : current));
+        })
+            .catch((error) => onError?.(error));
+    }, [setConfig, onError]);
 }
 
 function Icon({ path }) {
@@ -880,11 +871,7 @@ function TweakFields({ config, appid, values, patch }) {
                 } }), SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patch({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patch({ audioLatency: id }) }), SP_JSX.jsx(SelectEdit, { label: "Mesa Version", value: mesaValue, options: mesaOptions, onChange: (id) => patch({ mesaVersion: id }) }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patch }), SP_JSX.jsx(TouchField, { values: values, patch: patch }), SP_JSX.jsx(EnvVarsButton, { value: String(values.envVars ?? ""), onSave: (next) => patch({ envVars: next }) })] }));
 }
 
-function clone(obj) {
-    return JSON.parse(JSON.stringify(obj));
-}
-
-function Games({ config, setConfig, reload }) {
+function Games({ config, setConfig, patch, reload }) {
     const runtimeGame = config.game;
     const games = availableGames(config);
     const game = config.selectedGame || runtimeGame || null;
@@ -893,35 +880,15 @@ function Games({ config, setConfig, reload }) {
     const editingDefault = !game?.appid;
     const perGameEnabled = !!(game?.appid && gameSettings.enabled === true);
     const values = editingDefault || !perGameEnabled ? tweaks.global : { ...tweaks.global, ...gameSettings };
-    const patchSettings = (patch) => {
-        setConfig((current) => {
-            if (!current)
-                return current;
-            const next = clone(current);
-            if (editingDefault) {
-                Object.assign(next.tweaks.global, patch);
-            }
-            else if (perGameEnabled) {
-                const existing = next.tweaks.games[game.appid] || {};
-                next.tweaks.games[game.appid] = { ...existing, enabled: true, name: game.name || "", ...patch };
-            }
-            return next;
-        });
+    const patchSettings = (fields) => {
+        if (editingDefault)
+            patch("", fields);
+        else if (perGameEnabled)
+            patch(game.appid, { ...fields, enabled: true, name: game.name || "" });
     };
     const setPerGameEnabled = (enabled) => {
-        if (!game?.appid)
-            return;
-        setConfig((current) => {
-            if (!current)
-                return current;
-            const next = clone(current);
-            next.tweaks.games[game.appid] = {
-                ...(next.tweaks.games[game.appid] || {}),
-                enabled,
-                name: game.name || "",
-            };
-            return next;
-        });
+        if (game?.appid)
+            patch(game.appid, { enabled, name: game.name || "" });
     };
     // "" is the explicit Default target, not "nothing selected"; store a sentinel
     // so it doesn't fall back to the running game in the selectedGame derivation.
@@ -1235,22 +1202,28 @@ function Content() {
     const [tab, setTab] = SP_REACT.useState("Games");
     const [config, setConfig] = SP_REACT.useState(null);
     const [message, setMessage] = SP_REACT.useState("Loading");
-    const savedTweaksSnapshot = SP_REACT.useRef("");
+    const patchSeq = SP_REACT.useRef(0);
     const load = SP_REACT.useCallback(async () => {
+        const seq = patchSeq.current;
         try {
             const next = await getConfig();
             next.game = currentGame();
-            next.selectedGame = next.game || null;
-            savedTweaksSnapshot.current = JSON.stringify(next.tweaks);
-            setConfig(next);
+            // get_config is slow (it re-parses the Steam library): a save made meanwhile is newer than its tweaks.
+            const tweaks = (current) => (current && patchSeq.current !== seq ? current.tweaks : next.tweaks);
+            setConfig((current) => ({ ...next, tweaks: tweaks(current), selectedGame: current ? current.selectedGame : next.game || null }));
         }
         catch (error) {
             setMessage(String(error));
         }
     }, []);
+    // alwaysRender keeps this panel mounted while the QAM is closed, so the library modal's
+    // saves only show up if every reopen re-reads them.
+    const visible = useQuickAccessVisible();
     SP_REACT.useEffect(() => {
-        load();
-    }, [load]);
+        if (visible)
+            load();
+    }, [visible, load]);
+    const patch = usePatchTweaks(setConfig, load, patchSeq);
     // Track the running game so opening the QAM mid-game edits that game's profile.
     SP_REACT.useEffect(() => {
         if (!config)
@@ -1279,12 +1252,11 @@ function Content() {
             window.clearInterval(timer);
         };
     }, [!!config]);
-    useDebouncedSave({ config, field: "tweaks", snapshot: savedTweaksSnapshot, save: saveTweaks, setConfig, onError: load });
     if (!config)
         return SP_JSX.jsx(DFL.PanelSection, { title: "Pocknix Control", children: SP_JSX.jsx(DFL.Field, { label: message }) });
     const tabContent = (content) => (SP_JSX.jsx("div", { className: "pocknix-control-tab-content", children: content }));
     const tabs = [
-        { id: "Games", title: tabIcons.Games, content: tabContent(SP_JSX.jsx(Games, { config: config, setConfig: setConfig, reload: load })) },
+        { id: "Games", title: tabIcons.Games, content: tabContent(SP_JSX.jsx(Games, { config: config, setConfig: setConfig, patch: patch, reload: load })) },
         { id: "Library", title: tabIcons.Library, content: tabContent(SP_JSX.jsx(Library, {})) },
         { id: "Controller", title: tabIcons.Controller, content: tabContent(SP_JSX.jsx(Controller, { config: config, setConfig: setConfig, reload: load })) },
         { id: "Updater", title: tabIcons.Updater, content: tabContent(SP_JSX.jsx(Updater, {})) },
@@ -1292,10 +1264,11 @@ function Content() {
     return (SP_JSX.jsxs("div", { className: "pocknix-control-tabs", children: [SP_JSX.jsx("style", { children: styles }), SP_JSX.jsx(DFL.Tabs, { activeTab: tab, onShowTab: setTab, tabs: tabs })] }));
 }
 
-/** Standalone per-game settings, opened from the library context menu. Saves on each change
- *  (no QAM debounce lifecycle here; the modal has an explicit close). */
+/** Standalone per-game settings, opened from the library context menu. */
 function GameSettingsModal({ appid, name, closeModal }) {
     const [config, setConfig] = SP_REACT.useState(null);
+    const reload = () => getConfig().then(setConfig).catch(() => { });
+    const patchGame = usePatchTweaks(setConfig, reload);
     SP_REACT.useEffect(() => {
         getConfig()
             .then(setConfig)
@@ -1306,21 +1279,8 @@ function GameSettingsModal({ appid, name, closeModal }) {
     const gameSettings = config.tweaks.games[appid] || {};
     const enabled = gameSettings.enabled === true;
     const values = enabled ? { ...config.tweaks.global, ...gameSettings } : config.tweaks.global;
-    const update = (mutate) => {
-        const next = clone(config);
-        mutate(next);
-        setConfig(next);
-        saveTweaks(next.tweaks).catch(() => { });
-    };
-    const patch = (fields) => update((next) => {
-        const existing = next.tweaks.games[appid] || {};
-        next.tweaks.games[appid] = { ...existing, enabled: true, name, ...fields };
-    });
-    return (SP_JSX.jsxs(DFL.ModalRoot, { closeModal: closeModal, children: [SP_JSX.jsx("div", { style: { fontWeight: 600, marginBottom: "8px" }, children: name || `App ${appid}` }), SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: enabled, onChange: (on) => {
-                    update((next) => {
-                        next.tweaks.games[appid] = { ...(next.tweaks.games[appid] || {}), enabled: on, name };
-                    });
-                } }), enabled ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(PerfFields, { values: values, patch: patch }), SP_JSX.jsx(TweakFields, { config: config, appid: appid, values: values, patch: patch }), SP_JSX.jsx(ConfigSection, { game: { appid, name }, reload: () => getConfig().then(setConfig).catch(() => { }) })] })) : null] }));
+    const patch = (fields) => patchGame(appid, { ...fields, enabled: true, name });
+    return (SP_JSX.jsxs(DFL.ModalRoot, { closeModal: closeModal, children: [SP_JSX.jsx("div", { style: { fontWeight: 600, marginBottom: "8px" }, children: name || `App ${appid}` }), SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: enabled, onChange: (on) => patchGame(appid, { enabled: on, name }) }), enabled ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(PerfFields, { values: values, patch: patch }), SP_JSX.jsx(TweakFields, { config: config, appid: appid, values: values, patch: patch }), SP_JSX.jsx(ConfigSection, { game: { appid, name }, reload: reload })] })) : null] }));
 }
 
 // LibraryContextMenu is not exported: reach it via classname marker -> `navigator:` wrapper ->

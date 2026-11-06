@@ -5,12 +5,12 @@ import { ConfigSection } from "../components/ConfigSection";
 import { EnvVarsButton, PerfFields, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
 import { SelectEdit } from "../components/widgets";
 import { availableGames, editTargetOptions } from "../lib/games";
-import { clone } from "../lib/util";
 import type { Config } from "../types";
 
-export function Games({ config, setConfig, reload }: {
+export function Games({ config, setConfig, patch, reload }: {
   config: Config;
   setConfig: Dispatch<SetStateAction<Config | null>>;
+  patch: (appid: string, fields: Record<string, any>) => void;
   reload: () => void;
 }) {
   const runtimeGame = config.game;
@@ -21,31 +21,12 @@ export function Games({ config, setConfig, reload }: {
   const editingDefault = !game?.appid;
   const perGameEnabled = !!(game?.appid && gameSettings.enabled === true);
   const values = editingDefault || !perGameEnabled ? tweaks.global : { ...tweaks.global, ...gameSettings };
-  const patchSettings = (patch: Record<string, any>) => {
-    setConfig((current) => {
-      if (!current) return current;
-      const next = clone(current);
-      if (editingDefault) {
-        Object.assign(next.tweaks.global, patch);
-      } else if (perGameEnabled) {
-        const existing = next.tweaks.games[game!.appid] || {};
-        next.tweaks.games[game!.appid] = { ...existing, enabled: true, name: game!.name || "", ...patch };
-      }
-      return next;
-    });
+  const patchSettings = (fields: Record<string, any>) => {
+    if (editingDefault) patch("", fields);
+    else if (perGameEnabled) patch(game!.appid, { ...fields, enabled: true, name: game!.name || "" });
   };
   const setPerGameEnabled = (enabled: boolean) => {
-    if (!game?.appid) return;
-    setConfig((current) => {
-      if (!current) return current;
-      const next = clone(current);
-      next.tweaks.games[game.appid] = {
-        ...(next.tweaks.games[game.appid] || {}),
-        enabled,
-        name: game.name || "",
-      };
-      return next;
-    });
+    if (game?.appid) patch(game.appid, { enabled, name: game.name || "" });
   };
   // "" is the explicit Default target, not "nothing selected"; store a sentinel
   // so it doesn't fall back to the running game in the selectedGame derivation.
