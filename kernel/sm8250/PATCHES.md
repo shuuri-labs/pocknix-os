@@ -44,6 +44,15 @@ Last rebased: 2026-10-27 (battery time remaining).
 - **1086** Steam keeps the charging indicator after plug-in: qcom_fg CURRENT_NOW is negated so
   charging reads positive. Source: ours, fixing ROCKNIX's own 0011; goes to ROCKNIX. Drop: once
   their 0011 carries it (the sync's apply check then fails it as already applied).
+- **1097** Sleep drain drops because the SoC can reach XO shutdown (AOSS sleep): camcc-sm8250 enables
+  `cam_cc_gdsc_clk` in probe with `qcom_branch_set_clk_en()` instead of registering it as
+  `CLK_IS_CRITICAL`, which permanently prepared `cam_cc_xo_clk_src` and kept `bi_tcxo` voted on in
+  the RPMh sleep set. Source: ours, matching camcc-sm8150/sc8280xp; goes upstream (`clk: qcom`).
+- **1098** Sleep drain drops because the display PHY releases its XO vote across suspend: `dsi_phy`
+  manages its `iface` (MDSS AHB) clock via runtime PM `clk_prepare_enable()` /
+  `clk_disable_unprepare()` plus `pm_runtime_force_suspend()` instead of `pm_clk`, which kept
+  `disp_cc_mdss_ahb_clk` prepared for the lifetime of the device and held `bi_tcxo` on in the RPMh
+  sleep set. Source: ours; goes upstream (`drm/msm/dsi`).
 
 ### Display and audio
 
