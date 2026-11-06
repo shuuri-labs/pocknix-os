@@ -8,6 +8,7 @@ import os
 import pathlib
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import time
@@ -17,10 +18,10 @@ BASE_FEX_CONFIG = pathlib.Path("/usr/share/fex-emu/Config.json")
 TWEAKS_CONFIG = pathlib.Path("/etc/pocknix/game-tweaks.json")
 FEX_PROFILES_CONFIG = pathlib.Path("/usr/share/pocknix/fex-profiles.json")
 TURNIP_ARM_DIR = pathlib.Path("/usr/share/pocknix/vk-arm")
-TURNIP_X86_DIR = pathlib.Path("/usr/share/pocknix/vk-x86")
-# pressure-vessel resolves x86 graphics against the FEX rootfs, NOT the host, so pinning a version
-# the image lacks poisons the container env and the game loses Vulkan entirely.
-CONTAINER_VK_LIST = pathlib.Path("/usr/share/fex-emu/vk-x86-container.list")
+TURNIP_USER_DIR = pathlib.Path.home() / ".local/share/pocknix/turnip"
+# Same rule as Pocknix Control's lister: no path separators, no ":" (the prefix), no hidden dirs.
+TURNIP_USER_NAME = re.compile(r"[^/:.][^/:]{0,99}")
+MAX_DRIVER_BYTES = 256 << 20
 # CRT DLLs wine's NATIVE arm64 service processes import; an amd64 redist copy of these in
 # the prefix kills wineboot/services.exe with c000007b before any game code runs.
 CRT_HEAL_DLLS = ("ucrtbase.dll",)
@@ -66,10 +67,6 @@ def proton_dir(args):
 def is_arm(tool):
     # ARM Proton dists (arm64ec wine) ship native arm64 builtins; x86 dists don't.
     return tool is not None and (tool / "files/lib/wine/aarch64-windows").is_dir()
-
-
-def in_container(args):
-    return any("SteamLinuxRuntime" in a or a.endswith("/_v2-entry-point") for a in args)
 
 
 def pe_machine(path):
@@ -119,12 +116,12 @@ def merged_settings(tweaks, game_id):
     return settings
 
 
-def fex_config_dir():
-    # pressure-vessel shares $HOME into the container but not XDG_RUNTIME_DIR, and FEX silently
-    # skips an FEX_APP_CONFIG it cannot see.
+def cache_dir(name):
+    # pressure-vessel shares $HOME into the container but not XDG_RUNTIME_DIR, and the FEX config
+    # and Vulkan driver manifests written here are silently skipped if the game cannot see them.
     cache = os.environ.get("XDG_CACHE_HOME", "")
     base = pathlib.Path(cache) if cache.startswith("/") else pathlib.Path.home() / ".cache"
-    return base / "pocknix-fex"
+    return base / name
 
 
 def resolve_profile(settings, profiles):
@@ -148,7 +145,7 @@ def apply_fex(settings, game_id, profiles, tool):
     allowed = set().union(*(p["config"].keys() for p in profiles.values()))
     config.setdefault("Config", {}).update({k: v for k, v in profile["config"].items() if k in allowed})
 
-    config_dir = fex_config_dir()
+    config_dir = cache_dir("pocknix-fex")
     config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     cutoff = time.time() - 86400
     for old in config_dir.glob("*.json"):
@@ -178,39 +175,77 @@ def apply_audio_latency(settings):
         os.environ["PULSE_LATENCY_MSEC"] = value
 
 
-def apply_mesa_version(settings, tool, args):
-    # A SERIES ("25.2") resolves to the installed point release for the Proton's arch (ARM: vk-arm,
-    # x86 under FEX: vk-x86). VK_DRIVER_FILES replaces ICD enumeration: any miss skips, noted.
-    value = str(settings.get("mesaVersion", "") or "").strip()
-    m = re.fullmatch(r"(?:(arm|x86):)?([0-9][0-9.]*(?:rc[0-9]+)?)", value)
-    if not m or tool is None:
-        return
-    arch, version = m.groups()
-    flavor = "arm" if is_arm(tool) else "x86"
-    if arch and arch != flavor:
-        log(f"mesa pick {value} is {arch} but this Proton is {flavor}, using default driver")
-        return
-    base = TURNIP_ARM_DIR if flavor == "arm" else TURNIP_X86_DIR
-    candidates = []
+def read_user_file(path, limit):
+    # A FIFO or huge file here would hang or stall the launch: never block, never follow, cap the size.
     try:
-        for p in base.iterdir():
-            if (p.name == version or p.name.startswith(version + ".")) and (p / "icd.json").is_file():
-                candidates.append(p.name)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
-        pass
-    if not candidates:
-        log(f"no {base.name} turnip payload for mesa {version}, using default driver")
-        return
-    picked = max(candidates, key=lambda v: tuple(int(x) for x in re.findall(r"[0-9]+", v)))
-    if flavor == "x86" and in_container(args):
+        return None
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if not stat.S_ISREG(st.st_mode) or st.st_size > limit:
+            return None
+        return f.read(limit)
+
+
+def is_arm64_glibc(data):
+    # Android (bionic) Turnip builds link "libc.so" and can't load on this host.
+    return data[:5] == b"\x7fELF\x02" and data[18:20] == b"\xb7\x00" and b"libc.so.6\0" in data
+
+
+def user_driver_icd(name):
+    # Community Turnip zips ship only the .so (+ meta.json), so the manifest is written here.
+    lib = TURNIP_USER_DIR / name / "libvulkan_freedreno.so"
+    if not TURNIP_USER_NAME.fullmatch(name):
+        return None
+    data = read_user_file(lib, MAX_DRIVER_BYTES)
+    if not data or not is_arm64_glibc(data):
+        return None
+    api = "1.4.0"
+    for host in sorted(pathlib.Path("/usr/share/vulkan/icd.d").glob("freedreno_icd*.json")):
         try:
-            embedded = set(CONTAINER_VK_LIST.read_text().split())
-        except OSError:
-            embedded = set()
-        if picked not in embedded:
-            log(f"mesa {picked} is not embedded in the FEX rootfs image, using default driver")
-            return
-    icd = base / picked / "icd.json"
+            api = json.loads(host.read_text())["ICD"]["api_version"]
+            break
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    cache = cache_dir("pocknix-turnip")
+    cache.mkdir(parents=True, exist_ok=True)
+    icd = cache / f"{name}.json"
+    tmp = icd.with_name(f".{name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(json.dumps({"file_format_version": "1.0.1", "ICD": {"library_path": str(lib), "api_version": api}}) + "\n")
+        os.replace(tmp, icd)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return icd
+
+
+def apply_mesa_version(settings, tool):
+    # "devel" = the mesa main payload, "user:<dir>" = a driver under TURNIP_USER_DIR. Both are
+    # aarch64 only; anything else (old series pins included) runs the default driver.
+    value = str(settings.get("mesaVersion", "") or "").strip()
+    if not value or tool is None:
+        return
+    # pressure-vessel resolves an x86 game's VK_DRIVER_FILES inside the FEX rootfs, not the host.
+    if not is_arm(tool):
+        log(f"mesa pick {value}: an x86 Proton always runs its default driver")
+        return
+    icd = None
+    if value in ("devel", "26.3"):  # Shim: "26.3" pins predate mesa main's move to 27.0.
+        payloads = [p.name for p in TURNIP_ARM_DIR.glob("*devel*") if (p / "icd.json").is_file()]
+        if payloads:
+            icd = TURNIP_ARM_DIR / max(payloads, key=lambda v: tuple(int(x) for x in re.findall(r"[0-9]+", v))) / "icd.json"
+    elif value.startswith("user:"):
+        try:
+            icd = user_driver_icd(value[5:])
+        except OSError as exc:
+            log(f"mesa pick {value}: {exc}")
+    else:
+        log(f"mesa pick {value} is no longer offered, using default driver")
+        return
+    if icd is None:
+        log(f"mesa pick {value} is not installed or not a glibc aarch64 Turnip, using default driver")
+        return
     if "VK_DRIVER_FILES" not in os.environ and "VK_ICD_FILENAMES" not in os.environ:
         os.environ["VK_DRIVER_FILES"] = str(icd)
         os.environ["VK_ICD_FILENAMES"] = str(icd)
@@ -308,7 +343,7 @@ def main():
     except Exception as exc:
         log(f"failed to apply FEX config: {exc}")
     for step in (lambda: apply_audio_latency(settings),
-                 lambda: apply_mesa_version(settings, tool, args),
+                 lambda: apply_mesa_version(settings, tool),
                  lambda: apply_env_vars(settings),
                  lambda: apply_xalia(settings),
                  lambda: apply_game_modes(settings),

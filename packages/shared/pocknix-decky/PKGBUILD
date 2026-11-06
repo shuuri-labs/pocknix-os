@@ -3,13 +3,13 @@
 # The plugin frontend (dist/index.js) is prebuilt and committed — no node at package build time.
 pkgname=pocknix-decky
 pkgver=0.1.0
-pkgrel=47
+pkgrel=49
 pkgdesc="Decky Loader + Pocknix Control QAM plugin"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-# Every game's launch options name pocknix-game-launch; older pocknix-steam releases lack it.
-depends=('pocknix-steam>=0.1.0-67')
+# The pocknix-game-launch that resolves the "devel" and "user:" Mesa Version picks.
+depends=('pocknix-steam>=0.1.0-79')
 # strip truncates the PyInstaller archive appended after the ELF sections.
 options=('!strip')
 _loaderver=v3.3.0
