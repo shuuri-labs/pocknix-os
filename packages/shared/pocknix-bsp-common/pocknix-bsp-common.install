@@ -65,6 +65,27 @@ _retire_deck_polkit() {
   esac
 }
 
+# The image overlay shipped these defaults unowned; the packaged copies carry new names (an unowned
+# file at a packaged path aborts -Syu). /usr/lib copies go outright, /etc ones only unedited.
+_retire_overlay_defaults() {
+  rm -f /usr/lib/sysctl.d/60-pocknix-gaming.conf /usr/lib/systemd/journald.conf.d/10-pocknix-flash.conf
+  f=/etc/systemd/zram-generator.conf
+  if [ -f "${f}" ]; then
+    case "$(sha256sum "${f}" | cut -d' ' -f1)" in
+      583cbd04f6f2e2bf4ed185017ee807e1cd98f81137cc9d7d562d182662905adb|\
+      e96f8062c3af11628e6add631d27369931790d48c442c4fbe774de55264c2c4f) rm -f "${f}" ;;
+    esac
+  fi
+  f=/etc/NetworkManager/conf.d/20-wifi-backend.conf
+  if [ -f "${f}" ]; then
+    case "$(sha256sum "${f}" | cut -d' ' -f1)" in
+      35eb1e312c4d99575a7d517c8820c5eca9c84673b18a69fa5b54fdb2d4bd7a9a|\
+      fe419f1e47ec9628194de10c6f2f3e14cb3e77e7e6238692fa9daf00d71baa41) rm -f "${f}" ;;
+    esac
+  fi
+  return 0
+}
+
 # Enabled by its wants symlink; restart picks up a new daemon or profile file without a reboot.
 _perfd() {
   [ -d /run/systemd/system ] || return 0
@@ -86,6 +107,7 @@ post_install() {
   _retire_gamescope_rt
   _retire_gaming_limits
   _retire_deck_polkit
+  _retire_overlay_defaults
   _perfd
   _rt_ladder
 }
@@ -96,6 +118,7 @@ post_upgrade() {
   _retire_gamescope_rt
   _retire_gaming_limits
   _retire_deck_polkit
+  _retire_overlay_defaults
   _perfd
   _rt_ladder
 }

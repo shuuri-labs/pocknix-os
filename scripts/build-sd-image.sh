@@ -110,7 +110,7 @@ EOF
   for d in Desktop Documents Downloads Music Pictures Videos; do
     mkdir -p "${root}/home/deck/${d}"
   done
-  # useradd -m skips /etc/skel when the home already exists (the overlay made it).
+  # useradd -m skips /etc/skel when the home already exists (the baked Steam tree made it).
   chroot "${root}" cp -n /etc/skel/.bash_profile /etc/skel/.bashrc /home/deck/ 2>/dev/null || true
   # includes the Steam tree build-image.sh pre-extracted as root
   chroot "${root}" chown -R deck:deck /home/deck
@@ -124,10 +124,8 @@ EOF
         pocknix-volumed.service 2>/dev/null || true
   chroot "${root}" systemctl enable pocknix-decky-sync.service pocknix-decky-loader.service 2>/dev/null || true
   # pocknix-flathub.service deliberately absent: at boot it fails on DNS (the NM dispatcher starts it).
-  chroot "${root}" systemctl enable pocknix-waydroid-tuning.service 2>/dev/null || true
 
   # iwd must not run its own netconfig or it fights NM for DHCP.
-  install -d -m 755 "${root}/etc/NetworkManager/conf.d"
   # Country stays for 5 GHz regdom
   install -d -m 755 "${root}/etc/iwd"
   {

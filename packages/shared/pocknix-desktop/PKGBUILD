@@ -2,7 +2,7 @@
 # provider. Build with ./nodeps: the flavour dep would drag a whole DE into the chroot.
 pkgname=pocknix-desktop
 pkgver=0.1.0
-pkgrel=34
+pkgrel=35
 pkgdesc="pocknix desktop session launcher, Flathub seeding and flatpak fixes"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"

@@ -1,2 +1,5 @@
+[Compositing]
+LatencyPolicy=ExtremelyLow
+
 [Wayland]
 InputMethod=/usr/share/applications/org.kde.plasma.keyboard.desktop

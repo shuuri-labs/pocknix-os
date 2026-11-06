@@ -35,4 +35,4 @@ is not taken, retired numbers); files ported from another project record theirs 
 | Lepton | [packages/shared/pocknix-lepton/README.provenance](packages/shared/pocknix-lepton/README.provenance) |
 | DXVK donor | [packages/gpu/pocknix-dxvk2-donor/README.provenance](packages/gpu/pocknix-dxvk2-donor/README.provenance) |
 | Proton-GE DXVK 2 | [packages/gpu/proton-ge-dxvk2/README.provenance](packages/gpu/proton-ge-dxvk2/README.provenance) |
-| sysctl `overlay/usr/lib/sysctl.d/60-pocknix-gaming.conf` | here: from armada 60-armada-gaming.conf, values as armada's (vm.swappiness=180 for the zram swap, watchdogs off); `overlay/etc/systemd/zram-generator.conf` pairs with it. It cannot sit in `overlay/`, which ships whole. Last synced: never (hand-ported) |
+| sysctl tuning + zram swap | [packages/shared/pocknix-bsp-common/README.provenance](packages/shared/pocknix-bsp-common/README.provenance) |
