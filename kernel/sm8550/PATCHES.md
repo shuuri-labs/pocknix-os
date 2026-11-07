@@ -64,6 +64,9 @@ Last rebased: 2026-10-27 (RP6 LRA haptics).
   every writer (PowerDevil, Steam's own sysfs write, a plain echo) is right with a single write and
   nothing flashes. Gamma and floor are devicetree properties rather than constants because the
   exponent is per panel and probably per unit. Source: ours.
+- **1116** A failed brightness write no longer leaves the DSI link in HS mode: the driver restores
+  `MIPI_DSI_MODE_LPM` on the error path instead of only on success, and this panel answers `EINVAL`
+  while applying the value. Source: ours, sent to ROCKNIX. Drop: when the ROCKNIX sync carries it.
 
 ## Edits to synced files
 
