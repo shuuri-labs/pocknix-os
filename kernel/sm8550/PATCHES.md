@@ -57,6 +57,14 @@ Last rebased: 2026-10-27 (RP6 LRA haptics).
   ROCKNIX's fixed 185-215 Hz window and forced 205 Hz (the RP6 LRA calibrates at ~173 Hz).
   Source: ours.
 
+### Brightness
+
+- **1115** The two panels stop lighting up differently at the same backlight percentage: the
+  requested level is bent through a per-panel gamma inside the driver's only brightness write, so
+  every writer (PowerDevil, Steam's own sysfs write, a plain echo) is right with a single write and
+  nothing flashes. Gamma and floor are devicetree properties rather than constants because the
+  exponent is per panel and probably per unit. Source: ours.
+
 ## Edits to synced files
 
 The local delta `kernel/sm8550/sync-keep` restores after each make sync.
