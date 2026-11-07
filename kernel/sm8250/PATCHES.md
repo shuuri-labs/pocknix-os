@@ -51,6 +51,9 @@ Last rebased: 2026-10-27 (battery time remaining).
   and controller index (both 0) before it starts port 0x6020, as Android's q6afe does. Without
   them the DSP copied front left to both channels. Source: ours, from Android's q6afe; goes
   upstream (ASoC).
+- **1112** `SpkrLeft/Right PA Volume` sticks across stream starts: `wsa881x_spkr_pa_event()`
+  restores the configured `pa_gain` in `SND_SOC_DAPM_POST_PMU` after `wsa881x_pre_pmu_pa_2_0`
+  resets `WSA881X_SPKR_DRV_GAIN` to `G_12DB`. Source: ours; goes upstream (ASoC).
 
 ## Edits to synced files
 
