@@ -2,7 +2,7 @@
 # model and the input maps are model-gated, so a new board needs no new package.
 pkgname=pocknix-bsp-sm8550
 pkgver=0.2.0
-pkgrel=19
+pkgrel=20
 pkgdesc="pocknix board support: SM8550 family (RP6, Nova, Odin 2 family, Thor) — runtime board dispatch, input maps, suspend quirks, audio UCM, dual-screen touch policy"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
