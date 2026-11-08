@@ -1,0 +1,38 @@
+#!/bin/bash
+# pocknix-abl-gate — refuse an update that drops the legacy boot files unless OpenABL is in
+# charge: with any other ABL the device would not boot after it. Passes only on
+# pocknix-update-abl's needs_openabl=0 with OpenABL's boot entry on /flash; anything else refuses,
+# a failed status call included.
+# No /flash mount passes unchecked: a build chroot, or a device whose FAT did not mount (no
+# deploy can write there either).
+set -uo pipefail
+
+mountpoint -q /flash || exit 0
+status="$(/usr/bin/pocknix-update-abl --status 2>/dev/null)"
+state="$(sed -n 's/^state=//p' <<<"${status}")"
+running="$(sed -n 's/^running_openabl=//p' <<<"${status}")"
+if [ "$(sed -n 's/^needs_openabl=//p' <<<"${status}")" = 0 ]; then
+  # Without an entry OpenABL falls back to EFI/BOOT/BOOTAA64.EFI, which this update stops refreshing.
+  [ -f /flash/Image ] && [ -f /flash/loader/entries/pocknix.conf ] && exit 0
+  cat >&2 <<MSG
+
+  pocknix: this update needs OpenABL's boot entry on /flash, which is missing.
+  Run: sudo /usr/lib/pocknix/pocknix-boot-deploy (it says what is wrong, e.g. a full /flash),
+  then update again. Nothing has been changed.
+
+MSG
+  exit 1
+fi
+
+# Pocknix Control's updater matches the first line's wording.
+cat >&2 <<MSG
+
+  pocknix: this update needs the OpenABL bootloader, which this device does not run yet.
+  Without it the device would not boot after the update.
+  (bootloader status: ${state:-unknown}${running:+, running OpenABL ${running}})
+
+  Install it from Pocknix Tools > Advanced > Bootloader (or run: sudo pocknix-update-abl),
+  restart, then update again. Nothing has been changed.
+
+MSG
+exit 1

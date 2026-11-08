@@ -4,7 +4,7 @@
 Operation = Install
 Operation = Upgrade
 Type = Path
-Target = usr/share/pocknix/bootloader/rocknix_abl/*
+Target = usr/share/pocknix/bootloader/openabl/*
 
 [Action]
 Description = pocknix: refreshing the ABL install kit on /flash (no bootloader is written)...

@@ -7,17 +7,28 @@
 set -euo pipefail
 
 FLASH="${FLASH:-/flash}"
-KIT=/usr/share/pocknix/bootloader/rocknix_abl
+KIT=/usr/share/pocknix/bootloader/openabl
+OLD="${FLASH}/rocknix_abl"
 
 [ -d "${KIT}" ] || { echo "pocknix-refresh-abl-kit: no ${KIT} — nothing to do"; exit 0; }
 # build-sd-image.sh populates the FAT itself; /flash is not a mount there.
 mountpoint -q "${FLASH}" || { echo "pocknix-refresh-abl-kit: ${FLASH} not mounted — skipping (build chroot?)"; exit 0; }
 
 mount -o remount,rw "${FLASH}" 2>/dev/null || true
-mkdir -p "${FLASH}/rocknix_abl"
+mkdir -p "${FLASH}/openabl"
 # Copy, never mirror: the stock-ABL backups live in this same directory and
 # an rsync --delete would destroy them.
-cp -f "${KIT}"/* "${FLASH}/rocknix_abl/"
+cp -f "${KIT}"/* "${FLASH}/openabl/"
+
+# The pre-OpenABL kit folder: its backups move over (never onto one already there), its kit
+# files go, and anything else the user put there stays.
+if [ -d "${OLD}" ]; then
+  for f in abl_a.img abl_b.img; do
+    if [ -f "${OLD}/${f}" ] && [ ! -e "${FLASH}/openabl/${f}" ]; then mv "${OLD}/${f}" "${FLASH}/openabl/${f}"; fi
+  done
+  rm -f "${OLD}"/abl_signed-*.elf "${OLD}"/{README,flash_abl.sh,backup_abl.sh,restore_backup_abl.sh,version}
+  rmdir "${OLD}" 2>/dev/null || true
+fi
 sync
 
-echo "pocknix-refresh-abl-kit: refreshed ${FLASH}/rocknix_abl (v$(cat "${KIT}/version" 2>/dev/null || echo unknown); backups kept)"
+echo "pocknix-refresh-abl-kit: refreshed ${FLASH}/openabl (v$(cat "${KIT}/version" 2>/dev/null || echo unknown); backups kept)"

@@ -1,28 +1,27 @@
-# pocknix-bootloader-sm8550 — the ROCKNIX ABL install kit for SM8550 boards.
-# Boot contract (qcom-abl): XBL -> ABL -> /KERNEL (Android boot image) off any FAT partition.
-# The factory ABL boots only Android, so the ROCKNIX ABL must be flashed to abl_a/abl_b ONCE before
-# any SD boots — unlike sm8250, whose factory ABL chainloads UEFI GRUB. One elf covers the whole
-# SM8550 family: ROCKNIX keys it by SoC, not board.
+# pocknix-bootloader-sm8550 — the OpenABL install kit for SM8550 boards.
+# The factory ABL boots only Android, so an ABL must be flashed to abl_a/abl_b ONCE before any SD
+# boots. One elf covers the whole SM8550 family: OpenABL keys it by SoC, not board.
 # Nothing here flashes at build or install time; both flashing paths (the kit by hand from rooted
 # Android, pocknix-update-abl afterwards) are deliberate user actions.
 pkgname=pocknix-bootloader-sm8550
 _ablver=1.2
 pkgver=${_ablver}
-pkgrel=2
-pkgdesc="SM8550 qcom-abl boot payload: ROCKNIX ABL install kit (rocknix_abl)"
+pkgrel=3
+pkgdesc="SM8550 boot payload: OpenABL install kit (openabl)"
 arch=('aarch64')
 # !strip: a stripped bootloader is an unbootable one.
 options=('!strip')
+# bsp-common 37 reads the kit from openabl/ and writes the boot files OpenABL loads.
+depends=('pocknix-bsp-common>=0.1.0-37')
 url="https://github.com/shuuri-labs/pocknix-os"
-license=('BSD-3-Clause')   # Qualcomm ABL (edk2 LinuxLoader); kit scripts GPL-2.0
-# Our mirror: the upstream ABL repo was deleted. The sha512 below is the original release.
-source=("https://pocknix.shuuri.net/mirror/rocknix-abl-v${_ablver}.tar.gz"
+license=('GPL-3.0-or-later' 'BSD-3-Clause')   # OpenABL; the Qualcomm ABL it patches
+source=("https://github.com/OpenHandheldCollective/OpenABL/releases/download/v${_ablver}/openabl-v${_ablver}.tar.gz"
         'README'
         'flash_abl.sh.template'
         'backup_abl.sh'
         'restore_backup_abl.sh'
         '95-pocknix-abl-kit.hook')
-sha512sums=('b2d897b4f681f22d416201e332a5c27efc00b0139c3b0806126f8913182285e803b8a3726a7c9a1609956049d4b6d054b3529bd0f508d1a86ab9ab3bf79dca01'
+sha512sums=('41f8b0460bc5c2cbbec312911377e52c41eda7c4dcd365bc76486d81cf4da0e9072df00edaf3afacb87565d856487d0aac3c8b5506d46b9ea6c901c319635492'
             'SKIP'
             'SKIP'
             'SKIP'
@@ -31,16 +30,16 @@ sha512sums=('b2d897b4f681f22d416201e332a5c27efc00b0139c3b0806126f8913182285e803b
 
 prepare() {
   # the release ships a .sha256 sidecar per elf
-  ( cd "rocknix-abl-v${_ablver}" && sha256sum -c "abl_signed-SM8550.elf.sha256" )
+  ( cd "openabl-v${_ablver}/SM8550" && sha256sum -c "abl_signed-SM8550.elf.sha256" )
   sed 's/%DEVICE%/SM8550/g' flash_abl.sh.template > flash_abl.sh
   # pocknix-update-abl reports the shipped version; the elf itself carries none
   echo "${_ablver}" > version
 }
 
 package() {
-  local kit="${pkgdir}/usr/share/pocknix/bootloader/rocknix_abl"
+  local kit="${pkgdir}/usr/share/pocknix/bootloader/openabl"
 
-  install -Dm644 "rocknix-abl-v${_ablver}/abl_signed-SM8550.elf" "${kit}/abl_signed-SM8550.elf"
+  install -Dm644 "openabl-v${_ablver}/SM8550/abl_signed-SM8550.elf" "${kit}/abl_signed-SM8550.elf"
   install -Dm644 README                 "${kit}/README"
   install -Dm755 flash_abl.sh           "${kit}/flash_abl.sh"
   install -Dm755 backup_abl.sh          "${kit}/backup_abl.sh"

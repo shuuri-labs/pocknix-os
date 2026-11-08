@@ -52,7 +52,7 @@ new image.
 devices/<soc>/
   profile.conf                    # build-time facts that differ per family (see devices/sm8550):
                                   #   SOC (selects kernel/<soc>/ + vendor/rocknix-<soc>/),
-                                  #   BOOTLOADER (qcom-abl | arm-efi),
+                                  #   BOOTLOADER (qcom-abl | arm-efi | bls),
                                   #   KERNEL_CMDLINE_ROOT / KERNEL_CMDLINE_EXTRA (ONE cmdline
                                   #   for the family), DEVICE_PRETTY,
                                   #   GPU_GEN (Adreno generation, a6xx/a7xx/a8xx: selects the
@@ -103,7 +103,7 @@ populated by `make sync` against the ROCKNIX device dir named in `ROCKNIX_SOC`);
 package needs no recipe of its own (`packages/soc/linux-pocknix/` packages `make kernel` output,
 plus `mkbootimg` on qcom-abl; the /flash deploy is bsp-common's and needs nothing per SoC), and a
 `packages/soc/pocknix-bootloader-<soc>/` - on arm-efi SoCs the GRUB payload
-+ a grub.cfg.in template (see pocknix-bootloader-sm8250), on both styles the ROCKNIX ABL install kit
++ a grub.cfg.in template (see pocknix-bootloader-sm8250), on every style the OpenABL install kit
 copied to the SD boot FAT. Each SoC gets its own pacman repo tree
 (`build/localrepo/<soc>`, published at `POCKNIX_REPO_URL/<soc>`): the tuned packages
 (mesa, gamescope) share pkgnames across SoCs with different
@@ -116,7 +116,7 @@ the meta's `gpus` packages against `GPU_GEN`,
 the models table against boards/ and the dts model lines (and grub.cfg + board-select on
 arm-efi), the consumers' fallbacks, the rendered device.conf and family.conf, and that
 the cmdline has no committed copy outside the profile. The BSP PKGBUILD installs what the
-build stages into its `./staged` (device.conf, family.conf, and on qcom-abl kernel-cmdline):
+build stages into its `./staged` (device.conf, family.conf, kernel-cmdline):
 copy an existing family's `package()`. A new tree is never published until its first
 `make stage`/`make publish`; stage-check skips it for the other SoCs until then.
 
@@ -126,21 +126,32 @@ On the device the style is `POCKNIX_BOOT_STYLE`, rendered into the BSP's family.
 `BOOTLOADER`; bsp-common's `pocknix-boot-deploy` runs that style's /flash deploy for every
 kernel update, rollback and cmdline change. Kernel packages ship no deploy scripts or hooks.
 
+Every style also gets the OpenABL files, written by bsp-common's `pocknix-bls-deploy`: the raw
+`/Image`, every board dtb in `/dtbs/` (OpenABL's *Device model* menu lists them by dts `model`),
+and `loader/entries/pocknix.conf`, a Boot Loader Spec entry whose `options` are the BSP's
+`/usr/lib/pocknix/kernel-cmdline` (rendered by build-packages.sh from the profile's
+`KERNEL_CMDLINE`) with `root=` pinned to the install's root PARTUUID. It has no `devicetree`
+line, so the model picked in OpenABL's menu supplies the dtb. `Image.bak` +
+`pocknix-previous.conf` keep the previous kernel one menu pick away; `loader/loader.conf` names
+the default. OpenABL tries these entries before `EFI/BOOT/BOOTAA64.EFI`, and no other ABL reads
+them, so each ABL boots its own payload from the same FAT. The SD boot FAT also carries
+`openabl/` (pocknix-bootloader-<soc>): the first-install kit for flashing OpenABL from rooted
+stock Android - inert at boot, pocknix never flashes it itself (only the user-run
+`pocknix-update-abl`). bsp-common's dormant `00-pocknix-abl-gate.hook` refuses any package
+carrying `usr/share/pocknix/requires-openabl` unless the device runs OpenABL and has its boot
+entry.
+
 * `qcom-abl` (sm8550): the ROCKNIX ABL boots an Android boot image (`/KERNEL`,
-  mkbootimg, cmdline baked in, all dtbs appended - ABL picks by board id). The BSP
-  ships `/usr/lib/pocknix/kernel-cmdline`, which build-packages.sh renders from the profile's
-  `KERNEL_CMDLINE` into its `./staged`; bsp-common's kernel hook rebuilds /flash/KERNEL on device.
-  The SD boot FAT also carries `rocknix_abl/` (pocknix-bootloader-<soc>): ROCKNIX's
-  first-install kit for flashing that ABL from rooted stock Android - inert at boot,
-  pocknix never flashes it itself.
+  mkbootimg, cmdline baked in, all dtbs appended - ABL picks by board id); bsp-common's kernel
+  hook rebuilds /flash/KERNEL on device.
 * `arm-efi` (sm8250): the ABL chainloads GRUB (`EFI/BOOT/bootaa64.efi`); `/KERNEL` is
   a RAW Image; the board dtb is a separate `/boot/grub/<board>.dtb`; the cmdline lives
   in grub.cfg, rendered from `packages/soc/pocknix-bootloader-<soc>/grub.cfg.in` with the
   profile's `KERNEL_CMDLINE` in place of each entry's `@KERNEL_CMDLINE@` (build-packages.sh
   stages it; a profile edit rebuilds the BSP and the bootloader package). Board selection at the boot
-  level is the GRUB menuentry; at the OS level it's device.conf + model gates.
-  The stock ABL SD-boots this chain too; the ROCKNIX ABL kit on the SD boot FAT is
-  optional here.
+  level is the GRUB menuentry; at the OS level it's device.conf + model gates. A factory ABL
+  boots this chain.
+* `bls`: the OpenABL files alone.
 
 ## The runtime contract (`/usr/lib/pocknix/device.conf` -> `boards/<board>.conf`)
 
@@ -167,7 +178,7 @@ leaves it unset); otherwise it says what a board without the key gets. Keys:
 | `POCKNIX_BIG_CORES` | via cores.sh: pocknix-steam-env (-> pocknix-game-launch), pocknix-rt-ladder, emulator launchers, Pocknix Control | required | cores games and emulators are pinned to; the cores left out are the small cores irq work goes to (on a SoC with no little cluster, leave two mids out). The one among them with the highest cpu_capacity, if any, is the prime core Fastest Core First puts first |
 | `POCKNIX_SPEAKER_SINK` | pocknix-speaker-dsp-render | no speaker DSP | `node.name` of the UCM speaker sink the speaker DSP sits in front of; the same on every board of a family, so it lives in family.conf |
 | `POCKNIX_SPEAKER_PROFILE` | pocknix-speaker-dsp-render | no speaker DSP | the board's speaker profile: `usr/share/pocknix/speaker-dsp/<name>.conf` in the family BSP (see "Speaker DSP profiles") |
-| `POCKNIX_BOOT_STYLE` | pocknix-install-internal, pocknix-boot-deploy (the kernel hook, pocknix-rollback, pocknix-cmdline-sync) | required | qcom-abl or arm-efi (rendered from the profile's `BOOTLOADER`): selects the /flash kernel deploy (`pocknix-build-bootimg` or `pocknix-update-boot`) and the internal-install boot-file handling (arm-efi pins grub.cfg + fstab to internal PARTUUIDs) |
+| `POCKNIX_BOOT_STYLE` | pocknix-install-internal, pocknix-boot-deploy (the kernel hook, pocknix-rollback, pocknix-cmdline-sync) | required | qcom-abl, arm-efi or bls (rendered from the profile's `BOOTLOADER`): selects the legacy /flash kernel deploy beside the OpenABL one (`pocknix-build-bootimg`, `pocknix-update-boot` or none) and the internal-install fstab (PARTUUID except on qcom-abl; arm-efi also pins grub.cfg) |
 | `POCKNIX_INTERNAL_DISK` | pocknix-install/uninstall-internal, installer-gui, pocknix-tools, pocknix-rollback, pocknix-internal-boot-rename | required | internal disk |
 | `POCKNIX_BOOT_GPT_NAME` / `POCKNIX_BOOT_FAT_LABEL`, `POCKNIX_ROOT_LABEL` | pocknix-install/uninstall-internal, pocknix-tools (root label), pocknix-rollback, pocknix-internal-boot-rename (root label) | required | internal-install boot contract (the two labels are rendered from `SD_FAT_LABEL` / `ROOT_LABEL`, config/pocknix.conf defaults a profile may override) |
 

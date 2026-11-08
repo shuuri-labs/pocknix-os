@@ -67,6 +67,9 @@ if [ -n "${internal}" ]; then
   [ -d "${SNAPS}" ] || die "internal install has no snapshots subvolume"
   mount "${int_boot}" "${INT_FLASH}" || die "cannot mount internal boot ${int_boot}"
   FLASH="${INT_FLASH}"
+  # The boot entry pins root= by PARTUUID, and the running root here is the SD's.
+  ROOT_PARTUUID="$(blkid -s PARTUUID -o value "${int_root}" 2>/dev/null || true)"
+  [ -n "${ROOT_PARTUUID}" ] || die "cannot read the PARTUUID of ${int_root}"
   # kernel-diff reference: what the internal install would boot today.
   cur_default="$(btrfs subvolume get-default "${TOP}" | sed -n 's/.* path //p')"
   KERNEL_REF="${TOP}/${cur_default}/boot/Image"
@@ -139,9 +142,13 @@ if ! cmp -s "${KERNEL_REF}" "${TOP}/${new}/boot/Image"; then
   regen=/usr/lib/pocknix/pocknix-boot-deploy
   [ -x "${regen}" ] || die "kernel differs but ${regen} is missing (pocknix-bsp-common not installed?)"
   echo "pocknix-rollback: target kernel differs — staging boot files from the snapshot ($("${regen}" --style))"
-  FLASH="${FLASH}" SRCROOT="${TOP}/${new}" OUT_SUFFIX=".new" "${regen}" \
-    || die "boot-file staging failed — NOTHING was committed, system unchanged"
-  [ -f "${FLASH}/KERNEL.new" ] || die "staging produced no ${FLASH}/KERNEL.new — aborting before commit"
+  # A failed staging must leave no *.new: the repair service would activate them on a later boot.
+  clear_staged() { while read -r f; do rm -f "${f}"; done < <(snap_staged_files "${FLASH}"); }
+  clear_staged
+  FLASH="${FLASH}" SRCROOT="${TOP}/${new}" OUT_SUFFIX=".new" ROOT_PARTUUID="${ROOT_PARTUUID:-}" "${regen}" \
+    || { clear_staged; die "boot-file staging failed — NOTHING was committed, system unchanged"; }
+  [ -f "${FLASH}/Image.new" ] || [ -f "${FLASH}/KERNEL.new" ] \
+    || { clear_staged; die "staging produced no ${FLASH}/Image.new or KERNEL.new — aborting before commit"; }
   staged=1
 fi
 
@@ -152,10 +159,7 @@ btrfs subvolume set-default "$(btrfs inspect-internal rootid "${TOP}/${new}")" "
 # A crash in this window leaves *.new for pocknix-rollback-repair.service to finish.
 if [ -n "${staged}" ]; then
   mount -o remount,rw "${FLASH}" 2>/dev/null || true
-  shopt -s nullglob
-  for f in "${FLASH}/KERNEL.new" "${FLASH}/KERNEL.md5.new" "${FLASH}"/boot/grub/*.dtb.new; do
-    [ -f "${f}" ] && mv -f "${f}" "${f%.new}"
-  done
+  while read -r f; do mv -f "${f}" "${f%.new}"; done < <(snap_staged_files "${FLASH}")
   sync
 fi
 

@@ -49,3 +49,13 @@ snap_list_json() {  # $1 = the snapshots dir
   jq -s '[.[] | {id, created, ok: .transaction_ok, kernel: .kernel_in_transaction,
                  targets: .targets_head, more: ([.targets_count - (.targets_head | length), 0] | max)}]' "${infos[@]}"
 }
+
+# The boot files a rollback stages as *.new, kernels before the entries that name them.
+snap_staged_files() {  # $1 = the boot FAT mount
+  local f
+  for f in "$1/KERNEL.new" "$1/KERNEL.md5.new" "$1"/boot/grub/*.dtb.new \
+           "$1/Image.new" "$1"/dtbs/*.dtb.new "$1"/loader/entries/*.conf.new; do
+    [ -f "${f}" ] && printf '%s\n' "${f}"
+  done
+  return 0
+}

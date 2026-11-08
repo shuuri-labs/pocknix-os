@@ -4,14 +4,12 @@
 # pocknix-rollback). Marker-gated oneshot; always exits 0.
 set -uo pipefail
 
+. /usr/lib/pocknix/snapshot-lib.sh
+
 FLASH=/flash
 mountpoint -q "${FLASH}" || exit 0
 
-staged=()
-shopt -s nullglob
-for f in "${FLASH}/KERNEL.new" "${FLASH}/KERNEL.md5.new" "${FLASH}"/boot/grub/*.dtb.new; do
-  [ -f "${f}" ] && staged+=("${f}")
-done
+mapfile -t staged < <(snap_staged_files "${FLASH}")
 [ "${#staged[@]}" -gt 0 ] || exit 0
 
 mount -o remount,rw "${FLASH}" 2>/dev/null || true

@@ -253,8 +253,8 @@ build_one() {
     fi
     cp -a "${kout}" "${BROOT}/build/${name}/staged"
   fi
-  # The cmdline is written once, in the profile: the qcom-abl BSP installs it for the on-device
-  # boot image rebuild, the arm-efi bootloader renders it into grub.cfg.
+  # The cmdline is written once, in the profile: the BSP installs it for the on-device boot files,
+  # the arm-efi bootloader renders it into grub.cfg.
   if [ "${name}" = "${DEVICE_BSP_PKG}" ] || [ "${name}" = "pocknix-bootloader-${SOC}" ]; then
     mkdir -p "${BROOT}/build/${name}/staged"
     printf '%s\n' "${KERNEL_CMDLINE}" > "${BROOT}/build/${name}/staged/kernel-cmdline"

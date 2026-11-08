@@ -13,16 +13,18 @@ Grab the image for your device from the
 (`zstd -d`, 7-Zip, or let your flasher do it), and flash it to the microSD card (Balena Etcher,
 `dd`, etc.).
 
-## 2. Install the ROCKNIX bootloader
+## 2. Install the OpenABL bootloader
 
-The ROCKNIX ABL replaces the stock bootloader with one that can boot Linux from the SD card or
-internal storage. It is **required** on every device.
+[OpenABL](https://github.com/OpenHandheldCollective/OpenABL) replaces the stock bootloader with one
+that can boot Linux from the SD card or internal storage. It is **required** on every device. A
+device already running pocknix on another bootloader gets it from Pocknix Tools (see
+[Moving to OpenABL](#moving-to-openabl)).
 
-The flashed SD card carries the install kit in its `rocknix_abl` folder, visible from Android when
+The flashed SD card carries the install kit in its `openabl` folder, visible from Android when
 the card is inserted.
 
-1. Copy the `rocknix_abl` folder from the SD card to the root of Android's internal storage.
-2. Open **Settings → Handheld Settings → Advanced → Run Script as Root**, go into the `rocknix_abl`
+1. Copy the `openabl` folder from the SD card to the root of Android's internal storage.
+2. Open **Settings → Handheld Settings → Advanced → Run Script as Root**, go into the `openabl`
    folder you just copied, and run `backup_abl.sh` (saves your stock bootloader next to the
    scripts), then `flash_abl.sh`.
 3. **(Recommended)** copy the `abl_a.img` / `abl_b.img` backups from that folder to somewhere off
@@ -32,11 +34,12 @@ the card is inserted.
 
 ## 3. Boot pocknix
 
-1. Hold **Volume −** while powering on to open the ABL menu. Volume keys move through the entries,
-   the power key selects.
-2. Set **Boot mode** to **Linux** and **Boot source** to **SD Card**. **SM8550 devices must also
-   set the device model to match the device**; SM8250 devices can skip this.
-3. Insert the flashed microSD and boot.
+1. Hold **Volume −** while powering on to open the OpenABL menu. Volume keys move through the
+   entries, the power key selects.
+2. Set **Boot mode** to **Linux**, **Boot source** to **SD card** (or **Auto**, which tries
+   internal storage first), and **Device model** to your device. The model is what tells Linux
+   which device it runs on; without it the screen stays black.
+3. Insert the flashed microSD and select **Start**.
 
 The first boot into game mode can take a long while, especially from an SD card. Leave it be; it
 will come up.
@@ -48,10 +51,14 @@ will come up.
 ### Newer RP5 / Flip 2 panels
 
 Retroid Pocket 5 / Flip 2 units from 2026 batches (sold as 12 GB) have a different display panel
-(Visionox). pocknix supports it but cannot tell the two panels apart before the screen driver
-runs, so on those units the first boot stays black (you can hear Steam start). To fix it: with the
-SD card in a PC, create an empty file named `visionox` (or `visionox.txt`) in the top folder of the
-small `POCKNIX` partition, next to `KERNEL`, then boot again.
+(Visionox). Nothing can tell the two panels apart before the screen driver runs, so on those units
+pick the Visionox entry in **Device model**: **Retroid Pocket 5 Visionox** or **Retroid Pocket
+Flip2 Visionox**. With the wrong one the screen stays black (you can hear Steam start); open the
+menu again and change it.
+
+Still on the factory bootloader (booting through GRUB)? Then, with the SD card in a PC, create an
+empty file named `visionox` (or `visionox.txt`) in the top folder of the small `POCKNIX`
+partition, next to `KERNEL`, and boot again.
 
 ## Updating
 
@@ -65,3 +72,18 @@ Updates, kernel included, arrive through the pocknix package repo, with no refla
 
 The Steam client updates itself separately and tells you when one is available. If an update goes
 wrong, see [snapshots and rollback](snapshots.md).
+
+### Moving to OpenABL
+
+pocknix is moving every device to OpenABL. A coming update will not install on a device that runs
+another bootloader (the factory one, or the ROCKNIX ABL older pocknix cards installed), and Pocknix
+Tools asks about it when it opens. To move:
+
+1. Plug the device in.
+2. **Pocknix Tools → Advanced → Bootloader → Install** (or `sudo pocknix-update-abl` in a
+   terminal). It backs up the current bootloader first.
+3. Restart into the OpenABL menu: Tools offers it when the install finishes (or hold
+   **Volume −** while it restarts). Check **Boot mode** is **Linux**, set **Boot source** and
+   **Device model** to your device (Visionox units: the Visionox entry), then select **Start**.
+   Skip this and the device looks dead: black screen, no network. Restart holding **Volume −**
+   and set the model to recover.

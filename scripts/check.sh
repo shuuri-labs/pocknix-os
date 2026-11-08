@@ -394,9 +394,9 @@ check_family() {  # $1 = SoC
   # The build renders the cmdline from the profile; a committed copy would be a second source.
   [ ! -e "${bsp}/root/usr/lib/pocknix/kernel-cmdline" ] ||
     echo "BSP commits root/usr/lib/pocknix/kernel-cmdline, which the build renders from the profile"
-  # Without it the on-device boot image rebuild skips silently, leaving the old kernel booting.
-  [ "$(profile_get "${dev}" BOOTLOADER)" != qcom-abl ] || grep -q 'staged/kernel-cmdline' "${bsp}/PKGBUILD" ||
-    echo "qcom-abl BSP PKGBUILD does not install staged/kernel-cmdline"
+  # Without it the on-device boot-file writers skip or refuse, leaving the old kernel booting.
+  grep -q 'staged/kernel-cmdline' "${bsp}/PKGBUILD" ||
+    echo "BSP PKGBUILD does not install staged/kernel-cmdline"
   [ -f "${bsp}/boards/models" ] || return 0
   # arm-efi picks the dtb before Linux runs, so GRUB needs a menuentry per board too.
   grub="${POCKNIX_ROOT}/packages/soc/pocknix-bootloader-${soc}/grub.cfg.in"

@@ -4,12 +4,13 @@
 # chroot).
 pkgname=pocknix-snapshots
 pkgver=0.1.0
-pkgrel=9
+pkgrel=10
 pkgdesc="pocknix pre-update btrfs snapshots and rollback (subvolume set-default)"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-depends=('btrfs-progs' 'jq' 'util-linux' 'pacman-contrib')
+# bsp-common 37: the boot-file writer that stages Image.new and honours ROOT_PARTUUID.
+depends=('btrfs-progs' 'jq' 'util-linux' 'pacman-contrib' 'pocknix-bsp-common>=0.1.0-37')
 backup=('etc/pocknix/snapshots.conf')
 install=pocknix-snapshots.install
 source=('05-pocknix-snapshot.hook' '99-pocknix-snapshot-post.hook'

@@ -1,4 +1,4 @@
-# bootaa64.efi + rocknix_abl provenance
+# bootaa64.efi + openabl provenance
 
 Vendored ROCKNIX GRUB binary, extracted verbatim from the FAT partition
 (EFI/BOOT/bootaa64.efi) of the official release image:
@@ -20,8 +20,8 @@ commands are wanted.
 
 Note: the RP5's and Flip 2's factory ABL already provides the UEFI environment
 that chainloads this bootaa64.efi. "tests against the same ABL" above refers to
-ROCKNIX validating this GRUB binary against that factory ABL. Nothing on sm8250
-flashes an ABL automatically - see the kit section below.
+ROCKNIX validating this GRUB binary against that factory ABL. GRUB stays only
+until OpenABL is required.
 
 grubenv is the pristine environment block from the same image. grubenv on
 /flash is user state (saved menu choice) - never overwritten on upgrade.
@@ -30,33 +30,32 @@ grub.cfg.rocknix-reference is the GENERATED grub.cfg from the same image
 (boot=LABEL LibreELEC-style cmdline, savedefault menu, one entry per board) -
 kept as a reference only. Our shipped grub.cfg is the pocknix-authored
 static one: root=PARTUUID (re-pinned by pocknix-update-grub), one entry per
-board and panel revision, timeout 0.
+board and panel revision, timeout 0, and no `search`: every entry boots from
+the FAT GRUB was loaded from, which holds this install's kernel.
 
 
-# rocknix_abl kit (SM8250)
+# openabl kit (SM8250)
 
 abl_signed-SM8250.elf is NOT committed here - the PKGBUILD fetches it from the
-same pinned ROCKNIX ABL release the sm8550 package uses:
+same pinned OpenABL release the sm8550 package uses:
 
-  release:  https://github.com/ROCKNIX/abl/releases/tag/v1.2
-            (repo deleted upstream by 2026-10-23; fetched from our mirror,
-             https://pocknix.shuuri.net/mirror/rocknix-abl-v1.2.tar.gz, same sha512)
-  asset:    rocknix-abl-v1.2.tar.gz
-  tarball sha512: b2d897b4f681f22d416201e332a5c27efc00b0139c3b0806126f8913182285e8
-                  03b8a3726a7c9a1609956049d4b6d054b3529bd0f508d1a86ab9ab3bf79dca01
-  abl_signed-SM8250.elf sha256 (release's own sidecar, re-checked in prepare()):
-                  ef5248b26b3d55bd538bbcc55042918255a47b04990e93d681265b9e4af3dca6
+  release:  https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.2
+  asset:    openabl-v1.2.tar.gz (one folder per chipset)
+  source:   openabl-v1.2-source.tar.xz on the same release (the GPL-3.0 corresponding source)
+  tarball sha512: 41f8b0460bc5c2cbbec312911377e52c41eda7c4dcd365bc76486d81cf4da0e9
+                  072df00edaf3afacb87565d856487d0aac3c8b5506d46b9ea6c901c319635492
+  SM8250/abl_signed-SM8250.elf sha256 (release's own sidecar, re-checked in prepare()):
+                  628dbff74f5b570b897c14725f2c36ff2ca5fe018998e2c248a3d15d906ccef9
 
-The four kit scripts are the same verbatim ROCKNIX sources the sm8550 package
-vendors, with %DEVICE% -> SM8250 (their package.mk substitution). Keep the two
-packages' copies identical; diff both against the ROCKNIX tree when advancing
-the sync pin.
+OpenABL is not the ROCKNIX ABL v1.2 the kit shipped before (different bytes,
+same version label). It boots Boot Loader Spec entries (loader/entries/*.conf)
+ahead of EFI/BOOT/BOOTAA64.EFI, so a FAT carrying both GRUB and the entry
+written by pocknix-bls-deploy boots GRUB on a factory ABL and the entry here.
 
-Why ship it when RP5/Flip 2 do not need it: SM8250 boards exist whose factory
-ABL has no usable UEFI (ROCKNIX added this kit for the Ayn Thor Lite), and it
-does not change our boot contract - the ROCKNIX ABL keeps an EFI boot path and
-ROCKNIX's own SM8250 target is arm-efi while shipping it, so GRUB still
-chainloads. On an RP5 it buys the ROCKNIX boot menu, not a boot fix.
+The four kit scripts are verbatim copies of ROCKNIX's
+packages/tools/openabl/sources/ (distribution next 13d241a7d3), with %DEVICE%
+-> SM8250 (their package.mk substitution). Keep the two packages' copies
+identical; diff both against the ROCKNIX tree when advancing the sync pin.
 
 Nothing flashes it automatically. The in-OS path is pocknix-update-abl; the
 kit's Android scripts remain the path for a device that cannot boot pocknix.

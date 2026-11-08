@@ -1,0 +1,101 @@
+#!/bin/bash
+# pocknix-bls-deploy — write the OpenABL boot files on /flash from the installed kernel: /Image,
+# /dtbs/*.dtb and loader/entries/pocknix.conf, whose options are kernel-cmdline with root= pinned
+# to this install's root PARTUUID. Legacy payloads (KERNEL, EFI/, boot/grub/) are left alone.
+# Every write is tmp + rename, Image, then dtbs, then the entries: a cut leaves the previous set
+# or the new one under each name. Idempotent: an unchanged Image keeps Image.bak.
+# FLASH / SRCROOT / OUT_SUFFIX as in pocknix-build-bootimg; ROOT_PARTUUID overrides the running root.
+set -euo pipefail
+
+FLASH="${FLASH:-/flash}"
+SRCROOT="${SRCROOT:-}"
+OUT_SUFFIX="${OUT_SUFFIX:-}"
+MARGIN=$((8 * 1024 * 1024))
+
+say() { echo "pocknix-bls-deploy: $*"; }
+die() { echo "pocknix-bls-deploy: ERROR $*" >&2; exit 1; }
+
+[ -f "${SRCROOT}/boot/Image" ] || { say "no ${SRCROOT}/boot/Image — nothing to do"; exit 0; }
+mountpoint -q "$FLASH" || { say "$FLASH not mounted — skipping (build chroot?)"; exit 0; }
+
+# Snapshots from before the BSP shipped kernel-cmdline have none of their own.
+cmdline_file="${SRCROOT}/usr/lib/pocknix/kernel-cmdline"
+[ -f "$cmdline_file" ] || cmdline_file=/usr/lib/pocknix/kernel-cmdline
+[ -f "$cmdline_file" ] || die "no kernel-cmdline (is pocknix-bsp-<soc> installed?); $FLASH untouched"
+
+if [ -z "${ROOT_PARTUUID:-}" ]; then
+  # sed drops btrfs's "[/subvol]", which blkid cannot open
+  ROOT_PARTUUID="$(blkid -s PARTUUID -o value "$(findmnt -no SOURCE / | sed 's/\[.*//')" 2>/dev/null || true)"
+fi
+[ -n "$ROOT_PARTUUID" ] || die "could not resolve the root's PARTUUID; $FLASH untouched"
+options="$(sed -E "s|root=[^ ]*|root=PARTUUID=${ROOT_PARTUUID}|" "$cmdline_file")"
+grep -q "root=PARTUUID=${ROOT_PARTUUID}" <<<"$options" || die "$cmdline_file has no root=; $FLASH untouched"
+kver="$(cat "${SRCROOT}/usr/lib/pocknix/kernelrelease" 2>/dev/null || echo unknown)"
+shopt -s nullglob
+dtbs=("${SRCROOT}"/boot/dtbs/*.dtb)
+# The prune below would empty /dtbs, and OpenABL boots a black screen without a model's dtb.
+[ "${#dtbs[@]}" -gt 0 ] || die "no ${SRCROOT}/boot/dtbs/*.dtb; $FLASH untouched"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"; rm -f "$FLASH"/Image*.tmp "$FLASH"/dtbs/*.tmp "$FLASH"/loader/*.tmp "$FLASH"/loader/entries/*.tmp' EXIT
+entry() {  # $1 = title, $2 = kernel path, $3 = version (none: Image.bak's is not recorded)
+  printf 'title   %s\n' "$1"
+  [ -n "${3:-}" ] && printf 'version %s\n' "$3"
+  printf 'linux   %s\noptions %s\n' "$2" "$options"
+}
+entry "Pocknix" /Image "$kver" > "$tmp/pocknix.conf"
+entry "Pocknix (previous kernel)" /Image.bak > "$tmp/pocknix-previous.conf"
+# The default is named: without it the sort could put the previous entry first.
+printf 'default pocknix.conf\n' > "$tmp/loader.conf"
+
+put() { cp -f "$1" "$2.tmp" && sync "$2.tmp" && mv -f "$2.tmp" "$2"; }
+same() { [ -f "$2" ] && cmp -s "$1" "$2"; }
+
+# Leftovers from a cut write go before the space check, which would otherwise count them.
+mount -o remount,rw "$FLASH" 2>/dev/null || true
+rm -f "$FLASH"/Image*.tmp "$FLASH"/dtbs/*.tmp "$FLASH"/loader/*.tmp "$FLASH"/loader/entries/*.tmp
+
+image_new=1
+[ -z "$OUT_SUFFIX" ] && same "${SRCROOT}/boot/Image" "$FLASH/Image" && image_new=0
+need=0
+if [ "$image_new" = 1 ]; then
+  need="$(stat -c%s "${SRCROOT}/boot/Image")"
+  # Image.bak then Image are replaced in turn; a first Image.bak is a whole extra Image that stays.
+  [ -z "$OUT_SUFFIX" ] && [ -f "$FLASH/Image" ] && [ ! -f "$FLASH/Image.bak" ] \
+    && need=$((need + $(stat -c%s "$FLASH/Image")))
+fi
+avail="$(df -B1 --output=avail "$FLASH" | tail -1 | tr -d ' ')"
+[ $((need + MARGIN)) -le "$avail" ] \
+  || die "$FLASH needs $(((need + MARGIN) >> 20)) MiB free, has $((avail >> 20)) MiB; nothing written"
+
+mkdir -p "$FLASH/dtbs" "$FLASH/loader/entries"
+
+if [ "$image_new" = 1 ]; then
+  [ -z "$OUT_SUFFIX" ] && [ -f "$FLASH/Image" ] && put "$FLASH/Image" "$FLASH/Image.bak"
+  put "${SRCROOT}/boot/Image" "$FLASH/Image${OUT_SUFFIX}"
+  say "wrote $FLASH/Image${OUT_SUFFIX} (kernel ${kver})"
+fi
+
+for d in "${dtbs[@]}"; do
+  same "$d" "$FLASH/dtbs/$(basename "$d")" && [ -z "$OUT_SUFFIX" ] && continue
+  put "$d" "$FLASH/dtbs/$(basename "$d")${OUT_SUFFIX}"
+done
+# OpenABL lists every dtb here in its model menu, so a board the kernel dropped must go too.
+if [ -z "$OUT_SUFFIX" ]; then
+  for d in "$FLASH"/dtbs/*.dtb; do
+    [ -f "${SRCROOT}/boot/dtbs/$(basename "$d")" ] || rm -f "$d"
+  done
+fi
+
+entries=(pocknix.conf)
+if [ -f "$FLASH/Image.bak" ]; then entries+=(pocknix-previous.conf)
+elif [ -z "$OUT_SUFFIX" ]; then rm -f "$FLASH/loader/entries/pocknix-previous.conf"; fi
+for f in "${entries[@]}"; do
+  same "$tmp/$f" "$FLASH/loader/entries/$f" && [ -z "$OUT_SUFFIX" ] && continue
+  put "$tmp/$f" "$FLASH/loader/entries/$f${OUT_SUFFIX}"
+done
+# Constant, so writing it live during staging is safe, and a FAT staged first still gets a default.
+same "$tmp/loader.conf" "$FLASH/loader/loader.conf" || put "$tmp/loader.conf" "$FLASH/loader/loader.conf"
+sync
+note=""; [ -n "$OUT_SUFFIX" ] && note=" (staged, not activated)"
+say "boot entry ready: root=PARTUUID=${ROOT_PARTUUID}${note}"
