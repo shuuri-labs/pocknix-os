@@ -257,14 +257,12 @@ def apply_mesa_version(settings, tool):
 
 
 def apply_game_modes(settings):
-    # Fan curve / scheduler tagged with our pid: the launch chain execs in place, so a dead pid
-    # reverts the pick with no cleanup. "-" = field not overridden.
+    # Our pid outlives the exec, so a dead pid reverts with no cleanup. "-" = not overridden;
+    # written even then so Pocknix Control can find the running game and retune it.
     fan = str(settings.get("fanMode", "") or "").strip()
     lavd = str(settings.get("lavdMode", "") or "").strip()
     fan = fan if fan in FAN_MODES else "-"
     lavd = lavd if lavd in LAVD_MODES else "-"
-    if fan == "-" and lavd == "-":
-        return
     try:
         GAME_MODE_FILE.write_text(f"{os.getpid()} {fan} {lavd}\n")
     except OSError as exc:

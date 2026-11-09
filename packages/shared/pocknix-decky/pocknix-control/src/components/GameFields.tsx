@@ -1,8 +1,9 @@
-import { PanelSectionRow, ToggleField } from "@decky/ui";
+import { PanelSection, PanelSectionRow, ToggleField } from "@decky/ui";
 import { useEffect, useState } from "react";
 import { availableCompatTools, registerForCompatTool, setCompatTool } from "../lib/compat";
 import type { CompatTool } from "../lib/compat";
 import { EnvVarsField } from "./EnvVars";
+import { APPLIES_NEXT_LAUNCH, APPLIES_NOW } from "../lib/applies";
 import { SelectEdit } from "./widgets";
 import type { Config } from "../types";
 
@@ -34,7 +35,7 @@ export function XaliaToggle({ values, patch }: {
     <PanelSectionRow>
       <ToggleField
         label="Disable Xalia"
-        description="Proton's controller-navigation helper; costs CPU in every game"
+        description={`${APPLIES_NEXT_LAUNCH}. Proton's controller-navigation helper; costs CPU in every game.`}
         checked={values.disableXalia !== false}
         onChange={(checked) => patch({ disableXalia: checked })}
       />
@@ -42,13 +43,12 @@ export function XaliaToggle({ values, patch }: {
   );
 }
 
-/** Applies live: the backend re-syncs the running game's touchscreen on every save. */
 export function TouchField({ values, patch }: { values: Record<string, any>; patch: (patch: Record<string, any>) => void }) {
   return (
     <PanelSectionRow>
       <ToggleField
         label="Disable Touchscreen"
-        description="While the game is running, to stop stray touches"
+        description={`${APPLIES_NOW}. Stops stray touches while the game runs.`}
         checked={values.touchDisabled === true}
         onChange={(on) => patch({ touchDisabled: on })}
       />
@@ -66,7 +66,7 @@ export function PrimeCoreToggle({ primeCore, values, patch }: {
     <PanelSectionRow>
       <ToggleField
         label="Fastest Core First"
-        description={`Gives the game the fastest core (CPU ${primeCore}) as its first one. Can help games that do most of their work on one core.`}
+        description={`${APPLIES_NEXT_LAUNCH}. Gives the game the fastest core (CPU ${primeCore}) as its first one. Can help games that do most of their work on one core.`}
         checked={values.primeCoreFirst === true}
         onChange={(on) => patch({ primeCoreFirst: on })}
       />
@@ -74,24 +74,31 @@ export function PrimeCoreToggle({ primeCore, values, patch }: {
   );
 }
 
-/** Per-game fan/scheduler overrides ("" = follow the global mode). */
-export function PerfFields({ values, patch }: {
-  values: Record<string, any>;
-  patch: (patch: Record<string, any>) => void;
-}) {
-  const perGameFan = [globalChoice, ...fanOptions];
-  const perGameLavd = [globalChoice, ...lavdOptions];
-  const fanValue = perGameFan.some((option) => option.data === String(values.fanMode ?? "")) ? String(values.fanMode ?? "") : "";
-  const lavdValue = perGameLavd.some((option) => option.data === String(values.lavdMode ?? "")) ? String(values.lavdMode ?? "") : "";
+const pick = (options: { data: string }[], value: unknown) => {
+  const v = String(value ?? "");
+  return options.some((option) => option.data === v) ? v : "";
+};
+const perGameFan = [globalChoice, ...fanOptions];
+const perGameLavd = [globalChoice, ...lavdOptions];
+
+/** Per-game override ("" = follow the global mode); the backend retunes a running game on save. */
+export function FanField({ values, patch }: { values: Record<string, any>; patch: (patch: Record<string, any>) => void }) {
+  return <SelectEdit label="Fan Curve" description={APPLIES_NOW} value={pick(perGameFan, values.fanMode)} options={perGameFan} onChange={(id) => patch({ fanMode: id })} />;
+}
+
+export function SchedulerField({ values, patch }: { values: Record<string, any>; patch: (patch: Record<string, any>) => void }) {
   return (
-    <>
-      <SelectEdit label="CPU Scheduler" value={lavdValue} options={perGameLavd} onChange={(id) => patch({ lavdMode: id })} />
-      <SelectEdit label="Fan Curve" value={fanValue} options={perGameFan} onChange={(id) => patch({ fanMode: id })} />
-    </>
+    <SelectEdit
+      label="CPU Scheduler"
+      description={APPLIES_NOW}
+      value={pick(perGameLavd, values.lavdMode)}
+      options={perGameLavd}
+      onChange={(id) => patch({ lavdMode: id })}
+    />
   );
 }
 
-/** The per-game tweak controls, shared by the Games tab and the library context-menu modal. */
+/** Every per-game control, shared by the Games tab and the library context-menu modal. */
 export function TweakFields({ config, appid, values, patch }: {
   config: Config;
   appid: string;
@@ -136,31 +143,35 @@ export function TweakFields({ config, appid, values, patch }: {
 
   return (
     <>
-      <SelectEdit
-        label="Proton Version"
-        value={compatValue}
-        options={compatOptions}
-        onChange={(name) => {
-          setCurrentTool(String(name));
-          setCompatTool(appid, String(name));
-        }}
-      />
-      <SelectEdit
-        label="FEX Preset"
-        value={fexValue}
-        options={fexOptions}
-        onChange={(id) => patch({ fexProfile: id })}
-      />
-      <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patch({ audioLatency: id })} />
-      <SelectEdit label="Mesa Version" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
-      <XaliaToggle values={values} patch={patch} />
-      <PrimeCoreToggle primeCore={config.primeCore} values={values} patch={patch} />
-      <TouchField values={values} patch={patch} />
-      <EnvVarsField
-        own={config.tweaks.games[appid]?.envVars}
-        inherited={config.tweaks.global.envVars}
-        onChange={(envVars) => patch({ envVars })}
-      />
+      <PanelSection title="PERFORMANCE">
+        <FanField values={values} patch={patch} />
+        <SchedulerField values={values} patch={patch} />
+      </PanelSection>
+      <PanelSection title="GAME TWEAKS">
+        <SelectEdit
+          label="Proton Version"
+          description={APPLIES_NEXT_LAUNCH}
+          value={compatValue}
+          options={compatOptions}
+          onChange={(name) => {
+            setCurrentTool(String(name));
+            setCompatTool(appid, String(name));
+          }}
+        />
+        <SelectEdit label="FEX Preset" description={APPLIES_NEXT_LAUNCH} value={fexValue} options={fexOptions} onChange={(id) => patch({ fexProfile: id })} />
+        <SelectEdit label="Mesa Version" description={APPLIES_NEXT_LAUNCH} value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
+        <SelectEdit label="Audio Buffer" description={APPLIES_NEXT_LAUNCH} value={audioValue} options={audioLatencyOptions} onChange={(id) => patch({ audioLatency: id })} />
+        <TouchField values={values} patch={patch} />
+        <XaliaToggle values={values} patch={patch} />
+      </PanelSection>
+      <PanelSection title="ADVANCED">
+        <PrimeCoreToggle primeCore={config.primeCore} values={values} patch={patch} />
+        <EnvVarsField
+          own={config.tweaks.games[appid]?.envVars}
+          inherited={config.tweaks.global.envVars}
+          onChange={(envVars) => patch({ envVars })}
+        />
+      </PanelSection>
     </>
   );
 }

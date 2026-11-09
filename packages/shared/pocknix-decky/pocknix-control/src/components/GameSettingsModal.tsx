@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { getConfig } from "../backend";
 import { usePatchTweaks } from "../hooks/usePatchTweaks";
 import type { Config } from "../types";
-import { PerfFields, TweakFields } from "./GameFields";
+import { TweakFields } from "./GameFields";
 
 /** Standalone per-game settings, opened from the library context menu. */
 export function GameSettingsModal({ appid, name, closeModal }: { appid: string; name: string; closeModal?: () => void }) {
@@ -30,12 +30,7 @@ export function GameSettingsModal({ appid, name, closeModal }: { appid: string; 
         checked={enabled}
         onChange={(on) => patchGame(appid, { enabled: on, name })}
       />
-      {enabled ? (
-        <>
-          <PerfFields values={values} patch={patch} />
-          <TweakFields config={config} appid={appid} values={values} patch={patch} />
-        </>
-      ) : null}
+      {enabled ? <TweakFields config={config} appid={appid} values={values} patch={patch} /> : null}
     </ModalRoot>
   );
 }

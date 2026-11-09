@@ -749,6 +749,9 @@ function serializeEnvVars(vars) {
     return vars.length ? vars.map(([key, value]) => `${key}=${quoteValue(value)}`).join(" ") : null;
 }
 
+const APPLIES_NOW = "Applies now";
+const APPLIES_NEXT_LAUNCH = "Applies on next launch";
+
 function AddEnvVarModal({ current, onAdd, closeModal }) {
     const [key, setKey] = SP_REACT.useState(envPresets[0].key);
     const preset = presetFor(key);
@@ -770,12 +773,14 @@ function EnvVarsField({ own, inherited, canAdd = true, onChange }) {
     const vars = parseEnvVars(own);
     const fromDefault = parseEnvVars(inherited).filter(([key]) => !vars.some(([k]) => k === key));
     const save = (next) => onChange(serializeEnvVars(next));
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [vars.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { label: presetFor(entry[0])?.label || entry[0], description: describe(entry), onClick: () => save(vars.filter(([key]) => key !== entry[0])), children: "Remove" }) }, entry[0]))), fromDefault.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: presetFor(entry[0])?.label || entry[0], description: `${describe(entry)} (from Default)` }) }, `default-${entry[0]}`))), canAdd ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => DFL.showModal(SP_JSX.jsx(AddEnvVarModal, { current: vars, onAdd: (key, value) => save([...vars.filter(([k]) => k !== key), [key, value]]) })), children: "Add Environment Variable" }) })) : null] }));
+    if (!canAdd && !vars.length)
+        return null;
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Environment Variables", description: APPLIES_NEXT_LAUNCH }) }), vars.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { label: presetFor(entry[0])?.label || entry[0], description: describe(entry), onClick: () => save(vars.filter(([key]) => key !== entry[0])), children: "Remove" }) }, entry[0]))), fromDefault.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: presetFor(entry[0])?.label || entry[0], description: `${describe(entry)} (from Default)` }) }, `default-${entry[0]}`))), canAdd ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => DFL.showModal(SP_JSX.jsx(AddEnvVarModal, { current: vars, onAdd: (key, value) => save([...vars.filter(([k]) => k !== key), [key, value]]) })), children: "Add Environment Variable" }) })) : null] }));
 }
 
-function SelectEdit({ label, value, options, onChange }) {
+function SelectEdit({ label, description, value, options, onChange }) {
     const rgOptions = options.map((option) => (typeof option === "string" ? { data: option, label: option } : option));
-    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: label === undefined ? (SP_JSX.jsx(DFL.Dropdown, { selectedOption: value, rgOptions: rgOptions, onChange: (option) => onChange(option.data) })) : (SP_JSX.jsx(DFL.DropdownItem, { label: label, selectedOption: value, rgOptions: rgOptions, onChange: (option) => onChange(option.data) })) }));
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: label === undefined ? (SP_JSX.jsx(DFL.Dropdown, { selectedOption: value, rgOptions: rgOptions, onChange: (option) => onChange(option.data) })) : (SP_JSX.jsx(DFL.DropdownItem, { label: label, description: description, selectedOption: value, rgOptions: rgOptions, onChange: (option) => onChange(option.data) })) }));
 }
 
 // Audio buffer (PULSE_LATENCY_MSEC): absorbs FEX-mixer overruns (SFX-burst crackle) at the
@@ -797,26 +802,30 @@ const lavdOptions = [
 ];
 const globalChoice = { data: "", label: "Use global" };
 function XaliaToggle({ values, patch }) {
-    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Xalia", description: "Proton's controller-navigation helper; costs CPU in every game", checked: values.disableXalia !== false, onChange: (checked) => patch({ disableXalia: checked }) }) }));
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Xalia", description: `${APPLIES_NEXT_LAUNCH}. Proton's controller-navigation helper; costs CPU in every game.`, checked: values.disableXalia !== false, onChange: (checked) => patch({ disableXalia: checked }) }) }));
 }
-/** Applies live: the backend re-syncs the running game's touchscreen on every save. */
 function TouchField({ values, patch }) {
-    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Touchscreen", description: "While the game is running, to stop stray touches", checked: values.touchDisabled === true, onChange: (on) => patch({ touchDisabled: on }) }) }));
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Touchscreen", description: `${APPLIES_NOW}. Stops stray touches while the game runs.`, checked: values.touchDisabled === true, onChange: (on) => patch({ touchDisabled: on }) }) }));
 }
 function PrimeCoreToggle({ primeCore, values, patch }) {
     if (!primeCore)
         return null;
-    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Fastest Core First", description: `Gives the game the fastest core (CPU ${primeCore}) as its first one. Can help games that do most of their work on one core.`, checked: values.primeCoreFirst === true, onChange: (on) => patch({ primeCoreFirst: on }) }) }));
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Fastest Core First", description: `${APPLIES_NEXT_LAUNCH}. Gives the game the fastest core (CPU ${primeCore}) as its first one. Can help games that do most of their work on one core.`, checked: values.primeCoreFirst === true, onChange: (on) => patch({ primeCoreFirst: on }) }) }));
 }
-/** Per-game fan/scheduler overrides ("" = follow the global mode). */
-function PerfFields({ values, patch }) {
-    const perGameFan = [globalChoice, ...fanOptions];
-    const perGameLavd = [globalChoice, ...lavdOptions];
-    const fanValue = perGameFan.some((option) => option.data === String(values.fanMode ?? "")) ? String(values.fanMode ?? "") : "";
-    const lavdValue = perGameLavd.some((option) => option.data === String(values.lavdMode ?? "")) ? String(values.lavdMode ?? "") : "";
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: lavdValue, options: perGameLavd, onChange: (id) => patch({ lavdMode: id }) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: fanValue, options: perGameFan, onChange: (id) => patch({ fanMode: id }) })] }));
+const pick = (options, value) => {
+    const v = String(value ?? "");
+    return options.some((option) => option.data === v) ? v : "";
+};
+const perGameFan = [globalChoice, ...fanOptions];
+const perGameLavd = [globalChoice, ...lavdOptions];
+/** Per-game override ("" = follow the global mode); the backend retunes a running game on save. */
+function FanField({ values, patch }) {
+    return SP_JSX.jsx(SelectEdit, { label: "Fan Curve", description: APPLIES_NOW, value: pick(perGameFan, values.fanMode), options: perGameFan, onChange: (id) => patch({ fanMode: id }) });
 }
-/** The per-game tweak controls, shared by the Games tab and the library context-menu modal. */
+function SchedulerField({ values, patch }) {
+    return (SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", description: APPLIES_NOW, value: pick(perGameLavd, values.lavdMode), options: perGameLavd, onChange: (id) => patch({ lavdMode: id }) }));
+}
+/** Every per-game control, shared by the Games tab and the library context-menu modal. */
 function TweakFields({ config, appid, values, patch }) {
     // Proton pick is Steam's own per-game compat setting (see lib/compat.ts) — read live and
     // written straight back to Steam, so it mirrors the game-properties dropdown both ways.
@@ -855,10 +864,10 @@ function TweakFields({ config, appid, values, patch }) {
     const mesaOptions = config.mesaVersions?.length ? config.mesaVersions : [{ data: "", label: "System default" }];
     const storedMesa = String(values.mesaVersion ?? "");
     const mesaValue = mesaOptions.some((option) => option.data === storedMesa) ? storedMesa : "";
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "Proton Version", value: compatValue, options: compatOptions, onChange: (name) => {
-                    setCurrentTool(String(name));
-                    setCompatTool(appid, String(name));
-                } }), SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patch({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patch({ audioLatency: id }) }), SP_JSX.jsx(SelectEdit, { label: "Mesa Version", value: mesaValue, options: mesaOptions, onChange: (id) => patch({ mesaVersion: id }) }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patch }), SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patch }), SP_JSX.jsx(TouchField, { values: values, patch: patch }), SP_JSX.jsx(EnvVarsField, { own: config.tweaks.games[appid]?.envVars, inherited: config.tweaks.global.envVars, onChange: (envVars) => patch({ envVars }) })] }));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(FanField, { values: values, patch: patch }), SP_JSX.jsx(SchedulerField, { values: values, patch: patch })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Proton Version", description: APPLIES_NEXT_LAUNCH, value: compatValue, options: compatOptions, onChange: (name) => {
+                            setCurrentTool(String(name));
+                            setCompatTool(appid, String(name));
+                        } }), SP_JSX.jsx(SelectEdit, { label: "FEX Preset", description: APPLIES_NEXT_LAUNCH, value: fexValue, options: fexOptions, onChange: (id) => patch({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Mesa Version", description: APPLIES_NEXT_LAUNCH, value: mesaValue, options: mesaOptions, onChange: (id) => patch({ mesaVersion: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", description: APPLIES_NEXT_LAUNCH, value: audioValue, options: audioLatencyOptions, onChange: (id) => patch({ audioLatency: id }) }), SP_JSX.jsx(TouchField, { values: values, patch: patch }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patch })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "ADVANCED", children: [SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patch }), SP_JSX.jsx(EnvVarsField, { own: config.tweaks.games[appid]?.envVars, inherited: config.tweaks.global.envVars, onChange: (envVars) => patch({ envVars }) })] })] }));
 }
 
 function Games({ config, setConfig, patch, reload }) {
@@ -891,8 +900,7 @@ function Games({ config, setConfig, patch, reload }) {
         const saved = games.find((candidate) => candidate.appid === id);
         setConfig((current) => (current ? { ...current, selectedGame: saved || null } : current));
     };
-    // Default target: FEX/audio/env edit tweaks.global; fan + scheduler are the LIVE system
-    // modes, applied immediately through the backend.
+    // Default's fan and scheduler are the system modes, not tweaks.global.
     const applyMode = async (setter, mode) => {
         try {
             const next = await setter(mode);
@@ -908,8 +916,7 @@ function Games({ config, setConfig, patch, reload }) {
     const fexOptions = Object.entries(presets).map(([id, profile]) => ({ data: id, label: profile.label }));
     const storedLatency = String(values.audioLatency ?? "");
     const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
-    const showFields = editingDefault || perGameEnabled;
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), showFields ? (SP_JSX.jsx(DFL.PanelSection, { title: "PERFORMANCE", children: editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "Fan Curve", value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) })] })) : (SP_JSX.jsx(PerfFields, { values: values, patch: patchSettings })) })) : null, showFields ? (SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx("div", { className: "pocknix-note", children: "Changes apply on next game launch" }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patchSettings }), SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patchSettings }), SP_JSX.jsx(TouchField, { values: values, patch: patchSettings }), SP_JSX.jsx(EnvVarsField, { own: tweaks.global.envVars, canAdd: false, onChange: (envVars) => patchSettings({ envVars }) })] })) : (SP_JSX.jsx(TweakFields, { config: config, appid: game.appid, values: values, patch: patchSettings }))] })) : null] }));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(SelectEdit, { label: "Fan Curve", description: APPLIES_NOW, value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", description: APPLIES_NOW, value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", description: APPLIES_NEXT_LAUNCH, value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", description: APPLIES_NEXT_LAUNCH, value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) }), SP_JSX.jsx(TouchField, { values: values, patch: patchSettings }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patchSettings })] }), config.primeCore || parseEnvVars(tweaks.global.envVars).length ? (SP_JSX.jsxs(DFL.PanelSection, { title: "ADVANCED", children: [SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patchSettings }), SP_JSX.jsx(EnvVarsField, { own: tweaks.global.envVars, canAdd: false, onChange: (envVars) => patchSettings({ envVars }) })] })) : null] })) : perGameEnabled ? (SP_JSX.jsx(TweakFields, { config: config, appid: game.appid, values: values, patch: patchSettings })) : null] }));
 }
 
 // Replaces the stock "Add a Non-Steam Game" flow: Steam's file browser cannot open a new
@@ -1186,7 +1193,7 @@ function GameSettingsModal({ appid, name, closeModal }) {
     const enabled = gameSettings.enabled === true;
     const values = enabled ? { ...config.tweaks.global, ...gameSettings } : config.tweaks.global;
     const patch = (fields) => patchGame(appid, { ...fields, enabled: true, name });
-    return (SP_JSX.jsxs(DFL.ModalRoot, { closeModal: closeModal, children: [SP_JSX.jsx("div", { style: { fontWeight: 600, marginBottom: "8px" }, children: name || `App ${appid}` }), SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: enabled, onChange: (on) => patchGame(appid, { enabled: on, name }) }), enabled ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(PerfFields, { values: values, patch: patch }), SP_JSX.jsx(TweakFields, { config: config, appid: appid, values: values, patch: patch })] })) : null] }));
+    return (SP_JSX.jsxs(DFL.ModalRoot, { closeModal: closeModal, children: [SP_JSX.jsx("div", { style: { fontWeight: 600, marginBottom: "8px" }, children: name || `App ${appid}` }), SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: enabled, onChange: (on) => patchGame(appid, { enabled: on, name }) }), enabled ? SP_JSX.jsx(TweakFields, { config: config, appid: appid, values: values, patch: patch }) : null] }));
 }
 
 // LibraryContextMenu is not exported: reach it via classname marker -> `navigator:` wrapper ->

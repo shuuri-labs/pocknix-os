@@ -2,6 +2,7 @@ import { ButtonItem, ConfirmModal, DropdownItem, Field, PanelSectionRow, showMod
 import { useState } from "react";
 import { envPresets, parseEnvVars, presetFor, serializeEnvVars } from "../lib/envVars";
 import type { EnvVar } from "../lib/envVars";
+import { APPLIES_NEXT_LAUNCH } from "../lib/applies";
 
 function AddEnvVarModal({ current, onAdd, closeModal }: {
   current: EnvVar[];
@@ -53,8 +54,12 @@ export function EnvVarsField({ own, inherited, canAdd = true, onChange }: {
   const vars = parseEnvVars(own);
   const fromDefault = parseEnvVars(inherited).filter(([key]) => !vars.some(([k]) => k === key));
   const save = (next: EnvVar[]) => onChange(serializeEnvVars(next));
+  if (!canAdd && !vars.length) return null;
   return (
     <>
+      <PanelSectionRow>
+        <Field label="Environment Variables" description={APPLIES_NEXT_LAUNCH} />
+      </PanelSectionRow>
       {vars.map((entry) => (
         <PanelSectionRow key={entry[0]}>
           <ButtonItem

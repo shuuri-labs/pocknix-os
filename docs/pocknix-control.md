@@ -26,17 +26,18 @@ Every installed Steam game is listed, and so are non-Steam shortcuts (marked `·
 If you open the menu while a game is running, that game is preselected. To override the
 defaults for one game, select it and flip **Use Per-Game Settings** on.
 
-Two sections follow: **Performance** (applies live) and **Game Tweaks** (applies on the
-**next game launch**, except where noted). A game's settings are also reachable from its
-library page: **Manage → Pocknix Settings**.
+Three sections follow: **Performance**, **Game Tweaks** and **Advanced**. Under each setting's
+name it says whether a change **applies now** (even to a game that is already running) or on the
+**next launch**. A game's settings are also reachable from its library page: **Manage → Pocknix
+Settings**.
 
 **Performance**
 
-- **Fan Curve**: **Quiet**, **Moderate**, or **Performance**. Applies live, no restart.
+- **Fan Curve**: **Quiet**, **Moderate**, or **Performance**. Per game it can stay on the global
+  value; a change reaches a game that is already running.
 - **CPU Scheduler**: **Autopilot** (the `scx_lavd` default - adapts to load on the fly) or
-  **Performance** (keeps the CPU aggressive at the cost of battery and heat).
-
-Per game, either can stay on the global value.
+  **Performance** (keeps the CPU aggressive at the cost of battery and heat). Per game it
+  can stay on the global value; a change reaches a game that is already running.
 
 **Game Tweaks**
 
@@ -46,6 +47,11 @@ Per game, either can stay on the global value.
 - **FEX Preset**: **Default**, **Fast**, or **Compatible**. Trades x86 translation accuracy
   for speed. Try **Fast** for more FPS; switch to **Compatible** if a game misbehaves
   (crashes, glitched physics, odd audio).
+- **Mesa Version** (per game only): which Turnip (GPU driver) build the game runs on. The
+  first entry is the system driver and the default. "git" is a recent snapshot of Mesa's
+  development branch: newer fixes, less tested. Any drivers you added yourself come after it
+  (see [Adding your own Turnip driver](#adding-your-own-turnip-driver)). Everything except the
+  default works with ARM Proton versions only; an x86 Proton always uses its default driver.
 - **Audio Buffer**: **Game default**, **60**, **90**, or **120 ms**. Raising the buffer
   absorbs audio crackle in busy scenes (an FEX audio-mixer quirk) at the cost of a little
   extra audio latency. 120 ms clears crackle and is inaudible in most games. Keep it low (or
@@ -54,21 +60,18 @@ Per game, either can stay on the global value.
 - **Disable Touchscreen**: switches the touchscreen off while the game runs, so a thumb
   resting on the screen edge cannot fire stray taps. It comes back as soon as the game exits.
   While it is off, touch is off everywhere, the Steam overlay and on-screen keyboard included;
-  use the controls there. Unlike the other tweaks this one takes effect immediately, even
-  mid-game, and it works for every game Steam launches, native and emulators included.
-- **Mesa Version** (per game only): which Turnip (GPU driver) build the game runs on. The
-  first entry is the system driver and the default. "git" is a recent snapshot of Mesa's
-  development branch: newer fixes, less tested. Any drivers you added yourself come after it
-  (see [Adding your own Turnip driver](#adding-your-own-turnip-driver)). Everything except the
-  default works with ARM Proton versions only; an x86 Proton always uses its default driver.
+  use the controls there. It works for every game Steam launches, native and emulators included.
 - **Disable Xalia**: on by default. Xalia is Proton's controller-navigation helper and costs
   CPU in every game; turn this off only for a game that needs it.
-- **Fastest Core First**: off by default. Games already run on the fast cores only; this makes the
-  fastest one the game's first CPU, which helps games that do most of their work on one core. Hidden
-  on boards where no core is faster than the rest. Applies on the next launch; a CPU topology set in
-  the game's launch options wins.
+
+**Advanced**
+
+- **Fastest Core First**: off by default. Games already run on the fast cores only; this makes
+  the fastest one the game's first CPU, which helps games that do most of their work on
+  one core. Hidden on boards where no core is faster than the rest. A CPU topology set in the game's
+  launch options wins.
 - **Environment Variables** (per game only): **Add Environment Variable** picks from common
-  fixes, applied at the next launch:
+  fixes:
   - **DirectX 12 feature level**: for DirectX 12 games that won't start or say your graphics card
     isn't supported. 12.1 fixes most.
   - **DirectX 12 shader model**: lower it if a DirectX 12 game crashes or shows broken graphics.

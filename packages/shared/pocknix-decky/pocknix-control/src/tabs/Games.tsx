@@ -1,7 +1,9 @@
 import { PanelSection, ToggleField } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
 import { setFanMode, setLavdMode } from "../backend";
-import { PerfFields, PrimeCoreToggle, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
+import { PrimeCoreToggle, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
+import { APPLIES_NEXT_LAUNCH, APPLIES_NOW } from "../lib/applies";
+import { parseEnvVars } from "../lib/envVars";
 import { EnvVarsField } from "../components/EnvVars";
 import { SelectEdit } from "../components/widgets";
 import { availableGames, editTargetOptions } from "../lib/games";
@@ -40,8 +42,7 @@ export function Games({ config, setConfig, patch, reload }: {
     setConfig((current) => (current ? { ...current, selectedGame: saved || null } : current));
   };
 
-  // Default target: FEX/audio/env edit tweaks.global; fan + scheduler are the LIVE system
-  // modes, applied immediately through the backend.
+  // Default's fan and scheduler are the system modes, not tweaks.global.
   const applyMode = async (setter: (mode: string) => Promise<Config>, mode: string) => {
     try {
       const next = await setter(mode);
@@ -57,46 +58,39 @@ export function Games({ config, setConfig, patch, reload }: {
   const storedLatency = String(values.audioLatency ?? "");
   const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
 
-  const showFields = editingDefault || perGameEnabled;
   return (
     <>
       <PanelSection title="PERFORMANCE & GAME TWEAKS">
         <SelectEdit label="Game" value={game?.appid || ""} options={editTargetOptions(config)} onChange={setSelectedGame} />
         {!editingDefault ? <ToggleField label="Use Per-Game Settings" checked={perGameEnabled} onChange={setPerGameEnabled} /> : null}
       </PanelSection>
-      {showFields ? (
-        <PanelSection title="PERFORMANCE">
-          {editingDefault ? (
-            <>
-              <SelectEdit label="CPU Scheduler" value={config.lavdMode} options={lavdOptions} onChange={(mode) => applyMode(setLavdMode, mode)} />
-              <SelectEdit label="Fan Curve" value={config.fanMode} options={fanOptions} onChange={(mode) => applyMode(setFanMode, mode)} />
-            </>
-          ) : (
-            <PerfFields values={values} patch={patchSettings} />
-          )}
-        </PanelSection>
-      ) : null}
-      {showFields ? (
-        <PanelSection title="GAME TWEAKS">
-          <div className="pocknix-note">Changes apply on next game launch</div>
-          {editingDefault ? (
-            <>
-              <SelectEdit
-                label="FEX Preset"
-                value={fexValue}
-                options={fexOptions}
-                onChange={(id) => patchSettings({ fexProfile: id })}
-              />
-              <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patchSettings({ audioLatency: id })} />
-              <XaliaToggle values={values} patch={patchSettings} />
+      {editingDefault ? (
+        <>
+          <PanelSection title="PERFORMANCE">
+            <SelectEdit label="Fan Curve" description={APPLIES_NOW} value={config.fanMode} options={fanOptions} onChange={(mode) => applyMode(setFanMode, mode)} />
+            <SelectEdit label="CPU Scheduler" description={APPLIES_NOW} value={config.lavdMode} options={lavdOptions} onChange={(mode) => applyMode(setLavdMode, mode)} />
+          </PanelSection>
+          <PanelSection title="GAME TWEAKS">
+            <SelectEdit label="FEX Preset" description={APPLIES_NEXT_LAUNCH} value={fexValue} options={fexOptions} onChange={(id) => patchSettings({ fexProfile: id })} />
+            <SelectEdit
+              label="Audio Buffer"
+              description={APPLIES_NEXT_LAUNCH}
+              value={audioValue}
+              options={audioLatencyOptions}
+              onChange={(id) => patchSettings({ audioLatency: id })}
+            />
+            <TouchField values={values} patch={patchSettings} />
+            <XaliaToggle values={values} patch={patchSettings} />
+          </PanelSection>
+          {config.primeCore || parseEnvVars(tweaks.global.envVars).length ? (
+            <PanelSection title="ADVANCED">
               <PrimeCoreToggle primeCore={config.primeCore} values={values} patch={patchSettings} />
-              <TouchField values={values} patch={patchSettings} />
               <EnvVarsField own={tweaks.global.envVars} canAdd={false} onChange={(envVars) => patchSettings({ envVars })} />
-            </>
-          ) : (
-            <TweakFields config={config} appid={game!.appid} values={values} patch={patchSettings} />
-          )}
-        </PanelSection>
+            </PanelSection>
+          ) : null}
+        </>
+      ) : perGameEnabled ? (
+        <TweakFields config={config} appid={game!.appid} values={values} patch={patchSettings} />
       ) : null}
     </>
   );

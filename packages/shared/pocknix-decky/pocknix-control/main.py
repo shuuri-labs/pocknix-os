@@ -2,6 +2,7 @@ import asyncio
 
 from pocknix_control import calibration
 from pocknix_control.config import build_config
+from pocknix_control.gamemode import sync_game_mode
 from pocknix_control.led import restore_led, set_led, set_led_enabled, set_led_linked, set_led_sides
 from pocknix_control.modes import set_fan_mode, set_lavd_mode
 from pocknix_control.snapshots import reboot_system, snapshot_status, start_rollback
@@ -47,6 +48,7 @@ class Plugin:
     async def patch_tweaks(self, appid, fields):
         tweaks = await asyncio.to_thread(patch_tweaks, appid, fields)
         await asyncio.to_thread(sync_touch, self._running_appid)
+        await asyncio.to_thread(sync_game_mode)
         return tweaks
 
     # Not get_config(): that re-parses the whole Steam library, and a colour slider

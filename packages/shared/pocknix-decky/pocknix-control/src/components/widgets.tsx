@@ -4,8 +4,9 @@ import type { DropdownChoice } from "../types";
 
 type Option = string | DropdownChoice;
 
-export function SelectEdit({ label, value, options, onChange }: {
+export function SelectEdit({ label, description, value, options, onChange }: {
   label?: ReactNode;
+  description?: ReactNode;
   value: any;
   options: Option[];
   onChange: (data: any) => void;
@@ -16,7 +17,7 @@ export function SelectEdit({ label, value, options, onChange }: {
       {label === undefined ? (
         <Dropdown selectedOption={value} rgOptions={rgOptions} onChange={(option) => onChange(option.data)} />
       ) : (
-        <DropdownItem label={label} selectedOption={value} rgOptions={rgOptions} onChange={(option) => onChange(option.data)} />
+        <DropdownItem label={label} description={description} selectedOption={value} rgOptions={rgOptions} onChange={(option) => onChange(option.data)} />
       )}
     </PanelSectionRow>
   );

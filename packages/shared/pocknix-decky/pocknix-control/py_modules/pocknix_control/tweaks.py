@@ -64,6 +64,15 @@ def load_tweaks():
     return data
 
 
+def settings_for(tweaks, appid):
+    # pocknix-game-launch's merge minus its envVars rule: a game's values count only while it is enabled.
+    settings = dict(tweaks.get("global") or {})
+    game = (tweaks.get("games") or {}).get(str(appid)) if appid else None
+    if isinstance(game, dict) and game.get("enabled") is True:
+        settings.update(game)
+    return settings
+
+
 def sanitize_tweaks(data):
     # pocknix-game-launch reads this at every launch, so a bad key here breaks launching.
     if not isinstance(data, dict):
