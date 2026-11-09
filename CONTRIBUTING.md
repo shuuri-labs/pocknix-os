@@ -51,7 +51,10 @@ Four rules that catch most first-time contributors:
   `make sync` overwrites): the delta block in `scripts/build-kernel.sh` for every SoC, or
   `kernel/<soc>/config-delta` (plus `config-assert` to survive `olddefconfig`) for one.
 - **`overlay/` and the image scripts only reach people who reflash.** A fix existing installs
-  need goes in a package with a bumped `pkgrel`.
+  need goes in a package with a bumped `pkgrel`. A file moving from `overlay/` into a package takes
+  a new path (an unowned file at a packaged path aborts `pacman -Syu`), and the package's `.install`
+  deletes the old copy, an `/etc` one only when its sha256 matches a version the overlay shipped.
+  Each such file gets a row in `scripts/retired-hashes.list`; `make check` verifies the hashes.
 - **Runtime state a session or service can clobber is re-asserted where it sticks** (a systemd
   unit, the session launch path), not set once at install time.
 - **A new Arch Linux ARM package can't be installed on existing devices until the base hosts

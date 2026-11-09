@@ -1,0 +1,34 @@
+# Older images shipped these as unowned overlay files: the /etc unit shadows the packaged one and
+# the per-user seed's Exec names the /usr/local/bin copy. An edited copy stays, with the script it runs.
+_retire_overlay_waydroid() {
+  f=/etc/systemd/system/pocknix-waydroid-tuning.service
+  if [ ! -e "${f}" ] || [ "$(sha256sum "${f}" | cut -d' ' -f1)" = \
+       67f839e9c73ec0e2479c9f88ab66b5381f5f3fc7483d874067f8a34e2687c6cf ]; then
+    rm -f "${f}" /usr/local/bin/pocknix-waydroid-tuning
+  fi
+  kept=
+  for f in /home/*/.local/share/applications/waydroid-apk-install.desktop; do
+    [ -f "${f}" ] || continue
+    if [ "$(sha256sum "${f}" | cut -d' ' -f1)" = \
+         19c55a459b1a7733b62159ed539381909b8b0cdd60ddecd0ee6798ae8478a8ce ]; then
+      rm -f "${f}"
+    else
+      kept=1
+    fi
+  done
+  [ -n "${kept}" ] || rm -f /usr/local/bin/pocknix-waydroid-apk-install
+}
+
+# A device with the old overlay unit but no enable link had it disabled by the user: keep it off.
+post_install() {
+  link=/etc/systemd/system/waydroid-container.service.wants/pocknix-waydroid-tuning.service
+  enable=1
+  [ -e /etc/systemd/system/pocknix-waydroid-tuning.service ] && [ ! -L "${link}" ] && enable=
+  _retire_overlay_waydroid
+  rm -f "${link}"
+  [ -d /run/systemd/system ] && systemctl daemon-reload
+  [ -n "${enable}" ] && systemctl enable pocknix-waydroid-tuning.service >/dev/null 2>&1
+  return 0
+}
+
+pre_remove() { systemctl disable pocknix-waydroid-tuning.service >/dev/null 2>&1 || true; }

@@ -56,13 +56,33 @@ Per game, either can stay on the global value.
   While it is off, touch is off everywhere, the Steam overlay and on-screen keyboard included;
   use the controls there. Unlike the other tweaks this one takes effect immediately, even
   mid-game, and it works for every game Steam launches, native and emulators included.
-- **Mesa Version** (per game only): run the game on a different Turnip (GPU driver) build
-  than the system default, when more than one is installed.
+- **Mesa Version** (per game only): which Turnip (GPU driver) build the game runs on. The
+  first entry is the system driver and the default. "git" is a recent snapshot of Mesa's
+  development branch: newer fixes, less tested. Any drivers you added yourself come after it
+  (see [Adding your own Turnip driver](#adding-your-own-turnip-driver)). Everything except the
+  default works with ARM Proton versions only; an x86 Proton always uses its default driver.
 - **Disable Xalia**: on by default. Xalia is Proton's controller-navigation helper and costs
   CPU in every game; turn this off only for a game that needs it.
 - **Environment Variables**: extra variables for the game's launch, the same as a Steam
   launch option. To write your own launch options, see
   [Launch options](steam-games.md#launch-options).
+
+### Adding your own Turnip driver
+
+You can try a community Turnip build on one game without replacing the system driver:
+
+1. Download a **Linux** build for aarch64 (glibc). Android builds made for Winlator or
+   emulator apps (most "Turnip" zips, for example TurnipZ) can't load on Pocknix and won't be
+   listed.
+2. Make a folder for it in `~/.local/share/pocknix/turnip/`, for example
+   `~/.local/share/pocknix/turnip/my-turnip/`, and unzip it there. The folder must contain
+   `libvulkan_freedreno.so`; a `meta.json` next to it with a `"name"` field sets the name shown
+   in the list.
+3. Reopen the game's tweaks: the driver shows up under **Mesa Version** as
+   its name followed by "(ARM only)". Pick it for the game.
+
+If the game then fails to start or shows no picture, set Mesa Version back to the default.
+Deleting the folder removes the driver; a game still set to it falls back to the default.
 
 ### Sharing a game's config
 

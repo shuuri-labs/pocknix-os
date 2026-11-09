@@ -1,13 +1,14 @@
-# pocknix-turnip-arm — pinned aarch64 Turnip builds, one per upstream series, that the per-game
-# "Mesa Version" tweak selects by pointing VK_DRIVER_FILES at them (ARM Proton path).
-# Counterpart of pocknix-turnip-x86; same per-SoC tuning contract as packages/soc/mesa.
+# pocknix-turnip-arm — a pinned aarch64 Turnip build of mesa main, the per-game "Mesa Version"
+# tweak's git entry (ARM Proton path, picked by pointing VK_DRIVER_FILES at it). The host driver
+# entry comes from vulkan-freedreno's vk-arm manifest. Same per-SoC tuning contract as packages/soc/mesa.
 pkgname=pocknix-turnip-arm
-pkgver=20261009
-pkgrel=2
-pkgdesc="Pinned aarch64 Turnip builds for per-game Mesa selection (SoC-tuned)"
+pkgver=20261106
+pkgrel=1
+pkgdesc="Pinned aarch64 Turnip build of mesa main for per-game Mesa selection (SoC-tuned)"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
 license=("MIT AND BSD-3-Clause AND SGI-B-2.0")
+# Also the host libs user-supplied Linux Turnip builds link against (xcb-util-keysyms included).
 depends=(expat glibc libdrm libdisplay-info libx11 libxcb libxshmfence spirv-tools
          systemd-libs vulkan-icd-loader wayland xcb-util-keysyms zlib zstd)
 # glslang: newer mesa folds freedreno into the BVH shader set, so glslangValidator is a hard
@@ -17,48 +18,10 @@ makedepends=(meson ninja python-mako python-packaging python-yaml python-ply gls
              wayland wayland-protocols zlib zstd
              xorgproto libx11 libxcb libxext libxshmfence libxxf86vm libxrandr xcb-util-keysyms)
 options=(!lto)
-# The "devel" entry is a PINNED mesa main snapshot (main carries no tag) — pinned, not floating,
-# so rebuilds reproduce; refresh _develcommit deliberately.
-_develcommit=6b9cd5ab9cc3bfd0c79d9500a07a5e74351c72d1
-# The series mesa itself ships comes from its vk-arm payload; pinning mesa's pkgver here = file conflict.
-_versions=('25.0.7' '25.1.9' '25.2.8' '25.3.6' '26.0.8' '26.1.6' '26.3.0devel')
-source=('0001-c11-threads-fix-build-on-c23.patch'
-        'https://archive.mesa3d.org/mesa-25.0.7.tar.xz'
-        'https://archive.mesa3d.org/mesa-25.1.9.tar.xz'
-        'https://archive.mesa3d.org/mesa-25.2.8.tar.xz'
-        'https://archive.mesa3d.org/mesa-25.3.6.tar.xz'
-        'https://archive.mesa3d.org/mesa-26.0.8.tar.xz'
-        'https://archive.mesa3d.org/mesa-26.1.6.tar.xz'
-        "https://gitlab.freedesktop.org/mesa/mesa/-/archive/${_develcommit}/mesa-${_develcommit}.tar.gz")
-sha256sums=('SKIP'
-            '592272df3cf01e85e7db300c449df5061092574d099da275d19e97ef0510f8a6'
-            '412df33a1bb3c785ed698555a3972118a37c458e7accf6ae53f4bb87b3db454a'
-            '097842f3e49d996868b38688db87b006f7d4541e93ce86d2f341d8b3e7be7c93'
-            '59217efeac3b64e7ced958324b9db7494f1e0741aeb22d780276514cc1b8f206'
-            'caf1c0061a68e88dfa74967a7e780c0e85d65b6c4e334cd69095a5dc54ad78bc'
-            '5296b88a0f1e012e2cb9ada150a2bbadf728ca81e5a4fb2ab43c83a4d2158606'
-            '31ea152e5ec67b7689d7e00fd6b494a9246021e1ea937c09a90050a214f89afb')
-
-# The devel snapshot extracts to mesa-<commit>, releases to mesa-<ver>; RC tarballs keep the
-# hyphen that makepkg forbids in a version string, so our entries strip it and this restores it.
-_srctag() {
-  case "$1" in
-    *devel) printf '%s' "${_develcommit}" ;;
-    *)      printf '%s' "${1/rc/-rc}" ;;
-  esac
-}
-
-prepare() {
-  # The c11-threads C23 fix is already in 26.x and some late 25.x point releases: dry-run first
-  # and apply only where missing, because a reversed-patch prompt hangs the build.
-  local v
-  for v in "${_versions[@]}"; do
-    cd "${srcdir}/mesa-$(_srctag "$v")"
-    if patch -Np1 --forward --dry-run -i "${srcdir}/0001-c11-threads-fix-build-on-c23.patch" >/dev/null 2>&1; then
-      patch -Np1 --forward -i "${srcdir}/0001-c11-threads-fix-build-on-c23.patch"
-    fi
-  done
-}
+# Pinned, not floating, so rebuilds reproduce.
+_develcommit=5508b6e11905bf09122033ea755d7da809036189
+source=("https://gitlab.freedesktop.org/mesa/mesa/-/archive/${_develcommit}/mesa-${_develcommit}.tar.gz")
+sha256sums=('8c6372e67de592ac7960c89885e8af739ff65bd119c1c536eaeafc57029945ab')
 
 build() {
   # Same tuning contract as packages/soc/mesa (sm8550 fallback for a standalone makepkg).
@@ -67,42 +30,38 @@ build() {
   export CXXFLAGS="${CXXFLAGS} ${_rocknix_tune}"
 
   # Both WSI platforms stay on: x11 for XWayland games, wayland for gamescope-native ones.
-  local v
-  for v in "${_versions[@]}"; do
-    meson setup "build-${v}" "mesa-$(_srctag "$v")" --prefix=/usr --buildtype=plain \
-      -Db_ndebug=true \
-      -Dplatforms=x11,wayland \
-      -Dglx=disabled \
-      -Degl=disabled \
-      -Dgbm=disabled \
-      -Dopengl=false \
-      -Dgles1=disabled \
-      -Dgles2=disabled \
-      -Dgallium-drivers= \
-      -Dvulkan-drivers=freedreno \
-      -Dfreedreno-kmds=msm \
-      -Dvulkan-layers= \
-      -Dllvm=disabled \
-      -Dshader-cache=enabled \
-      -Dandroid-libbacktrace=disabled \
-      -Dlibunwind=disabled \
-      -Dvalgrind=disabled \
-      -Dbuild-tests=false
-    meson compile -C "build-${v}"
-  done
+  meson setup build "mesa-${_develcommit}" --prefix=/usr --buildtype=plain \
+    -Db_ndebug=true \
+    -Dplatforms=x11,wayland \
+    -Dglx=disabled \
+    -Degl=disabled \
+    -Dgbm=disabled \
+    -Dopengl=false \
+    -Dgles1=disabled \
+    -Dgles2=disabled \
+    -Dgallium-drivers= \
+    -Dvulkan-drivers=freedreno \
+    -Dfreedreno-kmds=msm \
+    -Dvulkan-layers= \
+    -Dllvm=disabled \
+    -Dshader-cache=enabled \
+    -Dandroid-libbacktrace=disabled \
+    -Dlibunwind=disabled \
+    -Dvalgrind=disabled \
+    -Dbuild-tests=false
+  meson compile -C build
 }
 
 package() {
-  local v stage dir
-  for v in "${_versions[@]}"; do
-    stage="${srcdir}/stage-${v}"
-    meson install -C "build-${v}" --destdir "${stage}" --no-rebuild
-    dir="${pkgdir}/usr/share/pocknix/vk-arm/${v}"
-    install -Dm755 "${stage}/usr/lib/libvulkan_freedreno.so" "${dir}/libvulkan_freedreno.so"
-    # ICD manifest name has varied across releases, hence the glob.
-    sed -E "s|\"library_path\": *\"[^\"]*\"|\"library_path\": \"/usr/share/pocknix/vk-arm/${v}/libvulkan_freedreno.so\"|" \
-      "${stage}"/usr/share/vulkan/icd.d/freedreno_icd*.json > "${dir}/icd.json"
-    chmod 0644 "${dir}/icd.json"
-  done
-  install -Dm644 "mesa-$(_srctag "${_versions[-1]}")/docs/license.rst" -t "${pkgdir}/usr/share/licenses/${pkgname}"
+  # The snapshot's VERSION (X.Y.0-devel) names the dir: the dropdown labels it "X.Y git".
+  local ver stage="${srcdir}/stage"
+  ver="$(<"mesa-${_develcommit}/VERSION")"
+  local dir="${pkgdir}/usr/share/pocknix/vk-arm/${ver//-/}"
+  meson install -C build --destdir "${stage}" --no-rebuild
+  install -Dm755 "${stage}/usr/lib/libvulkan_freedreno.so" "${dir}/libvulkan_freedreno.so"
+  # ICD manifest name has varied across releases, hence the glob.
+  sed -E "s|\"library_path\": *\"[^\"]*\"|\"library_path\": \"${dir#"${pkgdir}"}/libvulkan_freedreno.so\"|" \
+    "${stage}"/usr/share/vulkan/icd.d/freedreno_icd*.json > "${dir}/icd.json"
+  chmod 0644 "${dir}/icd.json"
+  install -Dm644 "mesa-${_develcommit}/docs/license.rst" -t "${pkgdir}/usr/share/licenses/${pkgname}"
 }

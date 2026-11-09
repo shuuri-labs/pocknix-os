@@ -3,15 +3,15 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=30
-pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump storage cap, speaker DSP"
+pkgrel=32
+pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump and journal storage caps, latency sysctls, zram swap, iwd Wi-Fi backend, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
 # pocknix-core rides along so a plain -Syu delivers the mandatory layer to devices that
 # predate it: a new package name only reaches installed devices via a dep edge.
 # swh-plugins: the LADSPA lookahead limiter at the end of the speaker DSP chain.
-depends=('sudo' 'pocknix-core' 'python' 'python-gobject' 'cpio' 'swh-plugins')
+depends=('sudo' 'pocknix-core' 'python' 'python-gobject' 'cpio' 'swh-plugins' 'zram-generator' 'polkit')
 # Older kernels own the /flash deploy files: the versioned conflict makes pacman upgrade the
 # kernel in the same transaction instead of failing on file conflicts.
 conflicts=('linux-pocknix-sm8550<7.2.10-3' 'linux-pocknix-sm8250<7.2.10-4')
@@ -23,6 +23,8 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'usb-role-sleep-pre' 'usb-role-sleep-post'
         'lid-powerkey-sleep-pre' 'lid-powerkey-sleep-post'
         '20-pocknix-powerkey.conf' '50-pocknix-coredump.conf'
+        '10-pocknix-journal-size.conf' '60-pocknix-latency.conf' 'zram-generator.conf'
+        '20-pocknix-wifi-backend.conf'
         '90-pocknix-backlight.rules' '60-pocknix-controllers.rules'
         '10-pocknix-wheel'
         'pocknix-fancontrol' 'pocknix-fan-mode' 'pocknix-lavd-mode'
@@ -45,7 +47,8 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -73,6 +76,13 @@ package() {
     "${pkgdir}/usr/lib/systemd/logind.conf.d/20-pocknix-powerkey.conf"
   install -Dm644 "${srcdir}/50-pocknix-coredump.conf" \
     "${pkgdir}/usr/lib/systemd/coredump.conf.d/50-pocknix-coredump.conf"
+  install -Dm644 "${srcdir}/10-pocknix-journal-size.conf" \
+    "${pkgdir}/usr/lib/systemd/journald.conf.d/10-pocknix-journal-size.conf"
+  install -Dm644 "${srcdir}/60-pocknix-latency.conf" "${pkgdir}/usr/lib/sysctl.d/60-pocknix-latency.conf"
+  # The main file, not a conf.d drop-in: an /etc/systemd/zram-generator.conf then replaces it whole.
+  install -Dm644 "${srcdir}/zram-generator.conf" "${pkgdir}/usr/lib/systemd/zram-generator.conf"
+  install -Dm644 "${srcdir}/20-pocknix-wifi-backend.conf" \
+    "${pkgdir}/usr/lib/NetworkManager/conf.d/20-pocknix-wifi-backend.conf"
 
   install -Dm644 "${srcdir}/90-pocknix-backlight.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/90-pocknix-backlight.rules"

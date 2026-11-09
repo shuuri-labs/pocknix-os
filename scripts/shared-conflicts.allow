@@ -3,6 +3,7 @@
 # so the entry acts on every fleet at once, and replaces= uninstalls on -Syu. check.sh fails on
 # an entry without a row and on a row whose entry is gone.
 pocknix-desktop-kde :: conflicts=pocknix-desktop<0.1.0-27 :: files that pocknix-desktop shipped before the split
+pocknix-desktop-kde :: conflicts=pocknix-desktop-plasma<0.1.0-4 :: /etc/xdg/kwinrc, which the Plasma flavour owned up to -3
 pocknix-desktop-plasma-mobile :: conflicts=pocknix-desktop<0.1.0-27 :: files that pocknix-desktop shipped before the split
 pocknix-session :: conflicts=pocknix-desktop<0.1.0-27 :: steamos-session-select lived in pocknix-desktop before the split
 pocknix-base-lock :: replaces=mbedtls :: the base renamed mbedtls to mbedtls3 with no conflicts=, so the old copy must go

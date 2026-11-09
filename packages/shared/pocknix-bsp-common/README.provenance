@@ -1,0 +1,9 @@
+# 60-pocknix-latency.conf provenance
+
+Source: armada 60-armada-gaming.conf, hand-ported.
+
+Ours:
+  - values as armada's (vm.swappiness=180 for the zram swap, watchdogs off)
+  - zram-generator.conf here pairs with it
+
+Last synced: never (hand-ported).

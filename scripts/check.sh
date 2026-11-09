@@ -539,6 +539,12 @@ else note "patch ledgers" "DRIFT"; printf '%s\n' "${out}" | sed 's/^/    /'; fai
 if python3 "${POCKNIX_ROOT}/scripts/check-patches.py" --selftest >/dev/null 2>&1; then note "patch ledgers self-test" "ok"
 else note "patch ledgers self-test" "a planted drift went unflagged (or a clean ledger was flagged)"; fail=1; fi
 
+# Hash-gated retirements: each install script's sha256 list is exactly its files' shipped versions.
+if out="$(python3 "${POCKNIX_ROOT}/scripts/check-retired-hashes.py" 2>&1)"; then note "retired-file hashes" "ok"
+else note "retired-file hashes" "DRIFT"; printf '%s\n' "${out}" | sed 's/^/    /'; fail=1; fi
+if python3 "${POCKNIX_ROOT}/scripts/check-retired-hashes.py" --selftest >/dev/null 2>&1; then note "retired-file hashes self-test" "ok"
+else note "retired-file hashes self-test" "a planted typo went unflagged (or a clean list was flagged)"; fail=1; fi
+
 # --- kernel enablement present? (committed; refreshable via sync) -----------
 _npatch=$(find "${KERNEL_DIR}/patches" "${POCKNIX_ROOT}/kernel/common/patches" -name '*.patch' 2>/dev/null | wc -l | tr -d ' ')
 if [ "${_npatch:-0}" -gt 0 ]; then

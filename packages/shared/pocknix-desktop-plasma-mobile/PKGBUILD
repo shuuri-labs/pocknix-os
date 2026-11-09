@@ -2,7 +2,7 @@
 # ./nodeps: makepkg -s would drag all of KDE/Qt into the chroot for a data package.
 pkgname=pocknix-desktop-plasma-mobile
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc="pocknix desktop flavour: Plasma Mobile"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -19,8 +19,9 @@ provides=('pocknix-desktop-flavour')
 conflicts=('pocknix-desktop<0.1.0-27')
 install='pocknix-desktop-plasma-mobile.install'
 source=('pocknix-desktop-remove-taskpanel' 'pocknix-desktop-remove-taskpanel.desktop'
-        'pocknix-panel-touchfix' '98-pocknix-panel-touchfix.hook' 'plasma-mobile.list')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'pocknix-panel-touchfix' '98-pocknix-panel-touchfix.hook' 'plasma-mobile.list'
+        'plasmamobilerc')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-desktop-remove-taskpanel" \
@@ -32,4 +33,6 @@ package() {
     "${pkgdir}/usr/share/libalpm/hooks/98-pocknix-panel-touchfix.hook"
   install -Dm644 "${srcdir}/plasma-mobile.list" \
     "${pkgdir}/usr/share/pocknix/desktop-apps/plasma-mobile.list"
+  # wizardRun=true: the first-run wizard would otherwise open over every new user's first session.
+  install -Dm644 "${srcdir}/plasmamobilerc" "${pkgdir}/etc/xdg/plasmamobilerc"
 }

@@ -1,0 +1,26 @@
+# pocknix-waydroid: Waydroid for the desktop layer, with the Android-side tuning re-applied after
+# each container boot and an "Install with Waydroid" handler for .apk files.
+# Build with ./nodeps: makepkg -s would drag Waydroid's LXC/Python stack into the chroot.
+pkgname=pocknix-waydroid
+pkgver=0.1.0
+pkgrel=2
+pkgdesc="pocknix Waydroid integration: Android-side tuning and an APK install handler"
+arch=('any')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('waydroid'      # needs the kernel's binder/binderfs (build-kernel.sh)
+         'libnotify')
+install=pocknix-waydroid.install
+source=('pocknix-waydroid-tuning' 'pocknix-waydroid-tuning.service'
+        'pocknix-waydroid-apk-install' 'waydroid-apk-install.desktop')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-waydroid-tuning" "${pkgdir}/usr/lib/pocknix/pocknix-waydroid-tuning"
+  install -Dm644 "${srcdir}/pocknix-waydroid-tuning.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-waydroid-tuning.service"
+  install -Dm755 "${srcdir}/pocknix-waydroid-apk-install" "${pkgdir}/usr/bin/pocknix-waydroid-apk-install"
+  # Same file name as the old per-user seed, so a copy the user edited still wins.
+  install -Dm644 "${srcdir}/waydroid-apk-install.desktop" \
+    "${pkgdir}/usr/share/applications/waydroid-apk-install.desktop"
+}

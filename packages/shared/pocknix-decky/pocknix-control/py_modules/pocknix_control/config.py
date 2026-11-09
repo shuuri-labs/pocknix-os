@@ -1,7 +1,8 @@
 from .led import led_config
 from .modes import fan_mode, lavd_mode
 from .steam import installed_games
-from .tweaks import fex_profile_labels, load_fex_contract, load_tweaks, mesa_versions
+from .turnip import mesa_versions
+from .tweaks import fex_profile_labels, load_fex_contract, load_tweaks
 
 
 def build_config():

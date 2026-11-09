@@ -3,7 +3,7 @@
 # compat tools) hang off the pocknix-device-<soc> metapackages instead.
 pkgname=pocknix-steam-full
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc="pocknix optional layer: Steam gamescope session, FEX x86 runtime, Decky, Lepton"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -18,7 +18,6 @@ depends=('pocknix-steam'
          'fex-emu'
          'fex-rootfs'
          'pocknix-turnip-arm'
-         'pocknix-turnip-x86'
          'pocknix-lepton')
 
 package() {
