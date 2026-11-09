@@ -1,0 +1,22 @@
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Sun, 8 Nov 2026 18:00:00 +0000
+Subject: [PATCH] arm64: dts: qcom: pm8150: add the bootloader and recovery
+ reboot modes
+
+Without reboot modes on the PON, `reboot bootloader` is a plain restart, so
+Linux cannot open the bootloader's menu. The Qualcomm ABL reads 0x2 as
+bootloader and 0x1 as recovery; sm8250 boards that need them set the same
+values one board at a time (sony-xperia-edo, xiaomi-elish), and pmk8550.dtsi
+carries them for every sm8550 board.
+---
+--- a/arch/arm64/boot/dts/qcom/pm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/pm8150.dtsi
+@@ -49,6 +49,8 @@
+ 		pon: pon@800 {
+ 			compatible = "qcom,pm8998-pon";
+ 			reg = <0x0800>;
++			mode-bootloader = <0x2>;
++			mode-recovery = <0x1>;
+ 
+ 			pon_pwrkey: pwrkey {
+ 				compatible = "qcom,pm8941-pwrkey";
