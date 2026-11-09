@@ -2,7 +2,7 @@ import { ButtonItem, ConfirmModal, DropdownItem, Field, PanelSectionRow, showMod
 import { useState } from "react";
 import { envPresets, parseEnvVars, presetFor, serializeEnvVars } from "../lib/envVars";
 import type { EnvVar } from "../lib/envVars";
-import { APPLIES_NEXT_LAUNCH } from "../lib/applies";
+import { APPLIES_NEXT_LAUNCH, timed } from "../lib/applies";
 
 function AddEnvVarModal({ current, onAdd, closeModal }: {
   current: EnvVar[];
@@ -45,10 +45,11 @@ const describe = ([key, value]: EnvVar) => `${key}=${value}`;
 
 /** own = this scope's envVars; inherited = the Default list a game adds its own on top of.
  *  Default has no Add: only variables saved there before can be seen and removed. */
-export function EnvVarsField({ own, inherited, canAdd = true, onChange }: {
+export function EnvVarsField({ own, inherited, canAdd = true, live, onChange }: {
   own: unknown;
   inherited?: unknown;
   canAdd?: boolean;
+  live: boolean;
   onChange: (envVars: string | null) => void;
 }) {
   const vars = parseEnvVars(own);
@@ -58,7 +59,7 @@ export function EnvVarsField({ own, inherited, canAdd = true, onChange }: {
   return (
     <>
       <PanelSectionRow>
-        <Field label="Environment Variables" description={APPLIES_NEXT_LAUNCH} />
+        <Field label="Environment Variables" description={timed(live, APPLIES_NEXT_LAUNCH)} />
       </PanelSectionRow>
       {vars.map((entry) => (
         <PanelSectionRow key={entry[0]}>

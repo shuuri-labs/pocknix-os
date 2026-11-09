@@ -1,9 +1,10 @@
-import { ModalRoot, ToggleField } from "@decky/ui";
+import { ModalRoot } from "@decky/ui";
 import { useEffect, useState } from "react";
 import { getConfig } from "../backend";
 import { usePatchTweaks } from "../hooks/usePatchTweaks";
 import type { Config } from "../types";
-import { TweakFields } from "./GameFields";
+import { currentGame } from "../lib/games";
+import { GameOnlyToggle, TweakFields, resetFields } from "./GameFields";
 
 /** Standalone per-game settings, opened from the library context menu. */
 export function GameSettingsModal({ appid, name, closeModal }: { appid: string; name: string; closeModal?: () => void }) {
@@ -25,12 +26,18 @@ export function GameSettingsModal({ appid, name, closeModal }: { appid: string; 
   return (
     <ModalRoot closeModal={closeModal}>
       <div style={{ fontWeight: 600, marginBottom: "8px" }}>{name || `App ${appid}`}</div>
-      <ToggleField
-        label="Use Per-Game Settings"
-        checked={enabled}
-        onChange={(on) => patchGame(appid, { enabled: on, name })}
-      />
-      {enabled ? <TweakFields config={config} appid={appid} values={values} patch={patch} /> : null}
+      <GameOnlyToggle checked={enabled} onChange={(on) => patchGame(appid, { enabled: on, name })} />
+      {enabled ? (
+        <TweakFields
+          config={config}
+          appid={appid}
+          name={name || `App ${appid}`}
+          values={values}
+          patch={patch}
+          live={currentGame()?.appid === appid}
+          onReset={() => patchGame(appid, resetFields(config, appid))}
+        />
+      ) : null}
     </ModalRoot>
   );
 }

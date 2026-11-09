@@ -8,9 +8,9 @@ export interface GameTweak {
   mesaVersion?: string;
   /** Shell-quoted KEY=VALUE words, added to the Default list (a game's value wins); launch options win over both. */
   envVars?: string;
-  /** Per-game fan curve override, applied for the game session only; "" = use global. */
+  /** Per-game fan curve override, applied for the game session only; "" = follow Default. */
   fanMode?: string;
-  /** Per-game scx_lavd mode override, applied for the game session only; "" = use global. */
+  /** Per-game scx_lavd mode override, applied for the game session only; "" = follow Default. */
   lavdMode?: string;
   /** pocknix-game-launch exports PROTON_USE_XALIA=0 unless false; absent = disabled. */
   disableXalia?: boolean;
@@ -53,6 +53,8 @@ export interface Config {
   mesaVersions?: DropdownChoice[];
   installedGames: InstalledGame[];
   led: LedConfig;
+  /** Pocknix tiles launched without pocknix-game-launch (Tools, Store): no per-game settings. */
+  plainTiles?: PlainTile[];
   /** cores.sh's prime core ("7"); "" = the board has none, so the toggle is hidden. */
   primeCore?: string;
   game?: GameRef | null;
@@ -113,4 +115,10 @@ export interface LedConfig {
   sides: boolean;
   left: LedSide;
   right: LedSide;
+}
+
+export interface PlainTile {
+  name: string;
+  exe: string;
+  args: string;
 }

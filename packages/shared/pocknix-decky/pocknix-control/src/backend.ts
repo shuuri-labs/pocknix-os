@@ -1,7 +1,8 @@
 import { call } from "@decky/api";
+import { rememberPlainTiles } from "./lib/games";
 import type { Config, LedConfig, LedSideKey, SnapshotStatus, Tweaks, UpdateInfo, UpdateStatus } from "./types";
 
-export const getConfig = () => call<[], Config>("get_config");
+export const getConfig = () => call<[], Config>("get_config").then(rememberPlainTiles);
 export const setFanMode = (mode: string) => call<[string], Config>("set_fan_mode", mode);
 export const setLavdMode = (mode: string) => call<[string], Config>("set_lavd_mode", mode);
 export const gameLifetime = (appid: string, running: boolean) => call<[string, boolean], void>("game_lifetime", appid, running);

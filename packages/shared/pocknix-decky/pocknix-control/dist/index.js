@@ -25,7 +25,126 @@ const definePlugin = (fn) => {
     };
 };
 
-const getConfig = () => call("get_config");
+function gameDisplayName(game) {
+    if (!game?.appid)
+        return "";
+    return game.name || `App ${game.appid}`;
+}
+// The backend lists every appmanifest in steamapps, tools included. app_type 4 = tool in
+// Steam's appStore overview; this name pattern is the fallback when no overview exists.
+const NON_GAME_NAME = /^(Proton[ 0-9]|Proton (Hotfix|EasyAntiCheat|BattlEye)|Steam Linux Runtime|Steamworks Common)/i;
+function isGame(appid, name = "") {
+    try {
+        const overview = window.appStore?.GetAppOverviewByAppID?.(Number(appid));
+        if (typeof overview?.app_type === "number")
+            return overview.app_type !== 4;
+    }
+    catch (error) {
+    }
+    return !NON_GAME_NAME.test(name);
+}
+function installedSteamGames(config) {
+    return (config.installedGames || [])
+        .filter((game) => game?.appid && isGame(String(game.appid), game.name || ""))
+        .map((game) => String(game.appid));
+}
+// Matched by name, as pocknix-tiles names them, so a stale duplicate tile is caught too.
+let plainTileNames = new Set();
+function rememberPlainTiles(config) {
+    plainTileNames = new Set((config.plainTiles || []).map((tile) => tile.name));
+    return config;
+}
+function isPlainTile(appid, name) {
+    if (Number(appid) < 0x80000000)
+        return false;
+    let display = name;
+    if (display === undefined) {
+        try {
+            display = window.appStore?.GetAppOverviewByAppID?.(Number(appid))?.display_name || "";
+        }
+        catch (error) {
+            display = "";
+        }
+    }
+    return plainTileNames.has(display || "");
+}
+// Non-Steam shortcuts have no appmanifest, so only deckDesktopApps sees them. Their appids are
+// unsigned and above 2^31, hence the >>> 0: some builds hand out the signed-int32 form.
+function nonSteamShortcuts() {
+    return allShortcuts().filter((shortcut) => !isPlainTile(shortcut.appid, shortcut.name));
+}
+function plainTileShortcuts() {
+    return allShortcuts().filter((shortcut) => isPlainTile(shortcut.appid, shortcut.name));
+}
+function allShortcuts() {
+    try {
+        const ids = window.collectionStore?.deckDesktopApps?.apps;
+        if (!ids?.values)
+            return [];
+        const shortcuts = [];
+        for (const id of Array.from(ids.values())) {
+            const appid = String(Number(id) >>> 0);
+            if (!appid || appid === "0")
+                continue;
+            let name = "";
+            try {
+                name = window.appStore?.GetAppOverviewByAppID?.(Number(appid))?.display_name || "";
+            }
+            catch (error) {
+            }
+            shortcuts.push({ appid, name: name || `App ${appid}`, nonSteam: true });
+        }
+        return shortcuts;
+    }
+    catch (error) {
+        return [];
+    }
+}
+function availableGames(config) {
+    const games = new Map();
+    for (const game of config.installedGames || []) {
+        if (game?.appid && isGame(String(game.appid), game.name || "")) {
+            games.set(String(game.appid), { appid: String(game.appid), name: game.name || `App ${game.appid}` });
+        }
+    }
+    for (const shortcut of nonSteamShortcuts()) {
+        games.set(shortcut.appid, shortcut);
+    }
+    // Saved tweaks keep a game listed even when the lookups above miss it, so existing
+    // per-game config can never become unreachable.
+    for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
+        if (game && typeof game === "object" && !games.has(String(appid)) && !isPlainTile(String(appid), game.name)) {
+            games.set(String(appid), { appid: String(appid), name: game.name || `App ${appid}`, nonSteam: Number(appid) >= 0x80000000 });
+        }
+    }
+    return Array.from(games.values()).sort((a, b) => (a.nonSteam ? 1 : 0) - (b.nonSteam ? 1 : 0) || gameDisplayName(a).localeCompare(gameDisplayName(b)));
+}
+function editTargetOptions(config) {
+    return [
+        { data: "", label: "Default" },
+        ...availableGames(config).map((game) => ({
+            data: game.appid,
+            label: game.nonSteam ? `${gameDisplayName(game)} · non-Steam` : gameDisplayName(game),
+        })),
+    ];
+}
+function currentGame() {
+    const running = DFL.Router?.MainRunningApp || window.Router?.MainRunningApp;
+    const appid = running?.appid;
+    if (!appid)
+        return null;
+    const id = String(appid);
+    let name = running?.display_name || running?.displayName || "";
+    try {
+        const details = window.appDetailsStore?.GetAppDetails?.(Number(id));
+        name = details?.strDisplayName || details?.strName || details?.name || name;
+    }
+    catch (error) {
+    }
+    return isPlainTile(id, name) ? null : { appid: id, name: name || `App ${id}` };
+}
+
+const getConfig = () => call("get_config").then(rememberPlainTiles);
 const setFanMode = (mode) => call("set_fan_mode", mode);
 const setLavdMode = (mode) => call("set_lavd_mode", mode);
 const gameLifetime = (appid, running) => call("game_lifetime", appid, running);
@@ -43,13 +162,14 @@ const rebootSystem = () => call("reboot_system");
 
 // Every Steam game and every non-Steam shortcut (emulator tiles, ROM managers, a Windows .exe on
 // Proton) launches through pocknix-game-launch, which applies the per-game tweaks at launch
-// time, so a settings change never has to touch launch options.
+// time, so a settings change never has to touch launch options. Pocknix's own settings apps
+// (launch=plain tiles) are the exception: they never take game tweaks.
 // Bare name: Steam runs launch options through a shell with the system PATH (/usr/bin).
 const LAUNCHER = "pocknix-game-launch";
 const COMMAND = "%command%";
 // Written by Pocknix Control before the launcher existed; the launcher exports it itself now.
 const FEX_TOKEN = /STEAM_COMPAT_FEX_CONFIG=("[^"]*"|\S*)\s*/g;
-function getLaunchOptions(appid) {
+function getDetails(appid) {
     return new Promise((resolve) => {
         const apps = window.SteamClient?.Apps;
         if (!apps?.RegisterForAppDetails)
@@ -70,7 +190,7 @@ function getLaunchOptions(appid) {
         timer = window.setTimeout(() => finish(null), 3000);
         try {
             registration = apps.RegisterForAppDetails(Number(appid), (details) => {
-                finish(String(details?.strLaunchOptions ?? ""));
+                finish({ exe: String(details?.strShortcutExe ?? "").replace(/^"|"$/g, ""), launchOptions: String(details?.strLaunchOptions ?? "") });
             });
         }
         catch (error) {
@@ -93,10 +213,10 @@ async function ensureLaunchWrapper(appid) {
     const apps = window.SteamClient?.Apps;
     if (!apps?.SetAppLaunchOptions)
         return false;
-    const current = await getLaunchOptions(appid);
-    if (current === null)
+    const details = await getDetails(appid);
+    if (details === null)
         return false;
-    const next = wrapLaunchOptions(current);
+    const next = wrapLaunchOptions(details.launchOptions);
     if (next !== null)
         apps.SetAppLaunchOptions(Number(appid), next);
     return true;
@@ -104,6 +224,22 @@ async function ensureLaunchWrapper(appid) {
 async function wrapShortcuts(appids) {
     for (const appid of appids)
         await ensureLaunchWrapper(appid);
+}
+/** pocknix-tiles finds a tile by exe + launch options, so an older sweep's wrapper hid it. Only an
+ *  exact wrapper + manifest args match is undone; anything else on the tile is the user's. */
+async function unwrapPlainTiles(tiles, shortcuts) {
+    const apps = window.SteamClient?.Apps;
+    if (!apps?.SetAppLaunchOptions)
+        return;
+    for (const shortcut of shortcuts) {
+        const details = await getDetails(shortcut.appid);
+        if (!details)
+            continue;
+        const tile = tiles.find((t) => t.name === shortcut.name && t.exe === details.exe);
+        if (tile && details.launchOptions.trim() === `${LAUNCHER} ${COMMAND} ${tile.args}`.trim()) {
+            apps.SetAppLaunchOptions(Number(shortcut.appid), tile.args);
+        }
+    }
 }
 async function wrapAllGames(appids) {
     let next = 0;
@@ -260,99 +396,6 @@ const tabIcons = {
     StickLights: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("path", { d: "M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" }), SP_JSX.jsx("path", { d: "M9 18h6" }), SP_JSX.jsx("path", { d: "M10 22h4" })] }) })),
     Updater: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }), SP_JSX.jsx("polyline", { points: "7 10 12 15 17 10" }), SP_JSX.jsx("line", { x1: "12", x2: "12", y1: "15", y2: "3" })] }) })),
 };
-
-function gameDisplayName(game) {
-    if (!game?.appid)
-        return "";
-    return game.name || `App ${game.appid}`;
-}
-// The backend lists every appmanifest in steamapps, tools included. app_type 4 = tool in
-// Steam's appStore overview; this name pattern is the fallback when no overview exists.
-const NON_GAME_NAME = /^(Proton[ 0-9]|Proton (Hotfix|EasyAntiCheat|BattlEye)|Steam Linux Runtime|Steamworks Common)/i;
-function isGame(appid, name = "") {
-    try {
-        const overview = window.appStore?.GetAppOverviewByAppID?.(Number(appid));
-        if (typeof overview?.app_type === "number")
-            return overview.app_type !== 4;
-    }
-    catch (error) {
-    }
-    return !NON_GAME_NAME.test(name);
-}
-function installedSteamGames(config) {
-    return (config.installedGames || [])
-        .filter((game) => game?.appid && isGame(String(game.appid), game.name || ""))
-        .map((game) => String(game.appid));
-}
-// Non-Steam shortcuts have no appmanifest, so only deckDesktopApps sees them. Their appids are
-// unsigned and above 2^31, hence the >>> 0: some builds hand out the signed-int32 form.
-function nonSteamShortcuts() {
-    try {
-        const ids = window.collectionStore?.deckDesktopApps?.apps;
-        if (!ids?.values)
-            return [];
-        const shortcuts = [];
-        for (const id of Array.from(ids.values())) {
-            const appid = String(Number(id) >>> 0);
-            if (!appid || appid === "0")
-                continue;
-            let name = "";
-            try {
-                name = window.appStore?.GetAppOverviewByAppID?.(Number(appid))?.display_name || "";
-            }
-            catch (error) {
-            }
-            shortcuts.push({ appid, name: name || `App ${appid}`, nonSteam: true });
-        }
-        return shortcuts;
-    }
-    catch (error) {
-        return [];
-    }
-}
-function availableGames(config) {
-    const games = new Map();
-    for (const game of config.installedGames || []) {
-        if (game?.appid && isGame(String(game.appid), game.name || "")) {
-            games.set(String(game.appid), { appid: String(game.appid), name: game.name || `App ${game.appid}` });
-        }
-    }
-    for (const shortcut of nonSteamShortcuts()) {
-        games.set(shortcut.appid, shortcut);
-    }
-    // Saved tweaks keep a game listed even when the lookups above miss it, so existing
-    // per-game config can never become unreachable.
-    for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
-        if (game && typeof game === "object" && !games.has(String(appid))) {
-            games.set(String(appid), { appid: String(appid), name: game.name || `App ${appid}`, nonSteam: Number(appid) >= 0x80000000 });
-        }
-    }
-    return Array.from(games.values()).sort((a, b) => (a.nonSteam ? 1 : 0) - (b.nonSteam ? 1 : 0) || gameDisplayName(a).localeCompare(gameDisplayName(b)));
-}
-function editTargetOptions(config) {
-    return [
-        { data: "", label: "Default" },
-        ...availableGames(config).map((game) => ({
-            data: game.appid,
-            label: game.nonSteam ? `${gameDisplayName(game)} · non-Steam` : gameDisplayName(game),
-        })),
-    ];
-}
-function currentGame() {
-    const running = DFL.Router?.MainRunningApp || window.Router?.MainRunningApp;
-    const appid = running?.appid;
-    if (!appid)
-        return null;
-    const id = String(appid);
-    let name = running?.display_name || running?.displayName || "";
-    try {
-        const details = window.appDetailsStore?.GetAppDetails?.(Number(id));
-        name = details?.strDisplayName || details?.strName || details?.name || name;
-    }
-    catch (error) {
-    }
-    return { appid: id, name: name || `App ${id}` };
-}
 
 const styles = `
       .pocknix-control-tabs {
@@ -627,13 +670,18 @@ async function availableCompatTools(appid) {
         return [];
     }
 }
-/** Live view of the game's current tool; fires again when it changes anywhere (incl. Steam's UI). */
+// Steam reports its own choice in the same fields as a user's pick; only the priority tells them
+// apart, and a pick made in Properties (or by SpecifyCompatTool) is saved at 250.
+const USER_PICK_PRIORITY = 250;
+/** Live view of the game's tool; fires again when it changes anywhere (incl. Steam's UI). */
 function registerForCompatTool(appid, onChange) {
     const apps = window.SteamClient?.Apps;
     if (!apps?.RegisterForAppDetails)
         return () => { };
     const registration = apps.RegisterForAppDetails(Number(appid), (details) => {
-        onChange(String(details?.strCompatToolName ?? ""));
+        const tool = String(details?.strCompatToolName ?? "");
+        const label = String(details?.strCompatToolDisplayName || tool);
+        onChange({ tool: Number(details?.nCompatToolPriority) >= USER_PICK_PRIORITY ? tool : "", label });
     });
     return () => registration?.unregister?.();
 }
@@ -731,6 +779,9 @@ function serializeEnvVars(vars) {
 
 const APPLIES_NOW = "Applies now";
 const APPLIES_NEXT_LAUNCH = "Applies on next launch";
+/** Now and next launch only differ while a running game uses the settings being edited; at any
+ *  other time everything takes effect when a game starts, which one note says instead. */
+const timed = (live, when, text) => (live ? (text ? `${when}. ${text}` : when) : text);
 
 function AddEnvVarModal({ current, onAdd, closeModal }) {
     const [key, setKey] = SP_REACT.useState(envPresets[0].key);
@@ -749,13 +800,13 @@ function AddEnvVarModal({ current, onAdd, closeModal }) {
 const describe = ([key, value]) => `${key}=${value}`;
 /** own = this scope's envVars; inherited = the Default list a game adds its own on top of.
  *  Default has no Add: only variables saved there before can be seen and removed. */
-function EnvVarsField({ own, inherited, canAdd = true, onChange }) {
+function EnvVarsField({ own, inherited, canAdd = true, live, onChange }) {
     const vars = parseEnvVars(own);
     const fromDefault = parseEnvVars(inherited).filter(([key]) => !vars.some(([k]) => k === key));
     const save = (next) => onChange(serializeEnvVars(next));
     if (!canAdd && !vars.length)
         return null;
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Environment Variables", description: APPLIES_NEXT_LAUNCH }) }), vars.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { label: presetFor(entry[0])?.label || entry[0], description: describe(entry), onClick: () => save(vars.filter(([key]) => key !== entry[0])), children: "Remove" }) }, entry[0]))), fromDefault.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: presetFor(entry[0])?.label || entry[0], description: `${describe(entry)} (from Default)` }) }, `default-${entry[0]}`))), canAdd ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => DFL.showModal(SP_JSX.jsx(AddEnvVarModal, { current: vars, onAdd: (key, value) => save([...vars.filter(([k]) => k !== key), [key, value]]) })), children: "Add Environment Variable" }) })) : null] }));
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: "Environment Variables", description: timed(live, APPLIES_NEXT_LAUNCH) }) }), vars.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { label: presetFor(entry[0])?.label || entry[0], description: describe(entry), onClick: () => save(vars.filter(([key]) => key !== entry[0])), children: "Remove" }) }, entry[0]))), fromDefault.map((entry) => (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.Field, { label: presetFor(entry[0])?.label || entry[0], description: `${describe(entry)} (from Default)` }) }, `default-${entry[0]}`))), canAdd ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => DFL.showModal(SP_JSX.jsx(AddEnvVarModal, { current: vars, onAdd: (key, value) => save([...vars.filter(([k]) => k !== key), [key, value]]) })), children: "Add Environment Variable" }) })) : null] }));
 }
 
 function SelectEdit({ label, description, value, options, onChange }) {
@@ -780,53 +831,66 @@ const lavdOptions = [
     { data: "autopilot", label: "Autopilot" },
     { data: "performance", label: "Performance" },
 ];
-const globalChoice = { data: "", label: "Use global" };
-function XaliaToggle({ values, patch }) {
-    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Xalia", description: `${APPLIES_NEXT_LAUNCH}. Saves CPU in every game. Xalia lets a controller work menus and launchers built for a mouse, so turn this off when docked without a mouse or touchscreen.`, checked: values.disableXalia !== false, onChange: (checked) => patch({ disableXalia: checked }) }) }));
+function Note({ text }) {
+    return SP_JSX.jsx("div", { style: { padding: "4px 16px 8px", fontSize: "12px", lineHeight: "16px", opacity: 0.62 }, children: text });
 }
-function TouchField({ values, patch }) {
-    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Touchscreen", description: `${APPLIES_NOW}. Stops stray touches while the game runs.`, checked: values.touchDisabled === true, onChange: (on) => patch({ touchDisabled: on }) }) }));
+function GameOnlyToggle({ checked, onChange }) {
+    return SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: checked, onChange: onChange });
 }
-function PrimeCoreToggle({ primeCore, values, patch }) {
+function XaliaToggle({ values, patch, live }) {
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Xalia", description: timed(live, APPLIES_NEXT_LAUNCH, "Saves CPU in every game. Turn off for a game whose menus only work with a mouse, if you can't tap the screen (e.g. docked)."), checked: values.disableXalia !== false, onChange: (checked) => patch({ disableXalia: checked }) }) }));
+}
+function TouchField({ values, patch, live }) {
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Touchscreen", description: timed(live, APPLIES_NOW, "Stops stray touches during play."), checked: values.touchDisabled === true, onChange: (on) => patch({ touchDisabled: on }) }) }));
+}
+function PrimeCoreToggle({ primeCore, values, patch, live }) {
     if (!primeCore)
         return null;
-    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Fastest Core First", description: `${APPLIES_NEXT_LAUNCH}. Gives the game the fastest core (CPU ${primeCore}) as its first one. Can help games that do most of their work on one core.`, checked: values.primeCoreFirst === true, onChange: (on) => patch({ primeCoreFirst: on }) }) }));
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Fastest Core First", description: timed(live, APPLIES_NEXT_LAUNCH, `Gives the game the fastest core (CPU ${primeCore}) as its first one. Can help games that do most of their work on one core.`), checked: values.primeCoreFirst === true, onChange: (on) => patch({ primeCoreFirst: on }) }) }));
 }
 const pick = (options, value) => {
     const v = String(value ?? "");
     return options.some((option) => option.data === v) ? v : "";
 };
-const perGameFan = [globalChoice, ...fanOptions];
-const perGameLavd = [globalChoice, ...lavdOptions];
-/** Per-game override ("" = follow the global mode); the backend retunes a running game on save. */
-function FanField({ values, patch }) {
-    return SP_JSX.jsx(SelectEdit, { label: "Fan Curve", description: APPLIES_NOW, value: pick(perGameFan, values.fanMode), options: perGameFan, onChange: (id) => patch({ fanMode: id }) });
+const labelOf = (options, value) => options.find((o) => o.data === value)?.label || value;
+const withAllGames = (options, current) => [
+    { data: "", label: `Default (${labelOf(options, current)})` },
+    ...options,
+];
+/** Per-game override ("" = follow Default); the backend retunes a running game on save. */
+function FanField({ config, values, patch, live }) {
+    const options = withAllGames(fanOptions, config.fanMode);
+    return (SP_JSX.jsx(SelectEdit, { label: "Fan Curve", description: timed(live, APPLIES_NOW), value: pick(options, values.fanMode), options: options, onChange: (id) => patch({ fanMode: id }) }));
 }
-function SchedulerField({ values, patch }) {
-    return (SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", description: APPLIES_NOW, value: pick(perGameLavd, values.lavdMode), options: perGameLavd, onChange: (id) => patch({ lavdMode: id }) }));
+function SchedulerField({ config, values, patch, live }) {
+    const options = withAllGames(lavdOptions, config.lavdMode);
+    return (SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", description: timed(live, APPLIES_NOW), value: pick(options, values.lavdMode), options: options, onChange: (id) => patch({ lavdMode: id }) }));
+}
+function ResetGame({ name, onReset }) {
+    return (SP_JSX.jsx(DFL.PanelSection, { children: SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => DFL.showModal(SP_JSX.jsx(DFL.ConfirmModal, { strTitle: `Reset ${name}?`, strDescription: "Clears this game's own settings so it uses Default again. Proton Version is Steam's setting and stays as it is.", strOKButtonText: "Reset", onOK: onReset })), children: "Reset This Game" }) }) }));
 }
 /** Every per-game control, shared by the Games tab and the library context-menu modal. */
-function TweakFields({ config, appid, values, patch }) {
+function TweakFields({ config, appid, name, values, patch, live, onReset }) {
     // Proton pick is Steam's own per-game compat setting (see lib/compat.ts) — read live and
     // written straight back to Steam, so it mirrors the game-properties dropdown both ways.
     const [compatTools, setCompatTools] = SP_REACT.useState([]);
-    const [currentTool, setCurrentTool] = SP_REACT.useState("");
+    const [compat, setCompat] = SP_REACT.useState({ tool: "", label: "" });
     SP_REACT.useEffect(() => {
         setCompatTools([]);
-        setCurrentTool("");
+        setCompat({ tool: "", label: "" });
         if (!appid)
             return;
-        let live = true;
+        let mounted = true;
         availableCompatTools(appid).then((tools) => {
-            if (live)
+            if (mounted)
                 setCompatTools(tools);
         });
-        const unregister = registerForCompatTool(appid, (tool) => {
-            if (live)
-                setCurrentTool(tool);
+        const unregister = registerForCompatTool(appid, (next) => {
+            if (mounted)
+                setCompat(next);
         });
         return () => {
-            live = false;
+            mounted = false;
             unregister();
         };
     }, [appid]);
@@ -834,7 +898,8 @@ function TweakFields({ config, appid, values, patch }) {
         { data: "", label: "Steam default" },
         ...compatTools.map((tool) => ({ data: tool.name, label: tool.label })),
     ];
-    const compatValue = compatOptions.some((option) => option.data === currentTool) ? currentTool : "";
+    const compatValue = compatOptions.some((option) => option.data === compat.tool) ? compat.tool : "";
+    const steamChoice = !compatValue && compat.label ? `Steam picks ${compat.label}.` : undefined;
     const presets = config.fexProfiles || {};
     const storedProfile = values.fexProfile;
     const fexValue = storedProfile && presets[storedProfile] ? storedProfile : "default";
@@ -844,10 +909,17 @@ function TweakFields({ config, appid, values, patch }) {
     const mesaOptions = config.mesaVersions?.length ? config.mesaVersions : [{ data: "", label: "System default" }];
     const storedMesa = String(values.mesaVersion ?? "");
     const mesaValue = mesaOptions.some((option) => option.data === storedMesa) ? storedMesa : "";
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(FanField, { values: values, patch: patch }), SP_JSX.jsx(SchedulerField, { values: values, patch: patch })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Proton Version", description: APPLIES_NEXT_LAUNCH, value: compatValue, options: compatOptions, onChange: (name) => {
-                            setCurrentTool(String(name));
-                            setCompatTool(appid, String(name));
-                        } }), SP_JSX.jsx(SelectEdit, { label: "FEX Preset", description: APPLIES_NEXT_LAUNCH, value: fexValue, options: fexOptions, onChange: (id) => patch({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Mesa Version", description: APPLIES_NEXT_LAUNCH, value: mesaValue, options: mesaOptions, onChange: (id) => patch({ mesaVersion: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", description: APPLIES_NEXT_LAUNCH, value: audioValue, options: audioLatencyOptions, onChange: (id) => patch({ audioLatency: id }) }), SP_JSX.jsx(TouchField, { values: values, patch: patch }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patch })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "ADVANCED", children: [SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patch }), SP_JSX.jsx(EnvVarsField, { own: config.tweaks.games[appid]?.envVars, inherited: config.tweaks.global.envVars, onChange: (envVars) => patch({ envVars }) })] })] }));
+    const nextLaunch = timed(live, APPLIES_NEXT_LAUNCH);
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [live ? null : SP_JSX.jsx(Note, { text: "Changes apply when you start the game." }), SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(FanField, { config: config, values: values, patch: patch, live: live }), SP_JSX.jsx(SchedulerField, { config: config, values: values, patch: patch, live: live })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Proton Version", description: timed(live, APPLIES_NEXT_LAUNCH, steamChoice), value: compatValue, options: compatOptions, onChange: (tool) => {
+                            setCompat((current) => ({ ...current, tool: String(tool) }));
+                            setCompatTool(appid, String(tool));
+                        } }), SP_JSX.jsx(SelectEdit, { label: "FEX Preset", description: nextLaunch, value: fexValue, options: fexOptions, onChange: (id) => patch({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Mesa Version", description: nextLaunch, value: mesaValue, options: mesaOptions, onChange: (id) => patch({ mesaVersion: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", description: nextLaunch, value: audioValue, options: audioLatencyOptions, onChange: (id) => patch({ audioLatency: id }) }), SP_JSX.jsx(TouchField, { values: values, patch: patch, live: live }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patch, live: live })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "ADVANCED", children: [SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patch, live: live }), SP_JSX.jsx(EnvVarsField, { own: config.tweaks.games[appid]?.envVars, inherited: config.tweaks.global.envVars, live: live, onChange: (envVars) => patch({ envVars }) })] }), SP_JSX.jsx(ResetGame, { name: name, onReset: onReset })] }));
+}
+/** The fields that undo a game's own settings, keeping its saved name. */
+function resetFields(config, appid) {
+    const own = config.tweaks.games[appid] || {};
+    const cleared = Object.fromEntries(Object.keys(own).filter((key) => key !== "name").map((key) => [key, null]));
+    return { ...cleared, enabled: false };
 }
 
 function Games({ config, setConfig, patch, reload }) {
@@ -896,7 +968,10 @@ function Games({ config, setConfig, patch, reload }) {
     const fexOptions = Object.entries(presets).map(([id, profile]) => ({ data: id, label: profile.label }));
     const storedLatency = String(values.audioLatency ?? "");
     const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(SelectEdit, { label: "Fan Curve", description: APPLIES_NOW, value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", description: APPLIES_NOW, value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", description: APPLIES_NEXT_LAUNCH, value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", description: APPLIES_NEXT_LAUNCH, value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) }), SP_JSX.jsx(TouchField, { values: values, patch: patchSettings }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patchSettings })] }), config.primeCore || parseEnvVars(tweaks.global.envVars).length ? (SP_JSX.jsxs(DFL.PanelSection, { title: "ADVANCED", children: [SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patchSettings }), SP_JSX.jsx(EnvVarsField, { own: tweaks.global.envVars, canAdd: false, onChange: (envVars) => patchSettings({ envVars }) })] })) : null] })) : perGameEnabled ? (SP_JSX.jsx(TweakFields, { config: config, appid: game.appid, values: values, patch: patchSettings })) : null] }));
+    // Default reaches whatever is running; a game's own settings only reach that game.
+    const live = !!runtimeGame?.appid && (editingDefault || runtimeGame.appid === game?.appid);
+    const nextLaunch = timed(live, APPLIES_NEXT_LAUNCH);
+    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(GameOnlyToggle, { checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [live ? null : SP_JSX.jsx(Note, { text: "Changes apply to every game you start." }), SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(SelectEdit, { label: "Fan Curve", description: live ? APPLIES_NOW : "Outside games too.", value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", description: live ? APPLIES_NOW : "Outside games too.", value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", description: nextLaunch, value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", description: nextLaunch, value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) }), SP_JSX.jsx(TouchField, { values: values, patch: patchSettings, live: live }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patchSettings, live: live })] }), config.primeCore || parseEnvVars(tweaks.global.envVars).length ? (SP_JSX.jsxs(DFL.PanelSection, { title: "ADVANCED", children: [SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patchSettings, live: live }), SP_JSX.jsx(EnvVarsField, { own: tweaks.global.envVars, canAdd: false, live: live, onChange: (envVars) => patchSettings({ envVars }) })] })) : null] })) : perGameEnabled ? (SP_JSX.jsx(TweakFields, { config: config, appid: game.appid, name: game.name || `App ${game.appid}`, values: values, patch: patchSettings, live: live, onReset: () => patch(game.appid, resetFields(config, game.appid)) })) : null] }));
 }
 
 const SHOWN_UPDATES = 8;
@@ -1105,7 +1180,7 @@ function GameSettingsModal({ appid, name, closeModal }) {
     const enabled = gameSettings.enabled === true;
     const values = enabled ? { ...config.tweaks.global, ...gameSettings } : config.tweaks.global;
     const patch = (fields) => patchGame(appid, { ...fields, enabled: true, name });
-    return (SP_JSX.jsxs(DFL.ModalRoot, { closeModal: closeModal, children: [SP_JSX.jsx("div", { style: { fontWeight: 600, marginBottom: "8px" }, children: name || `App ${appid}` }), SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: enabled, onChange: (on) => patchGame(appid, { enabled: on, name }) }), enabled ? SP_JSX.jsx(TweakFields, { config: config, appid: appid, values: values, patch: patch }) : null] }));
+    return (SP_JSX.jsxs(DFL.ModalRoot, { closeModal: closeModal, children: [SP_JSX.jsx("div", { style: { fontWeight: 600, marginBottom: "8px" }, children: name || `App ${appid}` }), SP_JSX.jsx(GameOnlyToggle, { checked: enabled, onChange: (on) => patchGame(appid, { enabled: on, name }) }), enabled ? (SP_JSX.jsx(TweakFields, { config: config, appid: appid, name: name || `App ${appid}`, values: values, patch: patch, live: currentGame()?.appid === appid, onReset: () => patchGame(appid, resetFields(config, appid)) })) : null] }));
 }
 
 // LibraryContextMenu is not exported: reach it via classname marker -> `navigator:` wrapper ->
@@ -1144,7 +1219,7 @@ function patchLibraryContextMenu() {
             try {
                 const overview = this.props?.overview;
                 const appid = overview?.appid;
-                if (!appid)
+                if (!appid || isPlainTile(String(Number(appid) >>> 0), String(overview?.display_name ?? "")))
                     return ret;
                 const children = Array.isArray(ret) ? ret : ret?.props?.children;
                 if (!Array.isArray(children))
@@ -1173,7 +1248,10 @@ function registerTouchLifetime() {
         report(running.appid, true);
     try {
         const handle = window.SteamClient?.GameSessions?.RegisterForAppLifetimeNotifications?.((update) => {
-            report(String(Number(update?.unAppID) >>> 0), !!update?.bRunning);
+            const appid = String(Number(update?.unAppID) >>> 0);
+            // Default's Disable Touchscreen must not lock the touch UI of Pocknix Tools or the Store.
+            if (!isPlainTile(appid))
+                report(appid, !!update?.bRunning);
         });
         return () => handle?.unregister?.();
     }
@@ -1187,8 +1265,11 @@ var index = definePlugin(() => {
     const unregisterTouch = registerTouchLifetime();
     const unregisterDownloads = registerDownloadWrapper((appid) => isGame(appid));
     getConfig()
-        .then((config) => wrapAllGames(installedSteamGames(config)))
-        .then(() => wrapShortcuts(nonSteamShortcuts().map((shortcut) => shortcut.appid)))
+        .then(async (config) => {
+        await wrapAllGames(installedSteamGames(config));
+        await wrapShortcuts(nonSteamShortcuts().map((shortcut) => shortcut.appid));
+        await unwrapPlainTiles(config.plainTiles || [], plainTileShortcuts());
+    })
         .catch(() => { });
     return {
         name: "Pocknix Control",

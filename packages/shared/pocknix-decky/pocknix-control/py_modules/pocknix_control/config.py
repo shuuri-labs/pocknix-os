@@ -2,6 +2,7 @@ from .led import led_config
 from .modes import fan_mode, lavd_mode
 from .steam import installed_games
 from .system import run_cmd
+from .tiles import plain_tiles
 from .turnip import mesa_versions
 from .tweaks import fex_profile_labels, load_fex_contract, load_tweaks
 
@@ -24,4 +25,5 @@ def build_config():
         "installedGames": installed_games(),
         "led": led_config(),
         "primeCore": prime_core(),
+        "plainTiles": plain_tiles(),
     }

@@ -25,9 +25,38 @@ export function installedSteamGames(config: Config): string[] {
     .map((game) => String(game.appid));
 }
 
+// Matched by name, as pocknix-tiles names them, so a stale duplicate tile is caught too.
+let plainTileNames = new Set<string>();
+
+export function rememberPlainTiles(config: Config): Config {
+  plainTileNames = new Set((config.plainTiles || []).map((tile) => tile.name));
+  return config;
+}
+
+export function isPlainTile(appid: string, name?: string): boolean {
+  if (Number(appid) < 0x80000000) return false;
+  let display = name;
+  if (display === undefined) {
+    try {
+      display = window.appStore?.GetAppOverviewByAppID?.(Number(appid))?.display_name || "";
+    } catch (error) {
+      display = "";
+    }
+  }
+  return plainTileNames.has(display || "");
+}
+
 // Non-Steam shortcuts have no appmanifest, so only deckDesktopApps sees them. Their appids are
 // unsigned and above 2^31, hence the >>> 0: some builds hand out the signed-int32 form.
 export function nonSteamShortcuts(): GameRef[] {
+  return allShortcuts().filter((shortcut) => !isPlainTile(shortcut.appid, shortcut.name));
+}
+
+export function plainTileShortcuts(): GameRef[] {
+  return allShortcuts().filter((shortcut) => isPlainTile(shortcut.appid, shortcut.name));
+}
+
+function allShortcuts(): GameRef[] {
   try {
     const ids = window.collectionStore?.deckDesktopApps?.apps;
     if (!ids?.values) return [];
@@ -61,7 +90,7 @@ export function availableGames(config: Config): GameRef[] {
   // Saved tweaks keep a game listed even when the lookups above miss it, so existing
   // per-game config can never become unreachable.
   for (const [appid, game] of Object.entries(config.tweaks?.games || {})) {
-    if (game && typeof game === "object" && !games.has(String(appid))) {
+    if (game && typeof game === "object" && !games.has(String(appid)) && !isPlainTile(String(appid), game.name)) {
       games.set(String(appid), { appid: String(appid), name: game.name || `App ${appid}`, nonSteam: Number(appid) >= 0x80000000 });
     }
   }
@@ -91,5 +120,5 @@ export function currentGame(): GameRef | null {
     name = details?.strDisplayName || details?.strName || details?.name || name;
   } catch (error) {
   }
-  return { appid: id, name: name || `App ${id}` };
+  return isPlainTile(id, name) ? null : { appid: id, name: name || `App ${id}` };
 }

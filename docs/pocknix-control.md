@@ -22,29 +22,33 @@ Settings save automatically as you change them. Controller calibration is in Poc
 
 ### Game tweaks
 
-Tweaks can be set globally (the **Default** entry in the **Game** dropdown) or per game.
-Every installed Steam game is listed, and so are non-Steam shortcuts (marked `· non-Steam`).
-If you open the menu while a game is running, that game is preselected. To override the
-defaults for one game, select it and flip **Use Per-Game Settings** on.
+Tweaks can be set for every game (the **Default** entry in the **Game** dropdown) or per game.
+Every installed Steam game is listed, and so are non-Steam shortcuts (marked `· non-Steam`), apart
+from Pocknix Tools and the Pocknix Store, which are settings apps rather than games.
+If you open the menu while a game is running, that game is preselected. To give one game its
+own settings, select it and turn on **Use Per-Game Settings**; with it off, the game uses
+**Default**. **Reset This Game**, at the bottom, clears a game's own settings again.
 
-Three sections follow: **Performance**, **Game Tweaks** and **Advanced**. Under each setting's
-name it says whether a change **applies now** (even to a game that is already running) or on the
-**next launch**. A game's settings are also reachable from its library page: **Manage → Pocknix
-Settings**.
+Three sections follow: **Performance**, **Game Tweaks** and **Advanced**. While a game is running,
+each setting that reaches it says whether a change **applies now** or on the **next launch**. With
+no game running, everything applies when a game starts, apart from the Default **Fan Curve** and
+**CPU Scheduler**, which also run the device outside games. A game's settings are also reachable
+from its library page: **Manage → Pocknix Settings**.
 
 **Performance**
 
-- **Fan Curve**: **Quiet**, **Moderate**, or **Performance**. Per game it can stay on the global
-  value; a change reaches a game that is already running.
+- **Fan Curve**: **Quiet**, **Moderate**, or **Performance**. Per game it can stay on **Default**
+  (the dropdown shows which curve that is); a change reaches a game that is already running.
 - **CPU Scheduler**: **Autopilot** (the `scx_lavd` default - adapts to load on the fly) or
   **Performance** (keeps the CPU aggressive at the cost of battery and heat). Per game it
-  can stay on the global value; a change reaches a game that is already running.
+  can stay on **Default**; a change reaches a game that is already running.
 
 **Game Tweaks**
 
 - **Proton Version** (per game only): the compatibility tool Steam launches the game with,
   the same setting as the game's **Properties → Compatibility**. Proton-GE and Proton-CachyOS
-  show up in this list once you install them from the **Pocknix Store** (Compatibility).
+  show up in this list once you install them from the **Pocknix Store** (Compatibility). On
+  **Steam default**, it names the version Steam picks for the game.
 - **FEX Preset**: **Default**, **Fast**, or **Compatible**. Trades x86 translation accuracy
   for speed. Try **Fast** for more FPS; switch to **Compatible** if a game misbehaves
   (crashes, glitched physics, odd audio).
@@ -63,8 +67,8 @@ Settings**.
   While it is off, touch is off everywhere, the Steam overlay and on-screen keyboard included;
   use the controls there. It works for every game Steam launches, native and emulators included.
 - **Disable Xalia**: on by default, which saves CPU in every game. Xalia lets a controller work
-  menus and launchers built for a mouse, so turn this off when docked without a mouse or
-  touchscreen.
+  menus built only for a mouse, so turn this off for a game like that when you can't tap the
+  screen (for example, docked).
 
 **Advanced**
 
