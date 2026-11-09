@@ -56,6 +56,24 @@ export function TouchField({ values, patch }: { values: Record<string, any>; pat
   );
 }
 
+export function PrimeCoreToggle({ primeCore, values, patch }: {
+  primeCore?: string;
+  values: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+}) {
+  if (!primeCore) return null;
+  return (
+    <PanelSectionRow>
+      <ToggleField
+        label="Fastest Core First"
+        description={`Gives the game the fastest core (CPU ${primeCore}) as its first one. Can help games that do most of their work on one core.`}
+        checked={values.primeCoreFirst === true}
+        onChange={(on) => patch({ primeCoreFirst: on })}
+      />
+    </PanelSectionRow>
+  );
+}
+
 /** Per-game fan/scheduler overrides ("" = follow the global mode). */
 export function PerfFields({ values, patch }: {
   values: Record<string, any>;
@@ -136,6 +154,7 @@ export function TweakFields({ config, appid, values, patch }: {
       <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patch({ audioLatency: id })} />
       <SelectEdit label="Mesa Version" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
       <XaliaToggle values={values} patch={patch} />
+      <PrimeCoreToggle primeCore={config.primeCore} values={values} patch={patch} />
       <TouchField values={values} patch={patch} />
       <EnvVarsField
         own={config.tweaks.games[appid]?.envVars}

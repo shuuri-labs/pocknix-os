@@ -1,7 +1,7 @@
 import { PanelSection, ToggleField } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
 import { setFanMode, setLavdMode } from "../backend";
-import { PerfFields, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
+import { PerfFields, PrimeCoreToggle, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
 import { EnvVarsField } from "../components/EnvVars";
 import { SelectEdit } from "../components/widgets";
 import { availableGames, editTargetOptions } from "../lib/games";
@@ -89,6 +89,7 @@ export function Games({ config, setConfig, patch, reload }: {
               />
               <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patchSettings({ audioLatency: id })} />
               <XaliaToggle values={values} patch={patchSettings} />
+              <PrimeCoreToggle primeCore={config.primeCore} values={values} patch={patchSettings} />
               <TouchField values={values} patch={patchSettings} />
               <EnvVarsField own={tweaks.global.envVars} canAdd={false} onChange={(envVars) => patchSettings({ envVars })} />
             </>

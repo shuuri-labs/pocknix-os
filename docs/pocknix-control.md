@@ -63,6 +63,10 @@ Per game, either can stay on the global value.
   default works with ARM Proton versions only; an x86 Proton always uses its default driver.
 - **Disable Xalia**: on by default. Xalia is Proton's controller-navigation helper and costs
   CPU in every game; turn this off only for a game that needs it.
+- **Fastest Core First**: off by default. Games already run on the fast cores only; this makes the
+  fastest one the game's first CPU, which helps games that do most of their work on one core. Hidden
+  on boards where no core is faster than the rest. Applies on the next launch; a CPU topology set in
+  the game's launch options wins.
 - **Environment Variables** (per game only): **Add Environment Variable** picks from common
   fixes, applied at the next launch:
   - **DirectX 12 feature level**: for DirectX 12 games that won't start or say your graphics card

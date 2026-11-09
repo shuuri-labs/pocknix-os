@@ -34,6 +34,7 @@ LAVD_MODES = ("autopilot", "performance", "balanced", "powersave")
 # them, a launch option that already changed them wins.
 PIN_KEYS = ("STEAM_LAUNCH_WRAPPER_AFFINITY_LIST", "WINE_CPU_TOPOLOGY", "PROTON_CPU_TOPOLOGY")
 PIN_ENV_SNIPPET = '. /usr/lib/pocknix/pocknix-steam-env; env'
+TOPOLOGY_KEYS = ("WINE_CPU_TOPOLOGY", "PROTON_CPU_TOPOLOGY")
 
 
 def log(msg):
@@ -270,13 +271,16 @@ def apply_game_modes(settings):
         log(f"failed to write game mode override: {exc}")
 
 
-def pin_defaults():
+def host_sh(snippet):
     try:
-        out = subprocess.run(["/bin/sh", "-c", PIN_ENV_SNIPPET], capture_output=True, text=True,
-                             timeout=5, env={"PATH": "/usr/bin:/bin"}).stdout
+        return subprocess.run(["/bin/sh", "-c", snippet], capture_output=True, text=True,
+                              timeout=5, env={"PATH": "/usr/bin:/bin"}).stdout
     except (OSError, subprocess.SubprocessError):
-        return {}
-    pairs = (line.partition("=") for line in out.splitlines())
+        return ""
+
+
+def pin_defaults():
+    pairs = (line.partition("=") for line in host_sh(PIN_ENV_SNIPPET).splitlines())
     return {k: v for k, _, v in pairs if k in PIN_KEYS}
 
 
@@ -299,6 +303,24 @@ def apply_env_vars(settings):
             os.environ[key] = value
         else:
             os.environ.setdefault(key, value)
+
+
+def apply_prime_first(settings):
+    # Wine's CPU 0 = the first core listed; many engines put their main thread there. Only our own
+    # pin default is reordered, so a launch option or envVars topology stays as given.
+    if settings.get("primeCoreFirst") is not True:
+        return
+    prime = host_sh(". /usr/lib/pocknix/cores.sh; pocknix_prime_core").strip()
+    if not prime.isdigit():
+        return
+    defaults = pin_defaults()
+    for key in TOPOLOGY_KEYS:
+        value = os.environ.get(key, "")
+        count, sep, cpus = value.partition(":")
+        listed = cpus.split(",")
+        if not sep or value != defaults.get(key) or prime not in listed:
+            continue
+        os.environ[key] = f"{count}:" + ",".join([prime] + [c for c in listed if c != prime])
 
 
 def apply_xalia(settings):
@@ -349,6 +371,7 @@ def main():
     for step in (lambda: apply_audio_latency(settings),
                  lambda: apply_mesa_version(settings, tool),
                  lambda: apply_env_vars(settings),
+                 lambda: apply_prime_first(settings),
                  lambda: apply_xalia(settings),
                  lambda: apply_game_modes(settings),
                  lambda: heal_arm_prefix(tool)):

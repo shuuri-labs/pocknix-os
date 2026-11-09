@@ -1,5 +1,6 @@
 # /usr/lib/pocknix/cores.sh: the one reading of a board's core split, sourced by the game pin
-# (pocknix-steam-env), the emulator pin (emu-resolve.sh) and irq placement (pocknix-rt-ladder).
+# (pocknix-steam-env, pocknix-game-launch), the emulator pin (emu-resolve.sh), irq placement
+# (pocknix-rt-ladder) and Pocknix Control.
 # POSIX sh; every function runs in a subshell, so sourcing leaks no variables.
 
 # POCKNIX_BIG_CORES as a comma list ("3-7" -> "3,4,5,6,7"); empty if unset or malformed (a wrong
@@ -22,6 +23,14 @@ pocknix_big_cores() (
       $2 != min { l = l s $1; s = "," } END { print (l != "" ? l : a) }')"
   fi
   printf '%s' "${list}"
+)
+
+# The big core whose cpu_capacity tops every other big core; empty when none stands out.
+pocknix_prime_core() (
+  for c in $(pocknix_big_cores | tr , ' '); do
+    echo "${c} $(cat "/sys/devices/system/cpu/cpu${c}/cpu_capacity" 2>/dev/null)"
+  done | sort -k2nr | awk 'NR == 1 { top = $1; cap = $2 } NR == 2 && $2 == cap { top = "" }
+    END { if (cap != "") print top }'
 )
 
 # The cores games are not pinned to, which take irq and helper work.

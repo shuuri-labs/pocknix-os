@@ -8,8 +8,8 @@ pkgdesc="Decky Loader + Pocknix Control QAM plugin"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-# The pocknix-game-launch that resolves the "devel" and "user:" Mesa Version picks.
-depends=('pocknix-steam>=0.1.0-79')
+# The pocknix-game-launch that applies Fastest Core First and always writes the game-mode record.
+depends=('pocknix-steam>=0.1.0-80')
 # strip truncates the PyInstaller archive appended after the ELF sections.
 options=('!strip')
 _loaderver=v3.3.0
