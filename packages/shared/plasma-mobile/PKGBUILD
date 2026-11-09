@@ -1,0 +1,38 @@
+# plasma-mobile: Arch's build with the task switcher gesture fixed on two screens; shadows the base
+# copy by repo order, so it must be rebased whenever a base cut moves Plasma.
+pkgname=plasma-mobile
+pkgver=6.8.1
+pkgrel=2
+pkgdesc="Plasma shell for mobile devices (task switcher gesture fixed on two screens)"
+arch=('aarch64')
+url="https://plasma-mobile.org/"
+license=('GPL-3.0-or-later')
+depends=('bash' 'bluez-qt' 'glibc' 'kauth' 'kcmutils' 'kconfig' 'kcoreaddons' 'kdbusaddons'
+         'kdeclarative' 'ki18n' 'kio' 'kirigami' 'kirigami-addons' 'kitemmodels' 'kjobwidgets'
+         'knewstuff' 'knotifications' 'kpackage' 'kpipewire' 'kservice' 'ksvg' 'kwayland' 'kwin'
+         'kwindowsystem' 'layer-shell-qt' 'libgcc' 'libkscreen' 'libplasma' 'libstdc++' 'milou'
+         'modemmanager-qt' 'networkmanager-qt' 'plasma-keyboard' 'plasma-nano' 'plasma-nm'
+         'plasma-pa' 'plasma-workspace' 'powerdevil' 'qcoro' 'qt6-5compat' 'qt6-base'
+         'qt6-declarative' 'qt6-sensors' 'solid' 'systemd-libs' 'wayland')
+makedepends=('cmake' 'extra-cmake-modules' 'plasma-wayland-protocols' 'vulkan-headers')
+optdepends=('bluedevil: Bluetooth management'
+            'kscreen: Screen management'
+            'plasma-settings: System settings')
+source=("https://download.kde.org/stable/plasma/${pkgver}/${pkgname}-${pkgver}.tar.xz"
+        '0001-mobiletaskswitcher-only-the-swiped-screens-view-acts-on-a-gesture.patch')
+sha256sums=('9b3faf56b9c1c3f1a03f4a8172855c330f1474858d994f456da635edb11d5eeb'
+            'SKIP')
+
+prepare() {
+  # two-screen task switcher gesture; mechanism and drop condition in the patch header.
+  patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0001-mobiletaskswitcher-only-the-swiped-screens-view-acts-on-a-gesture.patch"
+}
+
+build() {
+  cmake -B build -S "${pkgname}-${pkgver}" -D CMAKE_INSTALL_LIBEXECDIR=lib
+  cmake --build build
+}
+
+package() {
+  DESTDIR="${pkgdir}" cmake --install build
+}

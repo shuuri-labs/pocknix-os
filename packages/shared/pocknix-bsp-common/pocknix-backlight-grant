@@ -1,0 +1,14 @@
+#!/bin/sh
+# pocknix-backlight-grant <name> — udev RUN helper: lets 'video' write a backlight. Steam writes the
+# first node it can open, so a board naming its main panel's node (POCKNIX_PANEL_BACKLIGHT) gets no
+# brightness grant: Steam's write fails over to steamos-priv-write, which steers it to that node.
+set -u
+
+for _dc in /usr/lib/pocknix/device.conf /etc/pocknix/device.conf; do
+  [ -r "${_dc}" ] && . "${_dc}"
+done
+
+bl="/sys/class/backlight/${1:?usage: pocknix-backlight-grant <name>}"
+chgrp video "${bl}/bl_power" && chmod g+w "${bl}/bl_power"
+[ -n "${POCKNIX_PANEL_BACKLIGHT:-}" ] && exit 0
+chgrp video "${bl}/brightness" && chmod g+w "${bl}/brightness"

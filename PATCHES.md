@@ -18,6 +18,7 @@ is not taken, retired numbers); files ported from another project record theirs 
 | pocknix-mesa-android | [packages/shared/pocknix-mesa-android/PATCHES.md](packages/shared/pocknix-mesa-android/PATCHES.md) | 26.2.6 tarball (mesa's pin), epoch=2 |
 | steamos-manager | [packages/shared/steamos-manager/PATCHES.md](packages/shared/steamos-manager/PATCHES.md) | upstream `8e2883d` (v26.4.1-12, 2026-09-17), pinned upstream Rust 1.99.0 |
 | scx-scheds | [packages/shared/scx-scheds/PATCHES.md](packages/shared/scx-scheds/PATCHES.md) | upstream `v1.1.3` (c8728c6, 2026-08-19), pinned upstream Rust 1.99.0 |
+| plasma-mobile | [packages/shared/plasma-mobile/PATCHES.md](packages/shared/plasma-mobile/PATCHES.md) | 6.8.1 tarball (Arch's build) |
 | powerdevil | [packages/shared/powerdevil/PATCHES.md](packages/shared/powerdevil/PATCHES.md) | 6.8.1 tarball (Arch's build, no kdoctools) |
 | gtk2 | [packages/shared/gtk2/PATCHES.md](packages/shared/gtk2/PATCHES.md) | gtk+ 2.24.33 tarball |
 
