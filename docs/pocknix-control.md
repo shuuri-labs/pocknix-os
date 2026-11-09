@@ -5,17 +5,18 @@ session for tuning the handheld and managing the system without leaving the couc
 a terminal).
 
 Open the **Quick Access menu** in the Steam session, then pick **Pocknix Control** under the
-plug icon. The plugin is split into four tabs - switch between them with **L1/R1** or by
-tapping the icons:
+plug icon. The plugin is split into tabs (Stick Lights only on boards with stick LEDs) - switch
+between them with **L1/R1** or by tapping the icons:
 
 | Tab | What it does |
 |---|---|
 | 🎮 Games | Fan curve, CPU scheduler and game tweaks, globally or per game |
-| 📚 Library | Add non-Steam games |
-| 🕹️ Controller | Stick and trigger calibration, stick lights |
+| 💡 Stick Lights | Stick light colour and brightness (boards with stick LEDs only) |
+| ➕ Add Game | Add non-Steam games |
 | 🔄 Updater | Check for and install system updates, roll back the last update |
 
-Settings save automatically as you change them.
+Settings save automatically as you change them. Controller calibration is in Pocknix Tools: see
+[controller-calibration.md](controller-calibration.md).
 
 ## Games
 
@@ -61,8 +62,9 @@ Settings**.
   resting on the screen edge cannot fire stray taps. It comes back as soon as the game exits.
   While it is off, touch is off everywhere, the Steam overlay and on-screen keyboard included;
   use the controls there. It works for every game Steam launches, native and emulators included.
-- **Disable Xalia**: on by default. Xalia is Proton's controller-navigation helper and costs
-  CPU in every game; turn this off only for a game that needs it.
+- **Disable Xalia**: on by default, which saves CPU in every game. Xalia lets a controller work
+  menus and launchers built for a mouse, so turn this off when docked without a mouse or
+  touchscreen.
 
 **Advanced**
 
@@ -99,32 +101,25 @@ You can try a community Turnip build on one game without replacing the system dr
 If the game then fails to start or shows no picture, set Mesa Version back to the default.
 Deleting the folder removes the driver; a game still set to it falls back to the default.
 
-## Library
+## Stick Lights
 
-### Adding non-Steam games
+Boards with stick LEDs get this tab. **Enable**, **Link Left & Right** to give both sticks one
+colour, **Side Lights** to match the side lighting to the sticks, then colour and brightness per
+stick.
+
+## Add Game
 
 ![Add Non-Steam Game in Pocknix Control](images/pocknix-control-add-game.jpeg)
 
 Steam's own **Add a Non-Steam Game** dialog does not work on pocknix-os, so add them here:
 
-1. In the **Library** tab, press **Add Non-Steam Game**.
+1. In the **Add Game** tab, press **Add Non-Steam Game**.
 2. A file picker opens in your home directory. Navigate to the executable you want
    (a Linux binary, script, or Windows `.exe`) and select it.
 3. Give it a name, and choose whether to **Launch with Proton**. This switches on
    automatically for `.exe` files - Windows programs need it, native Linux ones do not.
 4. Press **Add to Library**. The game appears in your Steam library right away, and also
-   shows up in the tweaks dropdown above so you can give it its own FEX/audio settings.
-
-## Controller
-
-- **Calibration**: **Calibrate Controller**, then **Start**, walks each stick and trigger to its edge and back, then
-  shows live readings to check (a full push reads 100 at the edge, 0 at rest). **Save** keeps
-  it across reboots, **Discard** drops it, **Reset to Defaults** returns to the driver's
-  values. The controller is paused for Steam while it runs, so **Cancel** works by touch.
-  Boards whose gamepad driver cannot be calibrated say so.
-- **Stick Lights** (boards with stick LEDs): **Enable**, **Link Left & Right** to give both
-  sticks one colour, **Side Lights** to match the side lighting to the sticks, then colour and
-  brightness per stick.
+   shows up in the **Games** tab's **Game** dropdown so you can give it its own settings.
 
 ## Updater
 

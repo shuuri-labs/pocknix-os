@@ -114,29 +114,3 @@ export interface LedConfig {
   left: LedSide;
   right: LedSide;
 }
-
-export interface CalibrationLive {
-  lx: number;
-  ly: number;
-  rx: number;
-  ry: number;
-  lt: number;
-  rt: number;
-}
-
-export interface CalibrationStatus {
-  available: boolean;
-  backend: string;
-  saved: boolean;
-  phase: "idle" | "capture" | "review";
-  step: number;
-  steps: number;
-  progress: number;
-  error: string;
-  result: Record<string, number>;
-  control?: string;
-  kind?: "stick" | "trigger";
-  direction?: string;
-  stage?: "push" | "release";
-  live?: CalibrationLive;
-}

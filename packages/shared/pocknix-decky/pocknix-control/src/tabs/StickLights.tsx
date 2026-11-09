@@ -1,7 +1,6 @@
 import { PanelSection, PanelSectionRow, ToggleField } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
 import { setLed, setLedEnabled, setLedLinked, setLedSides } from "../backend";
-import { Calibration } from "../components/Calibration";
 import { ColorControls } from "../components/ColorControls";
 import { hsvToRgb, rgbToHsv } from "../lib/rgb";
 import type { Config, LedSide, LedSideKey } from "../types";
@@ -25,16 +24,7 @@ type TabProps = {
   reload: () => void;
 };
 
-export function Controller(props: TabProps) {
-  return (
-    <>
-      <Calibration />
-      {props.config.led.available && <StickLights {...props} />}
-    </>
-  );
-}
-
-function StickLights({ config, setConfig, reload }: TabProps) {
+export function StickLights({ config, setConfig, reload }: TabProps) {
   const led = config.led;
   const leftHsv = sideHsv(led.left);
   const rightHsv = sideHsv(led.right);

@@ -40,11 +40,182 @@ const updateStatus = () => call("update_status");
 const snapshotStatus = () => call("snapshot_status");
 const startRollback = (id) => call("start_rollback", id);
 const rebootSystem = () => call("reboot_system");
-const calibrationStatus = () => call("calibration_status");
-const calibrationStart = () => call("calibration_start");
-const calibrationCancel = () => call("calibration_cancel");
-const calibrationSave = () => call("calibration_save");
-const calibrationReset = () => call("calibration_reset");
+
+// Every Steam game and every non-Steam shortcut (emulator tiles, ROM managers, a Windows .exe on
+// Proton) launches through pocknix-game-launch, which applies the per-game tweaks at launch
+// time, so a settings change never has to touch launch options.
+// Bare name: Steam runs launch options through a shell with the system PATH (/usr/bin).
+const LAUNCHER = "pocknix-game-launch";
+const COMMAND = "%command%";
+// Written by Pocknix Control before the launcher existed; the launcher exports it itself now.
+const FEX_TOKEN = /STEAM_COMPAT_FEX_CONFIG=("[^"]*"|\S*)\s*/g;
+function getLaunchOptions(appid) {
+    return new Promise((resolve) => {
+        const apps = window.SteamClient?.Apps;
+        if (!apps?.RegisterForAppDetails)
+            return resolve(null);
+        let registration;
+        let timer;
+        let done = false;
+        const finish = (value) => {
+            if (done)
+                return;
+            done = true;
+            if (timer !== undefined)
+                window.clearTimeout(timer);
+            // Steam may call back before RegisterForAppDetails returns; unregister on a microtask.
+            Promise.resolve().then(() => registration?.unregister?.());
+            resolve(value);
+        };
+        timer = window.setTimeout(() => finish(null), 3000);
+        try {
+            registration = apps.RegisterForAppDetails(Number(appid), (details) => {
+                finish(String(details?.strLaunchOptions ?? ""));
+            });
+        }
+        catch (error) {
+            finish(null);
+        }
+    });
+}
+/** null = already wrapped. Keeps the user's own options around %command%. */
+function wrapLaunchOptions(current) {
+    const stripped = current.replace(FEX_TOKEN, "").trim();
+    if (stripped.includes(LAUNCHER))
+        return stripped === current.trim() ? null : stripped;
+    if (stripped.includes(COMMAND))
+        return stripped.replace(COMMAND, `${LAUNCHER} ${COMMAND}`);
+    // Without %command% Steam appends bare options as arguments, so they stay after it.
+    return [`${LAUNCHER} ${COMMAND}`, stripped].filter(Boolean).join(" ");
+}
+/** Bails rather than clobber when the current value can't be read. */
+async function ensureLaunchWrapper(appid) {
+    const apps = window.SteamClient?.Apps;
+    if (!apps?.SetAppLaunchOptions)
+        return false;
+    const current = await getLaunchOptions(appid);
+    if (current === null)
+        return false;
+    const next = wrapLaunchOptions(current);
+    if (next !== null)
+        apps.SetAppLaunchOptions(Number(appid), next);
+    return true;
+}
+async function wrapShortcuts(appids) {
+    for (const appid of appids)
+        await ensureLaunchWrapper(appid);
+}
+async function wrapAllGames(appids) {
+    let next = 0;
+    const worker = async () => {
+        while (next < appids.length)
+            await ensureLaunchWrapper(appids[next++]);
+    };
+    await Promise.all(Array.from({ length: Math.min(8, appids.length) }, worker));
+}
+/** New installs get wrapped once their download queues; returns the unregister. */
+function registerDownloadWrapper(isGame) {
+    const downloads = window.SteamClient?.Downloads;
+    if (!downloads?.RegisterForDownloadItems)
+        return () => { };
+    const pending = new Set();
+    let timer;
+    const flush = () => {
+        timer = undefined;
+        const ids = Array.from(pending);
+        pending.clear();
+        wrapAllGames(ids.filter(isGame));
+    };
+    // Each queue item is { item_data: [{ appid, ... }] }: the appids live in item_data.
+    const handle = downloads.RegisterForDownloadItems((_paused, items) => {
+        if (!Array.isArray(items))
+            return;
+        for (const item of items) {
+            for (const entry of Object.values(item?.item_data || {})) {
+                const appid = String(entry?.appid ?? "");
+                if (appid && appid !== "0")
+                    pending.add(appid);
+            }
+        }
+        if (timer === undefined)
+            timer = window.setTimeout(flush, 1500);
+    });
+    return () => {
+        if (timer !== undefined)
+            window.clearTimeout(timer);
+        try {
+            handle?.unregister?.();
+        }
+        catch (error) {
+        }
+    };
+}
+
+// Replaces the stock "Add a Non-Steam Game" flow: Steam's file browser cannot open a new
+// window under the Plasma Mobile X11 session, so Decky's in-UI picker feeds this instead.
+const WINDOWS_EXE = /\.(exe|bat|msi)$/i;
+// Constant internal name from proton-cachyos' compatibilitytool.vdf; survives version bumps.
+const PROTON_TOOL = "proton-cachyos";
+function isWindowsExe(path) {
+    return WINDOWS_EXE.test(path);
+}
+function defaultShortcutName(path) {
+    const base = path.split("/").pop() || path;
+    const cleaned = base.replace(/\.[^.]+$/, "").replace(/_+/g, " ").trim();
+    return cleaned || base;
+}
+const quote = (value) => `"${value.replace(/"/g, '\\"')}"`;
+async function addShortcut(name, path, useProton) {
+    const apps = window.SteamClient?.Apps;
+    if (!apps?.AddShortcut)
+        throw new Error("Steam shortcut API unavailable");
+    const dir = path.slice(0, path.lastIndexOf("/") + 1) || "/";
+    const appId = await apps.AddShortcut(name, path, "", "");
+    if (typeof appId !== "number" || !appId)
+        throw new Error("Steam refused to create the shortcut");
+    apps.SetShortcutName?.(appId, name);
+    apps.SetShortcutExe?.(appId, quote(path));
+    apps.SetShortcutStartDir?.(appId, quote(dir));
+    if (useProton)
+        apps.SpecifyCompatTool?.(appId, PROTON_TOOL);
+    ensureLaunchWrapper(String(appId >>> 0));
+    return appId;
+}
+
+function AddGameModal({ path, closeModal }) {
+    const [name, setName] = SP_REACT.useState(defaultShortcutName(path));
+    const [proton, setProton] = SP_REACT.useState(isWindowsExe(path));
+    const [busy, setBusy] = SP_REACT.useState(false);
+    const submit = async () => {
+        if (busy || !name.trim())
+            return;
+        setBusy(true);
+        try {
+            await addShortcut(name.trim(), path, proton);
+            toaster.toast({ title: "Added to library", body: name.trim() });
+            closeModal?.();
+        }
+        catch (error) {
+            toaster.toast({ title: "Could not add game", body: String(error) });
+            setBusy(false);
+        }
+    };
+    return (SP_JSX.jsxs(DFL.ConfirmModal, { strTitle: "Add Non-Steam Game", strDescription: path, strOKButtonText: busy ? "Adding…" : "Add to Library", bOKDisabled: busy || !name.trim(), onCancel: () => closeModal?.(), onOK: submit, children: [SP_JSX.jsx(DFL.TextField, { label: "Name", value: name, disabled: busy, onChange: (event) => setName(event.target.value) }), SP_JSX.jsx(DFL.ToggleField, { label: "Launch with Proton", description: "Needed for Windows games (.exe)", checked: proton, disabled: busy, onChange: setProton })] }));
+}
+function AddGameSection() {
+    const pick = async () => {
+        try {
+            // 0 = FileSelectionType.FILE (const enum in @decky/api typings, no runtime export).
+            const result = await openFilePicker(0, "/home/deck", true, true);
+            if (result?.path)
+                DFL.showModal(SP_JSX.jsx(AddGameModal, { path: result.path }));
+        }
+        catch (error) {
+            // Picker closed without a selection.
+        }
+    };
+    return (SP_JSX.jsxs(DFL.PanelSection, { title: "NON-STEAM GAMES", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: pick, children: "Add Non-Steam Game" }) }), SP_JSX.jsx("div", { className: "pocknix-note", children: "Pick an executable to add it to your Steam library" })] }));
+}
 
 function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
@@ -85,9 +256,9 @@ function Icon({ path }) {
 }
 const tabIcons = {
     Games: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("line", { x1: "6", x2: "10", y1: "11", y2: "11" }), SP_JSX.jsx("line", { x1: "8", x2: "8", y1: "9", y2: "13" }), SP_JSX.jsx("line", { x1: "15", x2: "15.01", y1: "12", y2: "12" }), SP_JSX.jsx("line", { x1: "18", x2: "18.01", y1: "10", y2: "10" }), SP_JSX.jsx("path", { d: "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z" })] }) })),
-    Library: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }), SP_JSX.jsx("path", { d: "M8 12h8" }), SP_JSX.jsx("path", { d: "M12 8v8" })] }) })),
+    AddGame: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }), SP_JSX.jsx("path", { d: "M8 12h8" }), SP_JSX.jsx("path", { d: "M12 8v8" })] }) })),
+    StickLights: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("path", { d: "M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" }), SP_JSX.jsx("path", { d: "M9 18h6" }), SP_JSX.jsx("path", { d: "M10 22h4" })] }) })),
     Updater: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }), SP_JSX.jsx("polyline", { points: "7 10 12 15 17 10" }), SP_JSX.jsx("line", { x1: "12", x2: "12", y1: "15", y2: "3" })] }) })),
-    Controller: (SP_JSX.jsx(Icon, { path: SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("path", { d: "M21 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2Z" }), SP_JSX.jsx("path", { d: "M6 15v-2" }), SP_JSX.jsx("path", { d: "M12 15V9" }), SP_JSX.jsx("circle", { cx: "12", cy: "6", r: "3" })] }) })),
 };
 
 function gameDisplayName(game) {
@@ -224,84 +395,6 @@ const styles = `
       }
     `;
 
-function instruction(s) {
-    if (s.kind === "trigger") {
-        return s.stage === "release"
-            ? `Let go of the ${s.control?.toLowerCase()} and keep your hands off`
-            : `Press the ${s.control?.toLowerCase()} all the way in and hold it`;
-    }
-    return s.stage === "release"
-        ? `Let go of the ${s.control?.toLowerCase()} and keep your hands off`
-        : `Push the ${s.control?.toLowerCase()} fully ${s.direction} and hold it there`;
-}
-function Bar({ label, value, signed }) {
-    const pct = Math.round((signed ? (value + 1) / 2 : value) * 100);
-    return (SP_JSX.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }, children: [SP_JSX.jsx("div", { style: { width: "120px", fontSize: "12px" }, children: label }), SP_JSX.jsx("div", { style: { flex: 1 }, children: SP_JSX.jsx(DFL.ProgressBar, { nProgress: pct, nTransitionSec: 0 }) }), SP_JSX.jsx("div", { style: { width: "48px", textAlign: "right", fontSize: "12px" }, children: signed ? `${Math.round(value * 100)}` : `${pct}%` })] }));
-}
-function LiveBars({ live }) {
-    if (!live)
-        return null;
-    return (SP_JSX.jsxs("div", { style: { margin: "8px 0" }, children: [SP_JSX.jsx(Bar, { label: "Left stick X", value: live.lx, signed: true }), SP_JSX.jsx(Bar, { label: "Left stick Y", value: live.ly, signed: true }), SP_JSX.jsx(Bar, { label: "Right stick X", value: live.rx, signed: true }), SP_JSX.jsx(Bar, { label: "Right stick Y", value: live.ry, signed: true }), SP_JSX.jsx(Bar, { label: "Left trigger", value: live.lt }), SP_JSX.jsx(Bar, { label: "Right trigger", value: live.rt })] }));
-}
-function CalibrationModal({ closeModal }) {
-    const [status, setStatus] = SP_REACT.useState(null);
-    const [message, setMessage] = SP_REACT.useState("");
-    const [busy, setBusy] = SP_REACT.useState(false);
-    const phaseRef = SP_REACT.useRef("idle");
-    phaseRef.current = status?.phase || "idle";
-    // also the backend's watchdog heartbeat (calibration.py WATCHDOG_S)
-    SP_REACT.useEffect(() => {
-        let cancelled = false;
-        let inFlight = false;
-        const tick = async () => {
-            if (inFlight)
-                return;
-            inFlight = true;
-            try {
-                const next = await calibrationStatus();
-                if (!cancelled)
-                    setStatus(next);
-            }
-            catch (error) {
-                if (!cancelled)
-                    setMessage(String(error));
-            }
-            finally {
-                inFlight = false;
-            }
-        };
-        tick();
-        const timer = window.setInterval(tick, 100);
-        return () => {
-            cancelled = true;
-            window.clearInterval(timer);
-            if (phaseRef.current !== "idle")
-                calibrationCancel().catch(() => { });
-        };
-    }, []);
-    const run = async (action) => {
-        if (busy)
-            return;
-        setBusy(true);
-        setMessage("");
-        try {
-            setStatus(await action());
-        }
-        catch (error) {
-            setMessage(String(error));
-        }
-        finally {
-            setBusy(false);
-        }
-    };
-    const phase = status?.phase || "idle";
-    const error = message || status?.error || "";
-    return (SP_JSX.jsxs(DFL.ModalRoot, { closeModal: phase === "capture" ? undefined : closeModal, bDisableBackgroundDismiss: phase !== "idle", children: [SP_JSX.jsx("div", { style: { fontWeight: 600, fontSize: "18px", marginBottom: "8px" }, children: "Controller Calibration" }), !status ? (SP_JSX.jsx("div", { children: "Loading\u2026" })) : !status.available ? (SP_JSX.jsx("div", { children: "This device's gamepad driver does not support calibration." })) : phase === "capture" ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs("div", { style: { fontSize: "12px", opacity: 0.7 }, children: ["Step ", status.step + 1, " of ", status.steps, " \u00B7 the controller is paused for Steam until this finishes"] }), SP_JSX.jsx("div", { style: { fontSize: "20px", margin: "16px 0" }, children: instruction(status) }), SP_JSX.jsx(DFL.ProgressBar, { nProgress: Math.round(status.progress * 100), nTransitionSec: 0 }), SP_JSX.jsx(LiveBars, { live: status.live }), SP_JSX.jsx(DFL.Focusable, { style: { display: "flex", gap: "8px", marginTop: "12px" }, children: SP_JSX.jsx(DFL.DialogButton, { onClick: () => run(calibrationCancel), children: "Cancel (touch)" }) })] })) : phase === "review" ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx("div", { children: "Calibration applied. Check the sticks and triggers below: a full push should read 100 at the edge and 0 at rest. Save keeps it across reboots." }), SP_JSX.jsx(LiveBars, { live: status.live }), SP_JSX.jsxs(DFL.Focusable, { style: { display: "flex", gap: "8px", marginTop: "12px" }, children: [SP_JSX.jsx(DFL.DialogButton, { disabled: busy, onClick: () => run(calibrationSave), children: "Save" }), SP_JSX.jsx(DFL.DialogButton, { disabled: busy, onClick: () => run(calibrationCancel), children: "Discard" })] })] })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs("div", { children: [status.saved ? "A saved calibration is in use." : "Using the driver defaults.", " Start walks each stick and trigger to its edge and back. The controller is paused for Steam while it runs; Cancel works by touch."] }), SP_JSX.jsx(LiveBars, { live: status.live }), SP_JSX.jsxs(DFL.Focusable, { style: { display: "flex", gap: "8px", marginTop: "12px" }, children: [SP_JSX.jsx(DFL.DialogButton, { disabled: busy, onClick: () => run(calibrationStart), children: "Start" }), SP_JSX.jsx(DFL.DialogButton, { disabled: busy, onClick: () => run(calibrationReset), children: "Reset to Defaults" }), SP_JSX.jsx(DFL.DialogButton, { disabled: busy, onClick: () => closeModal?.(), children: "Close" })] })] })), error ? SP_JSX.jsx("div", { style: { marginTop: "8px", color: "#ff8080" }, children: error }) : null] }));
-}
-function Calibration() {
-    return (SP_JSX.jsxs(DFL.PanelSection, { title: "CALIBRATION", children: [SP_JSX.jsx(DFL.Field, { label: "Sticks and triggers", description: "Stick centre and range, trigger travel" }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: () => DFL.showModal(SP_JSX.jsx(CalibrationModal, {})), children: "Calibrate Controller" }) })] }));
-}
-
 // SliderField has only onChange, so commits are debounced. The pending value lives in
 // a ref so the unmount flush always sees the latest edit, not a stale first-render one.
 const COMMIT_DELAY = 350;
@@ -428,9 +521,6 @@ function commit(side, hsv, brightness, setConfig, reload) {
 function sideHsv(side) {
     return rgbToHsv(side.r, side.g, side.b);
 }
-function Controller(props) {
-    return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(Calibration, {}), props.config.led.available && SP_JSX.jsx(StickLights, { ...props })] }));
-}
 function StickLights({ config, setConfig, reload }) {
     const led = config.led;
     const leftHsv = sideHsv(led.left);
@@ -445,116 +535,6 @@ function StickLights({ config, setConfig, reload }) {
                                 .catch(() => reload()) }) }), led.sidesAvailable && (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Side Lights", description: "Match the side lighting to the sticks.", checked: led.sides, disabled: !led.enabled, onChange: (value) => setLedSides(value)
                                 .then((next) => setConfig((cur) => (cur ? { ...cur, led: next } : cur)))
                                 .catch(() => reload()) }) }))] }), led.enabled && (led.linked ? (SP_JSX.jsx(DFL.PanelSection, { title: "BOTH STICKS", children: SP_JSX.jsx(ColorControls, { zone: "both", hsv: leftHsv, brightness: led.left.brightness, onCommit: commitBoth }) })) : (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsx(DFL.PanelSection, { title: "LEFT STICK", children: SP_JSX.jsx(ColorControls, { zone: "left", hsv: leftHsv, brightness: led.left.brightness, onCommit: commitLeft }) }), SP_JSX.jsx(DFL.PanelSection, { title: "RIGHT STICK", children: SP_JSX.jsx(ColorControls, { zone: "right", hsv: rightHsv, brightness: led.right.brightness, onCommit: commitRight }) })] })))] }));
-}
-
-// Every Steam game and every non-Steam shortcut (emulator tiles, ROM managers, a Windows .exe on
-// Proton) launches through pocknix-game-launch, which applies the per-game tweaks at launch
-// time, so a settings change never has to touch launch options.
-// Bare name: Steam runs launch options through a shell with the system PATH (/usr/bin).
-const LAUNCHER = "pocknix-game-launch";
-const COMMAND = "%command%";
-// Written by Pocknix Control before the launcher existed; the launcher exports it itself now.
-const FEX_TOKEN = /STEAM_COMPAT_FEX_CONFIG=("[^"]*"|\S*)\s*/g;
-function getLaunchOptions(appid) {
-    return new Promise((resolve) => {
-        const apps = window.SteamClient?.Apps;
-        if (!apps?.RegisterForAppDetails)
-            return resolve(null);
-        let registration;
-        let timer;
-        let done = false;
-        const finish = (value) => {
-            if (done)
-                return;
-            done = true;
-            if (timer !== undefined)
-                window.clearTimeout(timer);
-            // Steam may call back before RegisterForAppDetails returns; unregister on a microtask.
-            Promise.resolve().then(() => registration?.unregister?.());
-            resolve(value);
-        };
-        timer = window.setTimeout(() => finish(null), 3000);
-        try {
-            registration = apps.RegisterForAppDetails(Number(appid), (details) => {
-                finish(String(details?.strLaunchOptions ?? ""));
-            });
-        }
-        catch (error) {
-            finish(null);
-        }
-    });
-}
-/** null = already wrapped. Keeps the user's own options around %command%. */
-function wrapLaunchOptions(current) {
-    const stripped = current.replace(FEX_TOKEN, "").trim();
-    if (stripped.includes(LAUNCHER))
-        return stripped === current.trim() ? null : stripped;
-    if (stripped.includes(COMMAND))
-        return stripped.replace(COMMAND, `${LAUNCHER} ${COMMAND}`);
-    // Without %command% Steam appends bare options as arguments, so they stay after it.
-    return [`${LAUNCHER} ${COMMAND}`, stripped].filter(Boolean).join(" ");
-}
-/** Bails rather than clobber when the current value can't be read. */
-async function ensureLaunchWrapper(appid) {
-    const apps = window.SteamClient?.Apps;
-    if (!apps?.SetAppLaunchOptions)
-        return false;
-    const current = await getLaunchOptions(appid);
-    if (current === null)
-        return false;
-    const next = wrapLaunchOptions(current);
-    if (next !== null)
-        apps.SetAppLaunchOptions(Number(appid), next);
-    return true;
-}
-async function wrapShortcuts(appids) {
-    for (const appid of appids)
-        await ensureLaunchWrapper(appid);
-}
-async function wrapAllGames(appids) {
-    let next = 0;
-    const worker = async () => {
-        while (next < appids.length)
-            await ensureLaunchWrapper(appids[next++]);
-    };
-    await Promise.all(Array.from({ length: Math.min(8, appids.length) }, worker));
-}
-/** New installs get wrapped once their download queues; returns the unregister. */
-function registerDownloadWrapper(isGame) {
-    const downloads = window.SteamClient?.Downloads;
-    if (!downloads?.RegisterForDownloadItems)
-        return () => { };
-    const pending = new Set();
-    let timer;
-    const flush = () => {
-        timer = undefined;
-        const ids = Array.from(pending);
-        pending.clear();
-        wrapAllGames(ids.filter(isGame));
-    };
-    // Each queue item is { item_data: [{ appid, ... }] }: the appids live in item_data.
-    const handle = downloads.RegisterForDownloadItems((_paused, items) => {
-        if (!Array.isArray(items))
-            return;
-        for (const item of items) {
-            for (const entry of Object.values(item?.item_data || {})) {
-                const appid = String(entry?.appid ?? "");
-                if (appid && appid !== "0")
-                    pending.add(appid);
-            }
-        }
-        if (timer === undefined)
-            timer = window.setTimeout(flush, 1500);
-    });
-    return () => {
-        if (timer !== undefined)
-            window.clearTimeout(timer);
-        try {
-            handle?.unregister?.();
-        }
-        catch (error) {
-        }
-    };
 }
 
 // Drives the same state as Steam's own per-game compatibility dropdown (SpecifyCompatTool +
@@ -802,7 +782,7 @@ const lavdOptions = [
 ];
 const globalChoice = { data: "", label: "Use global" };
 function XaliaToggle({ values, patch }) {
-    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Xalia", description: `${APPLIES_NEXT_LAUNCH}. Proton's controller-navigation helper; costs CPU in every game.`, checked: values.disableXalia !== false, onChange: (checked) => patch({ disableXalia: checked }) }) }));
+    return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Xalia", description: `${APPLIES_NEXT_LAUNCH}. Saves CPU in every game. Xalia lets a controller work menus and launchers built for a mouse, so turn this off when docked without a mouse or touchscreen.`, checked: values.disableXalia !== false, onChange: (checked) => patch({ disableXalia: checked }) }) }));
 }
 function TouchField({ values, patch }) {
     return (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ToggleField, { label: "Disable Touchscreen", description: `${APPLIES_NOW}. Stops stray touches while the game runs.`, checked: values.touchDisabled === true, onChange: (on) => patch({ touchDisabled: on }) }) }));
@@ -917,76 +897,6 @@ function Games({ config, setConfig, patch, reload }) {
     const storedLatency = String(values.audioLatency ?? "");
     const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
     return (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE & GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "Game", value: game?.appid || "", options: editTargetOptions(config), onChange: setSelectedGame }), !editingDefault ? SP_JSX.jsx(DFL.ToggleField, { label: "Use Per-Game Settings", checked: perGameEnabled, onChange: setPerGameEnabled }) : null] }), editingDefault ? (SP_JSX.jsxs(SP_JSX.Fragment, { children: [SP_JSX.jsxs(DFL.PanelSection, { title: "PERFORMANCE", children: [SP_JSX.jsx(SelectEdit, { label: "Fan Curve", description: APPLIES_NOW, value: config.fanMode, options: fanOptions, onChange: (mode) => applyMode(setFanMode, mode) }), SP_JSX.jsx(SelectEdit, { label: "CPU Scheduler", description: APPLIES_NOW, value: config.lavdMode, options: lavdOptions, onChange: (mode) => applyMode(setLavdMode, mode) })] }), SP_JSX.jsxs(DFL.PanelSection, { title: "GAME TWEAKS", children: [SP_JSX.jsx(SelectEdit, { label: "FEX Preset", description: APPLIES_NEXT_LAUNCH, value: fexValue, options: fexOptions, onChange: (id) => patchSettings({ fexProfile: id }) }), SP_JSX.jsx(SelectEdit, { label: "Audio Buffer", description: APPLIES_NEXT_LAUNCH, value: audioValue, options: audioLatencyOptions, onChange: (id) => patchSettings({ audioLatency: id }) }), SP_JSX.jsx(TouchField, { values: values, patch: patchSettings }), SP_JSX.jsx(XaliaToggle, { values: values, patch: patchSettings })] }), config.primeCore || parseEnvVars(tweaks.global.envVars).length ? (SP_JSX.jsxs(DFL.PanelSection, { title: "ADVANCED", children: [SP_JSX.jsx(PrimeCoreToggle, { primeCore: config.primeCore, values: values, patch: patchSettings }), SP_JSX.jsx(EnvVarsField, { own: tweaks.global.envVars, canAdd: false, onChange: (envVars) => patchSettings({ envVars }) })] })) : null] })) : perGameEnabled ? (SP_JSX.jsx(TweakFields, { config: config, appid: game.appid, values: values, patch: patchSettings })) : null] }));
-}
-
-// Replaces the stock "Add a Non-Steam Game" flow: Steam's file browser cannot open a new
-// window under the Plasma Mobile X11 session, so Decky's in-UI picker feeds this instead.
-const WINDOWS_EXE = /\.(exe|bat|msi)$/i;
-// Constant internal name from proton-cachyos' compatibilitytool.vdf; survives version bumps.
-const PROTON_TOOL = "proton-cachyos";
-function isWindowsExe(path) {
-    return WINDOWS_EXE.test(path);
-}
-function defaultShortcutName(path) {
-    const base = path.split("/").pop() || path;
-    const cleaned = base.replace(/\.[^.]+$/, "").replace(/_+/g, " ").trim();
-    return cleaned || base;
-}
-const quote = (value) => `"${value.replace(/"/g, '\\"')}"`;
-async function addShortcut(name, path, useProton) {
-    const apps = window.SteamClient?.Apps;
-    if (!apps?.AddShortcut)
-        throw new Error("Steam shortcut API unavailable");
-    const dir = path.slice(0, path.lastIndexOf("/") + 1) || "/";
-    const appId = await apps.AddShortcut(name, path, "", "");
-    if (typeof appId !== "number" || !appId)
-        throw new Error("Steam refused to create the shortcut");
-    apps.SetShortcutName?.(appId, name);
-    apps.SetShortcutExe?.(appId, quote(path));
-    apps.SetShortcutStartDir?.(appId, quote(dir));
-    if (useProton)
-        apps.SpecifyCompatTool?.(appId, PROTON_TOOL);
-    ensureLaunchWrapper(String(appId >>> 0));
-    return appId;
-}
-
-function AddGameModal({ path, closeModal }) {
-    const [name, setName] = SP_REACT.useState(defaultShortcutName(path));
-    const [proton, setProton] = SP_REACT.useState(isWindowsExe(path));
-    const [busy, setBusy] = SP_REACT.useState(false);
-    const submit = async () => {
-        if (busy || !name.trim())
-            return;
-        setBusy(true);
-        try {
-            await addShortcut(name.trim(), path, proton);
-            toaster.toast({ title: "Added to library", body: name.trim() });
-            closeModal?.();
-        }
-        catch (error) {
-            toaster.toast({ title: "Could not add game", body: String(error) });
-            setBusy(false);
-        }
-    };
-    return (SP_JSX.jsxs(DFL.ConfirmModal, { strTitle: "Add Non-Steam Game", strDescription: path, strOKButtonText: busy ? "Adding…" : "Add to Library", bOKDisabled: busy || !name.trim(), onCancel: () => closeModal?.(), onOK: submit, children: [SP_JSX.jsx(DFL.TextField, { label: "Name", value: name, disabled: busy, onChange: (event) => setName(event.target.value) }), SP_JSX.jsx(DFL.ToggleField, { label: "Launch with Proton", description: "Needed for Windows games (.exe)", checked: proton, disabled: busy, onChange: setProton })] }));
-}
-function AddGameSection() {
-    const pick = async () => {
-        try {
-            // 0 = FileSelectionType.FILE (const enum in @decky/api typings, no runtime export).
-            const result = await openFilePicker(0, "/home/deck", true, true);
-            if (result?.path)
-                DFL.showModal(SP_JSX.jsx(AddGameModal, { path: result.path }));
-        }
-        catch (error) {
-            // Picker closed without a selection.
-        }
-    };
-    return (SP_JSX.jsxs(DFL.PanelSection, { title: "LIBRARY", children: [SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.ButtonItem, { layout: "below", onClick: pick, children: "Add Non-Steam Game" }) }), SP_JSX.jsx("div", { className: "pocknix-note", children: "Pick an executable to add it to your Steam library" })] }));
-}
-
-function Library() {
-    return (SP_JSX.jsx(SP_JSX.Fragment, { children: SP_JSX.jsx(AddGameSection, {}) }));
 }
 
 const SHOWN_UPDATES = 8;
@@ -1170,8 +1080,10 @@ function Content() {
     const tabContent = (content) => (SP_JSX.jsx("div", { className: "pocknix-control-tab-content", children: content }));
     const tabs = [
         { id: "Games", title: tabIcons.Games, content: tabContent(SP_JSX.jsx(Games, { config: config, setConfig: setConfig, patch: patch, reload: load })) },
-        { id: "Library", title: tabIcons.Library, content: tabContent(SP_JSX.jsx(Library, {})) },
-        { id: "Controller", title: tabIcons.Controller, content: tabContent(SP_JSX.jsx(Controller, { config: config, setConfig: setConfig, reload: load })) },
+        ...(config.led.available
+            ? [{ id: "StickLights", title: tabIcons.StickLights, content: tabContent(SP_JSX.jsx(StickLights, { config: config, setConfig: setConfig, reload: load })) }]
+            : []),
+        { id: "AddGame", title: tabIcons.AddGame, content: tabContent(SP_JSX.jsx(AddGameSection, {})) },
         { id: "Updater", title: tabIcons.Updater, content: tabContent(SP_JSX.jsx(Updater, {})) },
     ];
     return (SP_JSX.jsxs("div", { className: "pocknix-control-tabs", children: [SP_JSX.jsx("style", { children: styles }), SP_JSX.jsx(DFL.Tabs, { activeTab: tab, onShowTab: setTab, tabs: tabs })] }));

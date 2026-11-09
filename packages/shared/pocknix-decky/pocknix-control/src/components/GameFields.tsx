@@ -35,7 +35,7 @@ export function XaliaToggle({ values, patch }: {
     <PanelSectionRow>
       <ToggleField
         label="Disable Xalia"
-        description={`${APPLIES_NEXT_LAUNCH}. Proton's controller-navigation helper; costs CPU in every game.`}
+        description={`${APPLIES_NEXT_LAUNCH}. Saves CPU in every game. Xalia lets a controller work menus and launchers built for a mouse, so turn this off when docked without a mouse or touchscreen.`}
         checked={values.disableXalia !== false}
         onChange={(checked) => patch({ disableXalia: checked })}
       />

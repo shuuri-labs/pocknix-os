@@ -51,7 +51,7 @@ export function AddGameSection() {
     }
   };
   return (
-    <PanelSection title="LIBRARY">
+    <PanelSection title="NON-STEAM GAMES">
       <PanelSectionRow>
         <ButtonItem layout="below" onClick={pick}>Add Non-Steam Game</ButtonItem>
       </PanelSectionRow>

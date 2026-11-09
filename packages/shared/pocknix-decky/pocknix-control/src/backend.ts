@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import type { CalibrationStatus, Config, LedConfig, LedSideKey, SnapshotStatus, Tweaks, UpdateInfo, UpdateStatus } from "./types";
+import type { Config, LedConfig, LedSideKey, SnapshotStatus, Tweaks, UpdateInfo, UpdateStatus } from "./types";
 
 export const getConfig = () => call<[], Config>("get_config");
 export const setFanMode = (mode: string) => call<[string], Config>("set_fan_mode", mode);
@@ -18,8 +18,3 @@ export const updateStatus = () => call<[], UpdateStatus>("update_status");
 export const snapshotStatus = () => call<[], SnapshotStatus>("snapshot_status");
 export const startRollback = (id: string) => call<[string], SnapshotStatus>("start_rollback", id);
 export const rebootSystem = () => call<[], boolean>("reboot_system");
-export const calibrationStatus = () => call<[], CalibrationStatus>("calibration_status");
-export const calibrationStart = () => call<[], CalibrationStatus>("calibration_start");
-export const calibrationCancel = () => call<[], CalibrationStatus>("calibration_cancel");
-export const calibrationSave = () => call<[], CalibrationStatus>("calibration_save");
-export const calibrationReset = () => call<[], CalibrationStatus>("calibration_reset");

@@ -35,5 +35,4 @@ package() {
   cp -a "${plug}/py_modules" "${plug}/dist" "${dest}/"
   rm -f "${dest}/dist"/*.map
   find "${dest}" -name __pycache__ -type d -prune -exec rm -rf {} +
-  install -Dm644 "${plug}/LICENSE.gpcal" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE.gpcal"
 }

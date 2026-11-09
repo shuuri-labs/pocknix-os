@@ -1,6 +1,5 @@
 import asyncio
 
-from pocknix_control import calibration
 from pocknix_control.config import build_config
 from pocknix_control.gamemode import sync_game_mode
 from pocknix_control.led import restore_led, set_led, set_led_enabled, set_led_linked, set_led_sides
@@ -22,11 +21,9 @@ class Plugin:
 
     async def _main(self):
         await asyncio.to_thread(restore_led)
-        await asyncio.to_thread(calibration.recover)
         await asyncio.to_thread(sync_touch, self._running_appid)
 
     async def _unload(self):
-        await asyncio.to_thread(calibration.cancel)
         await asyncio.to_thread(sync_touch, None)
 
     async def game_lifetime(self, appid, running):
@@ -82,18 +79,3 @@ class Plugin:
 
     async def reboot_system(self):
         return await asyncio.to_thread(reboot_system)
-
-    async def calibration_status(self):
-        return await asyncio.to_thread(calibration.status)
-
-    async def calibration_start(self):
-        return await asyncio.to_thread(calibration.start)
-
-    async def calibration_cancel(self):
-        return await asyncio.to_thread(calibration.cancel)
-
-    async def calibration_save(self):
-        return await asyncio.to_thread(calibration.save)
-
-    async def calibration_reset(self):
-        return await asyncio.to_thread(calibration.reset)

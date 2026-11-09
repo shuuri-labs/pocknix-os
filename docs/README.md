@@ -6,8 +6,7 @@ User guides for pocknix-os. New here? Start with the [project README](../README.
   and updating
 - [known-issues.md](known-issues.md) - what does not work, or not well, yet
 - [pocknix-control.md](pocknix-control.md) - the in-game control panel: per-game tweaks, fan/CPU
-  modes, adding non-Steam games, controller calibration and stick lights, and
-  system updates
+  modes, adding non-Steam games, stick lights, and system updates
 - [pocknix-tools.md](pocknix-tools.md) - the settings app: updates and rollback, SSH, file
   sharing and VPNs, the ROMs folder, the desktop picker, calibration, internal install
 - [pocknix-store.md](pocknix-store.md) - installing and removing emulators, Proton versions,

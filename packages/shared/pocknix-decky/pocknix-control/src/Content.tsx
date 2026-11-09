@@ -3,13 +3,13 @@ import { Field, PanelSection, Tabs } from "@decky/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { getConfig } from "./backend";
+import { AddGameSection } from "./components/AddGame";
 import { usePatchTweaks } from "./hooks/usePatchTweaks";
 import { tabIcons } from "./icons";
 import { currentGame } from "./lib/games";
 import { styles } from "./styles";
-import { Controller } from "./tabs/Controller";
+import { StickLights } from "./tabs/StickLights";
 import { Games } from "./tabs/Games";
-import { Library } from "./tabs/Library";
 import { Updater } from "./tabs/Updater";
 import type { Config } from "./types";
 
@@ -68,8 +68,10 @@ export function Content() {
   );
   const tabs = [
     { id: "Games", title: tabIcons.Games, content: tabContent(<Games config={config} setConfig={setConfig} patch={patch} reload={load} />) },
-    { id: "Library", title: tabIcons.Library, content: tabContent(<Library />) },
-    { id: "Controller", title: tabIcons.Controller, content: tabContent(<Controller config={config} setConfig={setConfig} reload={load} />) },
+    ...(config.led.available
+      ? [{ id: "StickLights", title: tabIcons.StickLights, content: tabContent(<StickLights config={config} setConfig={setConfig} reload={load} />) }]
+      : []),
+    { id: "AddGame", title: tabIcons.AddGame, content: tabContent(<AddGameSection />) },
     { id: "Updater", title: tabIcons.Updater, content: tabContent(<Updater />) },
   ];
   return (
