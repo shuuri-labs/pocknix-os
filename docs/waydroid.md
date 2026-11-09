@@ -2,6 +2,7 @@
 
 pocknix-os can run Android apps through **Waydroid**. Each app opens as its own fullscreen
 window in the Plasma Mobile desktop session, so it behaves much like a native app.
+To run an Android app from your Steam library in Gaming mode, see [lepton.md](lepton.md).
 
 ## First-time setup
 

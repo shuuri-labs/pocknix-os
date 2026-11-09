@@ -1,5 +1,7 @@
 # Steam games
 
+Android apps can run from your Steam library too: see [lepton.md](lepton.md).
+
 ## Launch options
 
 Every game's Steam launch options (**Properties → General → Launch Options**) start out as
