@@ -1,0 +1,36 @@
+#!/bin/bash
+# pocknix-repo-line — move this device's [pocknix] and [pocknix-shared] repos to the update line a
+# package names in MARKER (e.g. "v2": <base>/v2/<soc>), once the device runs OpenABL
+# (needs_openabl=0). The marker ships only in the old line's last release, so a device off OpenABL
+# never sees a release that needs it. One-way and idempotent: runs at boot and when the marker lands.
+set -euo pipefail
+
+CONF="${PACMAN_CONF:-/etc/pacman.conf}"
+MARKER=/usr/share/pocknix/repo-line
+
+[ -f "$MARKER" ] || exit 0
+line="$(tr -d '[:space:]' < "$MARKER")"
+[[ "$line" =~ ^v[0-9]+$ ]] || { echo "pocknix-repo-line: bad line '$line' in $MARKER" >&2; exit 1; }
+status="$(/usr/bin/pocknix-update-abl --status 2>/dev/null || true)"
+grep -qx needs_openabl=0 <<<"$status" || exit 0
+
+tmp="$(mktemp "${CONF}.XXXXXX")"; trap 'rm -f "$tmp"' EXIT
+# Only https servers move: LAN (http://) and local (file://) test repos stay where they are.
+awk -v line="$line" '
+  { t = $0; gsub(/^[ \t]+|[ \t]+$/, "", t) }
+  t ~ /^\[/ { sec = t }
+  (sec == "[pocknix]" || sec == "[pocknix-shared]") && t ~ /^Server *= *https:\/\// {
+    sub(/\/+$/, "", t)
+    n = split(t, p, "/")
+    if (p[n - 1] ~ /^v[0-9]+$/) p[n - 1] = line
+    else { p[n + 1] = p[n]; p[n] = line; n++ }
+    out = p[1]; for (i = 2; i <= n; i++) out = out "/" p[i]
+    $0 = out
+  }
+  { print }' "$CONF" > "$tmp"
+grep -qE "^Server *= *https://.*/${line}/[^/]+$" "$tmp" \
+  || { echo "pocknix-repo-line: no https [pocknix]/[pocknix-shared] Server in $CONF; not moved" >&2; exit 0; }
+cmp -s "$tmp" "$CONF" && exit 0
+chmod --reference="$CONF" "$tmp"
+mv -f "$tmp" "$CONF"
+echo "pocknix-repo-line: pocknix repos moved to the ${line} update line"

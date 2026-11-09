@@ -139,7 +139,9 @@ them, so each ABL boots its own payload from the same FAT. The SD boot FAT also 
 stock Android - inert at boot, pocknix never flashes it itself (only the user-run
 `pocknix-update-abl`). bsp-common's dormant `00-pocknix-abl-gate.hook` refuses any package
 carrying `usr/share/pocknix/requires-openabl` unless the device runs OpenABL and has its boot
-entry.
+entry. Its `pocknix-repo-line` (boot service + hook) moves the https `[pocknix]` and
+`[pocknix-shared]` servers to `<base>/<line>/<repo>` once `usr/share/pocknix/repo-line` names a
+line and the device runs OpenABL, so releases that need OpenABL sit where only such devices look.
 
 * `qcom-abl` (sm8550): the ROCKNIX ABL boots an Android boot image (`/KERNEL`,
   mkbootimg, cmdline baked in, all dtbs appended - ABL picks by board id); bsp-common's kernel

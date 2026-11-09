@@ -42,6 +42,7 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'pocknix-cmdline-sync' '91-pocknix-cmdline.hook' 'cores.sh'
         'pocknix-boot-deploy' 'pocknix-build-bootimg' 'pocknix-update-boot' '90-linux-pocknix.hook'
         'pocknix-bls-deploy' 'pocknix-abl-gate' '00-pocknix-abl-gate.hook'
+        'pocknix-repo-line' 'pocknix-repo-line.service' '96-pocknix-repo-line.hook'
         'pocknix-speaker-dsp' 'pocknix-speaker-dsp-render' 'pocknix-speaker-dsp.service')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
@@ -50,7 +51,7 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -161,6 +162,11 @@ package() {
   install -Dm755 "${srcdir}/pocknix-abl-gate" "${pkgdir}/usr/lib/pocknix/pocknix-abl-gate"
   install -Dm644 "${srcdir}/00-pocknix-abl-gate.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/00-pocknix-abl-gate.hook"
+  install -Dm755 "${srcdir}/pocknix-repo-line" "${pkgdir}/usr/lib/pocknix/pocknix-repo-line"
+  install -Dm644 "${srcdir}/pocknix-repo-line.service" "${pkgdir}/usr/lib/systemd/system/pocknix-repo-line.service"
+  ln -sf "../pocknix-repo-line.service" "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants/pocknix-repo-line.service"
+  install -Dm644 "${srcdir}/96-pocknix-repo-line.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/96-pocknix-repo-line.hook"
   install -Dm755 "${srcdir}/pocknix-cmdline-sync" "${pkgdir}/usr/lib/pocknix/pocknix-cmdline-sync"
   install -Dm644 "${srcdir}/91-pocknix-cmdline.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/91-pocknix-cmdline.hook"

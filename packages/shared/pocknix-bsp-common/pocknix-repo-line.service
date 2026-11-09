@@ -1,0 +1,8 @@
+[Unit]
+Description=pocknix: move to the new update line once OpenABL runs
+ConditionPathExists=/usr/share/pocknix/repo-line
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/pocknix/pocknix-repo-line
