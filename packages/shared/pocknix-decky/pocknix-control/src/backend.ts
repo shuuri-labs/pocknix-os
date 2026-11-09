@@ -16,6 +16,7 @@ export const setLedSides = (sides: boolean) => call<[boolean], LedConfig>("set_l
 export const checkUpdates = () => call<[], UpdateInfo[]>("check_updates");
 export const startUpdate = () => call<[], UpdateStatus>("start_update");
 export const updateStatus = () => call<[], UpdateStatus>("update_status");
+export const bootloaderStatus = () => call<[], { needsOpenAbl: boolean }>("bootloader_status");
 export const snapshotStatus = () => call<[], SnapshotStatus>("snapshot_status");
 export const startRollback = (id: string) => call<[string], SnapshotStatus>("start_rollback", id);
 export const rebootSystem = () => call<[], boolean>("reboot_system");

@@ -139,6 +139,9 @@ The update keeps running even if you close the Quick Access menu - reopen the ta
 on progress. If you prefer, the same update is just `sudo pacman -Syu` in a terminal, or
 **Pocknix Tools** → **System** → **Update now**.
 
+If the tab says **OpenABL needed**, install the OpenABL bootloader from **Pocknix Tools** →
+**Advanced** → **Bootloader** first: future updates won't install without it.
+
 ### Rolling back an update
 
 Every update takes a snapshot first. If one breaks something, press **Roll Back Last Update**,

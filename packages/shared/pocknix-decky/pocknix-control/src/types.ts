@@ -76,6 +76,7 @@ export interface UpdateStatus {
   running: boolean;
   log: string;
   exitCode: number | null;
+  ablRefused: boolean;
 }
 
 export interface SnapshotInfo {

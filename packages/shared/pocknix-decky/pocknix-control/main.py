@@ -7,7 +7,7 @@ from pocknix_control.modes import set_fan_mode, set_lavd_mode
 from pocknix_control.snapshots import reboot_system, snapshot_status, start_rollback
 from pocknix_control.touch import sync_touch
 from pocknix_control.tweaks import patch_tweaks
-from pocknix_control.updates import check_updates, start_update, update_status
+from pocknix_control.updates import bootloader_status, check_updates, start_update, update_status
 
 
 class Plugin:
@@ -70,6 +70,9 @@ class Plugin:
 
     async def update_status(self):
         return await asyncio.to_thread(update_status)
+
+    async def bootloader_status(self):
+        return await asyncio.to_thread(bootloader_status)
 
     async def snapshot_status(self):
         return await asyncio.to_thread(snapshot_status)

@@ -1,6 +1,6 @@
 import { ButtonItem, ConfirmModal, Field, PanelSection, PanelSectionRow, showModal } from "@decky/ui";
 import { useEffect, useRef, useState } from "react";
-import { checkUpdates, rebootSystem, snapshotStatus, startRollback, startUpdate, updateStatus } from "../backend";
+import { bootloaderStatus, checkUpdates, rebootSystem, snapshotStatus, startRollback, startUpdate, updateStatus } from "../backend";
 import type { SnapshotStatus, UpdateInfo, UpdateStatus } from "../types";
 
 const SHOWN_UPDATES = 8;
@@ -23,6 +23,7 @@ export function Updater() {
   const [rollingBack, setRollingBack] = useState(false);
   const [rollbackDone, setRollbackDone] = useState(false);
   const [error, setError] = useState("");
+  const [needsAbl, setNeedsAbl] = useState(false);
   const [rollbackError, setRollbackError] = useState("");
   const busyRef = useRef(false);
   const running = !!status?.running;
@@ -39,6 +40,11 @@ export function Updater() {
       })
       .catch(() => {});
     refreshSnap();
+    bootloaderStatus()
+      .then((s) => {
+        if (!cancelled) setNeedsAbl(s.needsOpenAbl);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -140,6 +146,12 @@ export function Updater() {
   return (
     <>
       <PanelSection title="SYSTEM UPDATES">
+        {needsAbl ? (
+          <Field
+            label="OpenABL needed"
+            description="OpenABL is mandatory going forward. Until it's installed, you'll be unable to install future updates. Install it from Pocknix Tools > Advanced > Bootloader."
+          />
+        ) : null}
         {!running ? <Field label="Status" description={summary} /> : null}
         {!running && updates && updates.length > 0 ? (
           <div className="pocknix-note">
@@ -163,7 +175,13 @@ export function Updater() {
         {finished ? (
           <Field
             label={status!.exitCode === 0 ? "Update complete" : `Update failed (code ${status!.exitCode})`}
-            description={status!.exitCode === 0 ? "Restart to finish applying updates." : "See the log below."}
+            description={
+              status!.exitCode === 0
+                ? "Restart to finish applying updates."
+                : status!.ablRefused
+                  ? "This update needs OpenABL. Install it from Pocknix Tools > Advanced > Bootloader, restart, then update again."
+                  : "See the log below."
+            }
           />
         ) : null}
         {finished && status!.exitCode === 0 ? (
