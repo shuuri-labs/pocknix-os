@@ -1,7 +1,5 @@
-## Template: the PKGBUILD drops "##" lines and puts the profile's KERNEL_CMDLINE in place of
-## @KERNEL_CMDLINE@, so every entry boots the same cmdline.
-# The runtime cmdline lives here: build-packages.sh dies if the first "linux /KERNEL" line drifts
-# from devices/sm8250/profile.conf, and every entry must carry the same cmdline.
+# Rendered by the PKGBUILD, which fills every entry with the profile's KERNEL_CMDLINE;
+# scripts/check.sh fails on an entry that spells out its own cmdline.
 # A Flip 2 first-boots the rp5 dtb, then pocknix-sm8250-board-select sets saved_entry.
 # The Visionox panel is undetectable this early: a PC-created "visionox" file here picks its dtbs.
 insmod part_gpt
@@ -19,28 +17,24 @@ if [ "${panel}" = "visionox" ]; then
 fi
 set timeout=0
 
-# root= is a fixed PARTUUID: an internal install carries the same label, so label lookup races.
-# pocknix-update-grub re-pins it on every /flash refresh.
+# root= is a fixed PARTUUID, re-pinned by pocknix-update-grub: an internal install shares the label.
+# No `search`: it found the other install's KERNEL first when an SD and internal both carry one.
 menuentry 'pocknix (Retroid Pocket 5)' --id 'rp5' {
-        search --set -f /KERNEL
         linux /KERNEL @KERNEL_CMDLINE@
         devicetree /boot/grub/sm8250-retroidpocket-rp5.dtb
 }
 
 menuentry 'pocknix (Retroid Pocket Flip 2)' --id 'rpflip2' {
-        search --set -f /KERNEL
         linux /KERNEL @KERNEL_CMDLINE@
         devicetree /boot/grub/sm8250-retroidpocket-flip2.dtb
 }
 
 menuentry 'pocknix (Retroid Pocket 5, Visionox panel)' --id 'rp5-visionox' {
-        search --set -f /KERNEL
         linux /KERNEL @KERNEL_CMDLINE@
         devicetree /boot/grub/sm8250-retroidpocket-rp5-visionox.dtb
 }
 
 menuentry 'pocknix (Retroid Pocket Flip 2, Visionox panel)' --id 'rpflip2-visionox' {
-        search --set -f /KERNEL
         linux /KERNEL @KERNEL_CMDLINE@
         devicetree /boot/grub/sm8250-retroidpocket-flip2-visionox.dtb
 }

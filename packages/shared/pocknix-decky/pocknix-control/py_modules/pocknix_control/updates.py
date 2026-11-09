@@ -10,6 +10,8 @@ UNIT = "pocknix-qam-update"
 # Lives in /run so a reboot clears the finished/failed state together with the log.
 LOG = Path("/run/pocknix-update.log")
 EXIT_MARK = "POCKNIX_UPDATE_EXIT:"
+# pocknix-abl-gate's first line, so a refusal is told apart from any other failed update.
+ABL_GATE_MARK = "this update needs the OpenABL bootloader"
 
 # checkupdates(8) trick without pacman-contrib: refresh a THROWAWAY sync db copy and query
 # against it, so the real db is never -Sy'd without -u (partial-upgrade setup).
@@ -89,6 +91,12 @@ def _check_updates_locked():
     ]
 
 
+def bootloader_status():
+    proc = run_cmd(["/usr/bin/pocknix-update-abl", "--status"], timeout=20)
+    out = proc.stdout if proc and proc.returncode == 0 else ""
+    return {"needsOpenAbl": "needs_openabl=1" in out.splitlines()}
+
+
 def start_update():
     if _unit_running():
         raise RuntimeError("An update is already running")
@@ -125,4 +133,5 @@ def update_status():
         "running": _unit_running(),
         "log": "\n".join(lines[-6:]),
         "exitCode": exit_code,
+        "ablRefused": exit_code not in (None, 0) and any(ABL_GATE_MARK in line for line in lines),
     }

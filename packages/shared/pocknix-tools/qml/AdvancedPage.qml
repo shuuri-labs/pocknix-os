@@ -32,6 +32,33 @@ TabPage {
                 done()
         })
     }
+    // The launch prompt and the row's button both confirm here: hold, because it rewrites the ABL.
+    function askInstallAbl(title, lead) {
+        const repair = abl.state === "gptrepair"
+        app.ask({
+            title: title,
+            text: lead
+                + (repair ? qsTr("Many Retroid units ship with a damaged partition table. Only one 4 KB header is rewritten, using this disk's own backup copy. No partition contents are touched, and the original header is kept.\n\n") : "")
+                + qsTr("This rewrites both bootloader slots on internal storage. Keep the device plugged in: if this is interrupted, it will not boot and will need a PC to recover. The current bootloader is backed up first, and each slot is checked after writing."),
+            confirmText: repair ? qsTr("Repair and install") : qsTr("Install OpenABL"),
+            hold: true,
+            danger: true,
+            yes: () => {
+                const upgrade = !!abl.running_openabl
+                const toMenu = abl.menu_reboot === "1"
+                step(qsTr("Installing the bootloader"), ["abl"], () => upgrade
+                    ? app.toast(qsTr("Bootloader installed"), qsTr("It will be used from the next restart."))
+                    : app.ask({
+                        title: qsTr("Set your device model"),
+                        text: qsTr("OpenABL needs to know which device this is before Pocknix can start. Until it does, the screen stays black.\n\n")
+                            + (toMenu ? qsTr("Pocknix will now restart into the OpenABL menu. Check that Device model shows your device (set it if it says Not set), then select Start.\n\nIf you restart later instead, hold Volume Down while the device starts to open the OpenABL menu.")
+                                      : qsTr("While restarting, hold Volume Down to open the OpenABL menu. Check that Device model shows your device (set it if it says Not set), then select Start.")),
+                        confirmText: toMenu ? qsTr("Restart into OpenABL") : qsTr("Restart now"),
+                        yes: () => toMenu ? menuRebootJob.start([runner, "reboot-menu"], { root: true }) : app.reboot()
+                    }))
+            }
+        })
+    }
     function askPowerOff(title, text) {
         app.ask({ title: title, text: text, confirmText: qsTr("Power off"),
                   yes: () => powerJob.start(["/usr/bin/systemctl", "poweroff"]) })
@@ -42,9 +69,20 @@ TabPage {
         toolsState.start([app.jobRunner, "status", "tools"])
     }
 
+    // Asked once per launch: a later update refuses to install without OpenABL.
+    property bool ablAsked: false
+    // Asked only where Install can run; needs_openabl alone also covers devices it cannot fix.
+    readonly property bool needsOpenAbl: abl.needs_openabl === "1" && ["differs", "mixed", "gptrepair"].includes(abl.state)
     Job {
         id: ablJob
-        onFinished: code => page.abl = code === 0 ? Util.kv(output) : ({})
+        onFinished: code => {
+            page.abl = code === 0 ? Util.kv(output) : ({})
+            if (page.needsOpenAbl && !page.ablAsked && !page.app.logJobRunning) {
+                page.ablAsked = true
+                page.askInstallAbl(qsTr("Install the OpenABL bootloader?"),
+                    qsTr("Pocknix is moving to the OpenABL bootloader. OpenABL is mandatory going forward. Until it's installed, you'll be unable to install future updates. You can also install it later from Advanced > Bootloader.\n\n"))
+            }
+        }
     }
     Job {
         id: detectJob
@@ -63,6 +101,13 @@ TabPage {
             if (output.trim() === "running")
                 page.app.run(qsTr("Finishing the last step"), [page.runner, "follow"], { detached: true },
                              () => page.refresh())
+        }
+    }
+    Job {
+        id: menuRebootJob
+        onFinished: code => {
+            if (code !== 0)
+                page.app.notice(qsTr("Restart failed"), error)
         }
     }
     Job {
@@ -91,27 +136,19 @@ TabPage {
         id: ablRow
         visible: ["uptodate", "differs", "mixed", "gptrepair"].includes(page.abl.state)
         title: qsTr("Bootloader (ABL)")
-        description: page.abl.state === "uptodate" ? qsTr("Up to date (%1)").arg(page.abl.shipped_version)
-            : page.abl.state === "gptrepair" ? qsTr("The partition table must be repaired before %1 can be installed.").arg(page.abl.shipped_version)
-            : qsTr("Version %1 is available.").arg(page.abl.shipped_version)
+        description: page.abl.state === "uptodate" ? qsTr("OpenABL %1, up to date").arg(page.abl.shipped_version)
+            : page.abl.state === "gptrepair" ? qsTr("The partition table must be repaired before OpenABL %1 can be installed.").arg(page.abl.shipped_version)
+            : page.abl.running_openabl && page.abl.needs_openabl === "1" ? qsTr("This device runs OpenABL %2. Future updates will require OpenABL %1.").arg(page.abl.shipped_version).arg(page.abl.running_openabl)
+            : page.abl.running_openabl ? qsTr("OpenABL %1 is available (this device runs %2).").arg(page.abl.shipped_version).arg(page.abl.running_openabl)
+            : qsTr("This device does not run OpenABL. Future updates will require OpenABL.")
         Button {
             visible: page.abl.state !== "uptodate"
             enabled: !page.app.logJobRunning
             text: page.abl.state === "gptrepair" ? qsTr("Repair and install") : qsTr("Install")
             kind: Button.Danger
-            onClicked: page.app.ask({
-                title: page.abl.state === "gptrepair" ? qsTr("Repair the partition table and install the bootloader?")
-                                                      : qsTr("Install bootloader %1?").arg(page.abl.shipped_version),
-                text: (page.abl.state === "gptrepair"
-                       ? qsTr("Many Retroid units ship with a damaged partition table. Only one 4 KB header is rewritten, using this disk's own backup copy. No partition contents are touched, and the original header is kept.\n\n")
-                       : "")
-                    + qsTr("This rewrites both bootloader slots on internal storage. Keep the device plugged in: if this is interrupted, it will not boot and will need a PC to recover. The current bootloader is backed up first, and each slot is checked after writing."),
-                confirmText: qsTr("Install"),
-                hold: true,
-                danger: true,
-                yes: () => page.step(qsTr("Installing the bootloader"), ["abl"],
-                                     () => page.app.toast(qsTr("Bootloader installed"), qsTr("It will be used from the next restart.")))
-            })
+            onClicked: page.askInstallAbl(page.abl.state === "gptrepair"
+                ? qsTr("Repair the partition table and install the bootloader?")
+                : qsTr("Install OpenABL %1?").arg(page.abl.shipped_version), "")
         }
     }
 
@@ -125,7 +162,7 @@ TabPage {
     ActionRow {
         visible: page.internal.mode === "internal"
         title: qsTr("Pocknix is running from internal storage")
-        description: qsTr("To start from the SD card, or to remove Pocknix from internal storage: power off, then hold Volume - while powering on to open the ROCKNIX boot menu. There, Switch boot source picks SD card or internal, and Uninstall CFW removes Pocknix and gives its storage back to Android (Android then factory-resets). To start Android just once, hold Volume + while powering on.")
+        description: qsTr("To start from the SD card, or to remove Pocknix from internal storage: power off, then hold Volume - while powering on to open the bootloader menu. There, Boot source picks SD card or internal, and Uninstall CFW removes Pocknix and gives its storage back to Android (Android then factory-resets). To start Android just once, hold Volume + while powering on.")
     }
     ActionRow {
         visible: ["toosmall", "nofit", "foreign"].includes(page.internal.mode)
@@ -154,7 +191,7 @@ TabPage {
                 hold: true,
                 danger: true,
                 yes: () => page.step(qsTr("Installing to internal storage"), ["install-internal", String(page.androidGib)],
-                    () => page.askPowerOff(qsTr("Installed"), qsTr("Power off and remove the SD card, then hold Volume - while powering on to open the ROCKNIX boot menu and set Switch boot source to Internal.")))
+                    () => page.askPowerOff(qsTr("Installed"), qsTr("Power off and remove the SD card, then hold Volume - while powering on to open the bootloader menu and set Boot source to Internal.")))
             })
         }
     }

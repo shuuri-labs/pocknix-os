@@ -1,11 +1,13 @@
 # Must sort after 90-linux-pocknix.hook, so a kernel upgrade already carries the new cmdline.
+# The bls-deploy target lands the OpenABL files on devices whose kernel and cmdline did not change.
 [Trigger]
 Operation = Install
 Operation = Upgrade
 Type = Path
 Target = usr/lib/pocknix/kernel-cmdline
+Target = usr/lib/pocknix/pocknix-bls-deploy
 
 [Action]
-Description = pocknix: syncing the boot image cmdline...
+Description = pocknix: syncing the boot cmdline...
 When = PostTransaction
 Exec = /usr/lib/pocknix/pocknix-cmdline-sync

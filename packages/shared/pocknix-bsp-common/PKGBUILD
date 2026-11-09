@@ -3,7 +3,7 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=36
+pkgrel=37
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump and journal storage caps, latency sysctls, zram swap, iwd Wi-Fi backend, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -41,6 +41,8 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         '60-pocknix-deck.conf'
         'pocknix-cmdline-sync' '91-pocknix-cmdline.hook' 'cores.sh'
         'pocknix-boot-deploy' 'pocknix-build-bootimg' 'pocknix-update-boot' '90-linux-pocknix.hook'
+        'pocknix-bls-deploy' 'pocknix-abl-gate' '00-pocknix-abl-gate.hook'
+        'pocknix-repo-line' 'pocknix-repo-line.service' '96-pocknix-repo-line.hook'
         'pocknix-speaker-dsp' 'pocknix-speaker-dsp-render' 'pocknix-speaker-dsp.service')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
@@ -48,7 +50,8 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -155,7 +158,15 @@ package() {
   install -Dm755 "${srcdir}/pocknix-update-boot" "${pkgdir}/usr/bin/pocknix-update-boot"
   install -Dm644 "${srcdir}/90-linux-pocknix.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/90-linux-pocknix.hook"
-  # qcom-abl boot images bake the cmdline in; inert on other boot styles.
+  install -Dm755 "${srcdir}/pocknix-bls-deploy" "${pkgdir}/usr/lib/pocknix/pocknix-bls-deploy"
+  install -Dm755 "${srcdir}/pocknix-abl-gate" "${pkgdir}/usr/lib/pocknix/pocknix-abl-gate"
+  install -Dm644 "${srcdir}/00-pocknix-abl-gate.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/00-pocknix-abl-gate.hook"
+  install -Dm755 "${srcdir}/pocknix-repo-line" "${pkgdir}/usr/lib/pocknix/pocknix-repo-line"
+  install -Dm644 "${srcdir}/pocknix-repo-line.service" "${pkgdir}/usr/lib/systemd/system/pocknix-repo-line.service"
+  ln -sf "../pocknix-repo-line.service" "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants/pocknix-repo-line.service"
+  install -Dm644 "${srcdir}/96-pocknix-repo-line.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/96-pocknix-repo-line.hook"
   install -Dm755 "${srcdir}/pocknix-cmdline-sync" "${pkgdir}/usr/lib/pocknix/pocknix-cmdline-sync"
   install -Dm644 "${srcdir}/91-pocknix-cmdline.hook" \
     "${pkgdir}/usr/share/libalpm/hooks/91-pocknix-cmdline.hook"

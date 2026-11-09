@@ -1,13 +1,20 @@
 #!/bin/bash
-# pocknix-update-abl — flash the ROCKNIX ABL onto abl_a/abl_b from the running
+# pocknix-update-abl — flash OpenABL onto abl_a/abl_b from the running
 # system. User-run only, never a hook: a -Syu that rewrites the bootloader is
 # the one failure here needing a PC to recover. SoC-agnostic — the elf name
 # comes from whichever kit pocknix-bootloader-<soc> installed.
 set -euo pipefail
 
-KIT="${POCKNIX_ABL_KIT:-/usr/share/pocknix/bootloader/rocknix_abl}"
-BACKUP_DIR="${POCKNIX_ABL_BACKUP_DIR:-/flash/rocknix_abl}"
+KIT="${POCKNIX_ABL_KIT:-/usr/share/pocknix/bootloader/openabl}"
+BACKUP_DIR="${POCKNIX_ABL_BACKUP_DIR:-/flash/openabl}"
+# Where kits before OpenABL kept the stock-ABL backups.
+OLD_BACKUP_DIR="$(dirname "${BACKUP_DIR}")/rocknix_abl"
 MIN_BATTERY=30
+# OpenABL's ESRT class: this prefix + the chip id, version = major << 16 | minor.
+OPENABL_CLASS=c02d2ab2-3223-42be-9608-e280
+# The oldest OpenABL that boots the BLS entries alone; needs_openabl is the one verdict every
+# reader takes.
+MIN_OPENABL=1.2
 
 ASSUME_YES=0; STATUS_ONLY=0
 for a in "$@"; do
@@ -22,9 +29,31 @@ done
 die()  { echo "[abl] ERROR: $*" >&2; exit 1; }
 say()  { [ "$STATUS_ONLY" = 1 ] || echo "[abl] $*"; }
 
+# The ABL this boot came through, when it is OpenABL: "1.2". Empty on any other ABL.
+running_openabl() {
+  local e v
+  for e in /sys/firmware/efi/esrt/entries/entry*; do
+    [ -r "${e}/fw_class" ] || continue
+    case "$(tr 'A-F' 'a-f' < "${e}/fw_class")" in "${OPENABL_CLASS}"*) ;; *) continue ;; esac
+    v="$(cat "${e}/fw_version" 2>/dev/null)" || continue
+    echo "$((v >> 16)).$((v & 0xffff))"; return 0
+  done
+}
+RUNNING="$(running_openabl || true)"
+needs_openabl() {  # $1 = state
+  [ "$1" = uptodate ] && { echo 0; return; }
+  [ -n "${RUNNING}" ] && [ "$(printf '%s\n%s\n' "${MIN_OPENABL}" "${RUNNING}" | sort -V | head -1)" = "${MIN_OPENABL}" ] \
+    && { echo 0; return; }
+  echo 1
+}
+# A "bootloader" reboot reason opens OpenABL's menu; without the PMIC reboot-mode node it is a
+# plain restart.
+MENU_REBOOT=0
+[ -n "$(find /sys/firmware/devicetree/base -name mode-bootloader -print -quit 2>/dev/null)" ] && MENU_REBOOT=1
+
 ELF="$(ls "${KIT}"/abl_signed-*.elf 2>/dev/null | head -1 || true)"
 if [ -z "${ELF}" ] || [ ! -f "${ELF}" ]; then
-  [ "$STATUS_ONLY" = 1 ] && { echo "state=nokit"; exit 0; }
+  [ "$STATUS_ONLY" = 1 ] && { printf 'state=nokit\nrunning_openabl=%s\nneeds_openabl=%s\n' "${RUNNING}" "$(needs_openabl nokit)"; exit 0; }
   die "no ABL kit installed (${KIT}) — pocknix-bootloader-<soc> provides it."
 fi
 SOC="$(basename "${ELF}" .elf)"; SOC="${SOC#abl_signed-}"
@@ -49,7 +78,7 @@ if ! resolve_slots; then
     GPT_DEV="$(printf '%s\n' "${gpt_scan}" | sed -n 's/^device=//p')"
   fi
   if [ "${gpt_state}" != repairable ]; then
-    [ "$STATUS_ONLY" = 1 ] && { echo "state=nopart"; exit 0; }
+    [ "$STATUS_ONLY" = 1 ] && { printf 'state=nopart\nrunning_openabl=%s\nneeds_openabl=%s\n' "${RUNNING}" "$(needs_openabl nopart)"; exit 0; }
     die "abl_a/abl_b partitions not found — is this an internal-storage device?"
   fi
   if [ "$STATUS_ONLY" = 1 ]; then
@@ -57,6 +86,8 @@ if ! resolve_slots; then
 state=gptrepair
 soc=${SOC}
 shipped_version=${SHIPPED_VER}
+running_openabl=${RUNNING}
+needs_openabl=$(needs_openabl gptrepair)
 gpt_device=${GPT_DEV}
 STATUS
     exit 0
@@ -89,8 +120,8 @@ SUM_ELF="$(sha256sum "${ELF}" | awk '{print $1}')"
 SUM_A="$(slot_sum "${ABL_A}")"
 SUM_B="$(slot_sum "${ABL_B}")"
 
-# "differs", not "outdated": a non-matching slot may be an older ROCKNIX ABL or
-# the untouched factory one, and nothing here can tell which.
+# "differs", not "outdated": a non-matching slot may be an older OpenABL, the ROCKNIX ABL or
+# the untouched factory one; running_openabl tells only the first apart.
 if [ "${SUM_A}" = "${SUM_ELF}" ] && [ "${SUM_B}" = "${SUM_ELF}" ]; then STATE=uptodate
 elif [ "${SUM_A}" = "${SUM_B}" ];                                  then STATE=differs
 else                                                                    STATE=mixed
@@ -102,6 +133,9 @@ state=${STATE}
 soc=${SOC}
 shipped_version=${SHIPPED_VER}
 shipped_sum=${SUM_ELF:0:7}
+running_openabl=${RUNNING}
+needs_openabl=$(needs_openabl "${STATE}")
+menu_reboot=${MENU_REBOOT}
 current_a=${SUM_A:0:7}
 current_b=${SUM_B:0:7}
 STATUS
@@ -145,6 +179,10 @@ BACKED_UP=0
 # either way and backups would land shadowed on the root fs.
 if mountpoint -q "$(dirname "${BACKUP_DIR}")"; then
   mkdir -p "${BACKUP_DIR}"
+  for slot in a b; do
+    [ -f "${BACKUP_DIR}/abl_${slot}.img" ] || [ ! -f "${OLD_BACKUP_DIR}/abl_${slot}.img" ] \
+      || mv "${OLD_BACKUP_DIR}/abl_${slot}.img" "${BACKUP_DIR}/abl_${slot}.img"
+  done
   for slot in a b; do
     dev="ABL_${slot^^}"; img="${BACKUP_DIR}/abl_${slot}.img"
     if [ -f "${img}" ]; then
@@ -190,7 +228,19 @@ flash_slot "${ABL_A}" abl_a
 flash_slot "${ABL_B}" abl_b
 sync
 
-say "ABL is now v${SHIPPED_VER}. Reboot to run it."
+say "ABL is now OpenABL v${SHIPPED_VER}. Reboot to run it."
+if [ -z "${RUNNING}" ]; then
+  how="hold Volume Down while it restarts"
+  [ "${MENU_REBOOT}" = 1 ] && how="sudo systemctl reboot --reboot-argument=bootloader"
+  cat <<MODELMSG
+
+  OpenABL needs your device model before Linux can start; until it has one the
+  screen stays black. Restart into its menu (${how}),
+  check that Device model shows your device (set it if it says Not set), then
+  select Start.
+
+MODELMSG
+fi
 if [ -z "${SD_COPY}" ]; then
   cat <<BACKUP
 

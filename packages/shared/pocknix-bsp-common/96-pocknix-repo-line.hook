@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/pocknix/repo-line
+
+[Action]
+Description = pocknix: checking the update line...
+When = PostTransaction
+Exec = /usr/lib/pocknix/pocknix-repo-line

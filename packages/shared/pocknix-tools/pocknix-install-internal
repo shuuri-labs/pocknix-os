@@ -3,7 +3,8 @@
 #
 # Run ON THE DEVICE, as root, booted from the SD. Shrinks the Android `userdata` partition
 # on the internal disk, appends a FAT boot partition named POCKNIX plus a POCKNIX_ROOT
-# root, copies the current KERNEL onto the FAT and clones the running rootfs onto it.
+# root, copies the SD's boot files onto the FAT (re-pinned to the new root) and clones the
+# running rootfs onto it.
 # The internal root gets the running SD's btrfs snapshot subvol layout. Nothing before
 # `userdata` (abl, xbl, modem, persist) is touched. When it finishes: power off, remove
 # the SD card, power on.
@@ -21,12 +22,12 @@ set -euo pipefail
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 
-# qcom-abl (sm8550): the ABL boots the /flash KERNEL boot image. arm-efi (sm8250): the ABL
-# chainloads GRUB from the FAT, /KERNEL is a raw Image and the cmdline lives in
-# boot/grub/grub.cfg. Partitioning is identical; only boot-file handling and fstab differ.
+# Every style carries OpenABL's boot entry. Beside it, qcom-abl (sm8550): the ROCKNIX ABL boots the
+# /flash KERNEL boot image; arm-efi (sm8250): a factory ABL chainloads GRUB, /KERNEL is a raw
+# Image and the cmdline lives in boot/grub/grub.cfg. Only boot-file handling and fstab differ.
 BOOT_STYLE="${POCKNIX_BOOT_STYLE:-qcom-abl}"
 case "$BOOT_STYLE" in
-  qcom-abl|arm-efi) ;;
+  qcom-abl|arm-efi|bls) ;;
   *) echo "pocknix-install-internal: unknown boot style '${BOOT_STYLE}'" >&2; exit 1 ;;
 esac
 
@@ -293,21 +294,27 @@ else
 fi
 [ -f "$SD_SRC/KERNEL" ] || die "no KERNEL on the SD boot partition ($SD_BOOT at $SD_SRC)"
 cp -a "$SD_SRC/." "$BMNT/"
-cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"        # rollback copy, refreshed by the kernel-update hook
+cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"        # the legacy ABLs' previous-kernel copy
 [ "$did_sd_mount" = 1 ] && umount "$SDMNT" || true
 
 # SD and internal roots share the GPT name, so a PARTLABEL root= would resolve to whichever
 # the kernel enumerates first; PARTUUID is unique and keeps the internal install on its own root.
+ROOT_PARTUUID="$(blkid -s PARTUUID -o value "$ROOT_PART")"
+[ -n "$ROOT_PARTUUID" ] || die "could not read PARTUUID of $ROOT_PART"
 if [ "$BOOT_STYLE" = "arm-efi" ]; then
   [ -f "$BMNT/EFI/BOOT/bootaa64.efi" ] || die "SD boot FAT has no EFI/BOOT/bootaa64.efi — not an arm-efi layout?"
   [ -f "$BMNT/boot/grub/grub.cfg" ]    || die "SD boot FAT has no boot/grub/grub.cfg"
-  ROOT_PARTUUID="$(blkid -s PARTUUID -o value "$ROOT_PART")"
-  [ -n "$ROOT_PARTUUID" ] || die "could not read PARTUUID of $ROOT_PART"
   sed -i -E "s|root=PART(LABEL\|UUID)=[^ ]*|root=PARTUUID=${ROOT_PARTUUID}|g" "$BMNT/boot/grub/grub.cfg"
   grep -q "root=PARTUUID=${ROOT_PARTUUID}" "$BMNT/boot/grub/grub.cfg" \
     || die "failed to pin the internal grub.cfg root= (unexpected cmdline format?)"
   say "Pinned internal grub.cfg to root=PARTUUID=${ROOT_PARTUUID}"
 fi
+# The copied OpenABL entries name the SD's root.
+FLASH="$BMNT" ROOT_PARTUUID="$ROOT_PARTUUID" /usr/lib/pocknix/pocknix-bls-deploy \
+  || die "could not write the internal OpenABL boot entry"
+grep -q "root=PARTUUID=${ROOT_PARTUUID}" "$BMNT/loader/entries/pocknix.conf" \
+  || die "the internal OpenABL boot entry does not name the internal root"
+say "Pinned the internal OpenABL boot entry to root=PARTUUID=${ROOT_PARTUUID}"
 
 # On btrfs every subvol is its own st_dev, so rsync -x stops at each boundary: the / pass
 # copies @ alone and /home + /var/log need their own passes below.
@@ -324,14 +331,9 @@ if [ "$ROOT_FS" = btrfs ]; then
   rm -f "$RMNT/var/lib/pocknix/rollback-info.json"
 fi
 
-if [ "$BOOT_STYLE" = "arm-efi" ]; then
-  BOOT_PARTUUID="$(blkid -s PARTUUID -o value "$BOOT_PART")"
-  ROOT_ID="PARTUUID=${ROOT_PARTUUID}"; BOOT_ID="PARTUUID=${BOOT_PARTUUID}"
-  FSTAB_HDR="# pocknix-os — internal install (arm-efi; PARTUUID = unambiguous vs an inserted SD)"
-else
-  ROOT_ID="PARTLABEL=${ROOT_GPT_NAME}"; BOOT_ID="PARTLABEL=${BOOT_GPT_NAME}"
-  FSTAB_HDR="# pocknix-os — internal install"
-fi
+BOOT_PARTUUID="$(blkid -s PARTUUID -o value "$BOOT_PART")"
+ROOT_ID="PARTUUID=${ROOT_PARTUUID}"; BOOT_ID="PARTUUID=${BOOT_PARTUUID}"
+FSTAB_HDR="# pocknix-os — internal install (PARTUUID = unambiguous vs an inserted SD)"
 if [ "$ROOT_FS" = btrfs ]; then
   cat > "$RMNT/etc/fstab" <<EOF
 ${FSTAB_HDR}
@@ -354,16 +356,16 @@ sync
 cleanup_mnt; trap - ERR
 say "Done. New layout on $DEVICE:"
 parted -s "$DEVICE" print | awk 'NR>6'
-if [ "$BOOT_STYLE" = "arm-efi" ]; then
+if [ "$BOOT_STYLE" != "qcom-abl" ]; then
   cat <<EOF
 
   Internal install complete. Now:
     1) Power off.
     2) Remove the SD card.
-    3) Power on — the stock ABL chainloads GRUB from the internal $BOOT_GPT_NAME FAT.
-  (The internal grub.cfg + fstab are PARTUUID-pinned, so an inserted SD can't steal
-   the root — but SD-vs-internal BOOT priority is the stock ABL's choice; if the SD
-   still boots first, remove it to boot internal.)
+    3) Power on — OpenABL boots the internal $BOOT_GPT_NAME FAT (Boot source: Auto
+       tries internal first); a factory ABL chainloads GRUB from it instead.
+  (The internal boot files + fstab are PARTUUID-pinned, so an inserted SD can't steal
+   the root — but a factory ABL boots the SD first; remove it to boot internal.)
 EOF
 else
   cat <<EOF

@@ -2,13 +2,13 @@
 # model and the input maps are model-gated, so a new board needs no new package.
 pkgname=pocknix-bsp-sm8250
 pkgver=0.1.0
-pkgrel=27
+pkgrel=28
 pkgdesc="pocknix board support: SM8250 family (RP5, RP Flip 2) — runtime board dispatch, input maps, audio UCM, wake quirks"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-# An older bsp-common has no speaker DSP renderer, so the board profiles would sit unused.
-depends=('pocknix-bsp-common>=0.1.0-29')
+# An older bsp-common has no OpenABL boot-file writer for the kernel-cmdline shipped here.
+depends=('pocknix-bsp-common>=0.1.0-37')
 install=pocknix-bsp-sm8250.install
 # Exactly one device BSP may be installed (wrong-device guard for a shared repo).
 provides=('pocknix-bsp')
@@ -19,6 +19,7 @@ optdepends=('inputplumber: gamepad -> Steam Input mapping (01-retroid-*.yaml)'
 package() {
   # scripts/render-bsp.sh renders device.conf and family.conf into ./staged (build-packages.sh).
   install -Dm644 "${startdir}/staged/device.conf" "${pkgdir}/usr/lib/pocknix/device.conf"
+  install -Dm644 "${startdir}/staged/kernel-cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
   # root/ is the install tree. makepkg's umask 022 turns git's exec bit into 755/644, and
   # files created under fakeroot are root-owned; -d keeps the symlinks as links. The units
   # ship enabled through their wants links so a plain pacman -U activates them, and the

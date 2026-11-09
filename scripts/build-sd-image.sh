@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # build-sd-image.sh - flashable SD image, laid out the way the device's ABL expects:
-#   p1 fat32 "${SD_BOOT_PARTNAME}": /KERNEL (+ EFI/ and boot/grub/ with the dtbs on arm-efi)
+#   p1 fat32 "${SD_BOOT_PARTNAME}": OpenABL's /Image, dtbs/ and loader/, the legacy /KERNEL
+#      (+ EFI/ and boot/grub/ with the dtbs on arm-efi) and the openabl/ install kit
 #   p2 btrfs "${ROOT_LABEL}": subvols @ @home @snapshots @pacman-cache @var-log
 # The kernel mounts root by PARTUUID (no initramfs) and boots the btrfs DEFAULT subvol: the
 # cmdline and fstab must never name one, that is what lets pocknix-rollback switch roots.
@@ -38,6 +39,10 @@ ensure_kernel_in_rootfs() {
     chroot "${ROOTFS_DIR}" pacman -Rdd --noconfirm linux-aarch64 2>/dev/null || true
     # host-owned build output; rsync -a would carry uid 1000 into the rootfs (gate in main)
     rsync -a --chown=root:root "${KOUT}/modroot/lib/modules/" "${ROOTFS_DIR}/usr/lib/modules/"
+    # /boot too: the OpenABL /Image is written from the rootfs and must match these modules.
+    install -m644 "${KOUT}/Image" "${ROOTFS_DIR}/boot/Image"
+    mkdir -p "${ROOTFS_DIR}/boot/dtbs"; rm -f "${ROOTFS_DIR}"/boot/dtbs/*.dtb
+    install -m644 "${KOUT}/dtbs/"*.dtb "${ROOTFS_DIR}/boot/dtbs/"
     [ -n "${kver}" ] && chroot "${ROOTFS_DIR}" depmod "${kver}" 2>/dev/null || true
   else
     warn "no kernel modules in ${KOUT} — rootfs may lack matching modules"
@@ -47,7 +52,7 @@ ensure_kernel_in_rootfs() {
 # ABL kit at the FAT root on both boot styles: stock Android mounts this FAT, so a factory
 # device is provisioned from the SD alone. Inert at boot.
 copy_abl_kit() {
-  local mnt="$1" kit="${ROOTFS_DIR}/usr/share/pocknix/bootloader/rocknix_abl"
+  local mnt="$1" kit="${ROOTFS_DIR}/usr/share/pocknix/bootloader/openabl"
   [ -f "${kit}/abl_signed-${SOC^^}.elf" ] \
     || die "${kit#${ROOTFS_DIR}}/abl_signed-${SOC^^}.elf missing from the rootfs — is pocknix-bootloader-${SOC} built and installed? (make packages + make build)"
   rsync -rlt --no-owner --no-group "${kit}" "${mnt}/"
@@ -67,6 +72,15 @@ populate_arm_efi_boot() {
 }
 
 populate_qcom_abl_boot() { copy_abl_kit "$1"; }
+
+# The device's own writer, run from the rootfs, so the card matches what an update rewrites.
+populate_bls_boot() {
+  local w="${ROOTFS_DIR}/usr/lib/pocknix/pocknix-bls-deploy"
+  [ -f "${w}" ] || die "${w#${ROOTFS_DIR}} missing from the rootfs — is pocknix-bsp-common built and installed?"
+  FLASH="$1" SRCROOT="${ROOTFS_DIR}" ROOT_PARTUUID="${SD_ROOT_PARTUUID}" bash "${w}" \
+    || die "writing the OpenABL boot files failed"
+  [ -f "$1/loader/entries/pocknix.conf" ] || die "no loader/entries/pocknix.conf on the boot FAT"
+}
 
 firstboot_config() {
   local root="$1"
@@ -218,8 +232,8 @@ main() {
   parted -s "${OUT}" mkpart "${SD_BOOT_PARTNAME}" fat32 1MiB "${boot_end}MiB"
   parted -s "${OUT}" mkpart "${ROOT_LABEL}"        btrfs "${boot_end}MiB" 100%
   parted -s "${OUT}" set 1 legacy_boot on
-  # Fixed GUIDs: grub.cfg and fstab pin them, so an internal install with the same partition
-  # name and label can never steal the SD boot's root.
+  # Fixed GUIDs: the boot entry, grub.cfg and fstab pin them, so an internal install with the
+  # same partition name and label can never steal the SD boot's root.
   sgdisk --partition-guid=1:"${SD_BOOT_PARTUUID}" \
          --partition-guid=2:"${SD_ROOT_PARTUUID}" "${OUT}" >/dev/null
 
@@ -239,6 +253,7 @@ main() {
     arm-efi)  populate_arm_efi_boot "${MNT}" ;;
     qcom-abl) populate_qcom_abl_boot "${MNT}" ;;
   esac
+  populate_bls_boot "${MNT}"
   sync; umount "${MNT}"
 
   # @ becomes the fs DEFAULT subvol, which is what the kernel boots (see the header).

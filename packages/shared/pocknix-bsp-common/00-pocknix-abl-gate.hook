@@ -1,0 +1,14 @@
+# Loaded from disk before the transaction, so it ships a release ahead of the first package that
+# carries the target; until then it never fires. Sorts before 05-pocknix-snapshot.hook, so a
+# refused update leaves no snapshot behind.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/pocknix/requires-openabl
+
+[Action]
+Description = pocknix: checking the OpenABL bootloader is installed...
+When = PreTransaction
+Exec = /usr/lib/pocknix/pocknix-abl-gate
+AbortOnFail

@@ -3,6 +3,9 @@
 # arm-efi contract: GRUB loads a RAW arm64 Image at /KERNEL and the board dtb separately
 # from /boot/grub, so a kernel deploy is two copies and no mkbootimg. KERNEL.md5 is written only for
 # parity with the qcom-abl devices; GRUB never checks it.
+# KERNEL.bak only until /Image exists: pocknix-bls-deploy then keeps the previous raw kernel as
+# Image.bak, and a 256 MiB SD FAT cannot hold both pairs plus a rollback's staged copies.
+# Writes are tmp + rename, so a cut never truncates.
 # SRCROOT / OUT_SUFFIX behave as in pocknix-build-bootimg (rollback staging).
 set -euo pipefail
 
@@ -14,19 +17,23 @@ OUT_SUFFIX="${OUT_SUFFIX:-}"
 # In the image-build chroot /flash is not a mount; build-sd-image.sh populates the FAT instead.
 mountpoint -q "$FLASH" || { echo "pocknix-update-boot: $FLASH not mounted — skipping (build chroot?)"; exit 0; }
 
+put() { cp -f "$1" "$2.tmp" && sync "$2.tmp" && mv -f "$2.tmp" "$2"; }
+trap 'rm -f "$FLASH"/KERNEL*.tmp "$FLASH"/boot/grub/*.tmp' EXIT
+
 mount -o remount,rw "$FLASH" 2>/dev/null || true
 if [ -z "$OUT_SUFFIX" ]; then
-  [ -f "$FLASH/KERNEL" ] && cp -f "$FLASH/KERNEL" "$FLASH/KERNEL.bak"
+  if [ -f "$FLASH/Image" ]; then rm -f "$FLASH/KERNEL.bak"
+  elif [ -f "$FLASH/KERNEL" ]; then put "$FLASH/KERNEL" "$FLASH/KERNEL.bak"; fi
 fi
-cp -f "${SRCROOT}/boot/Image" "$FLASH/KERNEL${OUT_SUFFIX}"
+put "${SRCROOT}/boot/Image" "$FLASH/KERNEL${OUT_SUFFIX}"
 # md5 content always names "KERNEL" (contract parity; correct after the stage-rename)
 printf '%s  KERNEL\n' "$(md5sum "$FLASH/KERNEL${OUT_SUFFIX}" | awk '{print $1}')" > "$FLASH/KERNEL.md5${OUT_SUFFIX}"
 if ls "${SRCROOT}"/boot/dtbs/*.dtb >/dev/null 2>&1; then
   mkdir -p "$FLASH/boot/grub"
   for d in "${SRCROOT}"/boot/dtbs/*.dtb; do
-    cp -f "$d" "$FLASH/boot/grub/$(basename "$d")${OUT_SUFFIX}"
+    put "$d" "$FLASH/boot/grub/$(basename "$d")${OUT_SUFFIX}"
   done
 fi
 sync
-note="KERNEL.bak kept"; [ -n "$OUT_SUFFIX" ] && note="staged, not activated"
+note="previous kernel kept"; [ -n "$OUT_SUFFIX" ] && note="staged, not activated"
 echo "pocknix-update-boot: refreshed $FLASH/KERNEL${OUT_SUFFIX} + boot/grub dtbs (kernel $(cat "${SRCROOT}/usr/lib/pocknix/kernelrelease" 2>/dev/null || echo '?'); ${note})"

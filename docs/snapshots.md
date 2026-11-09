@@ -46,15 +46,21 @@ takes a fresh snapshot, and brings the button back.
 
 ## Manual recovery (device won't boot after a kernel update)
 
-Every kernel update keeps the previous boot image as `/flash/KERNEL.bak`. If the device
-no longer boots and you can't get a shell:
+Every kernel update keeps the previous kernel. On OpenABL: power on holding **Volume −**, open
+**Boot entries** and pick **Pocknix (previous kernel)**. It boots the old kernel with the newer
+modules - degraded (Wi-Fi/audio may be missing) but alive. Run `sudo pocknix-rollback` on the
+device to make kernel and rootfs coherent again; the next start uses the normal entry.
+
+On another bootloader the previous kernel is `/flash/KERNEL.bak` (Retroid Pocket 5 / Flip 2:
+`/flash/Image.bak` once the card has the OpenABL files). If the device no longer boots and you
+can't get a shell:
 
 1. Power off. Put the SD in a card reader (internal installs: boot a pocknix SD instead and
    mount the internal FAT).
 2. On the boot FAT partition:
    ```bash
    mv KERNEL KERNEL.bad
-   mv KERNEL.bak KERNEL
+   mv KERNEL.bak KERNEL          # Retroid Pocket 5 / Flip 2 without KERNEL.bak: cp Image.bak KERNEL
    md5sum KERNEL > KERNEL.md5    # MANDATORY - the ABL refuses a KERNEL whose md5 mismatches
    ```
 3. Boot. The old kernel now runs with the newer modules - degraded (Wi-Fi/audio may be

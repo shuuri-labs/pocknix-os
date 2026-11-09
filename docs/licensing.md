@@ -34,7 +34,7 @@ not and cannot relicense them. The main ones:
 | Linux kernel + patch series | `kernel/`, `packages/soc/linux-pocknix/` | GPL-2.0-only |
 | ROCKNIX patches, scripts, BSP material | `kernel/*/patches`, various packages | GPL-2.0 |
 | ROCKNIX-built GRUB binary | `packages/soc/pocknix-bootloader-sm8250` | GPL-3.0-or-later (GRUB) |
-| ROCKNIX ABL (fetched, pinned) | `packages/soc/pocknix-bootloader-*` | BSD-3-Clause (Qualcomm edk2 LinuxLoader) |
+| OpenABL (fetched, pinned) | `packages/soc/pocknix-bootloader-*` | GPL-3.0-or-later (OpenABL; some chips add a linking exception), BSD-3-Clause (the Qualcomm ABL it patches); source: the release's `openabl-<ver>-source.tar.xz` |
 | gamescope + patch set | `packages/soc/gamescope` | BSD-2-Clause (the patch set: GPL-2.0; origins in its PATCHES.md) |
 | Mesa | `packages/soc/mesa` | MIT |
 | Mesa for Android + Fossilize layer | `packages/shared/pocknix-mesa-android` | MIT (Mesa, Fossilize), Apache-2.0 WITH LLVM-exception (static libc++, NDK compiler-rt) |

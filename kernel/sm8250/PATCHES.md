@@ -23,6 +23,12 @@ Last rebased: 2026-11-06 (s2idle stack 3).
 - **1069** Home works as a chord modifier (Guide+A on the Flip 2): retroid-gamepad stretches the
   firmware's fixed home pulse. Source: ours.
 
+### Boot
+
+- **1119** Linux can restart into the bootloader's menu on every sm8250 board: pm8150's PON gets the
+  Qualcomm ABL reboot modes (bootloader 0x2, recovery 0x1), as pmk8550 already has for sm8550.
+  Source: ours.
+
 ### Suspend
 
 - **1118** DDR can self-refresh in sleep: the CPU to DDR interconnect votes are tagged active-only,
