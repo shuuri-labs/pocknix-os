@@ -3,7 +3,7 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=32
+pkgrel=34
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump and journal storage caps, latency sysctls, zram swap, iwd Wi-Fi backend, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -24,7 +24,7 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         '20-pocknix-powerkey.conf' '50-pocknix-coredump.conf'
         '10-pocknix-journal-size.conf' '60-pocknix-latency.conf' 'zram-generator.conf'
         '20-pocknix-wifi-backend.conf'
-        '90-pocknix-backlight.rules' '60-pocknix-controllers.rules'
+        '90-pocknix-backlight.rules' 'pocknix-backlight-grant' '60-pocknix-controllers.rules'
         '10-pocknix-wheel'
         'pocknix-fancontrol' 'pocknix-fan-mode' 'pocknix-lavd-mode'
         'pocknix-fancontrol.service' 'pocknix-lavd.service' 'pocknix-game-mode.conf'
@@ -47,7 +47,7 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -81,6 +81,7 @@ package() {
 
   install -Dm644 "${srcdir}/90-pocknix-backlight.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/90-pocknix-backlight.rules"
+  install -Dm755 "${srcdir}/pocknix-backlight-grant" "${pkgdir}/usr/lib/pocknix/pocknix-backlight-grant"
   install -Dm644 "${srcdir}/60-pocknix-controllers.rules" \
     "${pkgdir}/usr/lib/udev/rules.d/60-pocknix-controllers.rules"
 

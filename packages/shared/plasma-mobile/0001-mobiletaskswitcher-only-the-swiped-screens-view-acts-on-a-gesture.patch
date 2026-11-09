@@ -1,0 +1,226 @@
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Thu, 29 Oct 2026 15:27:23 +0100
+Subject: [PATCH] mobiletaskswitcher: only the swiped screen's view acts on a
+ gesture
+
+With two screens the task switcher gesture breaks: the switcher closes as
+soon as the finger lifts, and the other screen's apps get minimized.
+
+The effect creates one view per screen, but the gesture state is shared
+and the touch border callback drops the output the swipe started on. Every
+view follows the touch and handles the release: a view whose screen has no
+tasks calls close(), whose animation ends in instantHide() and deactivates
+the switcher on every screen, and each view minimizes its own screen's
+windows on activation.
+
+The touch border now reports the output a gesture starts on, the state
+exposes it as gestureScreen, and the other screens' views stay passive for
+that gesture: hidden, not minimizing, not touching the shared state. A
+swipe while the switcher is already open keeps the screen it opened on.
+Opening the switcher without a gesture clears it, so the shortcut still
+opens it on every screen.
+
+Drop when upstream mobiletaskswitcher tracks the gesture's output; not
+filed upstream yet.
+---
+ .../package/contents/ui/TaskSwitcher.qml      | 21 +++++++++++++++++--
+ .../plugin/effecttouchborder.cpp              |  6 +++++-
+ .../plugin/effecttouchborder.h                |  1 +
+ .../plugin/mobiletaskswitchereffect.cpp       | 20 ++++++++++++++++++
+ .../plugin/mobiletaskswitchereffect.h         |  7 +++++++
+ 5 files changed, 52 insertions(+), 3 deletions(-)
+
+diff --git a/kwin/mobiletaskswitcher/package/contents/ui/TaskSwitcher.qml b/kwin/mobiletaskswitcher/package/contents/ui/TaskSwitcher.qml
+index ca3908e..825df06 100644
+--- a/kwin/mobiletaskswitcher/package/contents/ui/TaskSwitcher.qml
++++ b/kwin/mobiletaskswitcher/package/contents/ui/TaskSwitcher.qml
+@@ -32,6 +32,10 @@ FocusScope {
+     readonly property QtObject effect: KWinComponents.SceneView.effect
+     readonly property QtObject targetScreen: KWinComponents.SceneView.screen
+ 
++    // Gesture state is shared by every screen's view: only the view on the screen the swipe
++    // started on may act on it, or another screen's view closes the switcher or minimizes its windows.
++    readonly property bool passive: root.state.gestureScreen !== "" && root.state.gestureScreen !== root.targetScreen.name
++
+     readonly property real navBottomMargin: MobileShell.Constants.navigationPanelOnSide(width, height) ? 0 : MobileShell.Constants.navigationPanelThickness
+     readonly property real navRightMargin: MobileShell.Constants.navigationPanelOnSide(width, height) ? MobileShell.Constants.navigationPanelThickness : 0
+     readonly property real topMargin: ShellSettings.Settings.autoHidePanelsEnabled ? 0 : MobileShell.Constants.topPanelHeight
+@@ -68,7 +72,7 @@ FocusScope {
+             taskSwitcherHelpers.lastClosedTask = -1;
+         }
+ 
+-        if (tasksCount === 0 && oldTasksCount !== 0) {
++        if (tasksCount === 0 && oldTasksCount !== 0 && !root.passive) {
+             hide();
+         } else if (tasksCount < oldTasksCount) {
+             if (state.currentTaskIndex < 0) {
+@@ -87,7 +91,10 @@ FocusScope {
+ 
+     function initialSetup(): void {
+         closeAnim.stop();
+-        container.opacity = 1;
++        container.opacity = root.passive ? 0 : 1;
++        if (root.passive) {
++            return;
++        }
+         closeAllButton.closeRequested = false;
+         oldTasksCount = tasksCount;
+ 
+@@ -192,6 +199,9 @@ FocusScope {
+         }
+ 
+         function onTouchPositionChanged(): void {
++            if (root.passive) {
++                return;
++            }
+             let unmodifiedYposition = Math.abs(root.state.touchYPosition)
+             if (root.taskSwitcherHelpers.isInTaskScrubMode || // once in scrub mode, let's not allow to go out, that can result in inconsistent UX
+                 (Math.abs(root.state.xVelocity) > Math.abs(root.state.yVelocity) * 3 && // gesture needs to be almost completely horizontal
+@@ -373,6 +383,9 @@ FocusScope {
+ 
+         // Logic for deciding how to handle the end of a gesture input
+         function onGestureInProgressChanged(): void {
++            if (root.passive) {
++                return;
++            }
+             root.taskSwitcherHelpers.fromButton = false;
+             if (root.state.gestureInProgress) {
+                 root.taskSwitcherHelpers.currentDisplayTask = root.state.currentTaskIndex;
+@@ -424,6 +437,9 @@ FocusScope {
+         }
+ 
+         function onXPositionChanged(): void {
++            if (root.passive) {
++                return;
++            }
+             root.taskSwitcherHelpers.updateTaskIndex();
+         }
+     }
+@@ -643,6 +659,7 @@ FocusScope {
+     // task list
+     Item {
+         id: container
++        enabled: !root.passive
+ 
+         // provide shell margins
+         anchors.fill: root
+diff --git a/kwin/mobiletaskswitcher/plugin/effecttouchborder.cpp b/kwin/mobiletaskswitcher/plugin/effecttouchborder.cpp
+index b455781..7c06194 100644
+--- a/kwin/mobiletaskswitcher/plugin/effecttouchborder.cpp
++++ b/kwin/mobiletaskswitcher/plugin/effecttouchborder.cpp
+@@ -3,6 +3,8 @@
+ 
+ #include "effecttouchborder.h"
+ 
++#include <core/output.h>
++
+ namespace KWin
+ {
+ 
+@@ -57,7 +59,9 @@ void EffectTouchBorder::setBorders(const QList<int> &touchActivateBorders)
+         effects->registerRealtimeTouchBorder(ElectricBorder(border),
+                                              m_state->activateAction(),
+                                              [this](ElectricBorder border, const QPointF &deltaProgress, const LogicalOutput *screen) {
+-                                                 Q_UNUSED(screen)
++                                                 if (!m_state->inProgress()) {
++                                                     Q_EMIT gestureStarted(screen ? screen->name() : QString());
++                                                 }
+                                                  m_state->setInProgress(true);
+ 
+                                                  if (border == ElectricTop || border == ElectricBottom) {
+diff --git a/kwin/mobiletaskswitcher/plugin/effecttouchborder.h b/kwin/mobiletaskswitcher/plugin/effecttouchborder.h
+index 996358f..f7b74a3 100644
+--- a/kwin/mobiletaskswitcher/plugin/effecttouchborder.h
++++ b/kwin/mobiletaskswitcher/plugin/effecttouchborder.h
+@@ -46,6 +46,7 @@ public:
+ 
+ Q_SIGNALS:
+     void touchPositionChanged(qreal primaryPosition, qreal orthogonalPosition);
++    void gestureStarted(const QString &outputName);
+ 
+ private:
+     QList<ElectricBorder> m_touchBorderActivate;
+diff --git a/kwin/mobiletaskswitcher/plugin/mobiletaskswitchereffect.cpp b/kwin/mobiletaskswitcher/plugin/mobiletaskswitchereffect.cpp
+index cbe487e..1ff6fcb 100644
+--- a/kwin/mobiletaskswitcher/plugin/mobiletaskswitchereffect.cpp
++++ b/kwin/mobiletaskswitcher/plugin/mobiletaskswitchereffect.cpp
+@@ -44,6 +44,12 @@ void MobileTaskSwitcherState::init(KWin::QuickSceneEffect *parent)
+     connect(m_effect, &QuickSceneEffect::deactivated, this, &MobileTaskSwitcherState::deactivated);
+     connect(this, &MobileTaskSwitcherState::gestureEnabledChanged, this, &MobileTaskSwitcherState::refreshBorders);
+     connect(m_border, &EffectTouchBorder::touchPositionChanged, this, &MobileTaskSwitcherState::processTouchPositionChanged);
++    // A swipe while the switcher is open keeps its screen: the other views never ran initialSetup.
++    connect(m_border, &EffectTouchBorder::gestureStarted, this, [this](const QString &screen) {
++        if (!m_effect->isRunning()) {
++            setGestureScreen(screen);
++        }
++    });
+     connect(this, &MobileTaskSwitcherState::gestureInProgressChanged, this, [this]() {
+         if (gestureInProgress()) {
+             invokeEffect();
+@@ -88,6 +94,19 @@ void MobileTaskSwitcherState::setGestureInProgress(bool gestureInProgress)
+     m_effectState->setInProgress(gestureInProgress);
+ }
+ 
++QString MobileTaskSwitcherState::gestureScreen() const
++{
++    return m_gestureScreen;
++}
++
++void MobileTaskSwitcherState::setGestureScreen(const QString &gestureScreen)
++{
++    if (m_gestureScreen != gestureScreen) {
++        m_gestureScreen = gestureScreen;
++        Q_EMIT gestureScreenChanged();
++    }
++}
++
+ bool MobileTaskSwitcherState::wasInActiveTask() const
+ {
+     return m_wasInActiveTask;
+@@ -312,6 +331,7 @@ void MobileTaskSwitcherState::activate()
+ 
+     resetGestureState();
+     m_effectState->setInProgress(false);
++    setGestureScreen(QString());
+     invokeEffect();
+ }
+ 
+diff --git a/kwin/mobiletaskswitcher/plugin/mobiletaskswitchereffect.h b/kwin/mobiletaskswitcher/plugin/mobiletaskswitchereffect.h
+index 0aae2a7..2cc1e35 100644
+--- a/kwin/mobiletaskswitcher/plugin/mobiletaskswitchereffect.h
++++ b/kwin/mobiletaskswitcher/plugin/mobiletaskswitchereffect.h
+@@ -48,6 +48,8 @@ class MobileTaskSwitcherState : public QObject
+     Q_PROPERTY(qreal yPosition READ yPosition WRITE setYPosition NOTIFY yPositionChanged)
+ 
+     Q_PROPERTY(bool gestureInProgress READ gestureInProgress NOTIFY gestureInProgressChanged)
++    // Output the current gesture started on; empty when the switcher was opened without one.
++    Q_PROPERTY(QString gestureScreen READ gestureScreen NOTIFY gestureScreenChanged)
+     Q_PROPERTY(KWin::MobileTaskSwitcherState::Status status READ status WRITE setStatus NOTIFY statusChanged)
+ 
+     Q_PROPERTY(qint64 elapsedTimeSinceStart READ getElapsedTimeSinceStart)
+@@ -75,6 +77,9 @@ public:
+ 
+     bool gestureInProgress() const;
+     void setGestureInProgress(bool gestureInProgress);
++
++    QString gestureScreen() const;
++    void setGestureScreen(const QString &gestureScreen);
+     bool wasInActiveTask() const;
+     void setWasInActiveTask(bool wasInActiveTask);
+     Q_INVOKABLE void updateWasInActiveTask(KWin::Window *window);
+@@ -124,6 +129,7 @@ Q_SIGNALS:
+     void deactivated();
+ 
+     void gestureInProgressChanged();
++    void gestureScreenChanged();
+     void statusChanged();
+ 
+     void wasInActiveTaskChanged();
+@@ -154,6 +160,7 @@ private:
+ 
+     Status m_status = Status::Inactive;
+     bool m_gestureInProgress = false;
++    QString m_gestureScreen;
+ 
+     int m_currentTaskIndex = 0;
+     int m_initialTaskIndex = 0;
