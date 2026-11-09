@@ -1,0 +1,14 @@
+# pocknix-gamepad-calibration provenance
+
+Source: GPcal (Kdog, github.com/cdeletre/GPcal, MIT, LICENSE.gpcal), hand-ported to Python.
+
+Taken verbatim: the stick maths (centre from the two settle points, max at 95% of the shorter
+side, deadzone 150% of the settle spread with a 5% floor, antideadzone 80%) and the hold
+detection (held within 3% for 0.5 s past half travel = edge, under half = settle).
+
+Ours:
+  - capture runs on neutral driver parameters, so a recalibration never builds on the last one
+  - fixed-reference triggers (rsinput): max = full travel, deadzone 105% of settle
+  - InputPlumber intercept during capture instead of a standalone app; boot replay unit
+
+Last synced: never (hand-ported).

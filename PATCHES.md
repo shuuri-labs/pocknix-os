@@ -30,6 +30,7 @@ is not taken, retired numbers); files ported from another project record theirs 
 | alsa-ucm, speaker DSP profile, InputPlumber maps (sm8550) | [devices/sm8550/packages/pocknix-bsp-sm8550/README.provenance](devices/sm8550/packages/pocknix-bsp-sm8550/README.provenance) |
 | firmware (sm8550) | [devices/sm8550/packages/pocknix-firmware-sm8550/README.provenance](devices/sm8550/packages/pocknix-firmware-sm8550/README.provenance) |
 | format-device.sh | [packages/shared/pocknix-sdcard-automount/README.provenance](packages/shared/pocknix-sdcard-automount/README.provenance) |
+| GPcal calibration maths | [packages/shared/pocknix-gamepad-calibration/README.provenance](packages/shared/pocknix-gamepad-calibration/README.provenance) |
 | GRUB + ABL kit (sm8250) | [packages/soc/pocknix-bootloader-sm8250/README.provenance](packages/soc/pocknix-bootloader-sm8250/README.provenance) |
 | ABL kit (sm8550) | [packages/soc/pocknix-bootloader-sm8550/README.provenance](packages/soc/pocknix-bootloader-sm8550/README.provenance) |
 | Cemu AppImage | [packages/shared/cemu/README.provenance](packages/shared/cemu/README.provenance) |

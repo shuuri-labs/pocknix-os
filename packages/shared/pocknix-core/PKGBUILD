@@ -19,7 +19,7 @@ depends=('mesa'                     # epoch-2 trimmed/tuned freedreno build ([po
          'pocknix-tools'
          'pocknix-store'
          'pocknix-branding'         # plymouthd.conf names its theme on every device
-         'pocknix-gamepad-calibration'  # boot replay of Pocknix Control's calibration; every family's pad driver takes one
+         'pocknix-gamepad-calibration'  # calibration CLI + boot replay; every family's pad driver takes one
          'pocknix-session')
 
 package() {

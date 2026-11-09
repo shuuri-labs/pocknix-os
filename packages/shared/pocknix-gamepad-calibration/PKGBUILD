@@ -1,20 +1,22 @@
-# pocknix-gamepad-calibration: replays Pocknix Control's saved calibration into the gamepad
-# driver's module parameters at boot, before InputPlumber claims the pad.
+# pocknix-gamepad-calibration: guided stick and trigger calibration (the CLI Pocknix Tools runs)
+# and its boot replay into the gamepad driver's module parameters, before InputPlumber claims the pad.
 pkgname=pocknix-gamepad-calibration
 pkgver=0.1.0
-pkgrel=4
-pkgdesc="pocknix gamepad calibration: replays the saved stick/trigger calibration at boot"
+pkgrel=5
+pkgdesc="pocknix gamepad calibration: calibrates the sticks and triggers and replays it at boot"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
-license=('GPL-2.0-or-later')
-depends=('systemd')
+license=('GPL-2.0-or-later' 'MIT')  # GPcal's stick maths, LICENSE.gpcal
+depends=('systemd' 'python' 'polkit')
 # retires the GPcal app's python-pyxel
 replaces=('python-pyxel')
 conflicts=('python-pyxel')
-source=('pocknix-gamepad-calibration-restore' 'pocknix-gamepad-calibration.service')
-sha256sums=('SKIP' 'SKIP')
+source=('pocknix-gamepad-calibration' 'pocknix-gamepad-calibration-restore'
+        'pocknix-gamepad-calibration.service' '59-pocknix-gamepad-calibration.rules' 'LICENSE.gpcal')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
+  install -Dm755 "${srcdir}/pocknix-gamepad-calibration" "${pkgdir}/usr/bin/pocknix-gamepad-calibration"
   install -Dm755 "${srcdir}/pocknix-gamepad-calibration-restore" \
     "${pkgdir}/usr/bin/pocknix-gamepad-calibration-restore"
   install -Dm644 "${srcdir}/pocknix-gamepad-calibration.service" \
@@ -22,4 +24,7 @@ package() {
   install -d "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants"
   ln -s ../pocknix-gamepad-calibration.service \
     "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants/pocknix-gamepad-calibration.service"
+  install -Dm644 "${srcdir}/59-pocknix-gamepad-calibration.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/59-pocknix-gamepad-calibration.rules"
+  install -Dm644 "${srcdir}/LICENSE.gpcal" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE.gpcal"
 }
