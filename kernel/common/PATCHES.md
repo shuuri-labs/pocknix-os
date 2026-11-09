@@ -9,7 +9,7 @@ Each SoC's kernel, after the SoC's own stack
 Applied in number order on the stock kernel that `kernel/<soc>/kernel.conf` pins. A SoC leaves
 a patch out by naming it in its optional `common-skip` file.
 
-Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
+Last rebased: 2026-11-06 (s2idle stack 3).
 
 ## Carried
 
@@ -32,6 +32,7 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
   Source: mkp/scsi d1fa5cea5dcd via armada 0535.
 - **1018** A UFS device that rejects the timestamp attribute stops getting it written on every boot
   and resume. Source: mkp/scsi 00eec343c730 via armada 0536.
+- **1110** A failed UFS ICE resume no longer leaves its clocks enabled. Source: armada 0510.
 
 ### Suspend and wake
 
@@ -52,6 +53,33 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
 - **1080** Waking with the power button no longer puts the device straight back to sleep:
   pm8941-pwrkey drops the wake press and its release (the first event within 1 s of resume),
   as ACPI buttons do. Source: ours.
+- **1095** A charger plugged in while the device sleeps starts charging: the IPCC doorbell stays
+  live in s2idle and is masked (unlazy) only for suspend to RAM. Applies: the s2ram mask is gated
+  to the `qcom,sm8550-ipcc` and `qcom,sm8750-ipcc` compatibles. Needs: the SoC dir without
+  ROCKNIX's blanket IRQF_NO_SUSPEND removal (sm8550 deletes its 0502 in sync-keep). Trap: that
+  removal is what stopped battmgr doorbells waking deep sleep; if s2idle self-wakes come back,
+  suspect this first. Source: armada 0504, reworked from ROCKNIX f955f5b.
+- **1096** Unplugging the charger while asleep no longer hard-hangs the SoC: ucsi clears the USB
+  role for a partner without USB data, so the USB power island can drop. Applies: pmic_glink UCSI
+  boards (sm8550); sm8250 runs qcom-pmic-typec. Source: Anze, via ROCKNIX SM8750 0509 and
+  armada 0519.
+- **1099** smp2p resets its inbound state only after a remote restart, so the ADSP ready and
+  handover bits are no longer replayed on every notification. Source: armada 0569.
+
+### Audio across sleep
+
+- **1101-1106** The LPASS WSA, VA, TX and RX macros hand their clocks to the PM clock framework,
+  so a runtime suspend drops their votes. Source: Ajay Kumar Nandam's series, queued for 7.3, via
+  armada 0557-0562. Drop: at a 7.3 base.
+- **1107** The LPASS macros runtime-suspend across system sleep, so their clock votes no longer
+  keep the ADSP out of island in s2idle. Needs: 1101-1106. Source: armada 0563.
+- **1108** SoundWire masters that support clock stop runtime-suspend across system sleep; a bus
+  without it (the sm8250 WSA881x speaker bus) is left alone so the speakers play after wake.
+  Trap: sm8250's 99-wcd938x-nosleep.rules pins the headphone codec active, and its master is
+  still force-suspended; check jack detection after wake. Source: armada 0564 (with PR #759).
+- **1109** A SoundWire slave that never finishes the clock-stop handshake (the PMIC haptics port
+  0217:f002) is skipped, so it no longer stalls the bus on wake (heard as a speaker pop).
+  Needs: 1108 to matter. Source: armada 0570.
 
 ### PCIe and wifi
 
@@ -59,7 +87,7 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
   is unreadable after PME_Turn_Off there. Applies: SM8550 only, gated by `qcom,pcie-sm8550`.
   Source: armada 0512.
 - **1048** PCIe keeps a suspend OPP as its memory floor in s2idle. Applies: does nothing without a
-  DT suspend OPP, which only sm8550.dtsi has (via sm8550's 1049). Source: armada 0513.
+  DT suspend OPP, which no SoC dtsi marks since sm8550 retired 1049. Source: armada 0513.
 - **1054** The PCIe host can power down in s2idle: only endpoints veto D3cold.
   Applies: every SoC (the sm8250 pcie-qcom path reaches the same D3cold check). Source: armada 0522.
 - **1060, 1061** Wifi comes up: pcie-qcom's BDF-to-SID table and the OF devlink parser read the
@@ -131,6 +159,12 @@ Last rebased: 2026-10-29 (iris gen1 HEVC Remote Play).
   boards; sm8250 builds battmgr but runs qcom_fg. Source: Jan-Michael Brummer's LKML v1 series
   "report charge levels on SM8350-class firmware", 2026-08-29, verbatim. Drop: at a kernel base
   that carries them; swap for a v2 if one is posted.
+
+### Fan
+
+- **1100** The fan can keep running while the device charges asleep: pwm-fan's opt-in
+  `pwm1_sleep_charging` (0-255, 0 = off) holds that speed in s2idle on external power and follows
+  plug and unplug. Applies: s2idle only; pocknix-fancontrol writes it. Source: armada 0532.
 
 ### FEX (x86 emulation)
 

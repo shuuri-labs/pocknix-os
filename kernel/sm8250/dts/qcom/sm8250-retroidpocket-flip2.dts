@@ -23,6 +23,7 @@
 			linux,can-disable;
 			linux,code = <SW_LID>;
 			linux,input-type = <EV_SW>;
+			wakeup-event-action = <EV_ACT_DEASSERTED>;
 			wakeup-source;
 		};
 	};

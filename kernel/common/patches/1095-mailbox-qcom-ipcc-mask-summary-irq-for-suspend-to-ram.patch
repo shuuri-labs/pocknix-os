@@ -1,0 +1,119 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Armada <noreply@armada.local>
+Date: Fri, 6 Nov 2026 19:29:16 +0000
+Subject: [PATCH] mailbox: qcom-ipcc: mask summary irq for suspend-to-RAM only
+
+The ADSP pushes unsolicited battery-manager doorbells around suspend
+entry, and SM8550/SM8750 suspend-to-RAM aborts whenever the summary
+interrupt is unmasked at the point of no return. The previous approach
+removed IRQF_NO_SUSPEND on those SoCs, which also silenced the doorbell
+during suspend-to-idle, where a live doorbell lets the charger firmware
+complete a cable attach with the AP asleep.
+
+Keep IRQF_NO_SUSPEND everywhere and instead mask the summary irq when
+the target state is suspend-to-RAM, scoped to the SM8550/SM8750
+compatibles so other SoCs keep established behavior. Masking in the
+late suspend phase and restoring in early resume brackets the core
+noirq interrupt barrier, so doorbell handlers never run while IPCC
+consumers are noirq-suspended and a pending doorbell is delivered no
+earlier than the core would deliver it.
+
+The disable must be unlazy: these platforms never power-collapse the
+GIC in s2ram, so a lazily-disabled line with its GIC enable bit still
+set raises a wake request when the doorbell rings and the SoC resumes
+with no attributable wakeup source. Hardware-observed on AYN Thor:
+cable attach woke the sleeping device until the disable was made
+unlazy, matching the hard mask the interrupt core applies through
+IRQCHIP_MASK_ON_SUSPEND on the previous approach.
+---
+ drivers/mailbox/qcom-ipcc.c | 41 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 41 insertions(+)
+
+diff --git a/drivers/mailbox/qcom-ipcc.c b/drivers/mailbox/qcom-ipcc.c
+index dead907aa..d13b3dc1f 100644
+--- a/drivers/mailbox/qcom-ipcc.c
++++ b/drivers/mailbox/qcom-ipcc.c
+@@ -9,7 +9,9 @@
+ #include <linux/irqdomain.h>
+ #include <linux/mailbox_controller.h>
+ #include <linux/module.h>
++#include <linux/of.h>
+ #include <linux/platform_device.h>
++#include <linux/suspend.h>
+ 
+ #include <dt-bindings/mailbox/qcom-ipcc.h>
+ 
+@@ -48,6 +50,7 @@ struct qcom_ipcc_chan_info {
+  * @mbox:		The mailbox controller
+  * @num_chans:		Number of @chans elements
+  * @irq:		Summary irq
++ * @mask_on_s2ram:	Mask the summary irq across suspend-to-RAM
+  */
+ struct qcom_ipcc {
+ 	struct device *dev;
+@@ -58,6 +61,7 @@ struct qcom_ipcc {
+ 	struct mbox_controller mbox;
+ 	int num_chans;
+ 	int irq;
++	bool mask_on_s2ram;
+ };
+ 
+ static inline struct qcom_ipcc *to_qcom_ipcc(struct mbox_controller *mbox)
+@@ -260,6 +264,31 @@ static int qcom_ipcc_setup_mbox(struct qcom_ipcc *ipcc,
+ 	return devm_mbox_controller_register(dev, mbox);
+ }
+ 
++/*
++ * Entry-time ADSP doorbells abort suspend-to-RAM unless masked, while
++ * suspend-to-idle depends on servicing them. Late phase, so handlers
++ * never run against noirq-suspended consumers.
++ */
++static int qcom_ipcc_suspend_late(struct device *dev)
++{
++	struct qcom_ipcc *ipcc = dev_get_drvdata(dev);
++
++	if (ipcc->mask_on_s2ram && pm_suspend_target_state == PM_SUSPEND_MEM)
++		disable_irq(ipcc->irq);
++
++	return 0;
++}
++
++static int qcom_ipcc_resume_early(struct device *dev)
++{
++	struct qcom_ipcc *ipcc = dev_get_drvdata(dev);
++
++	if (ipcc->mask_on_s2ram && pm_suspend_target_state == PM_SUSPEND_MEM)
++		enable_irq(ipcc->irq);
++
++	return 0;
++}
++
+ static int qcom_ipcc_pm_resume(struct device *dev)
+ {
+ 	struct qcom_ipcc *ipcc = dev_get_drvdata(dev);
+@@ -325,6 +354,17 @@ static int qcom_ipcc_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto err_mbox;
+ 
++	ipcc->mask_on_s2ram =
++		of_device_is_compatible(pdev->dev.of_node, "qcom,sm8550-ipcc") ||
++		of_device_is_compatible(pdev->dev.of_node, "qcom,sm8750-ipcc");
++
++	/*
++	 * A lazy disable leaves the GIC enable bit set, and a doorbell on the
++	 * still-powered GIC then wakes suspend-to-RAM despite the masking.
++	 */
++	if (ipcc->mask_on_s2ram)
++		irq_set_status_flags(ipcc->irq, IRQ_DISABLE_UNLAZY);
++
+ 	ret = devm_request_irq(&pdev->dev, ipcc->irq, qcom_ipcc_irq_fn,
+ 			       IRQF_TRIGGER_HIGH | IRQF_NO_SUSPEND |
+ 			       IRQF_NO_THREAD, name, ipcc);
+@@ -361,6 +401,7 @@ static const struct of_device_id qcom_ipcc_of_match[] = {
+ MODULE_DEVICE_TABLE(of, qcom_ipcc_of_match);
+ 
+ static const struct dev_pm_ops qcom_ipcc_dev_pm_ops = {
++	LATE_SYSTEM_SLEEP_PM_OPS(qcom_ipcc_suspend_late, qcom_ipcc_resume_early)
+ 	NOIRQ_SYSTEM_SLEEP_PM_OPS(NULL, qcom_ipcc_pm_resume)
+ };
+ 

@@ -6,3 +6,4 @@
 patches/30-sm8250/0105-drm-panel-visionox-vtdr6130-add-sm8250.patch
 dts/qcom/sm8250-retroidpocket-common.dtsi
 dts/qcom/sm8250-retroidpocket-rp5.dts
+dts/qcom/sm8250-retroidpocket-flip2.dts

@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Armada <noreply@armada.local>
+Date: Fri, 6 Nov 2026 19:29:15 +0000
+Subject: [PATCH] input: qcom-hv-haptics: cancel the set-gain work on suspend
+
+A gain update queued just before sleep could run into the resume path and
+race the first post-wake rumble. Cancel it on suspend with the playback
+and stop workers.
+---
+ drivers/input/misc/qcom-hv-haptics.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/input/misc/qcom-hv-haptics.c b/drivers/input/misc/qcom-hv-haptics.c
+index 3d2149c20..1c6852691 100644
+--- a/drivers/input/misc/qcom-hv-haptics.c
++++ b/drivers/input/misc/qcom-hv-haptics.c
+@@ -6164,6 +6164,7 @@ static int haptics_suspend_config(struct device *dev)
+ 	int rc;
+ 
+ 	cancel_work_sync(&chip->global_playback_work);
++	cancel_work_sync(&chip->set_gain_work);
+ 	cancel_delayed_work_sync(&chip->stop_work);
+ 
+ 	mutex_lock(&play->lock);

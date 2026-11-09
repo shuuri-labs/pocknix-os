@@ -3,6 +3,7 @@
 # -path = deleted locally. Our 1000+ patches the sync deletes come back without a line here.
 -patches/20-version/9999-fix-rust-build-error.patch
 -patches/20-version/0011-thermal-adc-tm5-drop-iio-val-int-check.patch
+-patches/30-sm8550/0502-wakeup-qcom-ipcc-remove-IRQF-NO-SUSPEND.patch
 dts/qcom/qcs8550-ayn-common.dtsi
 dts/qcom/qcs8550-ayn-odin2.dts
 dts/qcom/qcs8550-ayn-thor.dts

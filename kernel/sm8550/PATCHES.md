@@ -12,7 +12,7 @@ Pins are in `kernel/sm8550/kernel.conf`. Stack: `patches/10-mainline`, `20-versi
 
 ROCKNIX 1000+ (synced, not ours): 1000, 1002, 1003, 1005, 1020.
 
-Last rebased: 2026-10-27 (RP6 LRA haptics).
+Last rebased: 2026-11-06 (s2idle stack 3).
 
 ## Carried
 
@@ -40,8 +40,11 @@ Last rebased: 2026-10-27 (RP6 LRA haptics).
 - **1057, 1058, 1059** The ADSP graphs are released across suspend, so an open sound no longer
   keeps the ADSP awake. Trap: 1059 is rebased onto ROCKNIX 0612 and needs 1058, so 1057-1059
   stay together. Source: armada PR #545.
-- **1049** sm8550.dtsi marks a PCIe suspend OPP, the one kernel/common 1048 keeps as the memory
-  floor in s2idle. Source: armada.
+- **1116** The SoC reaches CX collapse and DDR self-refresh in sleep: the gcc-sm8550 PCIe
+  controller and PHY GDSCs power off instead of holding retention, whose NoC vote kept DDR awake.
+  Needs: kernel/common 1101-1108 (the LPASS votes must go too). Trap: it replaced the PCIe suspend
+  OPP floor (1049), which made s2idle safe; a wake hang after this points here.
+  Source: armada 0566.
 
 ### Display, touch, GPU
 
@@ -56,6 +59,9 @@ Last rebased: 2026-10-27 (RP6 LRA haptics).
   period against the board's `qcom,lra-period-us` (10%) and falls back to it, instead of
   ROCKNIX's fixed 185-215 Hz window and forced 205 Hz (the RP6 LRA calibrates at ~173 Hz).
   Source: ours.
+- **1117** A gain update queued just before sleep no longer runs into resume: haptics suspend
+  cancels the set-gain work with the playback and stop work. Needs: ROCKNIX 1005. Source: the
+  suspend hunk of armada 1003.
 
 ## Edits to synced files
 
@@ -63,18 +69,22 @@ The local delta `kernel/sm8550/sync-keep` restores after each make sync.
 
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-common.dtsi`: sdhc_2 without `sdhci-caps-mask` (UHS-I
   SDR104 on stock sdhci-msm, as armada carries it); rail and WAKE# constraints, bob1 LPM, and the
-  gamepad MCU on vdd_mcu_3v3 without always-on (armada PR #545).
+  gamepad MCU on vdd_mcu_3v3 without always-on (armada PR #545); volume up is no wake source, so
+  a press in a bag no longer wakes the device (armada's ayn-common dts patch).
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-odin2.dts`: `&vreg_l12b_1p8` always-on (armada 8675d40:
   the panel draws over a watt in sleep with its IO supply cut).
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-thor.dts`: touchscreens without `touchscreen-swapped-x-y`
   / `touchscreen-inverted-x` (armada's Thor dts patch: gamescope and kwin rotate touch by the
-  panel orientation, so a kernel-side rotation landed touch 90 degrees off).
+  panel orientation, so a kernel-side rotation landed touch 90 degrees off); the lid wakes only
+  on opening, with a pull-up on its open-drain hall line, so closing it on a sleeping Thor no
+  longer wakes it (same armada patch).
 - `kernel/sm8550/dts/qcom/qcs8550-retroidpocket-rp6.dts`: haptics driven as an LRA (no
   `use-erm`, 1300 mV node and effect drive, effect auto-res off, stock effect_0 pattern; armada
   PR #694, values from the stock Android board-id 0x1001f overlay). Nova and top-dpad include
   rp6.dts and inherit it.
 - Deleted: 20-version/0011 adc-tm5 (already in 7.2.x stable), 20-version/9999 (perf rust
-  target, perf not built).
+  target, perf not built), 30-sm8550/0502 IPCC IRQF_NO_SUSPEND removal (kernel/common 1095
+  keeps the doorbell live in s2idle instead).
 
 ## Not taken
 
@@ -82,4 +92,4 @@ None.
 
 ## Retired numbers
 
-None.
+- 1049 (PCIe suspend OPP in sm8550.dtsi)

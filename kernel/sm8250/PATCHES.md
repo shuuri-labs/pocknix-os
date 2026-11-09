@@ -14,7 +14,7 @@ ladder + ACD + bw votes; plus our 1000+ numbers), then `kernel/common`.
 
 ROCKNIX 1000+ (synced, not ours): none.
 
-Last rebased: 2026-10-27 (battery time remaining).
+Last rebased: 2026-11-06 (s2idle stack 3).
 
 ## Carried
 
@@ -22,6 +22,11 @@ Last rebased: 2026-10-27 (battery time remaining).
 
 - **1069** Home works as a chord modifier (Guide+A on the Flip 2): retroid-gamepad stretches the
   firmware's fixed home pulse. Source: ours.
+
+### Suspend
+
+- **1118** DDR can self-refresh in sleep: the CPU to DDR interconnect votes are tagged active-only,
+  so they leave the sleep set. Source: gennro, via kettlelinux 0114 and armada 0568.
 
 ### Charger and battery
 
@@ -61,6 +66,8 @@ The local delta `kernel/sm8250/sync-keep` restores after each make sync.
 - `kernel/sm8250/dts/qcom/sm8250-retroidpocket-common.dtsi`: ROCKNIX's fan rework and its two
   includes left out (see Not taken).
 - `kernel/sm8250/dts/qcom/sm8250-retroidpocket-rp5.dts`: RP5 `&battery` 5000 mAh.
+- `kernel/sm8250/dts/qcom/sm8250-retroidpocket-flip2.dts`: the lid wakes only on opening, so
+  closing it on a sleeping Flip 2 no longer wakes it (armada's Flip 2 dts).
 - Deleted: 20-version/0011 adc-tm5 (already in 7.2.x stable), 20-version/9999 (perf rust
   target, perf not built).
 

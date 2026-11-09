@@ -6,10 +6,13 @@ set -u
 
 MODE_FILE=/var/lib/pocknix/fan-mode
 GAME_MODE_FILE=/run/pocknix/game-mode
+CHARGING_FILE=/var/lib/pocknix/fan-charging
 
 FAN_PWM="$(ls /sys/class/hwmon/hwmon*/pwm1 2>/dev/null | head -1)"
 [ -n "${FAN_PWM}" ] || { echo "pocknix-fancontrol: no hwmon pwm1 fan found, exiting"; exit 0; }
 FAN_EN="${FAN_PWM}_enable"
+# pwm-fan holds this speed while the device charges in s2idle; 0 (the kernel default) stops it.
+FAN_SLEEP="${FAN_PWM}_sleep_charging"
 
 # gpu* not gpuss*: sm8550 names its zones gpuss-N-thermal, sm8250 gpu-top-thermal.
 SENSORS=""
@@ -19,6 +22,13 @@ for z in /sys/devices/virtual/thermal/thermal_zone*/; do
   esac
 done
 [ -n "${SENSORS}" ] || { echo "pocknix-fancontrol: no cpu/gpu thermal zones, exiting"; exit 0; }
+
+# Charging is read from the battery's status, not a supply's online flag: the RP5's TCPM supply
+# can stay online after an unplug in sleep.
+BATT_STATUS=""
+for p in /sys/class/power_supply/*; do
+  [ "$(cat "${p}/type" 2>/dev/null)" = Battery ] && { BATT_STATUS="${p}/status"; break; }
+done
 
 # PWM 0-255 against millidegC, highest first; only the thresholds differ per mode.
 SPEEDS="255 204 153 119 102 77 51 0"
@@ -54,8 +64,14 @@ FAN_MODE=1
 [ -e "${FAN_EN}" ] && echo "${FAN_MODE}" > "${FAN_EN}" 2>/dev/null
 trap '[ -e "${FAN_EN}" ] && echo 0 > "${FAN_EN}" 2>/dev/null; exit 0' INT TERM
 
-LAST=""; LAST_TH=0; LAST_MODE=""
+LAST=""; LAST_TH=0; LAST_MODE=""; LAST_OUT=""; LAST_SC=""
 while :; do
+  SC="$(cat "${CHARGING_FILE}" 2>/dev/null)"
+  case "${SC}" in ''|*[!0-9]*) SC=0 ;; esac
+  [ "${SC}" -gt 255 ] && SC=255
+  if [ -w "${FAN_SLEEP}" ] && [ "${SC}" != "${LAST_SC}" ]; then
+    echo "${SC}" > "${FAN_SLEEP}" 2>/dev/null && LAST_SC="${SC}"
+  fi
   MODE="$(effective_mode)"
   TEMPS="$(curve_temps "${MODE}")"
   TEMP="$(awk '{s+=$1;n++} END{printf "%d", (n? s/n : 0)}' ${SENSORS} 2>/dev/null)"
@@ -69,10 +85,15 @@ while :; do
      && [ "${TEMP}" -ge $((LAST_TH - HYST)) ]; then
     SPEED="${LAST}"; TH="${LAST_TH}"
   fi
-  if [ "${SPEED}" != "${LAST}" ]; then
-    echo "${SPEED}" > "${FAN_PWM}" 2>/dev/null
-    LAST="${SPEED}"; LAST_TH="${TH}"
+  LAST="${SPEED}"; LAST_TH="${TH}"; LAST_MODE="${MODE}"
+  # The charging floor stays out of LAST, so the hold above never keeps it after an unplug.
+  OUT="${SPEED}"
+  if [ "${SC}" -gt "${OUT}" ]; then
+    case "$(cat "${BATT_STATUS}" 2>/dev/null)" in Charging|Full|"Not charging") OUT="${SC}" ;; esac
   fi
-  LAST_MODE="${MODE}"
+  if [ "${OUT}" != "${LAST_OUT}" ]; then
+    echo "${OUT}" > "${FAN_PWM}" 2>/dev/null
+    LAST_OUT="${OUT}"
+  fi
   sleep 3
 done
