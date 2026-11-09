@@ -50,7 +50,7 @@
 
 - [Install guide](docs/install.md): flashing, the bootloader, first boot
 - [Install to internal storage](docs/install-to-internal.md): faster loads, uninstalling, restoring the stock bootloader
-- [Pocknix Control](docs/pocknix-control.md): per-game settings, fan curve, updates, controller calibration
+- [Pocknix Control](docs/pocknix-control.md): per-game settings, fan curve, adding non-Steam games, updates
 - [Emulation](docs/emulation-setup.md): ES-DE, supported systems, ROMs and BIOS
 - [Android apps](docs/waydroid.md): Waydroid
 - [Snapshots and rollback](docs/snapshots.md): recovering from a bad update

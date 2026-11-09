@@ -1,5 +1,6 @@
 import { MenuItem, afterPatch, fakeRenderComponent, findModuleChild, showModal } from "@decky/ui";
 import { GameSettingsModal } from "../components/GameSettingsModal";
+import { isPlainTile } from "./games";
 
 // LibraryContextMenu is not exported: reach it via classname marker -> `navigator:` wrapper ->
 // fake-render. Steam internals are unversioned: each step is guarded, so a change costs the item.
@@ -30,7 +31,7 @@ export function patchLibraryContextMenu(): () => void {
       try {
         const overview = this.props?.overview;
         const appid = overview?.appid;
-        if (!appid) return ret;
+        if (!appid || isPlainTile(String(Number(appid) >>> 0), String(overview?.display_name ?? ""))) return ret;
         const children = Array.isArray(ret) ? ret : ret?.props?.children;
         if (!Array.isArray(children)) return ret;
         if (children.some((child: any) => child?.key === "pocknix-settings")) return ret;

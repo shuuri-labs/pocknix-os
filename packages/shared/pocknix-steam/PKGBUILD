@@ -2,7 +2,7 @@
 # gamescope launcher, and the ARM-Proton compat-tool plumbing.
 pkgname=pocknix-steam
 pkgver=0.1.0
-pkgrel=79
+pkgrel=80
 pkgdesc="Native ARM64 Steam Big Picture (gamescope) for the RP6 — installer + launcher"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -15,7 +15,8 @@ license=('GPL-2.0-or-later')
 # Depends on pocknix-steam-full (a cycle pacman accepts): devices fielded before the metas
 # have this package but not the meta, and -Syu only installs a new name something requires.
 # Build with ./nodeps so makepkg -s does not drag the layer into the chroot.
-depends=('pocknix-steam-full' 'pocknix-bsp-common>=0.1.0-24'
+# bsp-common 36: cores.sh's pocknix_prime_core, which Fastest Core First reads.
+depends=('pocknix-steam-full' 'pocknix-bsp-common>=0.1.0-36'
          'gamescope' 'wget' 'unzip' 'curl' 'tar' 'gtk2' 'gdk-pixbuf2' 'openal' 'libcups' 'lsof'
          'noto-fonts' 'noto-fonts-cjk' 'noto-fonts-emoji' 'networkmanager' 'mangohud'
          'pocknix-steamos-shim' 'xorg-server-xvfb' 'ffmpeg' 'xorg-xprop'

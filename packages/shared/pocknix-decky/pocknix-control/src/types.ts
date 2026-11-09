@@ -6,14 +6,16 @@ export interface GameTweak {
   audioLatency?: string;
   /** Turnip series pin ("25.2"); pocknix-game-launch picks arch + point release. "" = default. */
   mesaVersion?: string;
-  /** Space-separated KEY=VALUE pairs applied at launch; launch options win over these. */
+  /** Shell-quoted KEY=VALUE words, added to the Default list (a game's value wins); launch options win over both. */
   envVars?: string;
-  /** Per-game fan curve override, applied for the game session only; "" = use global. */
+  /** Per-game fan curve override, applied for the game session only; "" = follow Default. */
   fanMode?: string;
-  /** Per-game scx_lavd mode override, applied for the game session only; "" = use global. */
+  /** Per-game scx_lavd mode override, applied for the game session only; "" = follow Default. */
   lavdMode?: string;
   /** pocknix-game-launch exports PROTON_USE_XALIA=0 unless false; absent = disabled. */
   disableXalia?: boolean;
+  /** true = pocknix-game-launch lists the prime core first in Wine's CPU topology. */
+  primeCoreFirst?: boolean;
   /** true = the touchscreen is inhibited while this game runs (pocknix_control/touch.py). */
   touchDisabled?: boolean;
   [key: string]: any;
@@ -51,6 +53,10 @@ export interface Config {
   mesaVersions?: DropdownChoice[];
   installedGames: InstalledGame[];
   led: LedConfig;
+  /** Pocknix tiles launched without pocknix-game-launch (Tools, Store): no per-game settings. */
+  plainTiles?: PlainTile[];
+  /** cores.sh's prime core ("7"); "" = the board has none, so the toggle is hidden. */
+  primeCore?: string;
   game?: GameRef | null;
   selectedGame?: GameRef | null;
 }
@@ -92,25 +98,6 @@ export interface SnapshotStatus {
   snapshots: SnapshotInfo[];
 }
 
-export interface ConfigExportResult {
-  /** true = target file already exists and nothing was written (rename/overwrite flow). */
-  exists: boolean;
-  base: string;
-  path: string;
-}
-
-export interface ConfigPreview {
-  device: string;
-  exported: string;
-  games: { appid: string; name: string; protonTool: string }[];
-}
-
-export interface ConfigImportResult {
-  protonTool: string;
-  fexProfile?: string;
-  enabled?: boolean;
-}
-
 export interface LedSide {
   r: number;
   g: number;
@@ -130,34 +117,8 @@ export interface LedConfig {
   right: LedSide;
 }
 
-export type ShareStatus = {
-  installed: boolean;
-  on: boolean;
-  active: boolean;
-};
-
-export interface CalibrationLive {
-  lx: number;
-  ly: number;
-  rx: number;
-  ry: number;
-  lt: number;
-  rt: number;
-}
-
-export interface CalibrationStatus {
-  available: boolean;
-  backend: string;
-  saved: boolean;
-  phase: "idle" | "capture" | "review";
-  step: number;
-  steps: number;
-  progress: number;
-  error: string;
-  result: Record<string, number>;
-  control?: string;
-  kind?: "stick" | "trigger";
-  direction?: string;
-  stage?: "push" | "release";
-  live?: CalibrationLive;
+export interface PlainTile {
+  name: string;
+  exe: string;
+  args: string;
 }

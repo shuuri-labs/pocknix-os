@@ -1,6 +1,9 @@
 // Every Steam game and every non-Steam shortcut (emulator tiles, ROM managers, a Windows .exe on
 // Proton) launches through pocknix-game-launch, which applies the per-game tweaks at launch
-// time, so a settings change never has to touch launch options.
+// time, so a settings change never has to touch launch options. Pocknix's own settings apps
+// (launch=plain tiles) are the exception: they never take game tweaks.
+
+import type { GameRef, PlainTile } from "../types";
 
 // Bare name: Steam runs launch options through a shell with the system PATH (/usr/bin).
 const LAUNCHER = "pocknix-game-launch";
@@ -8,14 +11,19 @@ const COMMAND = "%command%";
 // Written by Pocknix Control before the launcher existed; the launcher exports it itself now.
 const FEX_TOKEN = /STEAM_COMPAT_FEX_CONFIG=("[^"]*"|\S*)\s*/g;
 
-function getLaunchOptions(appid: string): Promise<string | null> {
+interface ShortcutDetails {
+  exe: string;
+  launchOptions: string;
+}
+
+function getDetails(appid: string): Promise<ShortcutDetails | null> {
   return new Promise((resolve) => {
     const apps = window.SteamClient?.Apps;
     if (!apps?.RegisterForAppDetails) return resolve(null);
     let registration: any;
     let timer: number | undefined;
     let done = false;
-    const finish = (value: string | null) => {
+    const finish = (value: ShortcutDetails | null) => {
       if (done) return;
       done = true;
       if (timer !== undefined) window.clearTimeout(timer);
@@ -26,7 +34,7 @@ function getLaunchOptions(appid: string): Promise<string | null> {
     timer = window.setTimeout(() => finish(null), 3000);
     try {
       registration = apps.RegisterForAppDetails(Number(appid), (details: any) => {
-        finish(String(details?.strLaunchOptions ?? ""));
+        finish({ exe: String(details?.strShortcutExe ?? "").replace(/^"|"$/g, ""), launchOptions: String(details?.strLaunchOptions ?? "") });
       });
     } catch (error) {
       finish(null);
@@ -47,15 +55,30 @@ export function wrapLaunchOptions(current: string): string | null {
 export async function ensureLaunchWrapper(appid: string): Promise<boolean> {
   const apps = window.SteamClient?.Apps;
   if (!apps?.SetAppLaunchOptions) return false;
-  const current = await getLaunchOptions(appid);
-  if (current === null) return false;
-  const next = wrapLaunchOptions(current);
+  const details = await getDetails(appid);
+  if (details === null) return false;
+  const next = wrapLaunchOptions(details.launchOptions);
   if (next !== null) apps.SetAppLaunchOptions(Number(appid), next);
   return true;
 }
 
 export async function wrapShortcuts(appids: string[]): Promise<void> {
   for (const appid of appids) await ensureLaunchWrapper(appid);
+}
+
+/** pocknix-tiles finds a tile by exe + launch options, so an older sweep's wrapper hid it. Only an
+ *  exact wrapper + manifest args match is undone; anything else on the tile is the user's. */
+export async function unwrapPlainTiles(tiles: PlainTile[], shortcuts: GameRef[]): Promise<void> {
+  const apps = window.SteamClient?.Apps;
+  if (!apps?.SetAppLaunchOptions) return;
+  for (const shortcut of shortcuts) {
+    const details = await getDetails(shortcut.appid);
+    if (!details) continue;
+    const tile = tiles.find((t) => t.name === shortcut.name && t.exe === details.exe);
+    if (tile && details.launchOptions.trim() === `${LAUNCHER} ${COMMAND} ${tile.args}`.trim()) {
+      apps.SetAppLaunchOptions(Number(shortcut.appid), tile.args);
+    }
+  }
 }
 
 export async function wrapAllGames(appids: string[]): Promise<void> {

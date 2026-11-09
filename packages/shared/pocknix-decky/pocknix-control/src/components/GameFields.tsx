@@ -1,7 +1,9 @@
-import { ButtonItem, ConfirmModal, PanelSectionRow, TextField, ToggleField, showModal } from "@decky/ui";
+import { ButtonItem, ConfirmModal, PanelSection, PanelSectionRow, ToggleField, showModal } from "@decky/ui";
 import { useEffect, useState } from "react";
 import { availableCompatTools, registerForCompatTool, setCompatTool } from "../lib/compat";
-import type { CompatTool } from "../lib/compat";
+import type { CompatPick, CompatTool } from "../lib/compat";
+import { EnvVarsField } from "./EnvVars";
+import { APPLIES_NEXT_LAUNCH, APPLIES_NOW, timed } from "../lib/applies";
 import { SelectEdit } from "./widgets";
 import type { Config } from "../types";
 
@@ -23,49 +25,28 @@ export const lavdOptions = [
   { data: "autopilot", label: "Autopilot" },
   { data: "performance", label: "Performance" },
 ];
-const globalChoice = { data: "", label: "Use global" };
 
-export function EnvVarsModal({ initial, onSave, closeModal }: { initial: string; onSave: (value: string) => void; closeModal?: () => void }) {
-  const [value, setValue] = useState(initial);
-  return (
-    <ConfirmModal
-      strTitle="Environment Variables"
-      strDescription={'Space-separated KEY=VALUE pairs; quote values with spaces, e.g. DXVK_CONFIG="dxgi.customDeviceDesc = GTX 480". Steam launch options win over these.'}
-      strOKButtonText="Save"
-      onCancel={() => closeModal?.()}
-      onOK={() => {
-        onSave(value.trim());
-        closeModal?.();
-      }}
-    >
-      <TextField label="Variables" value={value} onChange={(event) => setValue(event.target.value)} />
-    </ConfirmModal>
-  );
+type Patch = (patch: Record<string, any>) => void;
+type FieldProps = { values: Record<string, any>; patch: Patch; live: boolean };
+
+export function Note({ text }: { text: string }) {
+  return <div style={{ padding: "4px 16px 8px", fontSize: "12px", lineHeight: "16px", opacity: 0.62 }}>{text}</div>;
 }
 
-export function EnvVarsButton({ value, onSave }: { value: string; onSave: (next: string) => void }) {
-  return (
-    <PanelSectionRow>
-      <ButtonItem
-        layout="below"
-        description={value ? value : "None set"}
-        onClick={() => showModal(<EnvVarsModal initial={value} onSave={onSave} />)}
-      >
-        Environment Variables
-      </ButtonItem>
-    </PanelSectionRow>
-  );
+export function GameOnlyToggle({ checked, onChange }: { checked: boolean; onChange: (on: boolean) => void }) {
+  return <ToggleField label="Use Per-Game Settings" checked={checked} onChange={onChange} />;
 }
 
-export function XaliaToggle({ values, patch }: {
-  values: Record<string, any>;
-  patch: (patch: Record<string, any>) => void;
-}) {
+export function XaliaToggle({ values, patch, live }: FieldProps) {
   return (
     <PanelSectionRow>
       <ToggleField
         label="Disable Xalia"
-        description="Proton's controller-navigation helper; costs CPU in every game"
+        description={timed(
+          live,
+          APPLIES_NEXT_LAUNCH,
+          "Saves CPU in every game. Turn off for a game whose menus only work with a mouse, if you can't tap the screen (e.g. docked).",
+        )}
         checked={values.disableXalia !== false}
         onChange={(checked) => patch({ disableXalia: checked })}
       />
@@ -73,13 +54,12 @@ export function XaliaToggle({ values, patch }: {
   );
 }
 
-/** Applies live: the backend re-syncs the running game's touchscreen on every save. */
-export function TouchField({ values, patch }: { values: Record<string, any>; patch: (patch: Record<string, any>) => void }) {
+export function TouchField({ values, patch, live }: FieldProps) {
   return (
     <PanelSectionRow>
       <ToggleField
         label="Disable Touchscreen"
-        description="While the game is running, to stop stray touches"
+        description={timed(live, APPLIES_NOW, "Stops stray touches during play.")}
         checked={values.touchDisabled === true}
         onChange={(on) => patch({ touchDisabled: on })}
       />
@@ -87,47 +67,113 @@ export function TouchField({ values, patch }: { values: Record<string, any>; pat
   );
 }
 
-/** Per-game fan/scheduler overrides ("" = follow the global mode). */
-export function PerfFields({ values, patch }: {
-  values: Record<string, any>;
-  patch: (patch: Record<string, any>) => void;
-}) {
-  const perGameFan = [globalChoice, ...fanOptions];
-  const perGameLavd = [globalChoice, ...lavdOptions];
-  const fanValue = perGameFan.some((option) => option.data === String(values.fanMode ?? "")) ? String(values.fanMode ?? "") : "";
-  const lavdValue = perGameLavd.some((option) => option.data === String(values.lavdMode ?? "")) ? String(values.lavdMode ?? "") : "";
+export function PrimeCoreToggle({ primeCore, values, patch, live }: FieldProps & { primeCore?: string }) {
+  if (!primeCore) return null;
   return (
-    <>
-      <SelectEdit label="CPU Scheduler" value={lavdValue} options={perGameLavd} onChange={(id) => patch({ lavdMode: id })} />
-      <SelectEdit label="Fan Curve" value={fanValue} options={perGameFan} onChange={(id) => patch({ fanMode: id })} />
-    </>
+    <PanelSectionRow>
+      <ToggleField
+        label="Fastest Core First"
+        description={timed(
+          live,
+          APPLIES_NEXT_LAUNCH,
+          `Gives the game the fastest core (CPU ${primeCore}) as its first one. Can help games that do most of their work on one core.`,
+        )}
+        checked={values.primeCoreFirst === true}
+        onChange={(on) => patch({ primeCoreFirst: on })}
+      />
+    </PanelSectionRow>
   );
 }
 
-/** The per-game tweak controls, shared by the Games tab and the library context-menu modal. */
-export function TweakFields({ config, appid, values, patch }: {
+const pick = (options: { data: string }[], value: unknown) => {
+  const v = String(value ?? "");
+  return options.some((option) => option.data === v) ? v : "";
+};
+const labelOf = (options: { data: string; label: string }[], value: string) => options.find((o) => o.data === value)?.label || value;
+const withAllGames = (options: { data: string; label: string }[], current: string) => [
+  { data: "", label: `Default (${labelOf(options, current)})` },
+  ...options,
+];
+
+/** Per-game override ("" = follow Default); the backend retunes a running game on save. */
+export function FanField({ config, values, patch, live }: FieldProps & { config: Config }) {
+  const options = withAllGames(fanOptions, config.fanMode);
+  return (
+    <SelectEdit
+      label="Fan Curve"
+      description={timed(live, APPLIES_NOW)}
+      value={pick(options, values.fanMode)}
+      options={options}
+      onChange={(id) => patch({ fanMode: id })}
+    />
+  );
+}
+
+export function SchedulerField({ config, values, patch, live }: FieldProps & { config: Config }) {
+  const options = withAllGames(lavdOptions, config.lavdMode);
+  return (
+    <SelectEdit
+      label="CPU Scheduler"
+      description={timed(live, APPLIES_NOW)}
+      value={pick(options, values.lavdMode)}
+      options={options}
+      onChange={(id) => patch({ lavdMode: id })}
+    />
+  );
+}
+
+function ResetGame({ name, onReset }: { name: string; onReset: () => void }) {
+  return (
+    <PanelSection>
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          onClick={() =>
+            showModal(
+              <ConfirmModal
+                strTitle={`Reset ${name}?`}
+                strDescription="Clears this game's own settings so it uses Default again. Proton Version is Steam's setting and stays as it is."
+                strOKButtonText="Reset"
+                onOK={onReset}
+              />,
+            )
+          }
+        >
+          Reset This Game
+        </ButtonItem>
+      </PanelSectionRow>
+    </PanelSection>
+  );
+}
+
+/** Every per-game control, shared by the Games tab and the library context-menu modal. */
+export function TweakFields({ config, appid, name, values, patch, live, onReset }: {
   config: Config;
   appid: string;
+  name: string;
   values: Record<string, any>;
-  patch: (patch: Record<string, any>) => void;
+  patch: Patch;
+  /** This game is running, so a change can apply now. */
+  live: boolean;
+  onReset: () => void;
 }) {
   // Proton pick is Steam's own per-game compat setting (see lib/compat.ts) — read live and
   // written straight back to Steam, so it mirrors the game-properties dropdown both ways.
   const [compatTools, setCompatTools] = useState<CompatTool[]>([]);
-  const [currentTool, setCurrentTool] = useState("");
+  const [compat, setCompat] = useState<CompatPick>({ tool: "", label: "" });
   useEffect(() => {
     setCompatTools([]);
-    setCurrentTool("");
+    setCompat({ tool: "", label: "" });
     if (!appid) return;
-    let live = true;
+    let mounted = true;
     availableCompatTools(appid).then((tools) => {
-      if (live) setCompatTools(tools);
+      if (mounted) setCompatTools(tools);
     });
-    const unregister = registerForCompatTool(appid, (tool) => {
-      if (live) setCurrentTool(tool);
+    const unregister = registerForCompatTool(appid, (next) => {
+      if (mounted) setCompat(next);
     });
     return () => {
-      live = false;
+      mounted = false;
       unregister();
     };
   }, [appid]);
@@ -135,7 +181,8 @@ export function TweakFields({ config, appid, values, patch }: {
     { data: "", label: "Steam default" },
     ...compatTools.map((tool) => ({ data: tool.name, label: tool.label })),
   ];
-  const compatValue = compatOptions.some((option) => option.data === currentTool) ? currentTool : "";
+  const compatValue = compatOptions.some((option) => option.data === compat.tool) ? compat.tool : "";
+  const steamChoice = !compatValue && compat.label ? `Steam picks ${compat.label}.` : undefined;
 
   const presets = config.fexProfiles || {};
   const storedProfile = values.fexProfile as string | undefined;
@@ -146,29 +193,49 @@ export function TweakFields({ config, appid, values, patch }: {
   const mesaOptions = config.mesaVersions?.length ? config.mesaVersions : [{ data: "", label: "System default" }];
   const storedMesa = String(values.mesaVersion ?? "");
   const mesaValue = mesaOptions.some((option) => option.data === storedMesa) ? storedMesa : "";
+  const nextLaunch = timed(live, APPLIES_NEXT_LAUNCH);
 
   return (
     <>
-      <SelectEdit
-        label="Proton Version"
-        value={compatValue}
-        options={compatOptions}
-        onChange={(name) => {
-          setCurrentTool(String(name));
-          setCompatTool(appid, String(name));
-        }}
-      />
-      <SelectEdit
-        label="FEX Preset"
-        value={fexValue}
-        options={fexOptions}
-        onChange={(id) => patch({ fexProfile: id })}
-      />
-      <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patch({ audioLatency: id })} />
-      <SelectEdit label="Mesa Version" value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
-      <XaliaToggle values={values} patch={patch} />
-      <TouchField values={values} patch={patch} />
-      <EnvVarsButton value={String(values.envVars ?? "")} onSave={(next) => patch({ envVars: next })} />
+      {live ? null : <Note text="Changes apply when you start the game." />}
+      <PanelSection title="PERFORMANCE">
+        <FanField config={config} values={values} patch={patch} live={live} />
+        <SchedulerField config={config} values={values} patch={patch} live={live} />
+      </PanelSection>
+      <PanelSection title="GAME TWEAKS">
+        <SelectEdit
+          label="Proton Version"
+          description={timed(live, APPLIES_NEXT_LAUNCH, steamChoice)}
+          value={compatValue}
+          options={compatOptions}
+          onChange={(tool) => {
+            setCompat((current) => ({ ...current, tool: String(tool) }));
+            setCompatTool(appid, String(tool));
+          }}
+        />
+        <SelectEdit label="FEX Preset" description={nextLaunch} value={fexValue} options={fexOptions} onChange={(id) => patch({ fexProfile: id })} />
+        <SelectEdit label="Mesa Version" description={nextLaunch} value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
+        <SelectEdit label="Audio Buffer" description={nextLaunch} value={audioValue} options={audioLatencyOptions} onChange={(id) => patch({ audioLatency: id })} />
+        <TouchField values={values} patch={patch} live={live} />
+        <XaliaToggle values={values} patch={patch} live={live} />
+      </PanelSection>
+      <PanelSection title="ADVANCED">
+        <PrimeCoreToggle primeCore={config.primeCore} values={values} patch={patch} live={live} />
+        <EnvVarsField
+          own={config.tweaks.games[appid]?.envVars}
+          inherited={config.tweaks.global.envVars}
+          live={live}
+          onChange={(envVars) => patch({ envVars })}
+        />
+      </PanelSection>
+      <ResetGame name={name} onReset={onReset} />
     </>
   );
+}
+
+/** The fields that undo a game's own settings, keeping its saved name. */
+export function resetFields(config: Config, appid: string): Record<string, any> {
+  const own = config.tweaks.games[appid] || {};
+  const cleared: Record<string, any> = Object.fromEntries(Object.keys(own).filter((key) => key !== "name").map((key) => [key, null]));
+  return { ...cleared, enabled: false };
 }

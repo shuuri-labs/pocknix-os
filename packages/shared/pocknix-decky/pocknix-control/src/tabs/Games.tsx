@@ -1,16 +1,18 @@
-import { PanelSection, ToggleField } from "@decky/ui";
+import { PanelSection } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
 import { setFanMode, setLavdMode } from "../backend";
-import { ConfigSection } from "../components/ConfigSection";
-import { EnvVarsButton, PerfFields, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions } from "../components/GameFields";
+import { GameOnlyToggle, Note, PrimeCoreToggle, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions, resetFields } from "../components/GameFields";
+import { APPLIES_NEXT_LAUNCH, APPLIES_NOW, timed } from "../lib/applies";
+import { parseEnvVars } from "../lib/envVars";
+import { EnvVarsField } from "../components/EnvVars";
 import { SelectEdit } from "../components/widgets";
 import { availableGames, editTargetOptions } from "../lib/games";
-import { clone } from "../lib/util";
 import type { Config } from "../types";
 
-export function Games({ config, setConfig, reload }: {
+export function Games({ config, setConfig, patch, reload }: {
   config: Config;
   setConfig: Dispatch<SetStateAction<Config | null>>;
+  patch: (appid: string, fields: Record<string, any>) => void;
   reload: () => void;
 }) {
   const runtimeGame = config.game;
@@ -21,31 +23,12 @@ export function Games({ config, setConfig, reload }: {
   const editingDefault = !game?.appid;
   const perGameEnabled = !!(game?.appid && gameSettings.enabled === true);
   const values = editingDefault || !perGameEnabled ? tweaks.global : { ...tweaks.global, ...gameSettings };
-  const patchSettings = (patch: Record<string, any>) => {
-    setConfig((current) => {
-      if (!current) return current;
-      const next = clone(current);
-      if (editingDefault) {
-        Object.assign(next.tweaks.global, patch);
-      } else if (perGameEnabled) {
-        const existing = next.tweaks.games[game!.appid] || {};
-        next.tweaks.games[game!.appid] = { ...existing, enabled: true, name: game!.name || "", ...patch };
-      }
-      return next;
-    });
+  const patchSettings = (fields: Record<string, any>) => {
+    if (editingDefault) patch("", fields);
+    else if (perGameEnabled) patch(game!.appid, { ...fields, enabled: true, name: game!.name || "" });
   };
   const setPerGameEnabled = (enabled: boolean) => {
-    if (!game?.appid) return;
-    setConfig((current) => {
-      if (!current) return current;
-      const next = clone(current);
-      next.tweaks.games[game.appid] = {
-        ...(next.tweaks.games[game.appid] || {}),
-        enabled,
-        name: game.name || "",
-      };
-      return next;
-    });
+    if (game?.appid) patch(game.appid, { enabled, name: game.name || "" });
   };
   // "" is the explicit Default target, not "nothing selected"; store a sentinel
   // so it doesn't fall back to the running game in the selectedGame derivation.
@@ -59,8 +42,7 @@ export function Games({ config, setConfig, reload }: {
     setConfig((current) => (current ? { ...current, selectedGame: saved || null } : current));
   };
 
-  // Default target: FEX/audio/env edit tweaks.global; fan + scheduler are the LIVE system
-  // modes, applied immediately through the backend.
+  // Default's fan and scheduler are the system modes, not tweaks.global.
   const applyMode = async (setter: (mode: string) => Promise<Config>, mode: string) => {
     try {
       const next = await setter(mode);
@@ -75,49 +57,64 @@ export function Games({ config, setConfig, reload }: {
   const fexOptions = Object.entries(presets).map(([id, profile]) => ({ data: id, label: profile.label }));
   const storedLatency = String(values.audioLatency ?? "");
   const audioValue = audioLatencyOptions.some((option) => option.data === storedLatency) ? storedLatency : "";
+  // Default reaches whatever is running; a game's own settings only reach that game.
+  const live = !!runtimeGame?.appid && (editingDefault || runtimeGame.appid === game?.appid);
+  const nextLaunch = timed(live, APPLIES_NEXT_LAUNCH);
 
-  const showFields = editingDefault || perGameEnabled;
   return (
     <>
       <PanelSection title="PERFORMANCE & GAME TWEAKS">
         <SelectEdit label="Game" value={game?.appid || ""} options={editTargetOptions(config)} onChange={setSelectedGame} />
-        {!editingDefault ? <ToggleField label="Use Per-Game Settings" checked={perGameEnabled} onChange={setPerGameEnabled} /> : null}
+        {!editingDefault ? <GameOnlyToggle checked={perGameEnabled} onChange={setPerGameEnabled} /> : null}
       </PanelSection>
-      {showFields ? (
-        <PanelSection title="PERFORMANCE">
-          {editingDefault ? (
-            <>
-              <SelectEdit label="CPU Scheduler" value={config.lavdMode} options={lavdOptions} onChange={(mode) => applyMode(setLavdMode, mode)} />
-              <SelectEdit label="Fan Curve" value={config.fanMode} options={fanOptions} onChange={(mode) => applyMode(setFanMode, mode)} />
-            </>
-          ) : (
-            <PerfFields values={values} patch={patchSettings} />
-          )}
-        </PanelSection>
-      ) : null}
-      {showFields ? (
-        <PanelSection title="GAME TWEAKS">
-          <div className="pocknix-note">Changes apply on next game launch</div>
-          {editingDefault ? (
-            <>
-              <SelectEdit
-                label="FEX Preset"
-                value={fexValue}
-                options={fexOptions}
-                onChange={(id) => patchSettings({ fexProfile: id })}
-              />
-              <SelectEdit label="Audio Buffer" value={audioValue} options={audioLatencyOptions} onChange={(id) => patchSettings({ audioLatency: id })} />
-              <XaliaToggle values={values} patch={patchSettings} />
-              <TouchField values={values} patch={patchSettings} />
-              <EnvVarsButton value={String(values.envVars ?? "")} onSave={(next) => patchSettings({ envVars: next })} />
-            </>
-          ) : (
-            <TweakFields config={config} appid={game!.appid} values={values} patch={patchSettings} />
-          )}
-        </PanelSection>
-      ) : null}
-      {!editingDefault && perGameEnabled ? (
-        <ConfigSection game={{ appid: game!.appid, name: game!.name || "" }} reload={reload} />
+      {editingDefault ? (
+        <>
+          {live ? null : <Note text="Changes apply to every game you start." />}
+          <PanelSection title="PERFORMANCE">
+            <SelectEdit
+              label="Fan Curve"
+              description={live ? APPLIES_NOW : "Outside games too."}
+              value={config.fanMode}
+              options={fanOptions}
+              onChange={(mode) => applyMode(setFanMode, mode)}
+            />
+            <SelectEdit
+              label="CPU Scheduler"
+              description={live ? APPLIES_NOW : "Outside games too."}
+              value={config.lavdMode}
+              options={lavdOptions}
+              onChange={(mode) => applyMode(setLavdMode, mode)}
+            />
+          </PanelSection>
+          <PanelSection title="GAME TWEAKS">
+            <SelectEdit label="FEX Preset" description={nextLaunch} value={fexValue} options={fexOptions} onChange={(id) => patchSettings({ fexProfile: id })} />
+            <SelectEdit
+              label="Audio Buffer"
+              description={nextLaunch}
+              value={audioValue}
+              options={audioLatencyOptions}
+              onChange={(id) => patchSettings({ audioLatency: id })}
+            />
+            <TouchField values={values} patch={patchSettings} live={live} />
+            <XaliaToggle values={values} patch={patchSettings} live={live} />
+          </PanelSection>
+          {config.primeCore || parseEnvVars(tweaks.global.envVars).length ? (
+            <PanelSection title="ADVANCED">
+              <PrimeCoreToggle primeCore={config.primeCore} values={values} patch={patchSettings} live={live} />
+              <EnvVarsField own={tweaks.global.envVars} canAdd={false} live={live} onChange={(envVars) => patchSettings({ envVars })} />
+            </PanelSection>
+          ) : null}
+        </>
+      ) : perGameEnabled ? (
+        <TweakFields
+          config={config}
+          appid={game!.appid}
+          name={game!.name || `App ${game!.appid}`}
+          values={values}
+          patch={patchSettings}
+          live={live}
+          onReset={() => patch(game!.appid, resetFields(config, game!.appid))}
+        />
       ) : null}
     </>
   );

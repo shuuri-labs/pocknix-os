@@ -1,5 +1,6 @@
 import copy
 import json
+import threading
 from pathlib import Path
 
 from .system import atomically_write
@@ -63,6 +64,15 @@ def load_tweaks():
     return data
 
 
+def settings_for(tweaks, appid):
+    # pocknix-game-launch's merge minus its envVars rule: a game's values count only while it is enabled.
+    settings = dict(tweaks.get("global") or {})
+    game = (tweaks.get("games") or {}).get(str(appid)) if appid else None
+    if isinstance(game, dict) and game.get("enabled") is True:
+        settings.update(game)
+    return settings
+
+
 def sanitize_tweaks(data):
     # pocknix-game-launch reads this at every launch, so a bad key here breaks launching.
     if not isinstance(data, dict):
@@ -80,5 +90,28 @@ def sanitize_tweaks(data):
     return clean
 
 
+_write_lock = threading.Lock()
+
+
 def save_tweaks(data):
     atomically_write(TWEAKS_CONFIG, json.dumps(sanitize_tweaks(data), indent=2, sort_keys=True) + "\n", 0o644)
+
+
+def patch_tweaks(appid, fields):
+    # Merges only the changed fields: the QAM panel and the library modal each hold their own
+    # copy, so writing a whole object back clobbers the other's edits. None removes a key.
+    appid = str(appid or "")
+    if appid and not appid.isdigit():
+        raise ValueError(f"bad appid: {appid!r}")
+    if not isinstance(fields, dict):
+        raise ValueError("fields must be an object")
+    with _write_lock:
+        data = load_tweaks()
+        target = data["games"].setdefault(appid, {}) if appid else data["global"]
+        for key, value in fields.items():
+            if value is None:
+                target.pop(key, None)
+            else:
+                target[key] = value
+        save_tweaks(data)
+        return data

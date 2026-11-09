@@ -1,8 +1,8 @@
 import { definePlugin } from "@decky/api";
 import { Content } from "./Content";
 import { getConfig } from "./backend";
-import { installedSteamGames, isGame, nonSteamShortcuts } from "./lib/games";
-import { registerDownloadWrapper, wrapAllGames, wrapShortcuts } from "./lib/launchOptions";
+import { installedSteamGames, isGame, nonSteamShortcuts, plainTileShortcuts } from "./lib/games";
+import { registerDownloadWrapper, unwrapPlainTiles, wrapAllGames, wrapShortcuts } from "./lib/launchOptions";
 import { patchLibraryContextMenu } from "./lib/contextMenu";
 import { registerTouchLifetime } from "./lib/touch";
 
@@ -11,8 +11,11 @@ export default definePlugin(() => {
   const unregisterTouch = registerTouchLifetime();
   const unregisterDownloads = registerDownloadWrapper((appid) => isGame(appid));
   getConfig()
-    .then((config) => wrapAllGames(installedSteamGames(config)))
-    .then(() => wrapShortcuts(nonSteamShortcuts().map((shortcut) => shortcut.appid)))
+    .then(async (config) => {
+      await wrapAllGames(installedSteamGames(config));
+      await wrapShortcuts(nonSteamShortcuts().map((shortcut) => shortcut.appid));
+      await unwrapPlainTiles(config.plainTiles || [], plainTileShortcuts());
+    })
     .catch(() => {});
   return {
     name: "Pocknix Control",

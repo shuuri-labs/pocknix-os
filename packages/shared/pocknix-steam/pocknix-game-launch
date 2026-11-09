@@ -34,6 +34,7 @@ LAVD_MODES = ("autopilot", "performance", "balanced", "powersave")
 # them, a launch option that already changed them wins.
 PIN_KEYS = ("STEAM_LAUNCH_WRAPPER_AFFINITY_LIST", "WINE_CPU_TOPOLOGY", "PROTON_CPU_TOPOLOGY")
 PIN_ENV_SNIPPET = '. /usr/lib/pocknix/pocknix-steam-env; env'
+TOPOLOGY_KEYS = ("WINE_CPU_TOPOLOGY", "PROTON_CPU_TOPOLOGY")
 
 
 def log(msg):
@@ -112,7 +113,11 @@ def merged_settings(tweaks, game_id):
     if game_id:
         game_settings = tweaks.get("games", {}).get(str(game_id))
         if isinstance(game_settings, dict) and game_settings.get("enabled") is True:
+            base_env = settings.get("envVars")
             settings.update(game_settings)
+            # A game's variables add to Default's; apply_env_vars keeps the first of a key, so they go first.
+            if isinstance(base_env, str) and base_env and isinstance(game_settings.get("envVars"), str):
+                settings["envVars"] = f"{game_settings['envVars']} {base_env}"
     return settings
 
 
@@ -252,33 +257,34 @@ def apply_mesa_version(settings, tool):
 
 
 def apply_game_modes(settings):
-    # Fan curve / scheduler tagged with our pid: the launch chain execs in place, so a dead pid
-    # reverts the pick with no cleanup. "-" = field not overridden.
+    # Our pid outlives the exec, so a dead pid reverts with no cleanup. "-" = not overridden;
+    # written even then so Pocknix Control can find the running game and retune it.
     fan = str(settings.get("fanMode", "") or "").strip()
     lavd = str(settings.get("lavdMode", "") or "").strip()
     fan = fan if fan in FAN_MODES else "-"
     lavd = lavd if lavd in LAVD_MODES else "-"
-    if fan == "-" and lavd == "-":
-        return
     try:
         GAME_MODE_FILE.write_text(f"{os.getpid()} {fan} {lavd}\n")
     except OSError as exc:
         log(f"failed to write game mode override: {exc}")
 
 
-def pin_defaults():
+def host_sh(snippet):
     try:
-        out = subprocess.run(["/bin/sh", "-c", PIN_ENV_SNIPPET], capture_output=True, text=True,
-                             timeout=5, env={"PATH": "/usr/bin:/bin"}).stdout
+        return subprocess.run(["/bin/sh", "-c", snippet], capture_output=True, text=True,
+                              timeout=5, env={"PATH": "/usr/bin:/bin"}).stdout
     except (OSError, subprocess.SubprocessError):
-        return {}
-    pairs = (line.partition("=") for line in out.splitlines())
+        return ""
+
+
+def pin_defaults():
+    pairs = (line.partition("=") for line in host_sh(PIN_ENV_SNIPPET).splitlines())
     return {k: v for k, _, v in pairs if k in PIN_KEYS}
 
 
 def apply_env_vars(settings):
-    # Free-form per-game env ("Environment Variables" tweak). shlex so quoted values with spaces
-    # survive. Launch options win; we only fill in unset, except over our own pin defaults.
+    # shlex so quoted values with spaces survive. Launch options win: only unset keys are filled,
+    # plus our own pin defaults, and the first of a repeated key counts.
     raw = settings.get("envVars")
     if not isinstance(raw, str) or not raw.strip():
         return
@@ -295,6 +301,24 @@ def apply_env_vars(settings):
             os.environ[key] = value
         else:
             os.environ.setdefault(key, value)
+
+
+def apply_prime_first(settings):
+    # Wine's CPU 0 = the first core listed; many engines put their main thread there. Only our own
+    # pin default is reordered, so a launch option or envVars topology stays as given.
+    if settings.get("primeCoreFirst") is not True:
+        return
+    prime = host_sh(". /usr/lib/pocknix/cores.sh; pocknix_prime_core").strip()
+    if not prime.isdigit():
+        return
+    defaults = pin_defaults()
+    for key in TOPOLOGY_KEYS:
+        value = os.environ.get(key, "")
+        count, sep, cpus = value.partition(":")
+        listed = cpus.split(",")
+        if not sep or value != defaults.get(key) or prime not in listed:
+            continue
+        os.environ[key] = f"{count}:" + ",".join([prime] + [c for c in listed if c != prime])
 
 
 def apply_xalia(settings):
@@ -345,6 +369,7 @@ def main():
     for step in (lambda: apply_audio_latency(settings),
                  lambda: apply_mesa_version(settings, tool),
                  lambda: apply_env_vars(settings),
+                 lambda: apply_prime_first(settings),
                  lambda: apply_xalia(settings),
                  lambda: apply_game_modes(settings),
                  lambda: heal_arm_prefix(tool)):

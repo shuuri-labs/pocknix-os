@@ -106,12 +106,25 @@ export async function availableCompatTools(appid: string): Promise<CompatTool[]>
   }
 }
 
-/** Live view of the game's current tool; fires again when it changes anywhere (incl. Steam's UI). */
-export function registerForCompatTool(appid: string, onChange: (tool: string) => void): () => void {
+export interface CompatPick {
+  /** "" when Steam chooses the tool itself. */
+  tool: string;
+  /** The tool the game will actually run with, picked or not. */
+  label: string;
+}
+
+// Steam reports its own choice in the same fields as a user's pick; only the priority tells them
+// apart, and a pick made in Properties (or by SpecifyCompatTool) is saved at 250.
+const USER_PICK_PRIORITY = 250;
+
+/** Live view of the game's tool; fires again when it changes anywhere (incl. Steam's UI). */
+export function registerForCompatTool(appid: string, onChange: (pick: CompatPick) => void): () => void {
   const apps = window.SteamClient?.Apps;
   if (!apps?.RegisterForAppDetails) return () => {};
   const registration = apps.RegisterForAppDetails(Number(appid), (details: any) => {
-    onChange(String(details?.strCompatToolName ?? ""));
+    const tool = String(details?.strCompatToolName ?? "");
+    const label = String(details?.strCompatToolDisplayName || tool);
+    onChange({ tool: Number(details?.nCompatToolPriority) >= USER_PICK_PRIORITY ? tool : "", label });
   });
   return () => registration?.unregister?.();
 }

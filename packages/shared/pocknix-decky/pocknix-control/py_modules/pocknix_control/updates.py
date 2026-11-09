@@ -23,7 +23,7 @@ _check_lock = threading.Lock()
 
 
 def _pacman(args, timeout):
-    # pacman under PID 1, like every host tool (see sharing.py).
+    # pacman under PID 1, outside the loader's cgroup: a loader restart cannot kill it mid-run.
     return run_cmd(
         ["systemd-run", "--quiet", "--collect", "--wait", "--pipe", "/usr/bin/pacman", *args],
         timeout=timeout,

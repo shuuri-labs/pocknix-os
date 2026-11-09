@@ -21,8 +21,7 @@ WINEDLLOVERRIDES="icu=d" DOTNET_GCHeapHardLimit=0x400000000 pocknix-game-launch 
 ```
 
 An environment variable placed after `pocknix-game-launch` stops the game from starting.
-A variable set in the launch options wins over the same variable in Pocknix Control's
-**Environment Variables** tweak.
+A variable set in the launch options wins over the same variable set by Pocknix Control.
 
 `pocknix-game-launch` always goes directly in front of `%command%`, even when `%command%` sits
 inside quotes, as in launch options that rewrite the game's command:

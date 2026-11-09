@@ -3,13 +3,13 @@
 # The plugin frontend (dist/index.js) is prebuilt and committed — no node at package build time.
 pkgname=pocknix-decky
 pkgver=0.1.0
-pkgrel=49
+pkgrel=50
 pkgdesc="Decky Loader + Pocknix Control QAM plugin"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-# The pocknix-game-launch that resolves the "devel" and "user:" Mesa Version picks.
-depends=('pocknix-steam>=0.1.0-79')
+# The pocknix-game-launch that applies Fastest Core First and always writes the game-mode record.
+depends=('pocknix-steam>=0.1.0-80')
 # strip truncates the PyInstaller archive appended after the ELF sections.
 options=('!strip')
 _loaderver=v3.3.0
@@ -35,5 +35,4 @@ package() {
   cp -a "${plug}/py_modules" "${plug}/dist" "${dest}/"
   rm -f "${dest}/dist"/*.map
   find "${dest}" -name __pycache__ -type d -prune -exec rm -rf {} +
-  install -Dm644 "${plug}/LICENSE.gpcal" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE.gpcal"
 }

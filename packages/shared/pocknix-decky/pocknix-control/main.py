@@ -1,14 +1,12 @@
 import asyncio
 
-from pocknix_control import calibration
 from pocknix_control.config import build_config
-from pocknix_control.configio import apply_config, config_dir, export_config, read_config
+from pocknix_control.gamemode import sync_game_mode
 from pocknix_control.led import restore_led, set_led, set_led_enabled, set_led_linked, set_led_sides
 from pocknix_control.modes import set_fan_mode, set_lavd_mode
-from pocknix_control.sharing import install_samba, set_share, share_status
 from pocknix_control.snapshots import reboot_system, snapshot_status, start_rollback
 from pocknix_control.touch import sync_touch
-from pocknix_control.tweaks import save_tweaks
+from pocknix_control.tweaks import patch_tweaks
 from pocknix_control.updates import check_updates, start_update, update_status
 
 
@@ -23,11 +21,9 @@ class Plugin:
 
     async def _main(self):
         await asyncio.to_thread(restore_led)
-        await asyncio.to_thread(calibration.recover)
         await asyncio.to_thread(sync_touch, self._running_appid)
 
     async def _unload(self):
-        await asyncio.to_thread(calibration.cancel)
         await asyncio.to_thread(sync_touch, None)
 
     async def game_lifetime(self, appid, running):
@@ -38,15 +34,6 @@ class Plugin:
             self._running_appid = None
         await asyncio.to_thread(sync_touch, self._running_appid)
 
-    async def share_status(self):
-        return await asyncio.to_thread(share_status)
-
-    async def set_share(self, on):
-        return await asyncio.to_thread(set_share, on)
-
-    async def install_samba(self):
-        return await asyncio.to_thread(install_samba)
-
     async def set_fan_mode(self, mode):
         await asyncio.to_thread(set_fan_mode, mode)
         return await self.get_config()
@@ -55,22 +42,11 @@ class Plugin:
         await asyncio.to_thread(set_lavd_mode, mode)
         return await self.get_config()
 
-    async def save_tweaks(self, data):
-        await asyncio.to_thread(save_tweaks, data)
+    async def patch_tweaks(self, appid, fields):
+        tweaks = await asyncio.to_thread(patch_tweaks, appid, fields)
         await asyncio.to_thread(sync_touch, self._running_appid)
-        return await self.get_config()
-
-    async def export_config(self, appid, name, basename, allow_overwrite):
-        return await asyncio.to_thread(export_config, appid, name, basename, allow_overwrite)
-
-    async def config_dir(self):
-        return await asyncio.to_thread(config_dir)
-
-    async def read_config(self, path):
-        return await asyncio.to_thread(read_config, path)
-
-    async def apply_config(self, path, source_appid, target_appid, target_name):
-        return await asyncio.to_thread(apply_config, path, source_appid, target_appid, target_name)
+        await asyncio.to_thread(sync_game_mode)
+        return tweaks
 
     # Not get_config(): that re-parses the whole Steam library, and a colour slider
     # commits repeatedly while it is being dialled in.
@@ -103,18 +79,3 @@ class Plugin:
 
     async def reboot_system(self):
         return await asyncio.to_thread(reboot_system)
-
-    async def calibration_status(self):
-        return await asyncio.to_thread(calibration.status)
-
-    async def calibration_start(self):
-        return await asyncio.to_thread(calibration.start)
-
-    async def calibration_cancel(self):
-        return await asyncio.to_thread(calibration.cancel)
-
-    async def calibration_save(self):
-        return await asyncio.to_thread(calibration.save)
-
-    async def calibration_reset(self):
-        return await asyncio.to_thread(calibration.reset)
