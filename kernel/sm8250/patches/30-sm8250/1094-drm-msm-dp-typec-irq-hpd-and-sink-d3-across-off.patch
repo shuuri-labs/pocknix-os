@@ -1,0 +1,88 @@
+From: transentient <cliff.judge@gmail.com>
+Date: Wed, 14 Oct 2026 13:40:00 +0900
+Subject: [PATCH] drm/msm/dp: service the sink's IRQ_HPD over USB-C and put the sink in D3 across a DRM-initiated off
+
+Even when USB-PD stays alive across a docked sleep (1093), resuming link
+training hit AUX timeouts, and holding the DP link down for 3 minutes
+without sleeping (DRM connector force off, USB host alive, altmode entered)
+did the same: the dock sent IRQ_HPD Attention VDMs every 10 s, bounced HPD
+after ~30 s, and its EDID could no longer be read. The sink was never told
+to power down (no DP_SET_POWER D3 on a DRM-initiated off) and its IRQ_HPD
+over USB-C was never serviced.
+
+Fix both to match the downstream msm-4.19 dp_display driver:
+
+1. Over USB-C the sink's IRQ_HPD arrives as a DisplayPort Attention VDM
+   with HPD still high. typec_displayport forwards that to DRM as
+   connector_status_connected, where msm_dp_aux_is_link_connected() reads 0
+   because the hardware HPD pin is unused over USB-C. Route a repeat
+   connected notification while dp->plugged and power_on to
+   msm_dp_irq_hpd_handle() so the sink status is read and link maintenance
+   runs when DP_LINK_STATUS_UPDATED is set.
+
+2. When DRM turns the output off with the sink still attached (system
+   suspend, DPMS off), msm_dp_display_disable() shuts down the mainlink and
+   PHY without writing DP_SET_POWER. Put the sink in D3 first
+   (msm_dp_link_psm_config(..., true)) in msm_dp_bridge_atomic_post_disable()
+   when plugged and power_on, and wake it back to D0
+   (msm_dp_link_psm_config(..., false)) in msm_dp_bridge_atomic_enable()
+   before forced link training.
+
+Signed-off-by: transentient <cliff.judge@gmail.com>
+---
+ drivers/gpu/drm/msm/dp/dp_display.c | 27 ++++++++++++++++++++++++++-
+ 1 file changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/msm/dp/dp_display.c b/drivers/gpu/drm/msm/dp/dp_display.c
+--- a/drivers/gpu/drm/msm/dp/dp_display.c
++++ b/drivers/gpu/drm/msm/dp/dp_display.c
+@@ -1385,6 +1385,10 @@ void msm_dp_bridge_atomic_enable(struct drm_bridge *drm_bridge,
+ 
+ 	if (!dp->power_on) {
+ 		msm_dp_display_host_phy_init(msm_dp_display);
++		/* the sink was put in D3 by atomic_post_disable: wake it before training */
++		if (!dp->is_edp)
++			msm_dp_link_psm_config(msm_dp_display->link,
++					       &msm_dp_display->panel->link_info, false);
+ 		force_link_train = true;
+ 	}
+ 
+@@ -1443,6 +1447,18 @@ void msm_dp_bridge_atomic_post_disable(struct drm_bridge *drm_bridge,
+ 
+ 	if (dp->is_edp)
+ 		msm_dp_hpd_unplug_handle(msm_dp_display);
++	/*
++	 * When the sink is still attached and DRM is turning the output off
++	 * (system suspend, DPMS off), put the sink in D3 while the link is
++	 * still up, as the downstream driver does in dp_display_unprepare(),
++	 * so it does not spend the sleep requesting a retrain over PD.
++	 * msm_dp_display_disable() does this on its own only when the dongle
++	 * lost its monitor (sink_count == 0).
++	 */
++	else if (dp->power_on && msm_dp_display->plugged &&
++		 msm_dp_display->link->sink_count)
++		msm_dp_link_psm_config(msm_dp_display->link,
++				       &msm_dp_display->panel->link_info, true);
+ 
+ 	msm_dp_display_disable(msm_dp_display);
+ 
+@@ -1548,7 +1564,16 @@ void msm_dp_bridge_hpd_notify(struct drm_bridge *bridge,
+ 		if (hpd_link_status == ISR_HPD_REPLUG_COUNT) {
+ 			msm_dp_hpd_unplug_handle(dp);
+ 			msm_dp_hpd_plug_handle(dp);
+-		} else if (hpd_link_status == ISR_IRQ_HPD_PULSE_COUNT) {
++		/*
++		 * Over USB-C the sink's IRQ_HPD arrives as a DisplayPort
++		 * Attention VDM with HPD still high; the altmode driver
++		 * reports it as another "connected" while the hardware HPD
++		 * pin status is 0. Service it like the HPD-pin path does when
++		 * the link is already up: read the sink's status and retrain
++		 * if it asks for it.
++		 */
++		} else if (hpd_link_status == ISR_IRQ_HPD_PULSE_COUNT ||
++			   (dp->plugged && msm_dp_display->power_on)) {
+ 			msm_dp_irq_hpd_handle(dp);
+ 		} else {
+ 			msm_dp_hpd_plug_handle(dp);
+-- 
+2.47.0
