@@ -8,6 +8,10 @@ User guides for pocknix-os. New here? Start with the [project README](../README.
 - [pocknix-control.md](pocknix-control.md) - the in-game control panel: per-game tweaks, fan/CPU
   modes, adding non-Steam games, file sharing, controller calibration and stick lights, and
   system updates
+- [pocknix-tools.md](pocknix-tools.md) - the settings app: updates and rollback, SSH, file
+  sharing and VPNs, the ROMs folder, the desktop picker, calibration, internal install
+- [pocknix-store.md](pocknix-store.md) - installing and removing emulators, Proton versions,
+  VPNs, streaming and Plasma Desktop, and their Steam tiles
 - [controller-calibration.md](controller-calibration.md) - checking and calibrating the sticks and
   triggers in Pocknix Tools, and resetting them to the factory settings
 - [steam-games.md](steam-games.md) - Steam games: writing your own launch options, and what to try when
