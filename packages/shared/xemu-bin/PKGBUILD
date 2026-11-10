@@ -1,8 +1,8 @@
 # xemu-bin — xemu, the original-Xbox emulator, vendored from upstream's first-party aarch64
 # Linux AppImage.
 pkgname=xemu-bin
-pkgver=0.8.136
-pkgrel=5
+pkgver=0.8.139
+pkgrel=1
 pkgdesc="xemu — original Xbox emulator, official aarch64 AppImage (vendored)"
 arch=('aarch64')
 url="https://xemu.app"
@@ -11,7 +11,7 @@ depends=('fuse2')
 options=('!strip')
 source=("xemu-${pkgver}.AppImage::https://github.com/xemu-project/xemu/releases/download/v${pkgver}/xemu-${pkgver}-aarch64.AppImage"
         'pocknix-xemu.desktop')
-sha256sums=('8d2598bab0680ddd36c2d15ecccb70523e29adb852cd75e35bc5943dc0eb4816'
+sha256sums=('5f132b3a97c365bf22e8dc286954586ee0cf2202d63958dfcebc8fe9d742ecd4'
             'SKIP')
 noextract=("xemu-${pkgver}.AppImage")
 
