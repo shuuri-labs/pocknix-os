@@ -3,7 +3,7 @@
 # The plugin frontend (dist/index.js) is prebuilt and committed — no node at package build time.
 pkgname=pocknix-decky
 pkgver=0.1.0
-pkgrel=51
+pkgrel=52
 pkgdesc="Decky Loader + Pocknix Control QAM plugin"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -12,11 +12,11 @@ license=('GPL-2.0-or-later')
 depends=('pocknix-steam>=0.1.0-80')
 # strip truncates the PyInstaller archive appended after the ELF sections.
 options=('!strip')
-_loaderver=v3.3.0
+_loaderver=v3.3.1
 source=('pocknix-decky-sync' 'pocknix-decky-sync.service' 'pocknix-decky-loader.service'
         "PluginLoader-${_loaderver}::https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${_loaderver}/PluginLoader-arm64")
 sha256sums=('SKIP' 'SKIP' 'SKIP'
-            '8ef5dcf36cbbbb6e97201a6baed5d79c4cc44ec27789fc9af1c5b6ae8f0b25b6')
+            '6320bcf990aacc1c7a8aff67e17c98ece66601d1a7cc3d21d4259c7273adb2bb')
 
 package() {
   install -Dm755 "${srcdir}/PluginLoader-${_loaderver}" "${pkgdir}/usr/share/decky-loader/PluginLoader"
