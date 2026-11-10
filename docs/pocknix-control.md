@@ -113,8 +113,6 @@ stick.
 
 ## Add Game
 
-![Add Non-Steam Game in Pocknix Control](images/pocknix-control-add-game.jpeg)
-
 Steam's own **Add a Non-Steam Game** dialog does not work on pocknix-os, so add them here:
 
 1. In the **Add Game** tab, press **Add Non-Steam Game**.
