@@ -1,0 +1,84 @@
+From: theodotdot <59372255+theodotdot@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 21:55:00 +0100
+Subject: [PATCH] screenbrightnessutil: take availability from the reply, not
+ from isValid()
+
+QDBusAbstractInterface::isValid() only follows a new owner on a later event-loop pass, so the brightnessAvailableChanged that serviceRegistered emits still reads false: QML re-evaluates the binding once, gets false, and is never notified again. A PowerDevil that starts after plasmashell therefore leaves the quick-settings slider hidden for the whole session, which is the state the watcher was added to fix.
+
+Measure the interface with a reply instead. A successful brightness() reply means the object is there and answers, so set available; an error, or losing the owner, clears it. The availability signal then fires on the transition QML can still see.
+---
+ components/screenbrightnessplugin/screenbrightnessutil.cpp | 28 ++++++++++++++++----
+ components/screenbrightnessplugin/screenbrightnessutil.h   |  3 ++
+ 2 files changed, 25 insertions(+), 6 deletions(-)
+
+--- a/components/screenbrightnessplugin/screenbrightnessutil.cpp
++++ b/components/screenbrightnessplugin/screenbrightnessutil.cpp
+@@ -39,14 +39,16 @@
+                                                            this);
+ 
+     connect(m_brightnessInterfaceWatcher, &QDBusServiceWatcher::serviceRegistered, this, [this]() -> void {
++        // Availability follows the reply: at this point isValid() still reports the owner
++        // that is gone, so emitting here would tell QML "still unavailable" and the binding
++        // would never be re-evaluated.
+         fetchBrightness();
+         fetchMaxBrightness();
+         fetchMinBrightness();
+-        Q_EMIT brightnessAvailableChanged();
+     });
+ 
+     connect(m_brightnessInterfaceWatcher, &QDBusServiceWatcher::serviceUnregistered, this, [this]() -> void {
+-        Q_EMIT brightnessAvailableChanged();
++        setAvailable(false);
+     });
+ }
+ 
+@@ -72,9 +74,18 @@
+ 
+ bool ScreenBrightnessUtil::brightnessAvailable() const
+ {
+-    return m_brightnessInterface->isValid();
++    return m_available;
+ }
+ 
++void ScreenBrightnessUtil::setAvailable(bool available)
++{
++    if (m_available == available) {
++        return;
++    }
++    m_available = available;
++    Q_EMIT brightnessAvailableChanged();
++}
++
+ void ScreenBrightnessUtil::fetchBrightness()
+ {
+     QDBusPendingReply<int> reply = m_brightnessInterface->brightness();
+@@ -84,9 +95,14 @@
+         QDBusPendingReply<int> reply = *watcher;
+         if (reply.isError()) {
+             qWarning() << "Getting brightness failed:" << reply.error().name() << reply.error().message();
+-        } else if (m_brightness != reply.value()) {
+-            m_brightness = reply.value();
+-            Q_EMIT brightnessChanged();
++            setAvailable(false);
++        } else {
++            // A reply is the only proof the interface is there; isValid() lags the owner change.
++            setAvailable(true);
++            if (m_brightness != reply.value()) {
++                m_brightness = reply.value();
++                Q_EMIT brightnessChanged();
++            }
+         }
+         watcher->deleteLater();
+     });
+--- a/components/screenbrightnessplugin/screenbrightnessutil.h
++++ b/components/screenbrightnessplugin/screenbrightnessutil.h
+@@ -46,6 +46,9 @@
+     void fetchMinBrightness();
+ 
+ private:
++    void setAvailable(bool available);
++
++    bool m_available{false};
+     int m_brightness{0};
+     int m_maxBrightness{0};
+     int m_minBrightness{1};
