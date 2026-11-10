@@ -1,9 +1,9 @@
-# plasma-mobile: Arch's build with the task switcher gesture fixed on two screens; shadows the base
-# copy by repo order, so it must be rebased whenever a base cut moves Plasma.
+# plasma-mobile: Arch's build with the task switcher gesture and brightness slider fixed; shadows
+# the base copy by repo order, so it must be rebased whenever a base cut moves Plasma.
 pkgname=plasma-mobile
 pkgver=6.8.1
-pkgrel=2
-pkgdesc="Plasma shell for mobile devices (task switcher gesture fixed on two screens)"
+pkgrel=3
+pkgdesc="Plasma shell for mobile devices (task switcher and brightness slider fixes)"
 arch=('aarch64')
 url="https://plasma-mobile.org/"
 license=('GPL-3.0-or-later')
@@ -19,13 +19,19 @@ optdepends=('bluedevil: Bluetooth management'
             'kscreen: Screen management'
             'plasma-settings: System settings')
 source=("https://download.kde.org/stable/plasma/${pkgver}/${pkgname}-${pkgver}.tar.xz"
-        '0001-mobiletaskswitcher-only-the-swiped-screens-view-acts-on-a-gesture.patch')
+        '0001-mobiletaskswitcher-only-the-swiped-screens-view-acts-on-a-gesture.patch'
+        '0002-screenbrightnessutil-watch-the-powerdevil-service.patch'
+        '0003-screenbrightnessutil-use-brightnessmin-and-restorenone.patch')
 sha256sums=('9b3faf56b9c1c3f1a03f4a8172855c330f1474858d994f456da635edb11d5eeb'
+            'SKIP'
+            'SKIP'
             'SKIP')
 
 prepare() {
-  # two-screen task switcher gesture; mechanism and drop condition in the patch header.
+  # two-screen gesture and brightness slider; mechanisms and drop conditions in the headers.
   patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0001-mobiletaskswitcher-only-the-swiped-screens-view-acts-on-a-gesture.patch"
+  patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0002-screenbrightnessutil-watch-the-powerdevil-service.patch"
+  patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0003-screenbrightnessutil-use-brightnessmin-and-restorenone.patch"
 }
 
 build() {

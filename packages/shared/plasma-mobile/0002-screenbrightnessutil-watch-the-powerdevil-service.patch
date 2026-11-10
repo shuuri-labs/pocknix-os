@@ -1,0 +1,27 @@
+From: theodotdot <59372255+theodotdot@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 11:29:45 +0100
+Subject: [PATCH] screenbrightnessutil: watch the PowerDevil service, not the
+ interface
+
+The watcher listens for org.kde.Solid.PowerManagement.Actions.BrightnessControl, an interface name nothing owns, so a PowerDevil that starts after plasmashell is never seen and the quick-settings brightness slider stays hidden for the whole session.
+
+Watch org.kde.Solid.PowerManagement, the service PowerDevil owns. QDBusAbstractInterface::isValid() follows the owner, so the existing brightnessAvailableChanged signal reaches QML when it appears or goes away.
+---
+ components/screenbrightnessplugin/screenbrightnessutil.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/components/screenbrightnessplugin/screenbrightnessutil.cpp b/components/screenbrightnessplugin/screenbrightnessutil.cpp
+index 2f79a7b..fb5c2a8 100644
+--- a/components/screenbrightnessplugin/screenbrightnessutil.cpp
++++ b/components/screenbrightnessplugin/screenbrightnessutil.cpp
+@@ -27,8 +27,8 @@ ScreenBrightnessUtil::ScreenBrightnessUtil(QObject *parent)
+     fetchBrightness();
+     fetchMaxBrightness();
+ 
+-    // watch for brightness interface
+-    m_brightnessInterfaceWatcher = new QDBusServiceWatcher(QStringLiteral("org.kde.Solid.PowerManagement.Actions.BrightnessControl"),
++    // Watch the service PowerDevil owns; the interface name is never owned.
++    m_brightnessInterfaceWatcher = new QDBusServiceWatcher(QStringLiteral("org.kde.Solid.PowerManagement"),
+                                                            QDBusConnection::sessionBus(),
+                                                            QDBusServiceWatcher::WatchForOwnerChange,
+                                                            this);
