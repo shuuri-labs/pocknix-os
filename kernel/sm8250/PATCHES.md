@@ -31,6 +31,10 @@ Last rebased: 2026-11-06 (s2idle stack 3).
 
 ### Suspend
 
+- **1097** Sleep drain drops because the SoC can reach XO shutdown (AOSS sleep): camcc-sm8250 enables
+  `cam_cc_gdsc_clk` in probe with `qcom_branch_set_clk_en()` instead of registering it as
+  `CLK_IS_CRITICAL`, which permanently prepared `cam_cc_xo_clk_src` and kept `bi_tcxo` voted on in
+  the RPMh sleep set. Source: ours, matching camcc-sm8150/sc8280xp; goes upstream (`clk: qcom`).
 - **1118** DDR can self-refresh in sleep: the CPU to DDR interconnect votes are tagged active-only,
   so they leave the sleep set. Source: gennro, via kettlelinux 0114 and armada 0568.
 
