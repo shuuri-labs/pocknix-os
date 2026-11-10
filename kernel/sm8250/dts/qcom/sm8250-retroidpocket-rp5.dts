@@ -102,4 +102,17 @@
 &battery {
 	/* the RP5 cell is 5000 mAh, the common tree carries the 3850 mAh figure of the other models */
 	charge-full-design-microamp-hours = <5000000>;
+	/* 0.6C; the charger driver caps it at 3 A whatever this says */
+	constant-charge-current-max-microamp = <3000000>;
+};
+
+&pm8150b_typec {
+	connector {
+		/* 9 V lifts PD input to 27 W; a 5 V-only charger still gets the first PDO */
+		sink-pdos = <PDO_FIXED(5000, 3000,
+					 PDO_FIXED_DUAL_ROLE |
+					 PDO_FIXED_USB_COMM |
+					 PDO_FIXED_DATA_SWAP)
+			     PDO_FIXED(9000, 3000, 0)>;
+	};
 };

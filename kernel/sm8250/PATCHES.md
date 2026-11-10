@@ -55,6 +55,10 @@ Last rebased: 2026-11-06 (s2idle stack 3).
 - **1086** Steam keeps the charging indicator after plug-in: qcom_fg CURRENT_NOW is negated so
   charging reads positive. Source: ours, fixing ROCKNIX's own 0011; goes to ROCKNIX. Drop: once
   their 0011 carries it (the sync's apply check then fails it as already applied).
+- **1120** Unplugging the charger while the device sleeps no longer leaves it looking plugged in
+  (Steam's plug icon, a fan floor running on battery in the next sleep): pmic-typec rereads CC and
+  VBUS on resume, since its Type-C interrupts are not wake sources and an edge in s2idle is lost.
+  Source: ours; goes upstream (usb typec).
 
 ### Display and audio
 
@@ -71,7 +75,11 @@ The local delta `kernel/sm8250/sync-keep` restores after each make sync.
   Visionox sm8250 compatible, with a 60Hz-first mode table exposed as the single mode.
 - `kernel/sm8250/dts/qcom/sm8250-retroidpocket-common.dtsi`: ROCKNIX's fan rework and its two
   includes left out (see Not taken).
-- `kernel/sm8250/dts/qcom/sm8250-retroidpocket-rp5.dts`: RP5 `&battery` 5000 mAh.
+- `kernel/sm8250/dts/qcom/sm8250-retroidpocket-rp5.dts`: RP5 `&battery` 5000 mAh, and the RP5
+  and Flip 2 (its dts includes the RP5's) charge at up to 27 W from a USB-PD charger: the port also
+  offers to sink 9 V 3 A and the battery takes 3 A (the driver default is half the capacity). Not
+  in the common dtsi, which also builds boards Pocknix does not ship. Needs: 1073 (without its
+  adapter allowance 9 V input reads as over-voltage). Source: ROCKNIX PR #3386 (the 9 V PDO).
 - `kernel/sm8250/dts/qcom/sm8250-retroidpocket-flip2.dts`: the lid wakes only on opening, so
   closing it on a sleeping Flip 2 no longer wakes it (armada's Flip 2 dts).
 - Deleted: 20-version/0011 adc-tm5 (already in 7.2.x stable), 20-version/9999 (perf rust
