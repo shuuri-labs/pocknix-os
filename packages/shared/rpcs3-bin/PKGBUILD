@@ -2,19 +2,19 @@
 # repo's vX.Y.Z releases carry no arm64 asset: arm64 builds live in
 # RPCS3/rpcs3-binaries-linux-arm64, one release per commit tagged build-<sha>.
 pkgname=rpcs3-bin
-pkgver=0.0.43.20210
-pkgrel=2
+pkgver=0.0.43.20291
+pkgrel=1
 pkgdesc="RPCS3 — PS3 emulator, official aarch64 AppImage (vendored)"
 arch=('aarch64')
 url="https://rpcs3.net"
 license=('GPL2')
 depends=('fuse2')
 options=('!strip')
-_build=build-fcbed0bc6d803abc4d7ed1a722f2ac54d4591eee
-_asset=rpcs3-v0.0.43-20210-fcbed0bc_linux_aarch64.AppImage
+_build=build-ffba2bf09ef3980638f9327b25240d81414034ab
+_asset=rpcs3-v0.0.43-20291-ffba2bf0_linux_aarch64.AppImage
 source=("rpcs3-${pkgver}.AppImage::https://github.com/RPCS3/rpcs3-binaries-linux-arm64/releases/download/${_build}/${_asset}"
         'pocknix-rpcs3.desktop')
-sha256sums=('3e306fec3eb8fc3fdb991373a6b9d5e197439ff350d8483c36f840e61887cb1f'
+sha256sums=('f1ecd9af6073eb3643c4e10e5befff25bdcd4d2da53aec69547da5fa7f8ae1d2'
             'SKIP')
 noextract=("rpcs3-${pkgver}.AppImage")
 
