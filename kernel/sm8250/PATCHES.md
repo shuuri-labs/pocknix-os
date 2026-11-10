@@ -31,6 +31,11 @@ Last rebased: 2026-11-06 (s2idle stack 3).
 
 ### Suspend
 
+- **1098** Sleep drain drops because the display PHY releases its XO vote across suspend: `dsi_phy`
+  manages its `iface` (MDSS AHB) clock via runtime PM `clk_prepare_enable()` /
+  `clk_disable_unprepare()` plus `pm_runtime_force_suspend()` instead of `pm_clk`, which kept
+  `disp_cc_mdss_ahb_clk` prepared for the lifetime of the device and held `bi_tcxo` on in the RPMh
+  sleep set. Source: ours; goes upstream (`drm/msm/dsi`).
 - **1118** DDR can self-refresh in sleep: the CPU to DDR interconnect votes are tagged active-only,
   so they leave the sleep set. Source: gennro, via kettlelinux 0114 and armada 0568.
 
