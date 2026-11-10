@@ -410,6 +410,10 @@
 		reg = <0>;
 		compatible = "ch13726a,thor";
 
+		/* This panel is much brighter than the top one at the same percentage. */
+		pocknix,brightness-gamma-milli = <2700>;
+		pocknix,brightness-min = <1>;
+
 		pinctrl-0 = <&dsi_p_rst_active>, <&dsi_p_te_active>;
 		pinctrl-1 = <&dsi_p_rst_suspend>, <&dsi_p_te_suspend>;
 		pinctrl-names = "default", "sleep";
