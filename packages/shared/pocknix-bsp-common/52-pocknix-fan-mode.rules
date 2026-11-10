@@ -1,0 +1,8 @@
+// Promptless pkexec of pocknix-fan-mode for wheel: it only writes the fan curve and charging speed.
+polkit.addRule(function(action, subject) {
+    if (!subject.isInGroup("wheel")) { return; }
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/pocknix-fan-mode") {
+        return polkit.Result.YES;
+    }
+});

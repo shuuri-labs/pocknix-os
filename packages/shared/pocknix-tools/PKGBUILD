@@ -2,14 +2,15 @@
 # which live here rather than in the image overlay so fixes reach fielded SDs on -Syu (#34).
 pkgname=pocknix-tools
 pkgver=0.1.0
-pkgrel=26
+pkgrel=27
 pkgdesc="Pocknix Tools: updates, snapshot rollback, SSH + file sharing, ROMs folder, desktop picker, controller calibration, internal install"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
 # bsp-common 37: the OpenABL boot-file writer pocknix-install-internal pins the internal entry with.
+# 38: the polkit rule the System tab's fan-while-charging row runs pocknix-fan-mode through.
 depends=('pocknix-ui' 'pocknix-snapshots>=0.1.0-9' 'pocknix-base>=0.2.0-10' 'pocknix-gamepad-calibration>=0.1.0-5'
-         'pocknix-bsp-common>=0.1.0-37'
+         'pocknix-bsp-common>=0.1.0-38'
          'samba' 'qrencode')
 install=pocknix-tools.install
 source=('pocknix-tools' 'pocknix-tools.desktop' 'pocknix-tools-run' '58-pocknix-tools-run.rules' 'pocknix-wg-import'

@@ -7,6 +7,8 @@ set -u
 MODE_FILE=/var/lib/pocknix/fan-mode
 GAME_MODE_FILE=/run/pocknix/game-mode
 CHARGING_FILE=/var/lib/pocknix/fan-charging
+# Used while fan-charging is absent or unreadable; a written 0 stays off. Must match pocknix-fan-mode's.
+CHARGING_DEFAULT=51
 
 FAN_PWM="$(ls /sys/class/hwmon/hwmon*/pwm1 2>/dev/null | head -1)"
 [ -n "${FAN_PWM}" ] || { echo "pocknix-fancontrol: no hwmon pwm1 fan found, exiting"; exit 0; }
@@ -67,7 +69,7 @@ trap '[ -e "${FAN_EN}" ] && echo 0 > "${FAN_EN}" 2>/dev/null; exit 0' INT TERM
 LAST=""; LAST_TH=0; LAST_MODE=""; LAST_OUT=""; LAST_SC=""
 while :; do
   SC="$(cat "${CHARGING_FILE}" 2>/dev/null)"
-  case "${SC}" in ''|*[!0-9]*) SC=0 ;; esac
+  case "${SC}" in ''|*[!0-9]*) SC="${CHARGING_DEFAULT}" ;; esac
   [ "${SC}" -gt 255 ] && SC=255
   if [ -w "${FAN_SLEEP}" ] && [ "${SC}" != "${LAST_SC}" ]; then
     echo "${SC}" > "${FAN_SLEEP}" 2>/dev/null && LAST_SC="${SC}"

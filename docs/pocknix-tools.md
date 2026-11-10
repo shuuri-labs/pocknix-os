@@ -1,8 +1,8 @@
 # Pocknix Tools
 
 **Pocknix Tools** is the settings app for the things Steam doesn't manage: system updates and
-rollback, remote access, where your games live, which desktop desktop mode starts, controller
-calibration, and the internal storage install.
+rollback, the fan while charging, remote access, where your games live, which desktop desktop mode
+starts, controller calibration, and the internal storage install.
 
 It works the same in game mode and desktop mode, by touch or with the controller. In game mode,
 open its tile in your Steam library (it is added the first time you sign in to Steam). In desktop
@@ -10,7 +10,7 @@ mode, it is in the app menu and on the Plasma Mobile dock.
 
 | Page | What it does |
 |---|---|
-| System | Check for and install updates, roll back an update |
+| System | Check for and install updates, roll back an update, fan while charging |
 | Network | SSH, file sharing, Tailscale, WireGuard |
 | Emulation | Choose your ROMs folder |
 | Desktop | Choose the desktop that desktop mode starts |
@@ -31,6 +31,9 @@ base, the normal case) or **Rolling** (see [Advanced](#advanced)).
 - **Roll back an update**: every snapshot, newest first. Press and hold **Roll back** on one,
   then restart. Your games, saves and settings are never touched. Booted from the SD with Pocknix
   also on internal storage, an **Internal install** list does the same for the internal copy.
+- **Fan while charging**: the slowest the fan runs while the device is plugged in, also while it
+  sleeps and once the battery is full. **Low** is the default; **Off** leaves the fan to the
+  temperature alone, so a device charging overnight stays silent.
 
 How snapshots work, and what to do when the device won't boot at all:
 [snapshots and rollback](snapshots.md).
@@ -105,6 +108,7 @@ Every page is a front end for a command you can also run over SSH:
 sudo pocknix-update --check                # what an update would install (System)
 pocknix-update                             # install it (asks first)
 pocknix-rollback --list                    # snapshots you can roll back to
+pocknix-fan-mode charging                  # fan while charging, 0-255 (sudo pocknix-fan-mode charging 0)
 pocknix-ssh status                         # SSH on or off (sudo pocknix-ssh on|off)
 pocknix-share status                       # file sharing (sudo pocknix-share off)
 pocknix-roms-init --where                  # the ROMs folder (pocknix-roms-init --roms <dir>)
