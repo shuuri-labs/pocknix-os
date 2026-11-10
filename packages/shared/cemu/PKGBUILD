@@ -3,8 +3,8 @@
 # expire, so the AppImage is fetched from our mirror (provenance in README.provenance). Bump =
 # a newer main commit's cemu-appimage-arm, mirrored, with pkgver <last release>.<commit date>.<short sha>.
 pkgname=cemu
-_sha=29f2f1f
-pkgver=2.6.20261022.${_sha}
+_sha=3b10316
+pkgver=2.6.20261104.${_sha}
 pkgrel=1
 pkgdesc="Cemu — Wii U emulator, upstream aarch64 AppImage with the ARM64 recompiler (vendored)"
 arch=('aarch64')
@@ -15,7 +15,7 @@ options=('!strip')   # AppImage = ELF runtime + squashfs payload; strip would co
 _asset=Cemu-${_sha}-aarch64.AppImage
 source=("https://pocknix.shuuri.net/mirror/${_asset}"
         'Cemu.desktop')
-sha512sums=('5b51bef6f5d97d20050ec36fc71bbd2591176d993f23fd5c71a95d24dd1f64b645b8cb9d267288fcd5796dfec5cbdebc7b8cc2e8464fb428d4b803f11ec74357'
+sha512sums=('612a4236c370c2b09744b678c241bc3aefc280b0d1dbba28ccf6b682315855244fa7b5a8881e70207ddafc0b0e6c7a485f0dddd6c2e37c27ca68479c4d682283'
             'SKIP')
 noextract=("${_asset}")
 
