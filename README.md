@@ -52,7 +52,7 @@
 - [Install to internal storage](docs/install-to-internal.md): faster loads, uninstalling, restoring the stock bootloader
 - [Pocknix Control](docs/pocknix-control.md): per-game settings, fan curve, adding non-Steam games, updates
 - [Emulation](docs/emulation-setup.md): ES-DE, supported systems, ROMs and BIOS
-- [Android apps](docs/waydroid.md): Waydroid
+- [Android apps](docs/android-apps.md): Lepton in Gaming mode, Waydroid on the desktop
 - [Snapshots and rollback](docs/snapshots.md): recovering from a bad update
 - [Known issues](docs/known-issues.md)
 - [Contributing and building from source](CONTRIBUTING.md)

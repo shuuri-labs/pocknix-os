@@ -1,6 +1,6 @@
 # Steam games
 
-Android apps can run from your Steam library too: see [lepton.md](lepton.md).
+Android apps can run from your Steam library too: see [Android apps](android-apps.md#gaming-mode-lepton).
 
 ## Launch options
 

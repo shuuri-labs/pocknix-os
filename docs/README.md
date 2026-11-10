@@ -17,9 +17,8 @@ User guides for pocknix-os. New here? Start with the [project README](../README.
   a game won't run
 - [emulation-setup.md](emulation-setup.md) - where to put ROMs, BIOS, and firmware, how to launch
   games, and how to tweak emulator settings
-- [lepton.md](lepton.md) - running Android apps from your Steam library in Gaming mode
-- [waydroid.md](waydroid.md) - running Android apps in the desktop session: setup, installing apps,
-  and app shortcuts
+- [android-apps.md](android-apps.md) - running Android apps: from your Steam library in Gaming
+  mode (Lepton), or in the desktop session (Waydroid) with setup, installing apps, and shortcuts
 - [install-to-internal.md](install-to-internal.md) - moving pocknix from the SD card onto the
   device's internal storage, the bootloader menu that picks what boots, a microSD card for
   games, uninstalling, and restoring the factory bootloader
