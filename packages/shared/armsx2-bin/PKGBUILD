@@ -1,21 +1,18 @@
 # armsx2-bin — ARMSX2, the native-ARM64 PCSX2 fork, as a vendored aarch64 AppImage.
-# Stable tags are Android-APK-only, so the nightlies are the only Linux channel; upstream renames
-# those assets without warning, so a bump that 404s needs the release page's asset list re-read,
-# not just an edited _nightly/_gitsha. Take the 4K-page variant: our kernels use 4K pages.
+# Upstream renames release assets without warning, so a bump that 404s needs the release page's
+# asset list re-read. Take the 4K-page variant: our kernels use 4K pages.
 pkgname=armsx2-bin
-_nightly=20261022
-_gitsha=b276f045c6
-pkgver=2.8.4.nightly${_nightly}
+pkgver=2.9.3
 pkgrel=1
-pkgdesc="ARMSX2 — PS2 emulator, native-ARM64 PCSX2 fork (vendored AppImage, official nightly)"
+pkgdesc="ARMSX2 — PS2 emulator, native-ARM64 PCSX2 fork (vendored AppImage, official release)"
 arch=('aarch64')
 url="https://github.com/ARMSX2/ARMSX2"
 license=('GPL3')
 depends=('fuse2')
 options=('!strip')   # AppImage = ELF runtime + squashfs payload; strip would corrupt it
-source=("ARMSX2-${pkgver}.AppImage::https://github.com/ARMSX2/ARMSX2/releases/download/nightly-${_nightly}/ARMSX2-nightly-${_nightly}-${_gitsha}-Linux-arm64-4K-pages.AppImage"
+source=("ARMSX2-${pkgver}.AppImage::https://github.com/ARMSX2/ARMSX2/releases/download/${pkgver}/ARMSX2-${pkgver}-Linux-arm64-4K-pages.AppImage"
         'pocknix-armsx2.desktop')
-sha256sums=('4c97d968caa5b8f05e1b5f25b0b4654f7b7bc1b8ad7270cd09b868fdee08c4f7'
+sha256sums=('751672dc717e713a16b3e75cb380e1908472a740367b42ac8757570e31287e4e'
             'SKIP')
 noextract=("ARMSX2-${pkgver}.AppImage")
 
