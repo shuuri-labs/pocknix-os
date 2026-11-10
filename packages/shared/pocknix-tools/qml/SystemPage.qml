@@ -14,6 +14,9 @@ TabPage {
     property var snapshots: []
     property var internal: []
     property bool showAll: false
+    // pocknix-fan-mode charging: PWM 0-255, -1 = not read yet
+    property int chargingFan: -1
+    readonly property var fanSteps: [[0, qsTr("Off")], [51, qsTr("Low")], [102, qsTr("Medium")], [153, qsTr("High")]]
     readonly property bool busy: app.logJobRunning || checkJob.running
 
     // newest first, as the list shows them
@@ -63,6 +66,7 @@ TabPage {
         refresh()
         internalJob.start(["/usr/bin/pocknix-rollback", "--internal", "--list", "--json"], { root: true })
         updateState.start([app.jobRunner, "status", "update"])
+        fanGetJob.start(["/usr/bin/pocknix-fan-mode", "charging"])
     }
 
     // The snapshot hook marks an update that changed the kernel, Check run first or not.
@@ -91,6 +95,18 @@ TabPage {
             if (output.trim() === "running")
                 page.app.run(qsTr("Finishing the update"), ["/usr/bin/pocknix-update", "--follow"],
                              { detached: true }, () => page.refresh())
+        }
+    }
+    Job {
+        id: fanGetJob
+        onFinished: code => page.chargingFan = code === 0 ? parseInt(output) : -1
+    }
+    Job {
+        id: fanSetJob
+        onFinished: code => {
+            if (code !== 0)
+                page.app.notice(qsTr("Could not change the fan setting"), error)
+            fanGetJob.start(["/usr/bin/pocknix-fan-mode", "charging"])
         }
     }
     Job {
@@ -209,6 +225,31 @@ TabPage {
                 text: qsTr("Roll back")
                 enabled: !page.busy
                 onClicked: page.rollback(modelData, "--internal")
+            }
+        }
+    }
+
+    QQC2.Label {
+        Layout.topMargin: Theme.spacing
+        text: qsTr("Charging")
+        font.bold: true
+        font.pointSize: Theme.titleFontSize
+    }
+    ActionRow {
+        title: qsTr("Fan while charging")
+        description: qsTr("The slowest the fan runs while plugged in, asleep too and once full. Off leaves it to the temperature alone.")
+            + (page.chargingFan >= 0 && !page.fanSteps.some(s => s[0] === page.chargingFan)
+               ? " " + qsTr("Now set to %1 of 255 from a terminal.").arg(page.chargingFan) : "")
+        busy: fanGetJob.running || fanSetJob.running
+
+        Repeater {
+            model: page.fanSteps
+            Button {
+                required property var modelData
+                text: modelData[1]
+                enabled: page.chargingFan >= 0 && !fanSetJob.running
+                kind: modelData[0] === page.chargingFan ? Button.Primary : Button.Secondary
+                onClicked: fanSetJob.start(["/usr/bin/pocknix-fan-mode", "charging", String(modelData[0])], { root: true })
             }
         }
     }

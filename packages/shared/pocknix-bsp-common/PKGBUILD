@@ -3,7 +3,7 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=37
+pkgrel=38
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump and journal storage caps, latency sysctls, zram swap, iwd Wi-Fi backend, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -27,7 +27,7 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         '20-pocknix-wifi-backend.conf'
         '90-pocknix-backlight.rules' 'pocknix-backlight-grant' '60-pocknix-controllers.rules'
         '10-pocknix-wheel'
-        'pocknix-fancontrol' 'pocknix-fan-mode' 'pocknix-lavd-mode'
+        'pocknix-fancontrol' 'pocknix-fan-mode' '52-pocknix-fan-mode.rules' 'pocknix-lavd-mode'
         'pocknix-fancontrol.service' 'pocknix-lavd.service' 'pocknix-game-mode.conf'
         'pocknix-update-abl' '52-pocknix-abl.rules' 'pocknix-gpt-abl'
         'pocknix-refresh-abl-kit'
@@ -47,7 +47,7 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
@@ -99,6 +99,8 @@ package() {
 
   install -Dm755 "${srcdir}/pocknix-fancontrol" "${pkgdir}/usr/bin/pocknix-fancontrol"
   install -Dm755 "${srcdir}/pocknix-fan-mode"   "${pkgdir}/usr/bin/pocknix-fan-mode"
+  install -Dm644 "${srcdir}/52-pocknix-fan-mode.rules" \
+    "${pkgdir}/usr/share/polkit-1/rules.d/52-pocknix-fan-mode.rules"
   install -Dm755 "${srcdir}/pocknix-lavd-mode"  "${pkgdir}/usr/bin/pocknix-lavd-mode"
   install -Dm644 "${srcdir}/pocknix-fancontrol.service" \
     "${pkgdir}/usr/lib/systemd/system/pocknix-fancontrol.service"

@@ -1,0 +1,45 @@
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Subject: [PATCH] usb: typec: qcom-pmic-typec: recheck CC and VBUS on resume
+
+The pm8150b Type-C interrupts (cc-state-change, attach-detach,
+vbus-change) are not wakeup sources, and an edge that arrives while the
+device sits in s2idle is lost. Unplugging a charger in sleep still wakes
+the device through the charger's usbin-plugin interrupt, but TCPM never
+hears about it: the port stays in SNK_READY, the partner stays registered
+and tcpm-source-psy keeps online=1. Userspace then reports external power
+on battery, and anything gated on power_supply_is_system_supplied() acts
+as if the charger were still there on the next suspend.
+
+Queue a CC and a VBUS event on resume so TCPM rereads both. With nothing
+changed this is a no-op: in SNK_READY with a PD contract, an unchanged CC
+is only logged.
+---
+--- a/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.c
++++ b/drivers/usb/typec/tcpm/qcom/qcom_pmic_typec.c
+@@ -134,6 +134,18 @@
+ 	fwnode_handle_put(tcpm->tcpc.fwnode);
+ }
+
++static int qcom_pmic_typec_resume(struct device *dev)
++{
++	struct pmic_typec *tcpm = dev_get_drvdata(dev);
++
++	/* the Type-C IRQs are not wake sources: an unplug in s2idle loses its edge */
++	tcpm_cc_change(tcpm->tcpm_port);
++	tcpm_vbus_change(tcpm->tcpm_port);
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(qcom_pmic_typec_pm_ops, NULL, qcom_pmic_typec_resume);
++
+ static const struct pmic_typec_resources pm8150b_typec_res = {
+ 	.pdphy_res = &pm8150b_pdphy_res,
+ 	.port_res = &pm8150b_port_res,
+@@ -155,6 +167,7 @@
+ 	.driver = {
+ 		.name = "qcom,pmic-typec",
+ 		.of_match_table = qcom_pmic_typec_table,
++		.pm = pm_sleep_ptr(&qcom_pmic_typec_pm_ops),
+ 	},
+ 	.probe = qcom_pmic_typec_probe,
+ 	.remove = qcom_pmic_typec_remove,
