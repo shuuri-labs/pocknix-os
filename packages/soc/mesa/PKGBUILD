@@ -4,7 +4,7 @@
 pkgbase=mesa
 pkgname=(mesa vulkan-freedreno)
 epoch=2
-pkgver=26.2.6
+pkgver=26.3.0
 # differs from pkgver only for RCs: the tarball keeps the hyphen makepkg forbids in pkgver
 _srcver=${pkgver}
 pkgrel=1
@@ -22,14 +22,11 @@ makedepends=(
 )
 # upstream considers LTO broken until explicit notice
 options=(!lto)
-source=("https://archive.mesa3d.org/mesa-${_srcver}.tar.xz"
-        '0002-freedreno-add-a830v1-chip-id.patch')
-sha256sums=('b9436b3e1a8be76fbd4823dc884f90596ab7c6ac5e1867a305e66ffccfb31a92'
-            '7a66e73189d1e1cff06f979f569e354fb88fa7e813f4b1f594ce6ea9dfd3ea6c')
+source=("https://archive.mesa3d.org/mesa-${_srcver}.tar.xz")
+sha256sums=('91d729aa68bb89e4ec857841300bbe922bcb3e52b1f97566ca83930d3b28343a')
 
 prepare() {
   cd "mesa-${_srcver}"
-  patch -p1 < "${srcdir}/0002-freedreno-add-a830v1-chip-id.patch"
   # package release in the version string so Chromium/CEF (steamwebhelper) invalidates
   # its GPU cache across our rebuilds.
   echo "${pkgver}-pocknix${epoch}.${pkgrel}" > VERSION

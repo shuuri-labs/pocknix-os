@@ -2,7 +2,7 @@
 # tweak's git entry (ARM Proton path, picked by pointing VK_DRIVER_FILES at it). The host driver
 # entry comes from vulkan-freedreno's vk-arm manifest. Same per-SoC tuning contract as packages/soc/mesa.
 pkgname=pocknix-turnip-arm
-pkgver=20261106
+pkgver=20261110
 pkgrel=1
 pkgdesc="Pinned aarch64 Turnip build of mesa main for per-game Mesa selection (SoC-tuned)"
 arch=('aarch64')
@@ -19,9 +19,9 @@ makedepends=(meson ninja python-mako python-packaging python-yaml python-ply gls
              xorgproto libx11 libxcb libxext libxshmfence libxxf86vm libxrandr xcb-util-keysyms)
 options=(!lto)
 # Pinned, not floating, so rebuilds reproduce.
-_develcommit=5508b6e11905bf09122033ea755d7da809036189
+_develcommit=487d4ba4938d043e436dd3aac4e81a42b3b30178
 source=("https://gitlab.freedesktop.org/mesa/mesa/-/archive/${_develcommit}/mesa-${_develcommit}.tar.gz")
-sha256sums=('8c6372e67de592ac7960c89885e8af739ff65bd119c1c536eaeafc57029945ab')
+sha256sums=('7dbba95e4a5682bc1f61751b16b8215daae375887744425658bc2dc6bcf2f91a')
 
 build() {
   # Same tuning contract as packages/soc/mesa (sm8550 fallback for a standalone makepkg).

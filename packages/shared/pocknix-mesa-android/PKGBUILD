@@ -3,7 +3,7 @@
 pkgname=pocknix-mesa-android
 # epoch=2: pacman compares epoch before pkgver, and this name has only ever shipped at epoch 2.
 epoch=2
-pkgver=26.2.6
+pkgver=26.3.0
 # differs from pkgver only for RCs: the tarball keeps the hyphen makepkg forbids in pkgver
 _srcver=${pkgver}
 pkgrel=1
@@ -36,7 +36,7 @@ source=("https://archive.mesa3d.org/mesa-${_srcver}.tar.xz"
         "fossilize-${_fossilizecommit}.tar.gz::https://github.com/ValveSoftware/Fossilize/archive/${_fossilizecommit}.tar.gz"
         "rapidjson-${_rapidjsoncommit}.tar.gz::https://github.com/miloyip/rapidjson/archive/${_rapidjsoncommit}.tar.gz")
 noextract=("android-ndk-${_ndkver}-linux.zip" "libdrm-${_libdrmver}.tar.xz")
-sha256sums=('b9436b3e1a8be76fbd4823dc884f90596ab7c6ac5e1867a305e66ffccfb31a92'
+sha256sums=('91d729aa68bb89e4ec857841300bbe922bcb3e52b1f97566ca83930d3b28343a'
             'dfb20d396df28ca02a8c708314b814a4d961dc9074f9a161932746f815aa552f'
             'fc68f9d0ba2ea63c9432a299e14fea09fad7a8a66e8039fcd7802ca59f77b4f5'
             '2802294470007bd71bc36b169bebde25d63008c4ad65a84d288741b33d7d27e1'
