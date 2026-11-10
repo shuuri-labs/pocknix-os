@@ -32,11 +32,11 @@
 | Retroid Pocket Flip 2 | SM8250 | ✅ Supported |
 | Retroid Pocket 5 | SM8250 | ✅ Supported |
 | Retroid Pocket 6 | SM8550 | ✅ Supported |
+| Retroid Pocket Nova | SM8550 | ✅ Supported |
 | AYN Odin 2 | SM8550 | ✅ Supported |
 | AYN Odin 2 Portal | SM8550 | ✅ Supported |
 | AYN Odin 2 Mini | SM8550 | ✅ Supported |
 | AYN Thor | SM8550 | 🧪 Beta |
-| Retroid Pocket Nova | SM8550 | 🧪 Beta |
 | AYN Odin 3 | SM8750 | 🚧 In progress |
 
 ## Get started
