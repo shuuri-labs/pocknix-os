@@ -52,6 +52,10 @@ Last rebased: 2026-11-06 (s2idle stack 3).
 - **1050** edt-ft5x06 power is retained in suspend (Thor's lower touchscreen). Needs: ROCKNIX
   0053. Source: jaewun.
 - **1051** sm8550.dtsi gains the lowest GPU OPP. Source: Thorch contributors.
+- **1115** The Thor's lower panel is far brighter than the upper one at the same backlight
+  percentage, whoever writes it (PowerDevil, Steam, a plain sysfs write). The driver bends the
+  requested level through a per-panel gamma and floor from the devicetree. Needs: ROCKNIX 0057.
+  Applies: Thor only. Drop: when the Thor moves to the upstream ch13726a driver. Source: ours.
 
 ### Haptics
 
@@ -77,7 +81,8 @@ The local delta `kernel/sm8550/sync-keep` restores after each make sync.
   / `touchscreen-inverted-x` (armada's Thor dts patch: gamescope and kwin rotate touch by the
   panel orientation, so a kernel-side rotation landed touch 90 degrees off); the lid wakes only
   on opening, with a pull-up on its open-drain hall line, so closing it on a sleeping Thor no
-  longer wakes it (same armada patch).
+  longer wakes it (same armada patch); the lower panel's brightness curve properties
+  (`pocknix,brightness-gamma-milli`, `pocknix,brightness-min`), per unit (1115).
 - `kernel/sm8550/dts/qcom/qcs8550-retroidpocket-rp6.dts`: haptics driven as an LRA (no
   `use-erm`, 1300 mV node and effect drive, effect auto-res off, stock effect_0 pattern; armada
   PR #694, values from the stock Android board-id 0x1001f overlay). Nova and top-dpad include
