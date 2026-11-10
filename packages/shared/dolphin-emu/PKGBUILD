@@ -1,7 +1,7 @@
 # dolphin-emu — GameCube/Wii emulator, vendored from upstream's official arm64 AppImage. Only
 # master dev builds ship one (releases are Flatpak-only), so this tracks dev builds.
 pkgname=dolphin-emu
-_build=2609-119
+_build=2609-197
 pkgver=${_build/-/.}
 pkgrel=1
 pkgdesc="GameCube / Wii emulator (official arm64 dev AppImage, vendored)"
@@ -13,10 +13,10 @@ options=('!strip')   # AppImage = ELF runtime + squashfs payload; strip would co
 _asset=dolphin-master-${_build}-arm64.AppImage
 # The CDN folder is the first two byte pairs of sha256 of the asset NAME:
 # printf %s <asset> | sha256sum -> 0594... -> 05/94.
-_dir=05/94
+_dir=93/38
 source=("${_asset}::https://dl.dolphin-emu.org/builds/${_dir}/${_asset}"
         'dolphin-emu.desktop')
-sha256sums=('39921f96f0c4b38c92a9a6a5924a176b1c6697fd03d8fa402664d8ea46dce6b1'
+sha256sums=('557b145e24ec58b0313d4ef362ea4f57fc4e361429edfa43596ef34a2cc099bb'
             'SKIP')
 noextract=("${_asset}")
 
