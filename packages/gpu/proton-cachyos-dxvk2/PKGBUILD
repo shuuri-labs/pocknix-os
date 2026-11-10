@@ -6,12 +6,12 @@
 # for a GPU that supports 3.x. The donor must stay SAME-VENDOR — arm64ec dxvk dlls do not
 # transplant across wine trees. _srctag tracks proton-cachyos in lockstep; _dxvktag stays pinned.
 pkgname=proton-cachyos-dxvk2
-_srctag=11.0-20261005
+_srctag=11.0-20261015
 _dxvktag=11.0-20260602
 _build=slr
 _major=${_srctag%%.*}
 pkgver=${_srctag//-/.}
-pkgrel=2
+pkgrel=1
 pkgdesc="CachyOS Proton (ARM64) with DXVK pinned to 2.7 for GPUs without 8-bit storage (a6xx)"
 arch=('aarch64')
 url="https://github.com/CachyOS/proton-cachyos"
@@ -28,7 +28,7 @@ source=("https://github.com/CachyOS/proton-cachyos/releases/download/cachyos-${_
         'compatibilitytool.vdf.in'
         'toolmanifest.vdf'
         'pocknix-proton')
-sha512sums=('81ca1b66e841d8f33acee1b1425d4854e3a3245860a6273e12dee1342bddca9ba7cdea41362aca14e33e6da93e4f01d69d281f1c7c59e3f720f97d6299b1c0fa'
+sha512sums=('d61bfe4caae66d63c71bb1c84da326ca9af2d66f8c73dbcffe5fb58148ce950339984f84c4a3e3eead883b7f5d3aa7192d020ae413323c5e343dad851e65ed87'
             '83fbbc463f43be69d69052bcb6dfac078e597c5cd0da8a669d32bf1cda078031f0618a32fa055d6762dac3af2d149f9863213dd86e8d6dc9dd9daee003f51429'
             'SKIP'
             'SKIP'
