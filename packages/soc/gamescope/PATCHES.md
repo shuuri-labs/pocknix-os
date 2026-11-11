@@ -10,7 +10,7 @@ Launch: logical landscape -W/-H, rotation autodetected from the primary plane (s
 sm8550 via kernel 0066, composite on sm8250); POCKNIX_PANEL_ROTATE_SHADER=1 forces
 --force-composition-rotation for panels past the 1088-line rotator cap.
 
-Last rebased: 2026-10-22 (0014/0015 native Wayland windows: focus, touch).
+Last rebased: 2026-11-11 (0016 DPU output LUTs).
 
 ## Carried
 
@@ -43,11 +43,23 @@ Last rebased: 2026-10-22 (0014/0015 native Wayland windows: focus, touch).
   divisor. The `limiter_use_elapsed_time` convar (default on) restores the divisor.
   Source: armada 0027.
 - **0011** The composite skips identity colour LUTs, the larger half of sm8250's every-frame
-  composite (the shaper + 3D LUT taps). Steam's 0.5 gamut wideness counts as native where planes
-  cannot be colour managed (new `IBackend::SupportsPlaneColorManagement`), and a virtual white
+  composite (the shaper + 3D LUT taps). Steam's 0.5 gamut wideness counts as native where scanout
+  cannot be colour managed (new `IBackend::SupportsScanoutColorManagement`), and a virtual white
   within 0.001 xy of the display's is no override. The `color_mgmt_skip_identity_luts` and
   `color_mgmt_native_gamut_without_plane_cm` convars (default on) turn each half off.
   Trap: a raw shaper/3D LUT override is never treated as identity. Source: ours.
+- **0016** Night mode and the colour sliders reach directly scanned-out games at no GPU cost:
+  on SDR gamma 2.2 output the shaper + 3D LUT go to the msm DPU's CRTC `DEGAMMA_LUT` +
+  `DPU_3D_LUT` and the shader leaves them unbound; turning them on or off asks for a modeset
+  (sm8550 1124 keeps the topology, so the kernel does no full one). Where the kernel lacks
+  `DPU_3D_LUT` (sm8250, an older sm8550 kernel), a non-identity LUT composites instead of being
+  dropped at scanout. It also makes the DRM backend report scanout colour management, so
+  Steam's gamut wideness applies (0011's native override lifts). The `drm_output_luts` convar
+  (default on) keeps it in the shader. Needs: 0011; sm8550 kernel 1121-1124. Trap: scanout
+  colour management is reported per capability, not per frame, so with PQ output or an
+  HDR/scRGB layer (output LUTs off) Steam's wideness reaches composited frames only; the
+  degamma size (256) is hardcoded to match 1121. Source: armada 0017, without its armada 0004
+  hunks (HDR output composite rule and its test); the deferred backend forwards the new hooks.
 
 ### Steam focus
 

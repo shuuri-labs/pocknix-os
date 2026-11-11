@@ -12,7 +12,7 @@ on the CPU when the LUTs are rebuilt and leave them unbound for the shader;
 the DRM plane path keeps its blobs.
 
 Two Steam defaults kept the LUT from ever being identity. It drives the
-SDR gamut wideness to 0.5; where planes cannot be colour managed that
+SDR gamut wideness to 0.5; where scanout cannot be colour managed that
 remap only reaches composited frames, so a game looks different the moment
 an upscaler or overlay forces a composite. Keep SDR content in the native
 gamut on such backends. It also sets a virtual white that is D65 quantised
@@ -29,18 +29,18 @@ convars (default on) restore the old paths for A/B.
  src/color_helpers.cpp          | 44 +++++++++++++++++++++++++++++++---
  src/color_helpers.h            |  5 ++++
  src/rendervulkan.hpp           |  5 ++++
- src/steamcompmgr.cpp           | 33 ++++++++++++++++++++++---
- 7 files changed, 94 insertions(+), 6 deletions(-)
+ src/steamcompmgr.cpp           | 37 +++++++++++++++++++++++++---
+ 7 files changed, 98 insertions(+), 6 deletions(-)
 
 diff --git a/src/Backends/DRMBackend.cpp b/src/Backends/DRMBackend.cpp
-index 1eaea8c..a7f1c8b 100644
+index 1eaea8c..099c1fd 100644
 --- a/src/Backends/DRMBackend.cpp
 +++ b/src/Backends/DRMBackend.cpp
 @@ -4384,6 +4384,11 @@ namespace gamescope
  			return drm_supports_color_mgmt( &g_DRM );
  		}
  
-+		virtual bool SupportsPlaneColorManagement() const override
++		virtual bool SupportsScanoutColorManagement() const override
 +		{
 +			return SupportsColorManagement();
 +		}
@@ -49,32 +49,32 @@ index 1eaea8c..a7f1c8b 100644
  		{
  			drm_t *drm = &g_DRM;
 diff --git a/src/Backends/DeferredBackend.h b/src/Backends/DeferredBackend.h
-index 7f76122..89c6a4a 100644
+index 7f76122..07d3543 100644
 --- a/src/Backends/DeferredBackend.h
 +++ b/src/Backends/DeferredBackend.h
 @@ -210,6 +210,11 @@ namespace gamescope
              return m_pChild->SupportsPlaneHardwareCursor();
  		}
  
-+		virtual bool SupportsPlaneColorManagement() const override
++		virtual bool SupportsScanoutColorManagement() const override
 +		{
-+			return m_pChild->SupportsPlaneColorManagement();
++			return m_pChild->SupportsScanoutColorManagement();
 +		}
 +
  		virtual bool SupportsTearing() const override
  		{
              {
 diff --git a/src/backend.h b/src/backend.h
-index bd57c42..5b4bf92 100644
+index bd57c42..aa869e6 100644
 --- a/src/backend.h
 +++ b/src/backend.h
 @@ -360,6 +360,9 @@ namespace gamescope
          virtual IBackendConnector *GetConnector( GamescopeScreenType eScreenType ) = 0;
  
          virtual bool SupportsPlaneHardwareCursor() const = 0;
-+        // Whether scanned-out planes get the same colour pipeline the composite shader
-+        // applies; backends that cannot say keep the remap (nested, headless).
-+        virtual bool SupportsPlaneColorManagement() const { return true; }
++        // Whether scanned-out frames get the colour pipeline the composite shader applies,
++        // per plane or on the output; backends that cannot say keep the remap (nested, headless).
++        virtual bool SupportsScanoutColorManagement() const { return true; }
          virtual bool SupportsTearing() const = 0;
  
          virtual bool UsesVulkanSwapchain() const = 0;
@@ -188,25 +188,29 @@ index fa519db..673abbc 100644
  };
  
 diff --git a/src/steamcompmgr.cpp b/src/steamcompmgr.cpp
-index 5179700..61672b5 100644
+index 5179700..48a1b09 100644
 --- a/src/steamcompmgr.cpp
 +++ b/src/steamcompmgr.cpp
-@@ -327,6 +327,14 @@ static const gamescope_color_mgmt_t k_ScreenshotColorMgmtHDR =
+@@ -327,6 +327,18 @@ static const gamescope_color_mgmt_t k_ScreenshotColorMgmtHDR =
  //#define COLOR_MGMT_MICROBENCH
  // sudo cpupower frequency-set --governor performance
  
 +// An identity transform still costs the per-pixel shaper + 3D LUT taps in the composite
 +// shader, the bulk of a composited frame on a GPU that cannot scan the layers out.
 +gamescope::ConVar<bool> cv_color_mgmt_skip_identity_luts{ "color_mgmt_skip_identity_luts", true, "Leave the shaper + 3D LUTs out of the composite shader when they are an identity transform." };
-+// Without plane colour management a frame that scans out directly never sees the SDR
-+// gamut remap, so a composited one must not either or the look shifts whenever the
-+// scanout/composite decision flips (upscaler on, overlay up).
-+gamescope::ConVar<bool> cv_color_mgmt_native_gamut_without_plane_cm{ "color_mgmt_native_gamut_without_plane_cm", true, "Keep SDR content in the native gamut when planes cannot be colour managed, so composited and scanned-out frames match." };
++// Where scanout skips the colour pipeline a scanned-out frame never sees the SDR gamut
++// remap, so a composited one must not either or the look shifts with every composite.
++gamescope::ConVar<bool> cv_color_mgmt_native_gamut_without_plane_cm{ "color_mgmt_native_gamut_without_plane_cm", true, "Keep SDR content in the native gamut when scanout cannot be colour managed, so composited and scanned-out frames match." };
++
++static bool BForceNativeSDRGamut()
++{
++	return cv_color_mgmt_native_gamut_without_plane_cm && !GetBackend()->SupportsScanoutColorManagement();
++}
 +
  static void
  create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_color_mgmt_luts outColorMgmtLuts[ EOTF_Count ])
  {
-@@ -346,6 +354,7 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
+@@ -346,6 +358,7 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
  		{
  			memcpy(g_ColorMgmtLuts[nInputEOTF].lut1d, g_ColorMgmtLutsOverride[nInputEOTF].lut1d, sizeof(g_ColorMgmtLutsOverride[nInputEOTF].lut1d));
  			memcpy(g_ColorMgmtLuts[nInputEOTF].lut3d, g_ColorMgmtLutsOverride[nInputEOTF].lut3d, sizeof(g_ColorMgmtLutsOverride[nInputEOTF].lut3d));
@@ -214,20 +218,20 @@ index 5179700..61672b5 100644
  		}
  		else
  		{
-@@ -379,7 +388,11 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
+@@ -379,7 +392,11 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
  				// The final display colorimetry is used to build the output mapping, as we want a gamut-aware handling
  				// for sdrGamutWideness indepdendent of the output encoding (for SDR data), and when mapping SDR -> PQ output
  				// we only want to utilize a portion of the gamut the actual display can reproduce
 -				buildSDRColorimetry( &inputColorimetry, &colorMapping, newColorMgmt.sdrGamutWideness, displayColorimetry );
 +				// -1 is "native" in both the wide-gamut and the 709 branch below; 0 is not.
 +				float flSDRGamutWideness = newColorMgmt.sdrGamutWideness;
-+				if ( cv_color_mgmt_native_gamut_without_plane_cm && !GetBackend()->SupportsPlaneColorManagement() )
++				if ( BForceNativeSDRGamut() )
 +					flSDRGamutWideness = -1.f;
 +				buildSDRColorimetry( &inputColorimetry, &colorMapping, flSDRGamutWideness, displayColorimetry );
  			}
  			else if ( inputEOTF == EOTF_PQ )
  			{
-@@ -435,6 +448,13 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
+@@ -435,6 +452,13 @@ create_color_mgmt_luts(const gamescope_color_mgmt_t& newColorMgmt, gamescope_col
  				newColorMgmt.outputVirtualWhite, newColorMgmt.chromaticAdaptationMode,
  				colorMapping, newColorMgmt.nightmode, tonemapping, pLook, flGain );
  
@@ -241,22 +245,22 @@ index 5179700..61672b5 100644
  			// Create quantized output luts
  			for ( size_t i=0, end = g_tmpLut1d.dataR.size(); i<end; ++i )
  			{
-@@ -612,8 +632,13 @@ update_color_mgmt()
+@@ -612,8 +636,13 @@ update_color_mgmt()
  	struct timespec t0, t1;
  #else
  	// check if any part of our color mgmt stack is dirty
 -	if ( g_ColorMgmt.pending == g_ColorMgmt.current && g_ColorMgmt.serial != 0 )
-+	// The native-gamut convar feeds the LUT build, not the compared state, so a flip must
-+	// get past the dirty check on its own.
-+	static bool s_bLastNativeGamut = cv_color_mgmt_native_gamut_without_plane_cm;
-+	const bool bNativeGamut = cv_color_mgmt_native_gamut_without_plane_cm;
++	// The native-gamut decision feeds the LUT build, not the compared state, and the
++	// backend's answer can change at runtime, so a flip must get past the dirty check.
++	static bool s_bLastNativeGamut = BForceNativeSDRGamut();
++	const bool bNativeGamut = BForceNativeSDRGamut();
 +	if ( g_ColorMgmt.pending == g_ColorMgmt.current && g_ColorMgmt.serial != 0 && bNativeGamut == s_bLastNativeGamut )
  		return;
 +	s_bLastNativeGamut = bNativeGamut;
  #endif
  
  #ifdef COLOR_MGMT_MICROBENCH
-@@ -3503,7 +3528,9 @@ paint_all( global_focus_t *pFocus, bool async )
+@@ -3503,7 +3532,9 @@ paint_all( global_focus_t *pFocus, bool async )
  
  	for (uint32_t i = 0; i < EOTF_Count; i++)
  	{

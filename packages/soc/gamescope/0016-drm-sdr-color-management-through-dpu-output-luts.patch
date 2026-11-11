@@ -1,0 +1,374 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: virtudude <virtudude@protonmail.com>
+Date: Sun, 25 Oct 2026 00:00:00 +0000
+Subject: [PATCH] drm: SDR color management through the DPU output LUTs
+
+Without per-plane color management gamescope only applies its color
+pipeline in the composite shader, so a directly scanned-out layer loses
+night mode and the color sliders. The msm DPU's post-blend CRTC
+DEGAMMA_LUT (256) and 17^3 DPU_3D_LUT are the same shape as the shader's
+shaper and 3D LUT, so an SDR gamma 2.2 output can carry that chain in
+hardware. Enabling them changes which display blocks the CRTC owns, so
+that transition needs a modeset; being post-blend, a translucent overlay
+is corrected as the blended pixel. Per-plane offload is the follow-up.
+
+With the output LUTs, scanned-out frames get the shader's pipeline too,
+so the backend reports scanout color management and SDR content keeps
+Steam's gamut wideness.
+---
+ src/Backends/DRMBackend.cpp    | 130 +++++++++++++++++++++++++++++++--
+ src/Backends/DeferredBackend.h |  10 +++
+ src/backend.h                  |   5 ++
+ src/rendervulkan.hpp           |   3 +
+ src/steamcompmgr.cpp           |  27 +++++++
+ 5 files changed, 167 insertions(+), 8 deletions(-)
+
+diff --git a/src/Backends/DRMBackend.cpp b/src/Backends/DRMBackend.cpp
+index 099c1fd..6210e17 100644
+--- a/src/Backends/DRMBackend.cpp
++++ b/src/Backends/DRMBackend.cpp
+@@ -70,6 +70,7 @@ gamescope::ConVar<bool> cv_drm_debug_disable_regamma_tf( "drm_debug_disable_rega
+ gamescope::ConVar<bool> cv_drm_debug_disable_output_tf( "drm_debug_disable_output_tf", false, "Force default (identity) output TF, affects other logic. Not a property directly." );
+ gamescope::ConVar<bool> cv_drm_debug_disable_blend_tf( "drm_debug_disable_blend_tf", false, "Blending chicken bit. (Forces BLEND_TF to DEFAULT, does not affect other logic)" );
+ gamescope::ConVar<bool> cv_drm_debug_disable_ctm( "drm_debug_disable_ctm", false, "CTM chicken bit. (Forces CTM off, does not affect other logic)" );
++gamescope::ConVar<bool> cv_drm_output_luts( "drm_output_luts", true, "Apply SDR color management through the CRTC degamma and 3D LUT when planes lack color management. Off keeps it in the composite shader." );
+ gamescope::ConVar<bool> cv_drm_debug_disable_color_encoding( "drm_debug_disable_color_encoding", false, "YUV Color Encoding chicken bit. (Forces COLOR_ENCODING to DEFAULT, does not affect other logic)" );
+ gamescope::ConVar<bool> cv_drm_debug_disable_color_range( "drm_debug_disable_color_range", false, "YUV Color Range chicken bit. (Forces COLOR_RANGE to DEFAULT, does not affect other logic)" );
+ gamescope::ConVar<bool> cv_drm_debug_disable_explicit_sync( "drm_debug_disable_explicit_sync", false, "Force disable explicit sync on the DRM backend." );
+@@ -135,6 +136,10 @@ struct drm_t {
+ 	struct drm_state_t {
+ 		std::shared_ptr<gamescope::BackendBlob> mode_id;
+ 		uint32_t color_mgmt_serial;
++		// msm output LUTs, rebuilt with color_mgmt_serial
++		std::shared_ptr<gamescope::BackendBlob> output_degamma;
++		std::shared_ptr<gamescope::BackendBlob> output_lut3d;
++		bool output_luts_applied = false;
+ 		std::shared_ptr<gamescope::BackendBlob> lut3d_id[ EOTF_Count ];
+ 		std::shared_ptr<gamescope::BackendBlob> shaperlut_id[ EOTF_Count ];
+ 		amdgpu_transfer_function output_tf = AMDGPU_TRANSFER_FUNCTION_DEFAULT;
+@@ -357,6 +362,7 @@ namespace gamescope
+ 			std::optional<CDRMAtomicProperty> GAMMA_LUT;
+ 			std::optional<CDRMAtomicProperty> DEGAMMA_LUT;
+ 			std::optional<CDRMAtomicProperty> CTM;
++			std::optional<CDRMAtomicProperty> DPU_3D_LUT;
+ 			std::optional<CDRMAtomicProperty> VRR_ENABLED;
+ 			std::optional<CDRMAtomicProperty> OUT_FENCE_PTR;
+ 			std::optional<CDRMAtomicProperty> AMD_CRTC_REGAMMA_TF;
+@@ -1775,6 +1781,9 @@ void finish_drm(struct drm_t *drm)
+ 		if ( pCRTC->GetProperties().DEGAMMA_LUT )
+ 			pCRTC->GetProperties().DEGAMMA_LUT->SetPendingValue( req, 0, true );
+ 
++		if ( pCRTC->GetProperties().DPU_3D_LUT )
++			pCRTC->GetProperties().DPU_3D_LUT->SetPendingValue( req, 0, true );
++
+ 		if ( pCRTC->GetProperties().CTM )
+ 			pCRTC->GetProperties().CTM->SetPendingValue( req, 0, true );
+ 
+@@ -2403,6 +2412,7 @@ namespace gamescope
+ 			m_Props.GAMMA_LUT           = CDRMAtomicProperty::Instantiate( "GAMMA_LUT",           this, *rawProperties );
+ 			m_Props.DEGAMMA_LUT         = CDRMAtomicProperty::Instantiate( "DEGAMMA_LUT",         this, *rawProperties );
+ 			m_Props.CTM                 = CDRMAtomicProperty::Instantiate( "CTM",                 this, *rawProperties );
++			m_Props.DPU_3D_LUT          = CDRMAtomicProperty::Instantiate( "DPU_3D_LUT",          this, *rawProperties );
+ 			m_Props.VRR_ENABLED         = CDRMAtomicProperty::Instantiate( "VRR_ENABLED",         this, *rawProperties );
+ 			m_Props.OUT_FENCE_PTR       = CDRMAtomicProperty::Instantiate( "OUT_FENCE_PTR",       this, *rawProperties );
+ 			m_Props.AMD_CRTC_REGAMMA_TF = CDRMAtomicProperty::Instantiate( "AMD_CRTC_REGAMMA_TF", this, *rawProperties );
+@@ -3265,6 +3275,29 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
+ 			drm->needs_modeset = true;
+ 	}
+ 
++	// A sleeping screen holds no output LUTs, so its desired state is "not applied";
++	// otherwise every repaint while asleep would see a mismatch and ask for a modeset.
++	const bool bSleep = drm->pConnector && cv_drm_sleep_screens[ drm->pConnector->GetScreenType() ];
++
++	// The output LUTs change on this request when they go on or off (which changes
++	// the display blocks the CRTC owns and needs a modeset) or when their contents do;
++	// neither can ride on an async flip.
++	bool bOutputLutChange = false;
++	if ( drm->pCRTC && drm->pCRTC->GetProperties().DPU_3D_LUT && !drm_supports_color_mgmt( drm ) )
++	{
++		bool bApply = !bSleep && frameInfo->outputLuts && drm->pending.output_degamma && drm->pending.output_lut3d;
++		if ( bApply != drm->current.output_luts_applied )
++		{
++			drm->needs_modeset = true;
++			bOutputLutChange = true;
++		}
++		else if ( bApply && ( drm->pending.output_degamma != drm->current.output_degamma ||
++			drm->pending.output_lut3d != drm->current.output_lut3d ) )
++		{
++			bOutputLutChange = true;
++		}
++	}
++
+ 	drm->m_FbIdsInRequest.clear();
+ 
+ 	bool needs_modeset = drm->needs_modeset.exchange(false);
+@@ -3296,15 +3329,14 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
+ 
+ 	// We do internal refcounting with these events
+ 
+-	bool bSleep = false;
+ 	if ( drm->pConnector )
+ 	{
+-		bSleep = cv_drm_sleep_screens[ drm->pConnector->GetScreenType() ];
+-
+ 		bool bCurrentlyAsleep = drm->pConnector->GetProperties().CRTC_ID->GetCurrentValue() == 0;
+ 
+ 		if ( bCurrentlyAsleep != bSleep )
+ 			needs_modeset = true;
++		if ( bSleep )
++			drm->pending.output_luts_applied = false;
+ 	}
+ 
+ 	if ( !bSleep )
+@@ -3312,7 +3344,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
+ 		if ( drm->pCRTC != nullptr )
+ 			flags |= DRM_MODE_PAGE_FLIP_EVENT;
+ 
+-		if ( async || g_bForceAsyncFlips )
++		if ( ( async || g_bForceAsyncFlips ) && !bOutputLutChange )
+ 			flags |= DRM_MODE_PAGE_FLIP_ASYNC;
+ 	}
+ 
+@@ -3363,6 +3395,9 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
+ 			if ( pCRTC->GetProperties().DEGAMMA_LUT )
+ 				pCRTC->GetProperties().DEGAMMA_LUT->SetPendingValue( drm->req, 0, bForceInRequest );
+ 
++			if ( pCRTC->GetProperties().DPU_3D_LUT )
++				pCRTC->GetProperties().DPU_3D_LUT->SetPendingValue( drm->req, 0, bForceInRequest );
++
+ 			if ( pCRTC->GetProperties().CTM )
+ 				pCRTC->GetProperties().CTM->SetPendingValue( drm->req, 0, bForceInRequest );
+ 
+@@ -3396,7 +3431,7 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
+ 			if ( drm->pCRTC->GetProperties().GAMMA_LUT )
+ 				drm->pCRTC->GetProperties().GAMMA_LUT->SetPendingValue( drm->req, 0, true );
+ 
+-			if ( drm->pCRTC->GetProperties().DEGAMMA_LUT )
++			if ( drm->pCRTC->GetProperties().DEGAMMA_LUT && !drm->pCRTC->GetProperties().DPU_3D_LUT )
+ 				drm->pCRTC->GetProperties().DEGAMMA_LUT->SetPendingValue( drm->req, 0, true );
+ 
+ 			if ( drm->pCRTC->GetProperties().CTM )
+@@ -3425,6 +3460,14 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
+ 
+ 	if ( drm->pCRTC && !bSleep )
+ 	{
++		if ( drm->pCRTC->GetProperties().DEGAMMA_LUT && drm->pCRTC->GetProperties().DPU_3D_LUT && !drm_supports_color_mgmt( drm ) )
++		{
++			bool bApply = frameInfo->outputLuts && drm->pending.output_degamma && drm->pending.output_lut3d;
++			drm->pending.output_luts_applied = bApply;
++			drm->pCRTC->GetProperties().DEGAMMA_LUT->SetPendingValue( drm->req, bApply ? drm->pending.output_degamma->GetBlobValue() : 0lu, bForceInRequest );
++			drm->pCRTC->GetProperties().DPU_3D_LUT->SetPendingValue( drm->req, bApply ? drm->pending.output_lut3d->GetBlobValue() : 0lu, bForceInRequest );
++		}
++
+ 		if ( drm->pCRTC->GetProperties().AMD_CRTC_REGAMMA_TF )
+ 		{
+ 			if ( !cv_drm_debug_disable_regamma_tf )
+@@ -3562,14 +3605,61 @@ gamescope::GamescopeScreenType drm_get_screen_type(struct drm_t *drm)
+ 	return drm->pConnector->GetScreenType();
+ }
+ 
+-bool drm_update_color_mgmt(struct drm_t *drm)
++// The DPU's post-blend DEGAMMA_LUT (256) and DPU_3D_LUT (17^3) take the
++// gamma 2.2 shaper and 3D LUT the shader would apply; the shaper is
++// interpolated down from its 4096 entries.
++static bool drm_update_output_luts(struct drm_t *drm)
+ {
+-	if ( !drm_supports_color_mgmt( drm ) )
++	static constexpr uint32_t k_nDegammaSize = 256;
++	const gamescope_color_mgmt_luts &luts = g_ColorMgmtLuts[EOTF_Gamma22];
++	std::array<uint16_t, k_nDegammaSize * 4> degamma;
++
++	if ( !luts.HasLuts() )
++	{
++		drm->pending.output_degamma = nullptr;
++		drm->pending.output_lut3d = nullptr;
+ 		return true;
++	}
+ 
++	for ( uint32_t i = 0; i < k_nDegammaSize; i++ )
++	{
++		// entry i of both tables sits at i / (size - 1)
++		uint32_t pos = i * ( s_nLutSize1d - 1 );
++		uint32_t src = pos / ( k_nDegammaSize - 1 );
++		uint32_t frac = pos % ( k_nDegammaSize - 1 );
++		uint32_t next = std::min( src + 1, s_nLutSize1d - 1 );
++		for ( uint32_t c = 0; c < 3; c++ )
++		{
++			uint32_t a = luts.lut1d[src * 4 + c];
++			uint32_t b = luts.lut1d[next * 4 + c];
++			degamma[i * 4 + c] = ( a * ( k_nDegammaSize - 1 - frac ) + b * frac + ( k_nDegammaSize - 1 ) / 2 ) / ( k_nDegammaSize - 1 );
++		}
++		degamma[i * 4 + 3] = 0;
++	}
++
++	std::shared_ptr<gamescope::BackendBlob> pDegamma = GetBackend()->CreateBackendBlob( degamma );
++	std::shared_ptr<gamescope::BackendBlob> pLut3D = GetBackend()->CreateBackendBlob( luts.lut3d );
++	if ( !pDegamma || !pLut3D )
++		return false;
++
++	drm->pending.output_degamma = std::move( pDegamma );
++	drm->pending.output_lut3d = std::move( pLut3D );
++	return true;
++}
++
++bool drm_update_color_mgmt(struct drm_t *drm)
++{
+ 	if ( g_ColorMgmt.serial == drm->current.color_mgmt_serial )
+ 		return true;
+ 
++	if ( !drm_supports_color_mgmt( drm ) )
++	{
++		// A failed blob keeps the old serial so the next frame retries.
++		if ( GetBackend()->SupportsOutputLUTs() && drm_update_output_luts( drm ) )
++			drm->pending.color_mgmt_serial = g_ColorMgmt.serial;
++		return true;
++	}
++
+ 	drm->pending.color_mgmt_serial = g_ColorMgmt.serial;
+ 
+ 	for ( uint32_t i = 0; i < EOTF_Count; i++ )
+@@ -3978,6 +4068,13 @@ namespace gamescope
+ 
+ 			bNeedsFullComposite |= !!(g_uCompositeDebug & CompositeDebugFlag::Heatmap);
+ 			bNeedsFullComposite |= g_uOutputRotation != 0; // can't rotate planes at scanout
++			// SDR color work that neither a plane nor the CRTC carries has to go through the shader.
++			if ( !SupportsColorManagement() && !pFrameInfo->outputLuts &&
++			     pFrameInfo->shaperLut[EOTF_Gamma22] )
++			{
++				for ( uint32_t i = 0; i < pFrameInfo->layers.count(); i++ )
++					bNeedsFullComposite |= !ColorspaceIsHDR( pFrameInfo->layers.get( i ).colorspace );
++			}
+ 
+ 			bool bDoComposite = true;
+ 			if ( !bNeedsFullComposite && !bWantsPartialComposite )
+@@ -4091,6 +4188,8 @@ namespace gamescope
+ 			FrameInfo_t presentCompFrameInfo = {};
+ 			presentCompFrameInfo.allowVRR = pFrameInfo->allowVRR;
+ 			presentCompFrameInfo.outputEncodingEOTF = pFrameInfo->outputEncodingEOTF;
++			// The composited frame keeps the output LUTs; turning them off would be a modeset.
++			presentCompFrameInfo.outputLuts = pFrameInfo->outputLuts;
+ 
+ 			if ( bNeedsFullComposite )
+ 			{
+@@ -4386,7 +4485,22 @@ namespace gamescope
+ 
+ 		virtual bool SupportsScanoutColorManagement() const override
+ 		{
+-			return SupportsColorManagement();
++			return SupportsColorManagement() || SupportsOutputLUTs();
++		}
++
++		// A pair built for the previous color state is still applied for the one
++		// frame before the backend rebuilds it, as the AMD plane LUTs are.
++		virtual bool OutputLUTsReady() const override
++		{
++			return g_DRM.pending.output_degamma && g_DRM.pending.output_lut3d;
++		}
++
++		virtual bool SupportsOutputLUTs() const override
++		{
++			// The kernel exposes DPU_3D_LUT only where the DSPP LUT blocks are driven.
++			return cv_drm_output_luts && !g_bForceDisableColorMgmt && !drm_supports_color_mgmt( &g_DRM ) &&
++				g_DRM.pCRTC && g_DRM.pCRTC->GetProperties().DEGAMMA_LUT.has_value() &&
++				g_DRM.pCRTC->GetProperties().DPU_3D_LUT.has_value();
+ 		}
+ 
+ 		int Commit( const FrameInfo_t *pFrameInfo )
+diff --git a/src/Backends/DeferredBackend.h b/src/Backends/DeferredBackend.h
+index 07d3543..56803fd 100644
+--- a/src/Backends/DeferredBackend.h
++++ b/src/Backends/DeferredBackend.h
+@@ -215,6 +215,16 @@ namespace gamescope
+ 			return m_pChild->SupportsScanoutColorManagement();
+ 		}
+ 
++		virtual bool SupportsOutputLUTs() const override
++		{
++			return m_pChild->SupportsOutputLUTs();
++		}
++
++		virtual bool OutputLUTsReady() const override
++		{
++			return m_pChild->OutputLUTsReady();
++		}
++
+ 		virtual bool SupportsTearing() const override
+ 		{
+             {
+diff --git a/src/backend.h b/src/backend.h
+index aa869e6..af13abe 100644
+--- a/src/backend.h
++++ b/src/backend.h
+@@ -342,6 +342,11 @@ namespace gamescope
+         virtual OwningRc<IBackendFb> ImportDmabufToBackend( wlr_dmabuf_attributes *pDmaBuf ) = 0;
+ 
+         virtual bool UsesModifiers() const = 0;
++        // Post-blend degamma + 3D LUT on the output (msm DPU): carries the SDR shaper + 3D LUT
++        // after blending, resampled to the hardware's table sizes.
++        virtual bool SupportsOutputLUTs() const { return false; }
++        // An output LUT pair exists; it may be one frame behind the color management state.
++        virtual bool OutputLUTsReady() const { return false; }
+         virtual std::span<const uint64_t> GetSupportedModifiers( uint32_t uDrmFormat ) const = 0;
+ 		inline bool SupportsFormat( uint32_t uDrmFormat ) const
+ 		{
+diff --git a/src/rendervulkan.hpp b/src/rendervulkan.hpp
+index 673abbc..c484b11 100644
+--- a/src/rendervulkan.hpp
++++ b/src/rendervulkan.hpp
+@@ -300,6 +300,9 @@ struct FrameInfo_t
+ 	bool allowVRR;
+ 	bool applyOutputColorMgmt; // drm only
+ 	EOTF outputEncodingEOTF;
++	// The SDR shaper + 3D LUT are left to the output (msm DPU): set only when every
++	// layer is SDR and the shader skips its gamma 2.2 LUTs.
++	bool outputLuts;
+ 
+ 	// Maps output space onto the focused window's own space for absolute input.
+ 	// Not the base layer's transform, whose texture may already be upscaled.
+diff --git a/src/steamcompmgr.cpp b/src/steamcompmgr.cpp
+index 510420d..0fd5334 100644
+--- a/src/steamcompmgr.cpp
++++ b/src/steamcompmgr.cpp
+@@ -3530,8 +3530,24 @@ paint_all( global_focus_t *pFocus, bool async )
+ 		frameInfo.applyOutputColorMgmt = false;
+ 	}
+ 
++	// The output applies the gamma 2.2 shaper + 3D LUT post-blend, so the shader
++	// leaves them unbound and a composited frame is not corrected twice.
++	bool bOutputLUTs = GetBackend()->SupportsOutputLUTs() && GetBackend()->OutputLUTsReady() && !bDoMuraCompensation &&
++		g_ColorMgmt.current.enabled && g_ColorMgmtLuts[EOTF_Gamma22].HasLuts() &&
++		g_ColorMgmt.current.outputEncodingEOTF == EOTF_Gamma22 && g_ColorMgmt.current.displayEOTF == EOTF_Gamma22;
++	for ( int i = 0; i < frameInfo.layers.count(); i++ )
++	{
++		GamescopeAppTextureColorspace eColorspace = frameInfo.layers.get( i ).colorspace;
++		if ( eColorspace != GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB && eColorspace != GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR )
++			bOutputLUTs = false;
++	}
++	frameInfo.outputLuts = bOutputLUTs;
++
+ 	for (uint32_t i = 0; i < EOTF_Count; i++)
+ 	{
++		if ( bOutputLUTs && i == EOTF_Gamma22 )
++			continue;
++
+ 		// With output colour mgmt off the shader skips the final encode too, so only an
+ 		// identity LUT pair that still ends in the output transfer function can go unbound.
+ 		if ( g_ColorMgmtLuts[i].HasLuts() && !( cv_color_mgmt_skip_identity_luts && frameInfo.applyOutputColorMgmt && g_ColorMgmtLuts[i].bIdentity ) )
+@@ -3637,6 +3653,17 @@ paint_all( global_focus_t *pFocus, bool async )
+ 
+ 			frameInfo.outputEncodingEOTF = bHDRScreenshot ? EOTF_PQ : EOTF_Gamma22;
+ 
++			// The output LUTs ran in the DPU, which Vulkan cannot replay; rebind the
++			// gamma 2.2 LUTs so the capture carries them (the present is already done).
++			if ( frameInfo.outputLuts && drmCaptureFormat != DRM_FORMAT_NV12 &&
++				oScreenshotInfo->eScreenshotType == GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER &&
++				g_ColorMgmtLuts[EOTF_Gamma22].HasLuts() )
++			{
++				frameInfo.shaperLut[EOTF_Gamma22] = g_ColorMgmtLuts[EOTF_Gamma22].vk_lut1d;
++				frameInfo.lut3D[EOTF_Gamma22] = g_ColorMgmtLuts[EOTF_Gamma22].vk_lut3d;
++				frameInfo.outputLuts = false;
++			}
++
+ 			uint32_t uCompositeDebugBackup = g_uCompositeDebug;
+ 
+ 			if ( oScreenshotInfo->eScreenshotType != GAMESCOPE_CONTROL_SCREENSHOT_TYPE_SCREEN_BUFFER )
