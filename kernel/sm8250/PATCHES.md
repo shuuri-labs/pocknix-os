@@ -66,6 +66,22 @@ Last rebased: 2026-11-06 (s2idle stack 3).
   and controller index (both 0) before it starts port 0x6020, as Android's q6afe does. Without
   them the DSP copied front left to both channels. Source: ours, from Android's q6afe; goes
   upstream (ASoC).
+- **1125** Night mode and Steam's colour sliders cost no GPU time, and vibrance applies: the DSPP
+  inverse gamma (IGC v3.1) and 17^3 gamut (v4.2) are driven with plain register writes and exposed
+  as a 256-entry `DEGAMMA_LUT` and `DPU_3D_LUT`, the CRTC contract gamescope 0016 drives. Trap:
+  neither block has a second bank, so each table change shows one frame mixing the old and new
+  tables (never a black frame). Trap: alone, a change in whether the CRTC needs a DSPP is a
+  modeset (1126 keeps the DSPPs). Trap: a compositor that does not know `DPU_3D_LUT` (KWin) leaves
+  it as found, so a killed gamescope would leave Plasma with the 3D LUT on and the IGC off; a
+  clean gamescope exit clears it, and so does pocknix-session between compositors. Trap: an IGC
+  output never CRC-matches a painted frame (neighbouring samples feed a solid input), so test the
+  IGC with impulse tables.
+  Source: ours, table layouts measured by encoder CRC.
+- **1126** KWin Night Light should not freeze a command-mode DSC panel (the Visionox RP5) when it
+  turns on or off: an enabled CRTC keeps its DSPPs, so a colour change is no modeset while it
+  holds them. Needs: 1125. Trap: msm's atomic check still forces a modeset when CTM turns on or
+  off (KWin on the RP5 drives GAMMA_LUT only). Trap: no 2-LM topology (Visionox, a DP display)
+  has run it, nor the IGC skip mask for DSPP1-3. Source: ours, sm8550 1124 carried to sm8250.
 
 ## Edits to synced files
 
