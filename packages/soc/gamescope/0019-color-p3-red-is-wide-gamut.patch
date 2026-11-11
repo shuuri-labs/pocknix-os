@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: virtudude <virtudude@protonmail.com>
+Date: Wed, 11 Nov 2026 00:00:00 +0000
+Subject: [PATCH] color: count a DCI-P3 red as wide gamut
+
+BIsWideGamut() takes a red y below 0.320 as the sign of a wide-gamut
+panel. DCI-P3 red is exactly (0.680, 0.320), so a panel profiled with P3
+primaries is treated as narrow and the SDR gamut wideness slider only
+adjusts clipping instead of mapping between Rec.709 and the native
+gamut. Make the comparison inclusive.
+---
+ src/color_helpers.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/color_helpers.cpp b/src/color_helpers.cpp
+index 752efaa..423f4a7 100644
+--- a/src/color_helpers.cpp
++++ b/src/color_helpers.cpp
+@@ -868,8 +868,8 @@ bool BIsIdentityLut( const lut1d_t & lut1d, const lut3d_t & lut3d, float flToler
+ 
+ bool BIsWideGamut( const displaycolorimetry_t & nativeDisplayOutput )
+ {
+-    // Use red as a sentinal for a wide-gamut display
+-    return ( nativeDisplayOutput.primaries.r.x > 0.650f && nativeDisplayOutput.primaries.r.y < 0.320f );
++    // Use red as a sentinal for a wide-gamut display; DCI-P3 red sits exactly on the threshold
++    return ( nativeDisplayOutput.primaries.r.x > 0.650f && nativeDisplayOutput.primaries.r.y <= 0.320f );
+ }
+ 
+ void buildSDRColorimetry( displaycolorimetry_t * pColorimetry, colormapping_t *pMapping,

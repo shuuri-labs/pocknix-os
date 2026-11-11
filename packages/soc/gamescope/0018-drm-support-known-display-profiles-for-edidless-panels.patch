@@ -1,0 +1,144 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: enjihn <150061999+enjihn@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 00:00:00 +0000
+Subject: [PATCH] drm: support known-display profiles for EDID-less panels
+
+Expose connector, device_id (GAMESCOPE_INTERNAL_DEVICE_ID, internal
+connectors only), internal, and has_edid to known-display matches() so Lua
+profiles can identify EDID-less panels.
+---
+ src/Backends/DRMBackend.cpp | 20 +++++++++++++++++---
+ src/Script/Script.cpp       | 14 +++++++++-----
+ src/Script/Script.h         | 20 +++++++++++++++++++-
+ src/edid.cpp                |  3 +++
+ 4 files changed, 48 insertions(+), 9 deletions(-)
+
+diff --git a/src/Backends/DRMBackend.cpp b/src/Backends/DRMBackend.cpp
+index a1bd2c9..cc9cfc8 100644
+--- a/src/Backends/DRMBackend.cpp
++++ b/src/Backends/DRMBackend.cpp
+@@ -2664,7 +2664,19 @@ namespace gamescope
+ 		{
+ 			CScriptScopedLock script;
+ 
+-			auto oKnownDisplay = script.Manager().Gamescope().Config.LookupDisplay( script, m_Mutable.szMakePNP, pProduct->product, m_Mutable.szModel, m_Mutable.szDataString );
++			const bool bInternal = GetScreenType() == GAMESCOPE_SCREEN_TYPE_INTERNAL;
++			const char *pszDeviceId = bInternal ? getenv( "GAMESCOPE_INTERNAL_DEVICE_ID" ) : nullptr;
++			auto oKnownDisplay = script.Manager().Gamescope().Config.LookupDisplay( script, GamescopeDisplayLookupInfo
++			{
++				.vendor = m_Mutable.szMakePNP,
++				.product = pProduct->product,
++				.model = m_Mutable.szModel,
++				.dataString = m_Mutable.szDataString,
++				.connector = m_Mutable.szName,
++				.deviceId = pszDeviceId ? pszDeviceId : "",
++				.internal = bInternal,
++				.hasEdid = m_Mutable.bHasPhysicalEdid,
++			} );
+ 			if ( oKnownDisplay )
+ 			{
+ 				sol::table tTable = oKnownDisplay->second;
+@@ -2763,9 +2775,11 @@ namespace gamescope
+ 					bHasKnownHDRInfo = true;
+ 				}
+ 			}
+-			else
++			if ( m_Mutable.ValidDynamicRefreshRates.empty() )
+ 			{
+-				// Unknown display, see if there are any other refresh rates in the EDID we can get.
++				// No display-specific rates (unknown display, or a known profile
++				// without a dynamic modegen); collect the connector's own
++				// refresh rates so the kernel mode list stays usable.
+ 				if ( GetScreenType() == GAMESCOPE_SCREEN_TYPE_INTERNAL || cv_drm_allow_dynamic_modes_for_external_display )
+ 				{
+ 					const drmModeModeInfo *pPreferredMode = find_mode( m_pConnector.get(), 0, 0, 0 );
+diff --git a/src/Script/Script.cpp b/src/Script/Script.cpp
+index 9833339..fae5bfa 100644
+--- a/src/Script/Script.cpp
++++ b/src/Script/Script.cpp
+@@ -243,16 +243,20 @@ namespace gamescope
+     // GamescopeScript_t
+     //
+ 
+-    std::optional<std::pair<std::string_view, sol::table>> GamescopeScript_t::Config_t::LookupDisplay( CScriptScopedLock &script, std::string_view psvVendor,  uint16_t uProduct, std::string_view psvModel, std::string_view psvDataString )
++    std::optional<std::pair<std::string_view, sol::table>> GamescopeScript_t::Config_t::LookupDisplay( CScriptScopedLock &script, const GamescopeDisplayLookupInfo &display )
+     {
+         int nMaxPrority = -1;
+         std::optional<std::pair<std::string_view, sol::table>> oOutDisplay;
+ 
+         sol::table tDisplay = script->create_table();
+-        tDisplay["vendor"] = psvVendor;
+-        tDisplay["product"] = uProduct;
+-        tDisplay["model"] = psvModel;
+-        tDisplay["data_string"] = psvDataString;
++        tDisplay["vendor"] = display.vendor;
++        tDisplay["product"] = display.product;
++        tDisplay["model"] = display.model;
++        tDisplay["data_string"] = display.dataString;
++        tDisplay["connector"] = display.connector;
++        tDisplay["device_id"] = display.deviceId;
++        tDisplay["internal"] = display.internal;
++        tDisplay["has_edid"] = display.hasEdid;
+ 
+         for ( auto iter : KnownDisplays )
+         {
+diff --git a/src/Script/Script.h b/src/Script/Script.h
+index 1e5a5ff..4f3390d 100644
+--- a/src/Script/Script.h
++++ b/src/Script/Script.h
+@@ -2,7 +2,9 @@
+ 
+ #include "../Utils/Dict.h"
+ 
++#include <cstdint>
+ #include <mutex>
++#include <string_view>
+ 
+ #if HAVE_SCRIPTING
+ 
+@@ -12,6 +14,22 @@ namespace gamescope
+ {
+     class CScriptScopedLock;
+ 
++    // Identity offered to known-display matches(). vendor/product/model/
++    // dataString come from the parsed EDID (physical or synthetic); connector,
++    // deviceId, internal, and hasEdid let profiles match EDID-less internal
++    // panels whose synthetic EDID carries no useful identity of its own.
++    struct GamescopeDisplayLookupInfo
++    {
++        std::string_view vendor;
++        uint16_t product = 0;
++        std::string_view model;
++        std::string_view dataString;
++        std::string_view connector;
++        std::string_view deviceId;
++        bool internal = false;
++        bool hasEdid = false;
++    };
++
+     struct GamescopeScript_t
+     {
+         // Stores table entries, and caches sol::table
+@@ -30,7 +48,7 @@ namespace gamescope
+ 
+             sol::table KnownDisplays;
+ 
+-            std::optional<std::pair<std::string_view, sol::table>> LookupDisplay( CScriptScopedLock &script, std::string_view psvVendor, uint16_t uProduct, std::string_view psvModel, std::string_view psvDataString );
++            std::optional<std::pair<std::string_view, sol::table>> LookupDisplay( CScriptScopedLock &script, const GamescopeDisplayLookupInfo &display );
+         } Config;
+     };
+ 
+diff --git a/src/edid.cpp b/src/edid.cpp
+index fc44dde..1e0c51f 100644
+--- a/src/edid.cpp
++++ b/src/edid.cpp
+@@ -225,6 +225,9 @@ namespace gamescope
+                     uint8_t *dtd = &ext_data[dtd_start];
+                     memmove(dtd + hdr_metadata_block_size_plus_headers, dtd, hdr_metadata_block_size_plus_headers);
+                     dtd_start += hdr_metadata_block_size_plus_headers;
++                    // The descriptor offset must follow the inserted block or
++                    // parsers read the data block as a detailed timing.
++                    ext_data[2] = dtd_start;
+ 
+                     // Data block is where the dtd was.
+                     uint8_t *data_block = dtd;

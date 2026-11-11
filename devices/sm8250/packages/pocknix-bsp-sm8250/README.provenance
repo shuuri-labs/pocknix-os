@@ -65,3 +65,16 @@ Ours:
     QuickAccess chord (the Flip 2 has no back button)
 
 Last synced: never (hand-ported).
+
+
+# gamescope panel profiles: usr/share/gamescope/scripts/50-pocknix/
+
+Source: armada system_files/usr/share/gamescope/scripts/10-armada/retroid.ch13726a.oled.lua
+(matching shape and nominal Display P3 primaries).
+
+Ours:
+  - matched on our board ids (POCKNIX_DEVICE), not armada's device names
+  - no hdr table yet (SDR colorimetry only)
+  - vtdr6130.oled.lua (Visionox RP5 / Flip 2) is ours: armada profiles neither
+
+Last synced: 2026-11-11.
