@@ -1,24 +1,26 @@
 #!/bin/bash
-# pocknix-refresh-abl-kit — copy the ABL kit from the package tree onto /flash.
+# pocknix-refresh-abl-kit — copy the running SoC's ABL kit from the package tree onto /flash.
 #
 # DOES NOT FLASH. Refreshes inert files only; the bootloader is written solely by
 # pocknix-update-abl. Needed because pacman owns nothing on /flash, so that copy would
 # otherwise stay at the image's version - and users provision a SECOND device from it.
+# build-sd-image.sh runs it against the card with FLASH, SRCROOT and POCKNIX_ABL_SOC set.
 set -euo pipefail
 
 FLASH="${FLASH:-/flash}"
-KIT=/usr/share/pocknix/bootloader/openabl
 OLD="${FLASH}/rocknix_abl"
+. "${SRCROOT:-}/usr/lib/pocknix/abl-kit.sh"
 
-[ -d "${KIT}" ] || { echo "pocknix-refresh-abl-kit: no ${KIT} — nothing to do"; exit 0; }
-# build-sd-image.sh populates the FAT itself; /flash is not a mount there.
+abl_kit_resolve "${POCKNIX_ABL_SOC:-}" \
+  || { echo "pocknix-refresh-abl-kit: no OpenABL kit for ${ABL_SOCS_SEEN:-this device} — nothing to do"; exit 0; }
+# /flash is not a mount in the image's build chroot.
 mountpoint -q "${FLASH}" || { echo "pocknix-refresh-abl-kit: ${FLASH} not mounted — skipping (build chroot?)"; exit 0; }
 
 mount -o remount,rw "${FLASH}" 2>/dev/null || true
 mkdir -p "${FLASH}/openabl"
 # Copy, never mirror: the stock-ABL backups live in this same directory and
 # an rsync --delete would destroy them.
-cp -f "${KIT}"/* "${FLASH}/openabl/"
+cp -f "${ABL_ELF}" "${ABL_FLASH_SH}" "${ABL_KIT_FILES[@]/#/${ABL_KIT}/}" "${FLASH}/openabl/"
 
 # The pre-OpenABL kit folder: its backups move over (never onto one already there), its kit
 # files go, and anything else the user put there stays.
@@ -26,9 +28,9 @@ if [ -d "${OLD}" ]; then
   for f in abl_a.img abl_b.img; do
     if [ -f "${OLD}/${f}" ] && [ ! -e "${FLASH}/openabl/${f}" ]; then mv "${OLD}/${f}" "${FLASH}/openabl/${f}"; fi
   done
-  rm -f "${OLD}"/abl_signed-*.elf "${OLD}"/{README,flash_abl.sh,backup_abl.sh,restore_backup_abl.sh,version}
+  rm -f "${OLD}"/abl_signed-*.elf "${OLD}/flash_abl.sh" "${ABL_KIT_FILES[@]/#/${OLD}/}"
   rmdir "${OLD}" 2>/dev/null || true
 fi
 sync
 
-echo "pocknix-refresh-abl-kit: refreshed ${FLASH}/openabl (v$(cat "${KIT}/version" 2>/dev/null || echo unknown); backups kept)"
+echo "pocknix-refresh-abl-kit: refreshed ${FLASH}/openabl (${ABL_SOC}, v$(cat "${ABL_KIT}/version" 2>/dev/null || echo unknown); backups kept)"

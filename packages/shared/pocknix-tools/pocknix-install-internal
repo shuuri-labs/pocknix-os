@@ -22,9 +22,9 @@ set -euo pipefail
 [ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
 [ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
 
-# Every style carries OpenABL's boot entry. Beside it, qcom-abl (sm8550): the ROCKNIX ABL boots the
-# /flash KERNEL boot image; arm-efi (sm8250): a factory ABL chainloads GRUB, /KERNEL is a raw
-# Image and the cmdline lives in boot/grub/grub.cfg. Only boot-file handling and fstab differ.
+# Every style carries OpenABL's boot entry; bls carries nothing else. Beside it, qcom-abl (sm8550):
+# the ROCKNIX ABL boots the /flash KERNEL boot image; arm-efi (sm8250): a factory ABL chainloads
+# GRUB, /KERNEL is a raw Image and the cmdline lives in boot/grub/grub.cfg.
 BOOT_STYLE="${POCKNIX_BOOT_STYLE:-qcom-abl}"
 case "$BOOT_STYLE" in
   qcom-abl|arm-efi|bls) ;;
@@ -196,7 +196,7 @@ cat <<EOF
 
   PLAN for $DEVICE (nothing before userdata #$UD_NUM is touched: abl/xbl/modem/persist all safe):
     #$UD_NUM  userdata               ${UD_START_MIB}..${NEW_UD_END_MIB} MiB    (Android, ${UD_GIB} GiB — RESET)
-    #$BOOT_NUM  ${BOOT_GPT_NAME}           ${BOOT_START_MIB}..${BOOT_END_MIB} MiB    (FAT, 4K-sector — pocknix KERNEL+KERNEL.md5)
+    #$BOOT_NUM  ${BOOT_GPT_NAME}           ${BOOT_START_MIB}..${BOOT_END_MIB} MiB    (FAT, 4K-sector — pocknix boot files)
     #$ROOT_NUM  $ROOT_GPT_NAME           ${ROOT_START_MIB}..${UD_END_MIB} MiB    (${ROOT_FS}, ~${ROOT_GIB} GiB — pocknix rootfs, ${SD_USED_GIB} GiB to clone)
 EOF
 
@@ -275,26 +275,26 @@ else
   mount "$ROOT_PART" "$RMNT"
 fi
 
-# The ABL verifies KERNEL against KERNEL.md5, so the whole boot FAT is copied — a missing
+# The legacy ABLs verify KERNEL against KERNEL.md5, so the whole boot FAT is copied — a missing
 # KERNEL.md5 reads as "installation corrupt". Older SD images label their boot FAT ROCKNIX.
 SD_BOOT=""
 for _lbl in "$BOOT_FAT_LABEL" ROCKNIX; do
   SD_BOOT="$(blkid -t LABEL="$_lbl" -o device 2>/dev/null | grep -v "^${DEVICE}" | head -1 || true)"
   [ -n "$SD_BOOT" ] && break
 done
-[ -n "$SD_BOOT" ] || die "couldn't find the SD boot partition (LABEL=$BOOT_FAT_LABEL or ROCKNIX) to copy KERNEL from"
+[ -n "$SD_BOOT" ] || die "couldn't find the SD boot partition (LABEL=$BOOT_FAT_LABEL or ROCKNIX) to copy the boot files from"
 # The SD image already mounts its boot FAT on /flash, and vfat refuses a second RO mount while
 # it is mounted RW ("would change RO state"), so reuse an existing mountpoint when there is one.
-SD_SRC="$(findmnt -nro TARGET "$SD_BOOT" 2>/dev/null | head -1)"
+SD_SRC="$(findmnt -nro TARGET "$SD_BOOT" 2>/dev/null | head -1 || true)"
 if [ -n "$SD_SRC" ]; then
   did_sd_mount=0; say "Copying boot files from $SD_BOOT (already mounted at $SD_SRC) ..."
 else
   mount -o ro "$SD_BOOT" "$SDMNT"; SD_SRC="$SDMNT"; did_sd_mount=1
-  say "Copying boot files (KERNEL + KERNEL.md5) from $SD_BOOT ..."
+  say "Copying boot files from $SD_BOOT ..."
 fi
-[ -f "$SD_SRC/KERNEL" ] || die "no KERNEL on the SD boot partition ($SD_BOOT at $SD_SRC)"
+[ "$BOOT_STYLE" = bls ] || [ -f "$SD_SRC/KERNEL" ] || die "no KERNEL on the SD boot partition ($SD_BOOT at $SD_SRC)"
 cp -a "$SD_SRC/." "$BMNT/"
-cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"        # the legacy ABLs' previous-kernel copy
+[ "$BOOT_STYLE" = bls ] || cp "$BMNT/KERNEL" "$BMNT/KERNEL.bak"   # the legacy ABLs' previous-kernel copy
 [ "$did_sd_mount" = 1 ] && umount "$SDMNT" || true
 
 # SD and internal roots share the GPT name, so a PARTLABEL root= would resolve to whichever
@@ -356,7 +356,17 @@ sync
 cleanup_mnt; trap - ERR
 say "Done. New layout on $DEVICE:"
 parted -s "$DEVICE" print | awk 'NR>6'
-if [ "$BOOT_STYLE" != "qcom-abl" ]; then
+if [ "$BOOT_STYLE" = bls ]; then
+  cat <<EOF
+
+  Internal install complete. Now:
+    1) Power off.
+    2) Remove the SD card.
+    3) Power on — OpenABL boots the internal $BOOT_GPT_NAME FAT (Boot source: Auto
+       tries internal first).
+  (The internal boot entry + fstab are PARTUUID-pinned, so an inserted SD can't steal the root.)
+EOF
+elif [ "$BOOT_STYLE" = arm-efi ]; then
   cat <<EOF
 
   Internal install complete. Now:

@@ -1,11 +1,11 @@
 #!/bin/bash
 # pocknix-update-abl — flash OpenABL onto abl_a/abl_b from the running
 # system. User-run only, never a hook: a -Syu that rewrites the bootloader is
-# the one failure here needing a PC to recover. SoC-agnostic — the elf name
-# comes from whichever kit pocknix-bootloader-<soc> installed.
+# the one failure here needing a PC to recover. The elf is the running SoC's,
+# from abl-kit.sh.
 set -euo pipefail
 
-KIT="${POCKNIX_ABL_KIT:-/usr/share/pocknix/bootloader/openabl}"
+. "${SRCROOT:-}/usr/lib/pocknix/abl-kit.sh"
 BACKUP_DIR="${POCKNIX_ABL_BACKUP_DIR:-/flash/openabl}"
 # Where kits before OpenABL kept the stock-ABL backups.
 OLD_BACKUP_DIR="$(dirname "${BACKUP_DIR}")/rocknix_abl"
@@ -51,13 +51,12 @@ needs_openabl() {  # $1 = state
 MENU_REBOOT=0
 [ -n "$(find /sys/firmware/devicetree/base -name mode-bootloader -print -quit 2>/dev/null)" ] && MENU_REBOOT=1
 
-ELF="$(ls "${KIT}"/abl_signed-*.elf 2>/dev/null | head -1 || true)"
-if [ -z "${ELF}" ] || [ ! -f "${ELF}" ]; then
+if ! abl_kit_resolve; then
   [ "$STATUS_ONLY" = 1 ] && { printf 'state=nokit\nrunning_openabl=%s\nneeds_openabl=%s\n' "${RUNNING}" "$(needs_openabl nokit)"; exit 0; }
-  die "no ABL kit installed (${KIT}) — pocknix-bootloader-<soc> provides it."
+  die "no OpenABL kit installed for ${ABL_SOCS_SEEN:-this device (no qcom,<soc> device-tree compatible)} — pocknix-openabl or pocknix-bootloader-<soc> provides it."
 fi
-SOC="$(basename "${ELF}" .elf)"; SOC="${SOC#abl_signed-}"
-SHIPPED_VER="$(cat "${KIT}/version" 2>/dev/null || echo unknown)"
+ELF="${ABL_ELF}"; SOC="${ABL_SOC}"
+SHIPPED_VER="$(cat "${ABL_KIT}/version" 2>/dev/null || echo unknown)"
 
 # Retroid sm8250 units ship a bad primary GPT header, so the kernel hides abl_a
 # entirely. Repairable, and common, so it is a step here and not a dead end.

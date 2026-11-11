@@ -33,6 +33,7 @@ is not taken, retired numbers); files ported from another project record theirs 
 | GPcal calibration maths | [packages/shared/pocknix-gamepad-calibration/README.provenance](packages/shared/pocknix-gamepad-calibration/README.provenance) |
 | GRUB + ABL kit (sm8250) | [packages/soc/pocknix-bootloader-sm8250/README.provenance](packages/soc/pocknix-bootloader-sm8250/README.provenance) |
 | ABL kit (sm8550) | [packages/soc/pocknix-bootloader-sm8550/README.provenance](packages/soc/pocknix-bootloader-sm8550/README.provenance) |
+| OpenABL kit (every chip) | [packages/shared/pocknix-openabl/README.provenance](packages/shared/pocknix-openabl/README.provenance) |
 | Cemu AppImage | [packages/shared/cemu/README.provenance](packages/shared/cemu/README.provenance) |
 | Lepton | [packages/shared/pocknix-lepton/README.provenance](packages/shared/pocknix-lepton/README.provenance) |
 | DXVK donor | [packages/gpu/pocknix-dxvk2-donor/README.provenance](packages/gpu/pocknix-dxvk2-donor/README.provenance) |

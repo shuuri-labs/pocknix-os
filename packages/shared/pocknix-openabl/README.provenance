@@ -1,0 +1,47 @@
+# pocknix-openabl provenance
+
+The elfs are NOT committed here - the PKGBUILD fetches them from the OpenABL
+release, pinned by tag + sha512:
+
+  release:  https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.2
+  asset:    openabl-v1.2.tar.gz (one folder per chipset)
+  source:   openabl-v1.2-source.tar.xz on the same release (the GPL-3.0 corresponding source)
+  tarball sha512: 41f8b0460bc5c2cbbec312911377e52c41eda7c4dcd365bc76486d81cf4da0e9
+                  072df00edaf3afacb87565d856487d0aac3c8b5506d46b9ea6c901c319635492
+  per-chip elf sha256 (the release's own sidecars, re-checked in prepare()):
+    SM8250/abl_signed-SM8250.elf  628dbff74f5b570b897c14725f2c36ff2ca5fe018998e2c248a3d15d906ccef9
+    SM8550/abl_signed-SM8550.elf  2a2808d12f2d494ddd2c39093bbffa90bc43402050be1a87baf6a4c37c830163
+    SM8750/abl_signed-SM8750.elf  0dba7b90d1a36e13977c00fec87f4f5ccc8f49b98864ad495a1ed04d35e33c3a
+
+OpenABL is Qualcomm's ABL (edk2, BSD-3-Clause) with one patch and a menu
+program (GPL-3.0-or-later), signed with the test key. One elf serves every
+board of a chip; OpenABL keys the artifact by SoC. It boots Boot Loader Spec
+entries (loader/entries/*.conf, written by pocknix-bls-deploy). The tarball
+carries more chips than pocknix supports; _socs in the PKGBUILD picks ours.
+
+The four kit files (README, flash_abl.sh.template, backup_abl.sh,
+restore_backup_abl.sh) are VERBATIM copies from the ROCKNIX distribution repo,
+packages/tools/openabl/sources/ (GPL-2.0 tree, next 13d241a7d3), identical to
+the copies in packages/soc/pocknix-bootloader-sm8250 and -sm8550. The
+PKGBUILD renders one flash_abl.sh per chip (%DEVICE% -> the chip folder name,
+as their package.mk does); diff them against the ROCKNIX tree when advancing
+the sync pin.
+
+Layout: /usr/share/pocknix/openabl/<CHIP>/{abl_signed-<CHIP>.elf,flash_abl.sh}
+beside the shared README, backup/restore scripts and version. bsp-common's
+pocknix-refresh-abl-kit copies only the running chip's elf and flash_abl.sh
+(device-tree compatible) plus the shared files, flat, to /flash/openabl: the
+folder stock Android copies to internal storage and flash_abl.sh reads.
+
+Version coupling: the OpenABL version ROCKNIX pins lives in their
+packages/tools/openabl/package.mk (PKG_VERSION). Ours (pkgver in the PKGBUILD)
+should track it, and pocknix-update-abl's MIN_OPENABL is the oldest OpenABL the
+boot files are known to work with.
+
+The kit's job is FIRST INSTALL from stock Android: the user copies openabl/ off
+the SD's boot FAT to Android internal storage, runs backup_abl.sh (saves the
+stock abl_a/abl_b next to the scripts - tell users to copy those .img backups
+OFF the device; an install-to-internal later wipes userdata and the backup
+with it), then flash_abl.sh, both as root. restore_backup_abl.sh is the road
+back to a fully stock device. Once a device runs pocknix, ABL updates go
+through pocknix-update-abl (user-run only, never a hook).
