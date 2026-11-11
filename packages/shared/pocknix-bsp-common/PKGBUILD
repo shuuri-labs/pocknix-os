@@ -3,7 +3,7 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=38
+pkgrel=39
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump and journal storage caps, latency sysctls, zram swap, iwd Wi-Fi backend, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
