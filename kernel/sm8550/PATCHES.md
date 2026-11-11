@@ -12,7 +12,7 @@ Pins are in `kernel/sm8550/kernel.conf`. Stack: `patches/10-mainline`, `20-versi
 
 ROCKNIX 1000+ (synced, not ours): 1000, 1002, 1003, 1005, 1020.
 
-Last rebased: 2026-11-06 (s2idle stack 3).
+Last rebased: 2026-11-11 (DPU colour LUTs).
 
 ## Carried
 
@@ -56,6 +56,19 @@ Last rebased: 2026-11-06 (s2idle stack 3).
   percentage, whoever writes it (PowerDevil, Steam, a plain sysfs write). The driver bends the
   requested level through a per-panel gamma and floor from the devicetree. Needs: ROCKNIX 0057.
   Applies: Thor only. Drop: when the Thor moves to the upstream ch13726a driver. Source: ours.
+- **1121, 1122, 1123** Night mode and the colour sliders reach directly scanned-out games, with
+  no GPU composite: the DPU's LUTDMA engine loads the DSPP inverse gamma and 17^3 gamut, exposed
+  as CRTC `DEGAMMA_LUT` (256) and `DPU_3D_LUT`; 1122/1123 name the engine's `lutdma` register
+  range in sm8550.dtsi. Applies: DPU 9.0+ catalogs; without the `lutdma` reg, or when the engine
+  fails to start, the properties are simply not exposed. Trap: alone, a change in whether the CRTC
+  needs a DSPP (CTM, GAMMA_LUT too) is a modeset, which can freeze the RP6 panel (1124 keeps the
+  DSPPs instead). Source: armada 0068-0070, verbatim.
+- **1124** Plasma Night Light no longer freezes the RP6 panel when it turns on or off: where the
+  DSPP LUT blocks are driven, an enabled CRTC keeps its DSPPs, so a colour change is no modeset
+  while it holds them (elsewhere colour-off keeps the DSPP until the next modeset). A CRTC that
+  wants no colour still lights when the DSPPs are all taken. Needs: 1121. Trap: DSPPs go to
+  whoever lights first; a CRTC lit without one refuses colour until a modeset frees a pair, and
+  that modeset is the freeze-prone kind (Thor + DP dock, untested). Source: ours.
 
 ### Haptics
 

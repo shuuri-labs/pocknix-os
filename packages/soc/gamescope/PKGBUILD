@@ -6,7 +6,7 @@
 pkgname=gamescope
 epoch=1
 pkgver=3.16.31.rocknix.20260927.f6916aa
-pkgrel=5
+pkgrel=7
 _commit=f6916aacdecb4476f05746fef4dc49a650c28f05
 install=gamescope.install
 pkgdesc="SteamOS session compositing WM — patched (for msm handhelds)"
@@ -35,8 +35,9 @@ source=("gamescope::git+https://github.com/ValveSoftware/gamescope.git#commit=${
         '0012-libliftoff-treat-enodev-as-no-fit.patch'
         '0013-libliftoff-give-planes-the-layer-zpos.patch'
         '0014-steamcompmgr-report-wayland-windows-to-steam.patch'
-        '0015-wlserver-pass-touch-through-to-native-wayland-windows.patch')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        '0015-wlserver-pass-touch-through-to-native-wayland-windows.patch'
+        '0016-drm-sdr-color-management-through-dpu-output-luts.patch')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
   cd gamescope
@@ -52,6 +53,7 @@ prepare() {
   patch -p1 < "${srcdir}/0013-libliftoff-give-planes-the-layer-zpos.patch"
   patch -p1 < "${srcdir}/0014-steamcompmgr-report-wayland-windows-to-steam.patch"
   patch -p1 < "${srcdir}/0015-wlserver-pass-touch-through-to-native-wayland-windows.patch"
+  patch -p1 < "${srcdir}/0016-drm-sdr-color-management-through-dpu-output-luts.patch"
 }
 
 build() {
