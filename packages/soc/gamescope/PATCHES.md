@@ -51,11 +51,11 @@ Last rebased: 2026-11-11 (0016 DPU output LUTs).
 - **0016** Night mode and the colour sliders reach directly scanned-out games at no GPU cost:
   on SDR gamma 2.2 output the shaper + 3D LUT go to the msm DPU's CRTC `DEGAMMA_LUT` +
   `DPU_3D_LUT` and the shader leaves them unbound; turning them on or off asks for a modeset
-  (sm8550 1124 keeps the topology, so the kernel does no full one). Where the kernel lacks
-  `DPU_3D_LUT` (sm8250, an older sm8550 kernel), a non-identity LUT composites instead of being
+  (sm8550 1124 and sm8250 1126 keep the topology, so the kernel does no full one). Where the
+  kernel lacks `DPU_3D_LUT` (an older kernel), a non-identity LUT composites instead of being
   dropped at scanout. It also makes the DRM backend report scanout colour management, so
   Steam's gamut wideness applies (0011's native override lifts). The `drm_output_luts` convar
-  (default on) keeps it in the shader. Needs: 0011; sm8550 kernel 1121-1124. Trap: scanout
+  (default on) keeps it in the shader. Needs: 0011; sm8550 kernel 1121-1124 or sm8250 kernel 1125-1126. Trap: scanout
   colour management is reported per capability, not per frame, so with PQ output or an
   HDR/scRGB layer (output LUTs off) Steam's wideness reaches composited frames only; the
   degamma size (256) is hardcoded to match 1121. Source: armada 0017, without its armada 0004

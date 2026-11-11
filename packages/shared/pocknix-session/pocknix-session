@@ -92,6 +92,18 @@ release_display() {
   echo "pocknix-session: ${holder} still holds the display after 10s, starting anyway" >&2
 }
 
+# gamescope clears the msm DPU_3D_LUT only on a clean exit and kwin does not know the property,
+# so after a gamescope crash the desktop would run with its 3D LUT still applied.
+clear_output_luts() {
+  local crtc prop
+  command -v proptest >/dev/null 2>&1 || return 0
+  proptest -M msm 2>/dev/null | awk '/^CRTC /{c=$2} /^\t[0-9]+ DPU_3D_LUT:/{print c, $1}' |
+    while read -r crtc prop; do
+      proptest -M msm "${crtc}" crtc "${prop}" 0 >/dev/null 2>&1 \
+        || echo "pocknix-session: could not clear DPU_3D_LUT on CRTC ${crtc}" >&2
+    done
+}
+
 fastfails=0
 while true; do
   session="$(cat "${STATE}" 2>/dev/null || echo gamescope)"
@@ -99,6 +111,7 @@ while true; do
   blank
   # Before the clock starts: time spent waiting here is no evidence the session works.
   release_display
+  clear_output_luts
   start="$(date +%s)"
   case "${session}" in
     plasma|desktop) command -v pocknix-desktop >/dev/null 2>&1 && run pocknix-desktop

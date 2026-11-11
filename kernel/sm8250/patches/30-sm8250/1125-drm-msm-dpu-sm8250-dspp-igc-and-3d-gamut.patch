@@ -1,0 +1,594 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 22:00:00 +0100
+Subject: [PATCH] drm/msm/dpu: drive the sm8250 DSPP IGC and 3D gamut
+
+The sm8250 DSPP carries an inverse gamma (IGC v3.1) and a 17^3 gamut LUT
+(v4.2) that mainline never drives. Program both with plain register writes
+(no reg DMA) and expose them as a 256-entry DEGAMMA_LUT and the CRTC blob
+property DPU_3D_LUT (drm_color_lut entries, red fastest), the same contract
+as the sm8550 LUTDMA port, so a compositor can move its shaper and 3D LUT off
+the GPU. A DSPP joins the topology only on a modeset, so one is requested
+when color management starts or stops; a mixer no longer keeps a stale DSPP
+pointer from an earlier state.
+
+The table layouts are not documented and were measured on the RP5 by
+comparing the interface CRC of a LUT output with a painted reference: the
+IGC tables sit in the DSPP top behind one shared index, in G, B, R order,
+with 257 samples at i/256 (the 257th must be written); the gamut takes R in
+UPPER and G << 16 | B in LOWER, 12 bits each, with consecutive nodes rotating
+through its four tables. An identity 3D LUT gives the bypass CRC exactly. An
+IGC output never matches a painted frame bit for bit (neighbouring samples
+contribute to a solid input; the cause is not identified).
+
+Neither block has a second bank, so a table rewritten while it is enabled
+can show one frame mixing old and new values.
+---
+diff -ruN a/drivers/gpu/drm/msm/disp/dpu1/catalog/dpu_6_0_sm8250.h b/drivers/gpu/drm/msm/disp/dpu1/catalog/dpu_6_0_sm8250.h
+--- a/drivers/gpu/drm/msm/disp/dpu1/catalog/dpu_6_0_sm8250.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/catalog/dpu_6_0_sm8250.h
+@@ -186,19 +186,19 @@
+ 	{
+ 		.name = "dspp_0", .id = DSPP_0,
+ 		.base = 0x54000, .len = 0x1800,
+-		.sblk = &sdm845_dspp_sblk,
++		.sblk = &sm8250_dspp_sblk,
+ 	}, {
+ 		.name = "dspp_1", .id = DSPP_1,
+ 		.base = 0x56000, .len = 0x1800,
+-		.sblk = &sdm845_dspp_sblk,
++		.sblk = &sm8250_dspp_sblk,
+ 	}, {
+ 		.name = "dspp_2", .id = DSPP_2,
+ 		.base = 0x58000, .len = 0x1800,
+-		.sblk = &sdm845_dspp_sblk,
++		.sblk = &sm8250_dspp_sblk,
+ 	}, {
+ 		.name = "dspp_3", .id = DSPP_3,
+ 		.base = 0x5a000, .len = 0x1800,
+-		.sblk = &sdm845_dspp_sblk,
++		.sblk = &sm8250_dspp_sblk,
+ 	},
+ };
+ 
+diff -ruN a/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c b/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c
+@@ -44,6 +44,13 @@
+ #define	CONVERT_S3_15(val) \
+ 	(((((u64)val) & ~BIT_ULL(63)) >> 17) & GENMASK_ULL(17, 0))
+ 
++/* color management lives in the DSPP, which only joins the topology on a modeset */
++static bool dpu_crtc_state_needs_dspp(const struct drm_crtc_state *crtc_state)
++{
++	return crtc_state->ctm || crtc_state->gamma_lut || crtc_state->degamma_lut ||
++	       to_dpu_crtc_state(crtc_state)->lut3d;
++}
++
+ static struct dpu_kms *_dpu_crtc_get_kms(struct drm_crtc *crtc)
+ {
+ 	struct msm_drm_private *priv = crtc->dev->dev_private;
+@@ -898,17 +905,28 @@
+ 				dspp->ops.setup_gc(dspp, NULL);
+ 			} else {
+ 				gc_lut = kzalloc_obj(*gc_lut);
+-				if (!gc_lut)
+-					continue;
+-				_dpu_crtc_get_gc_lut(state, gc_lut);
+-				dspp->ops.setup_gc(dspp, gc_lut);
+-				kfree(gc_lut);
++				if (gc_lut) {
++					_dpu_crtc_get_gc_lut(state, gc_lut);
++					dspp->ops.setup_gc(dspp, gc_lut);
++					kfree(gc_lut);
++				}
+ 			}
+ 
+ 			/* stage config flush mask */
+ 			ctl->ops.update_pending_flush_dspp(ctl,
+ 				mixer[i].hw_dspp->idx, DPU_DSPP_GC);
+ 		}
++
++		if (dspp->ops.setup_igc) {
++			dspp->ops.setup_igc(dspp, state->degamma_lut ?
++					    state->degamma_lut->data : NULL);
++			ctl->ops.update_pending_flush_dspp(ctl, dspp->idx, DPU_DSPP_IGC);
++		}
++
++		if (dspp->ops.setup_gamut) {
++			dspp->ops.setup_gamut(dspp, cstate->lut3d ? cstate->lut3d->data : NULL);
++			ctl->ops.update_pending_flush_dspp(ctl, dspp->idx, DPU_DSPP_GAMUT);
++		}
+ 	}
+ }
+ 
+@@ -1025,6 +1043,7 @@
+ 	DRM_DEBUG_ATOMIC("crtc%d\n", crtc->base.id);
+ 
+ 	__drm_atomic_helper_crtc_destroy_state(state);
++	drm_property_blob_put(cstate->lut3d);
+ 
+ 	kfree(cstate);
+ }
+@@ -1183,10 +1202,46 @@
+ 
+ 	/* duplicate base helper */
+ 	__drm_atomic_helper_crtc_duplicate_state(crtc, &cstate->base);
++	if (cstate->lut3d)
++		drm_property_blob_get(cstate->lut3d);
+ 
+ 	return &cstate->base;
+ }
+ 
++static int dpu_crtc_atomic_set_property(struct drm_crtc *crtc,
++					struct drm_crtc_state *state,
++					struct drm_property *property, uint64_t val)
++{
++	struct dpu_crtc *dpu_crtc = to_dpu_crtc(crtc);
++	struct dpu_crtc_state *cstate = to_dpu_crtc_state(state);
++	bool replaced = false;
++	int ret;
++
++	if (property != dpu_crtc->lut3d_property)
++		return -EINVAL;
++
++	ret = drm_property_replace_blob_from_id(crtc->dev, &cstate->lut3d, val, -1,
++						DPU_GAMUT_3D_SIZE * sizeof(struct drm_color_lut),
++						sizeof(struct drm_color_lut), &replaced);
++	if (!ret)
++		state->color_mgmt_changed |= replaced;
++	return ret;
++}
++
++static int dpu_crtc_atomic_get_property(struct drm_crtc *crtc,
++					const struct drm_crtc_state *state,
++					struct drm_property *property, uint64_t *val)
++{
++	struct dpu_crtc *dpu_crtc = to_dpu_crtc(crtc);
++	const struct dpu_crtc_state *cstate = to_dpu_crtc_state(state);
++
++	if (property != dpu_crtc->lut3d_property)
++		return -EINVAL;
++
++	*val = cstate->lut3d ? cstate->lut3d->base.id : 0;
++	return 0;
++}
++
+ static void dpu_crtc_atomic_print_state(struct drm_printer *p,
+ 					const struct drm_crtc_state *state)
+ {
+@@ -1437,7 +1492,7 @@
+ 	else
+ 		topology.num_lm = 1;
+ 
+-	if (crtc_state->ctm || crtc_state->gamma_lut)
++	if (dpu_crtc_state_needs_dspp(crtc_state))
+ 		topology.num_dspp = topology.num_lm;
+ 
+ 	return topology;
+@@ -1501,8 +1556,8 @@
+ 
+ 		cstate->mixers[i].hw_lm = to_dpu_hw_mixer(hw_lm[i]);
+ 		cstate->mixers[i].lm_ctl = to_dpu_hw_ctl(hw_ctl[ctl_idx]);
+-		if (i < num_dspp)
+-			cstate->mixers[i].hw_dspp = to_dpu_hw_dspp(hw_dspp[i]);
++		cstate->mixers[i].hw_dspp = i < num_dspp ?
++			to_dpu_hw_dspp(hw_dspp[i]) : NULL;
+ 	}
+ 
+ 	cstate->num_mixers = num_lm;
+@@ -1537,9 +1592,41 @@
+ 	    (!clone_mode_requested && clone_mode_enabled))
+ 		new_crtc_state->mode_changed = true;
+ 
++	if (dpu_crtc_state_needs_dspp(old_crtc_state) != dpu_crtc_state_needs_dspp(new_crtc_state))
++		new_crtc_state->mode_changed = true;
++
+ 	return 0;
+ }
+ 
++/* every DSPP reserved for this CRTC must carry the LUT blocks the state uses */
++static int _dpu_crtc_check_cp_blocks(struct drm_crtc *crtc, struct drm_crtc_state *crtc_state)
++{
++	struct dpu_kms *dpu_kms = _dpu_crtc_get_kms(crtc);
++	struct dpu_crtc_state *cstate = to_dpu_crtc_state(crtc_state);
++	struct dpu_global_state *global_state;
++	struct dpu_hw_blk *hw_dspp[MAX_CHANNELS_PER_CRTC];
++	int i, num_dspp;
++
++	global_state = dpu_kms_get_global_state(crtc_state->state);
++	if (IS_ERR(global_state))
++		return PTR_ERR(global_state);
++
++	num_dspp = dpu_rm_get_assigned_resources(&dpu_kms->rm, global_state, crtc,
++						 DPU_HW_BLK_DSPP, hw_dspp, ARRAY_SIZE(hw_dspp));
++	for (i = 0; i < num_dspp; i++) {
++		struct dpu_hw_dspp *dspp = to_dpu_hw_dspp(hw_dspp[i]);
++
++		if ((crtc_state->degamma_lut && !dspp->ops.setup_igc) ||
++		    (cstate->lut3d && !dspp->ops.setup_gamut)) {
++			DRM_DEBUG_ATOMIC("crtc%d: dspp %d lacks the requested LUT block\n",
++					 crtc->base.id, dspp->idx - DSPP_0);
++			return -EINVAL;
++		}
++	}
++
++	return 0;
++}
++
+ static int dpu_crtc_atomic_check(struct drm_crtc *crtc,
+ 		struct drm_atomic_commit *state)
+ {
+@@ -1555,14 +1642,28 @@
+ 
+ 	bool needs_dirtyfb = dpu_crtc_needs_dirtyfb(crtc_state);
+ 
+-	/* don't reallocate resources if only ACTIVE has beeen changed */
+-	if (crtc_state->mode_changed || crtc_state->connectors_changed ||
+-	    crtc_state->color_mgmt_changed) {
++	/* DEGAMMA_LUT_SIZE only caps the blob; the IGC table needs every entry */
++	if (crtc_state->degamma_lut &&
++	    drm_color_lut_size(crtc_state->degamma_lut) != DPU_DEGAMMA_LUT_SIZE) {
++		DRM_DEBUG_ATOMIC("crtc%d: degamma lut has %d entries, need %d\n",
++				 crtc->base.id, drm_color_lut_size(crtc_state->degamma_lut),
++				 DPU_DEGAMMA_LUT_SIZE);
++		return -EINVAL;
++	}
++
++	/* a color change that alters the topology has already asked for a modeset */
++	if (crtc_state->mode_changed || crtc_state->connectors_changed) {
+ 		rc = dpu_crtc_assign_resources(crtc, crtc_state);
+ 		if (rc < 0)
+ 			return rc;
+ 	}
+ 
++	if (crtc_state->degamma_lut || cstate->lut3d) {
++		rc = _dpu_crtc_check_cp_blocks(crtc, crtc_state);
++		if (rc)
++			return rc;
++	}
++
+ 	if (crtc_state->planes_changed || crtc_state->zpos_changed) {
+ 		if (dpu_use_virtual_planes)
+ 			rc = dpu_crtc_reassign_planes(crtc, crtc_state);
+@@ -1867,6 +1968,8 @@
+ 	.reset = dpu_crtc_reset,
+ 	.atomic_duplicate_state = dpu_crtc_duplicate_state,
+ 	.atomic_destroy_state = dpu_crtc_destroy_state,
++	.atomic_set_property = dpu_crtc_atomic_set_property,
++	.atomic_get_property = dpu_crtc_atomic_get_property,
+ 	.atomic_print_state = dpu_crtc_atomic_print_state,
+ 	.late_register = dpu_crtc_late_register,
+ 	.verify_crc_source = dpu_crtc_verify_crc_source,
+@@ -1935,12 +2038,23 @@
+ 
+ 	if (dpu_kms->catalog->dspp_count) {
+ 		const struct dpu_dspp_cfg *dspp = &dpu_kms->catalog->dspp[0];
++		struct dpu_hw_dspp *hw_dspp = dpu_kms->rm.dspp_blks[0] ?
++			to_dpu_hw_dspp(dpu_kms->rm.dspp_blks[0]) : NULL;
++		u32 degamma = hw_dspp && hw_dspp->ops.setup_igc ? DPU_DEGAMMA_LUT_SIZE : 0;
+ 
++		if (hw_dspp && hw_dspp->ops.setup_gamut) {
++			dpu_crtc->lut3d_property = drm_property_create(dev, DRM_MODE_PROP_BLOB,
++								       "DPU_3D_LUT", 0);
++			if (dpu_crtc->lut3d_property)
++				drm_object_attach_property(&crtc->base,
++							   dpu_crtc->lut3d_property, 0);
++		}
++
+ 		if (dspp->sblk->gc.base) {
+ 			drm_mode_crtc_set_gamma_size(crtc, DPU_GAMMA_LUT_SIZE);
+-			drm_crtc_enable_color_mgmt(crtc, 0, true, DPU_GAMMA_LUT_SIZE);
++			drm_crtc_enable_color_mgmt(crtc, degamma, true, DPU_GAMMA_LUT_SIZE);
+ 		} else {
+-			drm_crtc_enable_color_mgmt(crtc, 0, true, 0);
++			drm_crtc_enable_color_mgmt(crtc, degamma, true, 0);
+ 		}
+ 	}
+ 
+diff -ruN a/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.h b/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.h
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.h
+@@ -156,6 +156,7 @@
+ struct dpu_crtc {
+ 	struct drm_crtc base;
+ 	char name[DPU_CRTC_NAME_SIZE];
++	struct drm_property *lut3d_property;
+ 
+ 	struct drm_pending_vblank_event *event;
+ 	u32 vsync_count;
+@@ -225,6 +226,10 @@
+ 
+ 	enum dpu_crtc_crc_source crc_source;
+ 	int crc_frame_skip_count;
++
++	/* DPU_3D_LUT: DPU_GAMUT_3D_SIZE drm_color_lut entries indexed r + 17 * (g + 17 * b),
++	 * 12 bits used, applied after DEGAMMA_LUT; 0 bypasses */
++	struct drm_property_blob *lut3d;
+ };
+ 
+ #define to_dpu_crtc_state(x) \
+diff -ruN a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_catalog.c b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_catalog.c
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_catalog.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_catalog.c
+@@ -425,6 +425,17 @@
+ 		.len = 0x40, .version = 0x10008},
+ };
+ 
++static const struct dpu_dspp_sub_blks sm8250_dspp_sblk = {
++	.pcc = {.name = "pcc", .base = 0x1700,
++		.len = 0x90, .version = 0x40000},
++	.gc = {.name = "gc", .base = 0x17c0,
++		.len = 0x40, .version = 0x10008},
++	.igc = {.name = "igc", .base = 0x0,
++		.len = 0x4, .version = 0x30001},
++	.gamut = {.name = "gamut", .base = 0x1000,
++		.len = 0xe4, .version = 0x40002},
++};
++
+ static const struct dpu_dspp_sub_blks sm8750_dspp_sblk = {
+ 	.pcc = {.name = "pcc", .base = 0x1700,
+ 		.len = 0x90, .version = 0x60000},
+diff -ruN a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_catalog.h b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_catalog.h
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_catalog.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_catalog.h
+@@ -82,6 +82,8 @@
+ enum {
+ 	DPU_DSPP_PCC = 0x1,
+ 	DPU_DSPP_GC,
++	DPU_DSPP_IGC,
++	DPU_DSPP_GAMUT,
+ 	DPU_DSPP_MAX
+ };
+ 
+@@ -334,10 +336,14 @@
+  * struct dpu_dspp_sub_blks: Information of DSPP block
+  * @pcc: pixel color correction block
+  * @gc: gamma correction block
++ * @igc: inverse gamma block, present when its version is set (its base is 0)
++ * @gamut: 3D gamut LUT block
+  */
+ struct dpu_dspp_sub_blks {
+ 	struct dpu_pp_blk pcc;
+ 	struct dpu_pp_blk gc;
++	struct dpu_pp_blk igc;
++	struct dpu_pp_blk gamut;
+ };
+ 
+ struct dpu_pingpong_sub_blks {
+diff -ruN a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_dspp.c b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_dspp.c
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_dspp.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_dspp.c
+@@ -2,6 +2,8 @@
+ /* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+  */
+ 
++#include <linux/mutex.h>
++
+ #include <drm/drm_managed.h>
+ 
+ #include "dpu_hwio.h"
+@@ -115,6 +117,100 @@
+ 	DPU_REG_WRITE(&ctx->hw, base, reg);
+ }
+ 
++static u16 lut_chan(const struct drm_color_lut *e, int chan)
++{
++	return chan == 0 ? e->red : chan == 1 ? e->green : e->blue;
++}
++
++/* DSPP_IGC v3.1: tables in the DSPP top behind one shared index, c0 = G, c1 = B, c2 = R;
++ * 257 samples at i / 256, and inputs above 1020 read the 257th, so it must be written */
++#define IGC_EN			BIT(0)
++#define IGC_TOP_OFF		0x300
++#define IGC_DATA_MASK		GENMASK(11, 0)
++#define IGC_INDEX_UPDATE	BIT(25)
++#define IGC_DSPP_SKIP(n)	((0xf & ~BIT(n)) << 28)
++#define IGC_SAMPLES		257
++
++/* the DSPP top's index is shared, so CRTCs committing in parallel must not interleave */
++static DEFINE_MUTEX(dpu_igc_lock);
++
++/* sample i of the hardware table sits at i / 256, DEGAMMA_LUT entry i at i / 255 */
++static u16 igc_sample(const struct drm_color_lut *lut, int i, int chan)
++{
++	int pos = i * (DPU_DEGAMMA_LUT_SIZE - 1);
++	int idx = pos / (IGC_SAMPLES - 1);
++	int frac = pos % (IGC_SAMPLES - 1);
++	int a = lut_chan(&lut[idx], chan);
++	int b = lut_chan(&lut[min(idx + 1, DPU_DEGAMMA_LUT_SIZE - 1)], chan);
++
++	return (a * (IGC_SAMPLES - 1 - frac) + b * frac + (IGC_SAMPLES - 1) / 2) /
++	       (IGC_SAMPLES - 1);
++}
++
++static void dpu_setup_dspp_igc(struct dpu_hw_dspp *ctx, const struct drm_color_lut *lut)
++{
++	static const int chan[3] = { 1, 2, 0 };
++	u32 skip = IGC_DSPP_SKIP(ctx->idx - DSPP_0);
++	int c, i;
++
++	if (!lut) {
++		DPU_REG_WRITE(&ctx->hw, ctx->cap->sblk->igc.base, 0);
++		return;
++	}
++
++	mutex_lock(&dpu_igc_lock);
++	for (c = 0; c < 3; c++) {
++		for (i = 0; i < IGC_SAMPLES; i++) {
++			u32 v = drm_color_lut_extract(igc_sample(lut, i, chan[c]), 12);
++
++			DPU_REG_WRITE(&ctx->hw_top, c * 4, (v & IGC_DATA_MASK) | skip |
++				      (i ? 0 : IGC_INDEX_UPDATE));
++		}
++	}
++	mutex_unlock(&dpu_igc_lock);
++
++	DPU_REG_WRITE(&ctx->hw, ctx->cap->sblk->igc.base, IGC_EN);
++}
++
++/* DSPP_GAMUT v4.2 mode 17: LOWER = G << 16 | B then UPPER = R, 12 bits; nodes in
++ * drm_color_lut order (red fastest) rotate through the four tables */
++#define GAMUT_EN		BIT(0)
++#define GAMUT_TABLE_SEL_OFF	0x4
++#define GAMUT_UPPER_OFF		0x8
++#define GAMUT_LOWER_OFF		0xc
++#define GAMUT_TABLE_SEL(t)	BIT(12 + (t))
++#define GAMUT_TBL_NUM		4
++#define GAMUT_TBL_LEN		1229
++
++static void dpu_setup_dspp_gamut(struct dpu_hw_dspp *ctx, const struct drm_color_lut *lut)
++{
++	u32 base = ctx->cap->sblk->gamut.base;
++	int t, e, n;
++
++	if (!lut) {
++		DPU_REG_WRITE(&ctx->hw, base, 0);
++		return;
++	}
++
++	for (t = 0; t < GAMUT_TBL_NUM; t++) {
++		DPU_REG_WRITE(&ctx->hw, base + GAMUT_TABLE_SEL_OFF, GAMUT_TABLE_SEL(t));
++		for (e = 0; e < GAMUT_TBL_LEN; e++) {
++			u32 r = 0, g = 0, b = 0;
++
++			n = e * GAMUT_TBL_NUM + t;
++			if (n < DPU_GAMUT_3D_SIZE) {
++				r = drm_color_lut_extract(lut[n].red, 12);
++				g = drm_color_lut_extract(lut[n].green, 12);
++				b = drm_color_lut_extract(lut[n].blue, 12);
++			}
++			DPU_REG_WRITE(&ctx->hw, base + GAMUT_LOWER_OFF, (g << 16) | b);
++			DPU_REG_WRITE(&ctx->hw, base + GAMUT_UPPER_OFF, r);
++		}
++	}
++
++	DPU_REG_WRITE(&ctx->hw, base, GAMUT_EN);
++}
++
+ /**
+  * dpu_hw_dspp_init() - Initializes the DSPP hw driver object.
+  * should be called once before accessing every DSPP.
+@@ -138,6 +234,8 @@
+ 
+ 	c->hw.blk_addr = addr + cfg->base;
+ 	c->hw.log_mask = DPU_DBG_MASK_DSPP;
++	c->hw_top.blk_addr = addr + IGC_TOP_OFF;
++	c->hw_top.log_mask = DPU_DBG_MASK_DSPP;
+ 
+ 	/* Assign ops */
+ 	c->idx = cfg->id;
+@@ -146,6 +244,11 @@
+ 		c->ops.setup_pcc = dpu_setup_dspp_pcc;
+ 	if (c->cap->sblk->gc.base)
+ 		c->ops.setup_gc = dpu_setup_dspp_gc;
++	/* only the block revisions whose table layout is known */
++	if (c->cap->sblk->igc.version == 0x30001)
++		c->ops.setup_igc = dpu_setup_dspp_igc;
++	if (c->cap->sblk->gamut.version == 0x40002)
++		c->ops.setup_gamut = dpu_setup_dspp_gamut;
+ 
+ 	return c;
+ }
+diff -ruN a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_dspp.h b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_dspp.h
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_dspp.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_hw_dspp.h
+@@ -5,6 +5,8 @@
+ #ifndef _DPU_HW_DSPP_H
+ #define _DPU_HW_DSPP_H
+ 
++#include <drm/drm_color_mgmt.h>
++
+ struct dpu_hw_dspp;
+ 
+ /**
+@@ -34,6 +36,9 @@
+ };
+ 
+ #define DPU_GAMMA_LUT_SIZE 1024
++#define DPU_DEGAMMA_LUT_SIZE 256
++#define DPU_GAMUT_3D_EDGE 17
++#define DPU_GAMUT_3D_SIZE (DPU_GAMUT_3D_EDGE * DPU_GAMUT_3D_EDGE * DPU_GAMUT_3D_EDGE)
+ #define PGC_TBL_LEN 512
+ #define PGC_8B_ROUND BIT(0)
+ 
+@@ -72,6 +77,11 @@
+ 	 */
+ 	void (*setup_gc)(struct dpu_hw_dspp *ctx, struct dpu_hw_gc_lut *gc_lut);
+ 
++	/* @lut: DPU_DEGAMMA_LUT_SIZE entries, NULL bypasses */
++	void (*setup_igc)(struct dpu_hw_dspp *ctx, const struct drm_color_lut *lut);
++
++	/* @lut: DPU_GAMUT_3D_SIZE entries, red fastest, NULL bypasses */
++	void (*setup_gamut)(struct dpu_hw_dspp *ctx, const struct drm_color_lut *lut);
+ };
+ 
+ /**
+@@ -85,6 +95,8 @@
+ struct dpu_hw_dspp {
+ 	struct dpu_hw_blk base;
+ 	struct dpu_hw_blk_reg_map hw;
++	/* DSPP top, shared by every DSPP: holds the IGC tables */
++	struct dpu_hw_blk_reg_map hw_top;
+ 
+ 	/* dspp */
+ 	int idx;
+diff -ruN a/drivers/gpu/drm/msm/disp/dpu1/dpu_kms.c b/drivers/gpu/drm/msm/disp/dpu1/dpu_kms.c
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_kms.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_kms.c
+@@ -31,6 +31,7 @@
+ #include "dpu_crtc.h"
+ #include "dpu_encoder.h"
+ #include "dpu_formats.h"
++#include "dpu_hw_dspp.h"
+ #include "dpu_hw_vbif.h"
+ #include "dpu_hw_rotator.h"
+ #include "dpu_kms.h"
+@@ -110,6 +111,39 @@
+ }
+ DEFINE_SHOW_ATTRIBUTE(dpu_debugfs_safe_stats);
+ 
++/* opmode of each DSPP color block; 0 = bypassed */
++static int dpu_debugfs_dspp_show(struct seq_file *s, void *v)
++{
++	struct dpu_kms *dpu_kms = s->private;
++	int i, ret;
++
++	ret = pm_runtime_resume_and_get(&dpu_kms->pdev->dev);
++	if (ret)
++		return ret;
++	for (i = 0; i < ARRAY_SIZE(dpu_kms->rm.dspp_blks); i++) {
++		const struct dpu_dspp_sub_blks *sblk;
++		struct dpu_hw_dspp *dspp;
++
++		if (!dpu_kms->rm.dspp_blks[i])
++			continue;
++		dspp = to_dpu_hw_dspp(dpu_kms->rm.dspp_blks[i]);
++		sblk = dspp->cap->sblk;
++		seq_printf(s, "dspp%d", i);
++		if (sblk->igc.version)
++			seq_printf(s, " igc %#x", DPU_REG_READ(&dspp->hw, sblk->igc.base));
++		if (sblk->pcc.base)
++			seq_printf(s, " pcc %#x", DPU_REG_READ(&dspp->hw, sblk->pcc.base));
++		if (sblk->gamut.base)
++			seq_printf(s, " gamut %#x", DPU_REG_READ(&dspp->hw, sblk->gamut.base));
++		if (sblk->gc.base)
++			seq_printf(s, " gc %#x", DPU_REG_READ(&dspp->hw, sblk->gc.base));
++		seq_puts(s, "\n");
++	}
++	pm_runtime_put_sync(&dpu_kms->pdev->dev);
++	return 0;
++}
++DEFINE_SHOW_ATTRIBUTE(dpu_debugfs_dspp);
++
+ static ssize_t _dpu_plane_danger_read(struct file *file,
+ 			char __user *buff, size_t count, loff_t *ppos)
+ {
+@@ -188,6 +222,7 @@
+ 			dpu_kms, &dpu_debugfs_safe_stats_fops);
+ 	debugfs_create_file("disable_danger", 0600, entry,
+ 			dpu_kms, &dpu_plane_danger_enable);
++	debugfs_create_file("dspp", 0400, parent, dpu_kms, &dpu_debugfs_dspp_fops);
+ 
+ }
+ 
