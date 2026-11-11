@@ -11,7 +11,7 @@
 #   scripts/ci.sh seed SOC PKG...          # live builds of the siblings PKGs build against
 #   scripts/ci.sh scratch BASE RUN PKG...  # pkgrel = BASE's + ".RUN" (or "0.RUN" on a new version)
 #   scripts/ci.sh kernel-pkgrel BASE SOC RUN
-#   scripts/ci.sh collect SOC RUN OUT PKG... # copy this run's artifacts to OUT; fail on a missing one
+#   scripts/ci.sh collect SOC RUN OUT PKG... # copy this run's artifacts to OUT (epoch out of the name); fail on a missing one
 #
 # The scratch pkgrel sorts between BASE's release and the next one (29 < 29.412 < 30), so a
 # tester's install upgrades over the live package and the real release upgrades over it.
@@ -202,7 +202,8 @@ cmd_collect() {
   for f in build/localrepo/shared/*.pkg.tar.* "build/localrepo/${s}"/*.pkg.tar.*; do
     [ -e "${f}" ] || continue
     read -r n rel <<<"$(artifact_fields "${f}")"
-    [[ "${rel}" == *".${run}" ]] && cp "${f}" "${out}/"
+    # upload-artifact rejects ':'; pacman reads the epoch from .PKGINFO, not the filename
+    [[ "${rel}" == *".${run}" ]] && cp "${f}" "${out}/$(sed -E 's/-[0-9]+:/-/' <<<"${f##*/}")"
   done
   ls -l "${out}"
 }
