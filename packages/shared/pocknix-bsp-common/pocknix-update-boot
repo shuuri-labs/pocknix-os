@@ -33,6 +33,13 @@ if ls "${SRCROOT}"/boot/dtbs/*.dtb >/dev/null 2>&1; then
   for d in "${SRCROOT}"/boot/dtbs/*.dtb; do
     put "$d" "$FLASH/boot/grub/$(basename "$d")${OUT_SUFFIX}"
   done
+  # OpenABL's model menu also lists every dtb here and shows only the first 64 by name, so
+  # boards the kernel no longer ships (once ~400 upstream ones) push ours off it.
+  if [ -z "$OUT_SUFFIX" ]; then
+    for d in "$FLASH"/boot/grub/*.dtb; do
+      [ -f "${SRCROOT}/boot/dtbs/$(basename "$d")" ] || rm -f "$d"
+    done
+  fi
 fi
 sync
 note="previous kernel kept"; [ -n "$OUT_SUFFIX" ] && note="staged, not activated"
