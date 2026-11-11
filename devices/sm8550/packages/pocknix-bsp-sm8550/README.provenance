@@ -39,3 +39,16 @@ Ours:
   - 02-ayn-thor-controller.yaml + thor-gamepad.yaml are ours
 
 Last synced: never (hand-ported).
+
+
+# gamescope panel profiles: usr/share/gamescope/scripts/50-pocknix/
+
+Source: armada system_files/usr/share/gamescope/scripts/10-armada/ retroid.vtdr6130 (RP6),
+ayn.icna3520 (Thor top), ayn.icna3512 (Odin 2 Portal), retroid.il97680a (Nova)
+(matching shape and nominal Display P3 primaries).
+
+Ours:
+  - matched on our board ids (POCKNIX_DEVICE), not armada's device names
+  - no hdr table yet (SDR colorimetry only)
+
+Last synced: 2026-11-11.

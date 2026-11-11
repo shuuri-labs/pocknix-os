@@ -26,8 +26,8 @@ is not taken, retired numbers); files ported from another project record theirs 
 
 | Ported | Provenance |
 |---|---|
-| alsa-ucm, speaker DSP profiles, InputPlumber maps (sm8250) | [devices/sm8250/packages/pocknix-bsp-sm8250/README.provenance](devices/sm8250/packages/pocknix-bsp-sm8250/README.provenance) |
-| alsa-ucm, speaker DSP profile, InputPlumber maps (sm8550) | [devices/sm8550/packages/pocknix-bsp-sm8550/README.provenance](devices/sm8550/packages/pocknix-bsp-sm8550/README.provenance) |
+| alsa-ucm, speaker DSP profiles, InputPlumber maps, gamescope panel profiles (sm8250) | [devices/sm8250/packages/pocknix-bsp-sm8250/README.provenance](devices/sm8250/packages/pocknix-bsp-sm8250/README.provenance) |
+| alsa-ucm, speaker DSP profile, InputPlumber maps, gamescope panel profiles (sm8550) | [devices/sm8550/packages/pocknix-bsp-sm8550/README.provenance](devices/sm8550/packages/pocknix-bsp-sm8550/README.provenance) |
 | firmware (sm8550) | [devices/sm8550/packages/pocknix-firmware-sm8550/README.provenance](devices/sm8550/packages/pocknix-firmware-sm8550/README.provenance) |
 | format-device.sh | [packages/shared/pocknix-sdcard-automount/README.provenance](packages/shared/pocknix-sdcard-automount/README.provenance) |
 | GPcal calibration maths | [packages/shared/pocknix-gamepad-calibration/README.provenance](packages/shared/pocknix-gamepad-calibration/README.provenance) |

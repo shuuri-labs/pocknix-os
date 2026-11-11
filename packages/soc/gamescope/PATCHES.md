@@ -10,7 +10,7 @@ Launch: logical landscape -W/-H, rotation autodetected from the primary plane (s
 sm8550 via kernel 0066, composite on sm8250); POCKNIX_PANEL_ROTATE_SHADER=1 forces
 --force-composition-rotation for panels past the 1088-line rotator cap.
 
-Last rebased: 2026-11-11 (0016 DPU output LUTs).
+Last rebased: 2026-11-11 (0017-0019 panel profiles).
 
 ## Carried
 
@@ -33,6 +33,18 @@ Last rebased: 2026-11-11 (0016 DPU output LUTs).
 - **0013** The Steam overlay and MangoHud stay above the game: libliftoff sets a plane's mutable
   zpos from its layer, so msm's several primary planes (all zpos 0, else stacked by plane id)
   follow layer order. Source: ROCKNIX 0020 + 0022, verbatim.
+- **0017** An EDID-less internal panel (every DSI board) gets a synthetic EDID built from its
+  preferred mode (sRGB chromaticity, no HDR), so known-display profiles are looked up at all
+  and Steam sees a display. Never committed to KMS. Trap: every internal panel's kernel modes
+  at native size now become Steam's refresh list (was empty; 0018 does it for profiled panels
+  too), so a panel with several modes (the Nova's 60 + 120) gets Steam refresh switching.
+  Source: armada 0002, without its tests.
+- **0018** Steam's default vibrance no longer oversaturates the OLED panels: known-display
+  `matches()` also gets `connector`, `device_id` (`GAMESCOPE_INTERNAL_DEVICE_ID`, internal
+  connectors only), `internal` and `has_edid`, so the BSPs' panel profiles (board id passed
+  by pocknix-steam) give a panel its Display P3 colorimetry. Also fixes the CTA descriptor
+  offset when an HDR block is inserted into the EDID. Needs: 0017. Source: armada 0003,
+  without its tests.
 
 ### Frame pacing and colour
 
@@ -60,6 +72,9 @@ Last rebased: 2026-11-11 (0016 DPU output LUTs).
   HDR/scRGB layer (output LUTs off) Steam's wideness reaches composited frames only; the
   degamma size (256) is hardcoded to match 1121. Source: armada 0017, without its armada 0004
   hunks (HDR output composite rule and its test); the deferred backend forwards the new hooks.
+- **0019** A panel profiled with exact Display P3 primaries counts as wide gamut, so vibrance 0
+  is accurate sRGB and Steam's 0.5 a mild boost (`BIsWideGamut` wanted red y < 0.320; P3 red
+  is 0.320). Source: armada 0019, verbatim.
 
 ### Steam focus
 

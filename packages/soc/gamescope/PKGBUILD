@@ -6,7 +6,7 @@
 pkgname=gamescope
 epoch=1
 pkgver=3.16.31.rocknix.20260927.f6916aa
-pkgrel=7
+pkgrel=8
 _commit=f6916aacdecb4476f05746fef4dc49a650c28f05
 install=gamescope.install
 pkgdesc="SteamOS session compositing WM — patched (for msm handhelds)"
@@ -36,8 +36,12 @@ source=("gamescope::git+https://github.com/ValveSoftware/gamescope.git#commit=${
         '0013-libliftoff-give-planes-the-layer-zpos.patch'
         '0014-steamcompmgr-report-wayland-windows-to-steam.patch'
         '0015-wlserver-pass-touch-through-to-native-wayland-windows.patch'
-        '0016-drm-sdr-color-management-through-dpu-output-luts.patch')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        '0016-drm-sdr-color-management-through-dpu-output-luts.patch'
+        '0017-drm-synthesize-edid-for-edidless-internal-panels.patch'
+        '0018-drm-support-known-display-profiles-for-edidless-panels.patch'
+        '0019-color-p3-red-is-wide-gamut.patch')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP' 'SKIP')
 
 prepare() {
   cd gamescope
@@ -54,6 +58,9 @@ prepare() {
   patch -p1 < "${srcdir}/0014-steamcompmgr-report-wayland-windows-to-steam.patch"
   patch -p1 < "${srcdir}/0015-wlserver-pass-touch-through-to-native-wayland-windows.patch"
   patch -p1 < "${srcdir}/0016-drm-sdr-color-management-through-dpu-output-luts.patch"
+  patch -p1 < "${srcdir}/0017-drm-synthesize-edid-for-edidless-internal-panels.patch"
+  patch -p1 < "${srcdir}/0018-drm-support-known-display-profiles-for-edidless-panels.patch"
+  patch -p1 < "${srcdir}/0019-color-p3-red-is-wide-gamut.patch"
 }
 
 build() {

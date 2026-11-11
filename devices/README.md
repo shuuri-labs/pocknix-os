@@ -81,7 +81,10 @@ devices/<soc>/
                                   #   the boards, then a qcom,<soc> catch-all), pocknix-perfd's
                                   #   underclock tables (usr/share/pocknix/power-profiles.d/
                                   #   family.conf, checked against freqs.txt), speaker DSP
-                                  #   profiles (usr/share/pocknix/speaker-dsp/<name>.conf).
+                                  #   profiles (usr/share/pocknix/speaker-dsp/<name>.conf),
+                                  #   gamescope panel profiles for EDID-less panels
+                                  #   (usr/share/gamescope/scripts/50-pocknix/<panel>.lua,
+                                  #   matched on the board id).
                                   #   No kernel-cmdline: the build renders it from the profile.
                                   #   MUST: depends=(pocknix-bsp-common)
                                   #   provides/conflicts=(pocknix-bsp)   <- wrong-device guard
@@ -166,12 +169,12 @@ leaves it unset); otherwise it says what a board without the key gets. Keys:
 
 | Key | Used by | Absent | Meaning |
 |---|---|---|---|
-| `POCKNIX_DEVICE` / `POCKNIX_SOC` | anything | required | identity |
+| `POCKNIX_DEVICE` / `POCKNIX_SOC` | anything | required | identity; the board also reaches gamescope as `GAMESCOPE_INTERNAL_DEVICE_ID` (pocknix-steam), which the BSP's panel profiles match on |
 | `POCKNIX_PANEL_W` / `POCKNIX_PANEL_H` / `POCKNIX_PANEL_REFRESH` | pocknix-steam, pocknix-roms-init (refresh also: es-retroarch) | required | gamescope -W/-H/-r |
 | `POCKNIX_PANEL_ORIENT` | pocknix-steam, pocknix-roms-init | required | gamescope --force-orientation |
 | `POCKNIX_PANEL_MM` | pocknix-steam | required | GAMESCOPE_FAKE_OUTPUT_MM (gamepadui DPI; deliberately faked on small panels) |
 | `POCKNIX_DESKTOP_ROTATE` / `POCKNIX_DESKTOP_SCALE` | pocknix-desktop-rotate (scale also: pocknix-ui) | required | kscreen-doctor rotation/scale (seeded once per user; env re-forces); the touch apps' scale in game mode |
-| `POCKNIX_BOARD_UNKNOWN` | pocknix-desktop-rotate | board known (only the fallback branch sets it) | set by the device.conf fallback branch: board not in the list, do not force guessed values |
+| `POCKNIX_BOARD_UNKNOWN` | pocknix-desktop-rotate, pocknix-steam | board known (only the fallback branch sets it) | set by the device.conf fallback branch: board not in the list, do not force guessed values |
 | `POCKNIX_PANEL_OUTPUT` | pocknix-steam, pocknix-desktop, pocknix-desktop-rotate, pocknix-desktop-touchpin | single panel, first DSI | DRM connector of the main panel (`DSI-2`); gamescope `--prefer-output`, the desktop seed's output |
 | `POCKNIX_PANEL_BACKLIGHT` | pocknix-backlight-grant, steamos-priv-write | Steam writes every backlight directly | sysfs backlight of the main panel on a multi-backlight board (`ae96000.dsi.0`): no node gets the direct write grant, so Steam falls back to steamos-priv-write, which writes this node rescaled |
 | `POCKNIX_PANEL_ROTATE_SHADER` | pocknix-steam | rotation autodetected | `1` = gamescope `--force-composition-rotation`: required for a panel past the DPU rotator's 1088-line cap, which otherwise scans out black |
