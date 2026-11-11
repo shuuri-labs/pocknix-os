@@ -1,7 +1,8 @@
 #!/bin/bash
 # pocknix-bls-deploy — write the OpenABL boot files on /flash from the installed kernel: /Image,
 # /dtbs/*.dtb and loader/entries/pocknix.conf, whose options are kernel-cmdline with root= pinned
-# to this install's root PARTUUID. Legacy payloads (KERNEL, EFI/, boot/grub/) are left alone.
+# to this install's root PARTUUID. Legacy payloads (KERNEL, EFI/, boot/grub/) are left alone,
+# except boot/grub dtbs the kernel no longer ships, which OpenABL's model menu also lists.
 # Every write is tmp + rename, Image, then dtbs, then the entries: a cut leaves the previous set
 # or the new one under each name. Idempotent: an unchanged Image keeps Image.bak.
 # FLASH / SRCROOT / OUT_SUFFIX as in pocknix-build-bootimg; ROOT_PARTUUID overrides the running root.
@@ -80,9 +81,10 @@ for d in "${dtbs[@]}"; do
   same "$d" "$FLASH/dtbs/$(basename "$d")" && [ -z "$OUT_SUFFIX" ] && continue
   put "$d" "$FLASH/dtbs/$(basename "$d")${OUT_SUFFIX}"
 done
-# OpenABL lists every dtb here in its model menu, so a board the kernel dropped must go too.
+# OpenABL's model menu lists every dtb in both and shows only the first 64 by name, so a board
+# the kernel dropped must go too.
 if [ -z "$OUT_SUFFIX" ]; then
-  for d in "$FLASH"/dtbs/*.dtb; do
+  for d in "$FLASH"/dtbs/*.dtb "$FLASH"/boot/grub/*.dtb; do
     [ -f "${SRCROOT}/boot/dtbs/$(basename "$d")" ] || rm -f "$d"
   done
 fi
