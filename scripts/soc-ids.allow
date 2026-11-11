@@ -7,4 +7,5 @@ config/pocknix.conf :: DEVICE:=sm8550 :: by design: the default image target
 .github/* :: sm8550|sm8250 :: by design: the forms ask for the reporter's family
 scripts/check-comments.py :: SM8550 quirk :: by design: self-test fixture
 packages/shared/pocknix-bsp-common/pocknix-gpt-abl :: Retroid sm8250 units :: by design: help text naming the affected hardware
+packages/shared/pocknix-openabl/* :: SM8250|SM8550|SM8750 :: by design: one OpenABL elf per supported chip, named by the release
 packages/shared/pocknix-bsp-common/PKGBUILD :: linux-pocknix-sm[0-9]{4}<7 :: #126: the kernels that shipped the /flash deploy before it moved here

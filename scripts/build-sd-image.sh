@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-sd-image.sh - flashable SD image, laid out the way the device's ABL expects:
-#   p1 fat32 "${SD_BOOT_PARTNAME}": OpenABL's /Image, dtbs/ and loader/, the legacy /KERNEL
-#      (+ EFI/ and boot/grub/ with the dtbs on arm-efi) and the openabl/ install kit
+#   p1 fat32 "${SD_BOOT_PARTNAME}": OpenABL's /Image, dtbs/ and loader/, the openabl/ install kit
+#      and, on the legacy styles, /KERNEL (+ EFI/ and boot/grub/ with the dtbs on arm-efi)
 #   p2 btrfs "${ROOT_LABEL}": subvols @ @home @snapshots @pacman-cache @var-log
 # The kernel mounts root by PARTUUID (no initramfs) and boots the btrfs DEFAULT subvol: the
 # cmdline and fstab must never name one, that is what lets pocknix-rollback switch roots.
@@ -16,7 +16,7 @@ KERNEL_IMG="${IMAGE_DIR}/KERNEL"
 KOUT="${KERNEL_BUILD_DIR}/out"   # per-SoC (set in lib.sh)
 OUT="${IMAGE_DIR}/pocknix-${SOC}-sd.img"   # one image per SoC family -> name it so
 
-[ -f "${KERNEL_IMG}" ] || die "no ${KERNEL_IMG} — run 'make kernel' first"
+[ "${BOOTLOADER}" = bls ] || [ -f "${KERNEL_IMG}" ] || die "no ${KERNEL_IMG} — run 'make kernel' first"
 [ -d "${ROOTFS_DIR}" ] || die "no rootfs at ${ROOTFS_DIR} — run 'sudo make build' first"
 
 LOOP=""; MNT=""
@@ -49,13 +49,15 @@ ensure_kernel_in_rootfs() {
   fi
 }
 
-# ABL kit at the FAT root on both boot styles: stock Android mounts this FAT, so a factory
+# ABL kit at the FAT root on every boot style: stock Android mounts this FAT, so a factory
 # device is provisioned from the SD alone. Inert at boot.
 copy_abl_kit() {
-  local mnt="$1" kit="${ROOTFS_DIR}/usr/share/pocknix/bootloader/openabl"
-  [ -f "${kit}/abl_signed-${SOC^^}.elf" ] \
-    || die "${kit#${ROOTFS_DIR}}/abl_signed-${SOC^^}.elf missing from the rootfs — is pocknix-bootloader-${SOC} built and installed? (make packages + make build)"
-  rsync -rlt --no-owner --no-group "${kit}" "${mnt}/"
+  local w="${ROOTFS_DIR}/usr/bin/pocknix-refresh-abl-kit"
+  [ -f "${w}" ] || die "${w#${ROOTFS_DIR}} missing from the rootfs — is pocknix-bsp-common built and installed?"
+  FLASH="$1" SRCROOT="${ROOTFS_DIR}" POCKNIX_ABL_SOC="${SOC}" bash "${w}" \
+    || die "copying the OpenABL kit failed"
+  [ -f "$1/openabl/abl_signed-${SOC^^}.elf" ] \
+    || die "no ${SOC^^} OpenABL kit copied to the boot FAT — is pocknix-openabl or pocknix-bootloader-${SOC} built and installed? (make packages + make build)"
 }
 
 # GRUB + cfg + grubenv come from pocknix-bootloader-${SOC} in the rootfs (its alpm hook
@@ -68,10 +70,7 @@ populate_arm_efi_boot() {
     || die "arm-efi: ${bl#${ROOTFS_DIR}}/boot/grub/grub.cfg missing from the rootfs"
   rsync -rlt --no-owner --no-group "${bl}/EFI" "${bl}/boot" "${mnt}/"
   cp "${KOUT}/dtbs/"*.dtb "${mnt}/boot/grub/"
-  copy_abl_kit "${mnt}"
 }
-
-populate_qcom_abl_boot() { copy_abl_kit "$1"; }
 
 # The device's own writer, run from the rootfs, so the card matches what an update rewrites.
 populate_bls_boot() {
@@ -247,12 +246,12 @@ main() {
 
   MNT="$(mktemp -d)"
   mount "${LOOP}p1" "${MNT}"
-  cp "${KERNEL_IMG}" "${MNT}/KERNEL"
-  ( cd "${MNT}" && md5sum KERNEL > KERNEL.md5 )
-  case "${BOOTLOADER}" in
-    arm-efi)  populate_arm_efi_boot "${MNT}" ;;
-    qcom-abl) populate_qcom_abl_boot "${MNT}" ;;
-  esac
+  if [ "${BOOTLOADER}" != bls ]; then
+    cp "${KERNEL_IMG}" "${MNT}/KERNEL"
+    ( cd "${MNT}" && md5sum KERNEL > KERNEL.md5 )
+  fi
+  if [ "${BOOTLOADER}" = arm-efi ]; then populate_arm_efi_boot "${MNT}"; fi
+  copy_abl_kit "${MNT}"
   populate_bls_boot "${MNT}"
   sync; umount "${MNT}"
 

@@ -3,7 +3,7 @@
 # live in devices/<name>/packages/pocknix-bsp-<name>, which depends on this package.
 pkgname=pocknix-bsp-common
 pkgver=0.1.0
-pkgrel=40
+pkgrel=41
 pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-key policy, session udev rules, wheel sudo, fan/scheduler daemons, ABL updater, second-screen touch policy, power profiles daemon, realtime priority ladder, deck session limits, kernel /flash deploy, coredump and journal storage caps, latency sysctls, zram swap, iwd Wi-Fi backend, speaker DSP"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
@@ -30,7 +30,7 @@ source=('pocknix-sleep' 'sdam-debug-pre' 'sdam-debug-post'
         'pocknix-fancontrol' 'pocknix-fan-mode' '52-pocknix-fan-mode.rules' 'pocknix-lavd-mode'
         'pocknix-fancontrol.service' 'pocknix-lavd.service' 'pocknix-game-mode.conf'
         'pocknix-update-abl' '52-pocknix-abl.rules' 'pocknix-gpt-abl'
-        'pocknix-refresh-abl-kit'
+        'pocknix-refresh-abl-kit' 'abl-kit.sh'
         'pocknix-gamepad-target' 'pocknix-gamepad-target.service'
         'pocknix-second-screen' 'pocknix-second-screen.service' '50-pocknix-second-screen.rules'
         'iwd-wait-wlan0.conf'
@@ -51,7 +51,7 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
             'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
-            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+            'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 "${srcdir}/pocknix-sleep" \
@@ -113,6 +113,7 @@ package() {
   # Not in PATH: it writes a partition table, and has exactly one caller.
   install -Dm755 "${srcdir}/pocknix-gpt-abl" "${pkgdir}/usr/lib/pocknix/pocknix-gpt-abl"
   install -Dm755 "${srcdir}/pocknix-refresh-abl-kit" "${pkgdir}/usr/bin/pocknix-refresh-abl-kit"
+  install -Dm644 "${srcdir}/abl-kit.sh" "${pkgdir}/usr/lib/pocknix/abl-kit.sh"
   install -Dm644 "${srcdir}/52-pocknix-abl.rules" \
     "${pkgdir}/usr/share/polkit-1/rules.d/52-pocknix-abl.rules"
 
