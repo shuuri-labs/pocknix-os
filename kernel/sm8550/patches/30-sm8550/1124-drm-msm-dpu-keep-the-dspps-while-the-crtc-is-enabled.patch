@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: shuuri-labs <61762328+shuuri-labs@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 15:30:00 +0100
+Subject: [PATCH] drm/msm/dpu: keep the DSPPs while the CRTC is enabled
+
+A DSPP joins or leaves the topology only on a modeset, so a compositor
+that turns its first color property on or off (KWin night light: CTM and
+GAMMA_LUT) forces one on a lit panel. On the RP6's command-mode DSC panel
+that modeset leaves the pingpong without a done interrupt about half the
+time: every later commit times out and the panel shows its last frame
+until the power domain resets.
+
+Where the DSPP LUT blocks are driven, reserve the DSPPs at every modeset
+of an enabled CRTC, so color changes never alter the topology; they only
+reprogram or bypass the blocks. A modeset is still needed when a state
+wants color on a CRTC that has no DSPP, and a CRTC that wants none still
+lights when the DSPPs are all taken.
+---
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_crtc.c
+@@ -51,6 +51,20 @@
+ 	       to_dpu_crtc_state(crtc_state)->lut3d;
+ }
+ 
++/* kept while enabled where the LUT blocks are driven: adding or dropping a DSPP on a live
++ * command-mode panel is a modeset that can leave its pingpong without a done interrupt */
++static bool dpu_crtc_wants_dspp(struct drm_crtc *crtc, const struct drm_crtc_state *crtc_state)
++{
++	return dpu_crtc_state_needs_dspp(crtc_state) || to_dpu_crtc(crtc)->lut3d_property;
++}
++
++static bool dpu_crtc_state_has_dspp(const struct drm_crtc_state *crtc_state)
++{
++	const struct dpu_crtc_state *cstate = to_dpu_crtc_state(crtc_state);
++
++	return cstate->num_mixers && cstate->mixers[0].hw_dspp;
++}
++
+ static struct dpu_kms *_dpu_crtc_get_kms(struct drm_crtc *crtc)
+ {
+ 	struct msm_drm_private *priv = crtc->dev->dev_private;
+@@ -1549,7 +1563,7 @@
+ 	else
+ 		topology.num_lm = 1;
+ 
+-	if (dpu_crtc_state_needs_dspp(crtc_state))
++	if (dpu_crtc_wants_dspp(crtc, crtc_state))
+ 		topology.num_dspp = topology.num_lm;
+ 
+ 	return topology;
+@@ -1586,6 +1600,14 @@
+ 	topology = dpu_crtc_get_topology(crtc, dpu_kms, crtc_state);
+ 	ret = dpu_rm_reserve(&dpu_kms->rm, global_state,
+ 			     crtc_state->crtc, &topology);
++	/* out of DSPPs with several outputs lit: a CRTC that uses no color still lights */
++	if (ret && topology.num_dspp && !dpu_crtc_state_needs_dspp(crtc_state)) {
++		DRM_DEBUG_ATOMIC("crtc%d: no free DSPP, lighting without\n", crtc->base.id);
++		dpu_rm_release(global_state, crtc);
++		topology.num_dspp = 0;
++		ret = dpu_rm_reserve(&dpu_kms->rm, global_state,
++				     crtc_state->crtc, &topology);
++	}
+ 	if (ret) {
+ 		/*
+ 		 * Release on reserve failure to since partial reservation will prevent
+@@ -1649,7 +1671,8 @@
+ 	    (!clone_mode_requested && clone_mode_enabled))
+ 		new_crtc_state->mode_changed = true;
+ 
+-	if (dpu_crtc_state_needs_dspp(old_crtc_state) != dpu_crtc_state_needs_dspp(new_crtc_state))
++	if (new_crtc_state->enable && dpu_crtc_state_needs_dspp(new_crtc_state) &&
++	    !dpu_crtc_state_has_dspp(old_crtc_state))
+ 		new_crtc_state->mode_changed = true;
+ 
+ 	return 0;
