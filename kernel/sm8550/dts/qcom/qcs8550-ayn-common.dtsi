@@ -1076,6 +1076,11 @@
 	sound-name-prefix = "Display Port0";
 };
 
+/* Without link-frequencies the msm DP bridge caps this 2-lane link at HBR2: no 4K60. */
+&mdss_dp0_out {
+	link-frequencies = /bits/ 64 <1620000000 2700000000 5400000000 8100000000>;
+};
+
 &mdss_dsi1 {
 	vdda-supply = <&vreg_l3e_1p2>;
 	status = "okay";

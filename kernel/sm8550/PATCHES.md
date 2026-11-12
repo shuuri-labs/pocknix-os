@@ -87,7 +87,9 @@ The local delta `kernel/sm8550/sync-keep` restores after each make sync.
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-common.dtsi`: sdhc_2 without `sdhci-caps-mask` (UHS-I
   SDR104 on stock sdhci-msm, as armada carries it); rail and WAKE# constraints, bob1 LPM, and the
   gamepad MCU on vdd_mcu_3v3 without always-on (armada PR #545); volume up is no wake source, so
-  a press in a bag no longer wakes the device (armada's ayn-common dts patch).
+  a press in a bag no longer wakes the device (armada's ayn-common dts patch); `&mdss_dp0_out`
+  declares HBR3 link rates, without which the msm DP bridge caps the two-lane link at HBR2 and a
+  4K60 sink never gets a 4K60 mode (ours).
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-odin2.dts`: `&vreg_l12b_1p8` always-on (armada 8675d40:
   the panel draws over a watt in sleep with its IO supply cut).
 - `kernel/sm8550/dts/qcom/qcs8550-ayn-thor.dts`: touchscreens without `touchscreen-swapped-x-y`
