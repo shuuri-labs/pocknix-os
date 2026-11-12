@@ -25,8 +25,8 @@ if [ ! -x "${CLIENT}" ]; then
   exit 1
 fi
 
-# Steam resolves its legacy module paths (bin/vgui2_s.dll ...) RELATIVE TO getcwd, and gamescope
-# passes our cwd to the client: launching from $HOME gives "Could not load module 'bin/vgui2_s.dll'".
+# Steam resolves its legacy module paths (bin/vgui2_s.dll) against getcwd, which gamescope passes
+# on: from $HOME it fails "Could not load module 'bin/vgui2_s.dll'".
 cd "${CLIENT_DIR}" 2>/dev/null || { echo "missing ${CLIENT_DIR}" >&2; exit 1; }
 
 # Steam opens its CEF debugging port (Decky, pocknix-tiles, pocknix-steam-storage) only if this
@@ -36,9 +36,8 @@ touch "${STEAM}/.cef-enable-remote-debugging" 2>/dev/null || true
 . /usr/lib/pocknix/pocknix-steam-channel
 pocknix_steam_channel_guard "${STEAM}"
 
-# Must precede Steam, which enumerates controllers once at startup; desktop mode leaves the pad
-# on xb360, and only a Deck target gives Steam Input the Steam-native pad (Guide, QAM, L4/L5).
-# deck-uhid, not USB/IP `deck`: vhci_hcd refuses system suspend while a USB/IP device is attached.
+# Before Steam, which enumerates pads once; only a Deck target gets Steam Input's native pad.
+# deck-uhid, not USB/IP deck: vhci_hcd refuses system suspend while a USB/IP device is attached.
 if command -v pocknix-gamepad-target >/dev/null 2>&1; then
   pocknix-gamepad-target deck-uhid || true
 fi
@@ -47,9 +46,8 @@ fi
 /usr/bin/pocknix-proton-prep
 mark "proton prep done"
 
-# A session switch SIGTERMs gamescope but the Steam client re-parents and survives holding its
-# single-instance lock, so the next launch exits "Steam is already running" and gamescope
-# hot-loops. Safe only because this runs at session START, when no legitimate Steam is alive.
+# A switch SIGTERMs gamescope but the client survives holding its single-instance lock, so the
+# next launch hot-loops on "already running". Safe: at session start no real Steam is alive.
 uid="$(id -u)"
 if pgrep -u "${uid}" -x steam >/dev/null 2>&1 || pgrep -u "${uid}" -f steamwebhelper >/dev/null 2>&1; then
   echo "[pocknix-steam] clearing a stale Steam from a previous session..."
@@ -78,8 +76,8 @@ case "${ORIENT}" in
   *)          GS_W="${W}"; GS_H="${H}" ;;
 esac
 
-# --prefer-output pins the main panel; gamescope's modeset disables every other CRTC, which is
-# what blanks the second one. Stop pocknix-second-screen so the bottom touchscreen stays off libinput.
+# --prefer-output pins the main panel; gamescope's modeset blanks every other CRTC. Stop
+# pocknix-second-screen so the bottom touchscreen stays off libinput.
 GS_OUTPUT=()
 if [ -n "${POCKNIX_PANEL_OUTPUT:-}" ]; then
   GS_OUTPUT=(--prefer-output "${POCKNIX_PANEL_OUTPUT}")
@@ -121,10 +119,8 @@ export STEAM_ALLOW_DRIVE_ADOPT=1
 GS_LOG="${HOME}/pocknix-steam.log"
 # gamescope paints black until a client presents; the splash covers that, then execs Steam.
 mark "starting gamescope"
-# gamepadui sizes its UI from the output's physical mm; the ~96 DPI default reads as a desktop
-# monitor and renders the UI tiny. -noshaders keeps fossilize from stealing CPU during play.
-# --rt: gamescope's own threads at SCHED_RR 1 (cap_sys_nice), below audio and GPU/display kthreads;
-# it resets children before exec, so Steam and games stay SCHED_OTHER.
+# gamepadui sizes from physical mm (~96 DPI renders it tiny); -noshaders keeps fossilize off the
+# CPU. --rt: gamescope's threads only, SCHED_RR 1 under audio/display kthreads; children reset.
 env -u WAYLAND_DISPLAY \
   GAMESCOPE_FAKE_OUTPUT_MM="${PANEL_MM}" GAMESCOPE_INTERNAL_DEVICE_ID="${GS_DEVICE_ID}" \
   gamescope "${GS_OUTPUT[@]}" -W "${GS_W}" -H "${GS_H}" -r "${REFRESH}" --rt --xwayland-count 2 --mangoapp --backend drm \

@@ -11,19 +11,6 @@ packages/shared/pocknix-tools/pocknix-internal-boot-rename :: from ROCKNIX to PO
 packages/shared/pocknix-sdcard-automount/format-device.sh :: SteamOS's deck
 packages/shared/pocknix-decky/pocknix-control/py_modules/pocknix_control/calibration.py :: provenance/status :: GPcal
 scripts/build-kernel.sh :: long comment :: ^# Deltas over the synced config
+packages/shared/pocknix-tools/pocknix-install-internal :: long comment :: ^#\$UD_NUM  userdata
 # Unswept: files an unmerged branch changes. After it merges, cut their comments and drop the line.
 config/pocknix.conf :: long comment :: .
-devices/sm8250/packages/pocknix-bsp-sm8250/PKGBUILD :: long comment :: .
-packages/shared/pocknix-bsp-common/PKGBUILD :: long comment :: .
-packages/shared/pocknix-decky/pocknix-control/py_modules/pocknix_control/led.py :: long comment :: .
-packages/shared/pocknix-desktop/pocknix-desktop :: long comment :: .
-packages/shared/pocknix-emulation-common/pocknix-roms-init :: long comment :: .
-packages/shared/pocknix-session/pocknix-session :: long comment :: .
-packages/shared/pocknix-steam/PKGBUILD :: long comment :: .
-packages/shared/pocknix-steam/pocknix-steam :: long comment :: .
-packages/shared/pocknix-steam/pocknix-tiles :: long comment :: .
-packages/shared/pocknix-tools/pocknix-install-internal :: long comment :: .
-packages/shared/pocknix-tools/pocknix-share :: long comment :: .
-packages/shared/pocknix-tools/smb.conf :: long comment :: .
-packages/soc/gamescope/PKGBUILD :: long comment :: .
-packages/soc/mesa/PKGBUILD :: long comment :: .

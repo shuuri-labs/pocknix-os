@@ -50,9 +50,8 @@ sweep() {  # <TERM|KILL>; TERM escalates to KILL after 3s
   kill -KILL "${pids[@]}" 2>/dev/null
 }
 
-# A switch only TERMs the compositor, and one TERM-proof straggler (a Wine process stuck in
-# ntsync) holds gamescope's reaper, and so the launcher, open forever (#107). Anything still
-# running 6s after a switch request, or left once the launcher is gone, is killed from here.
+# A switch only TERMs the compositor, and one TERM-proof straggler (Wine stuck in ntsync) keeps
+# the launcher open forever: whatever is left 6s after a switch, or after the launcher, is killed.
 run() {  # <launcher>
   local child t=0
   # Append mode for both writers: a truncating fd would overwrite lines written meanwhile.
@@ -69,9 +68,8 @@ run() {  # <launcher>
   sweep TERM
 }
 
-# Plasma 6 runs kwin as a user service, outside our scope, and it outlives its launcher by
-# seconds: the next compositor would start without DRM master and modeset into a black panel.
-# kwin is PartOf graphical-session.target, but stopping the target only queues kwin's stop.
+# Plasma 6's kwin is a user service that outlives its launcher by seconds, so the next compositor
+# lacks DRM master and modesets black. Stopping graphical-session.target only queues kwin's stop.
 release_display() {
   local holder i
   timeout 15 systemctl --user stop graphical-session.target \

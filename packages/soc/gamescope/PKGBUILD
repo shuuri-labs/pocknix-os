@@ -65,9 +65,8 @@ prepare() {
 
 build() {
   cd gamescope
-  # gamescope and wlroots build with -Werror against older libs than ALARM ships (newer
-  # libinput enums alone break -Werror=switch); appended last, these override it, and they
-  # propagate into the subprojects.
+  # -Werror breaks against ALARM's newer libs (libinput enums trip -Werror=switch); appended
+  # last, this wins, subprojects included.
   export CFLAGS+=" -Wno-error" CXXFLAGS+=" -Wno-error"
   # Appended last so -march/-mtune override ALARM's defaults, subprojects included.
   # Fallback = sm8550, as in packages/soc/mesa.

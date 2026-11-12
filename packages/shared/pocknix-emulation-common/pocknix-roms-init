@@ -20,9 +20,8 @@ case "${POCKNIX_PANEL_ORIENT:-left}" in
   left|right) LOGICAL_H="${POCKNIX_PANEL_W:-1080}" ;;
   *)          LOGICAL_H="${POCKNIX_PANEL_H:-1920}" ;;
 esac
-# ES-DE's ROMDirectory setting is the single source of truth for where ROMs live (the user can
-# repoint it at an SD card), and this skeleton follows it. Empty/absent means ES-DE's own default
-# ~/ROMs. The settings file is a rootless XML fragment, hence sed.
+# ES-DE's ROMDirectory decides where ROMs live (empty = ~/ROMs) and this skeleton follows it.
+# es_settings.xml is a rootless XML fragment, hence sed.
 ESDE_SETTINGS="${HOME}/ES-DE/settings/es_settings.xml"
 ESDE_CUSTOM="${HOME}/ES-DE/custom_systems"
 _roms_setting="$(sed -n 's/.*name="ROMDirectory" value="\([^"]*\)".*/\1/p' "${ESDE_SETTINGS}" 2>/dev/null | head -1)"
@@ -101,9 +100,8 @@ seed_copy() {  # $1 file or dir (absolute, or relative to SHARE), $2 target; per
   fi
 }
 
-# The custom_systems pair is launch wiring, not settings: a frozen copy would drift from
-# pocknix-play and never learn a new emulator, so ES-DE reads ours through a link. A user's own
-# real file there is left alone.
+# custom_systems is launch wiring, not settings: a copy would drift from pocknix-play, so ES-DE
+# reads ours through a link. A user's own real file there is left alone.
 ESDE_WIRING="es_systems.xml es_find_rules.xml"
 link_esde() {  # $1 file name
   [ -f "${SHARE}/$1" ] || return 0
@@ -165,9 +163,8 @@ seed_srm() {
   seed_file userConfigurations.json "${SRM_DATA}/userConfigurations.json"
 }
 
-# One-time move off the old settings merge: an unedited custom_systems copy (comment and blank
-# line differences ignored) becomes the link, then the merge's per-user baselines and the
-# .pocknixnew offers beside our files go.
+# One-time move off the old settings merge: an unedited custom_systems copy becomes the link,
+# then the merge's per-user baselines and .pocknixnew offers go.
 BASELINE="${STATE}/pocknix/seed-baseline"
 xml_body() {  # $1 file -> its lines minus XML comments, blank lines and trailing blanks
   awk '{
