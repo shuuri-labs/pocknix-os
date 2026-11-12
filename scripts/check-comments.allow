@@ -12,13 +12,8 @@ packages/shared/pocknix-sdcard-automount/format-device.sh :: SteamOS's deck
 packages/shared/pocknix-decky/pocknix-control/py_modules/pocknix_control/calibration.py :: provenance/status :: GPcal
 scripts/build-kernel.sh :: long comment :: ^# Deltas over the synced config
 # Unswept: files an unmerged branch changes. After it merges, cut their comments and drop the line.
-config/packages/base-extras.list :: long comment :: .
-config/packages/base.list :: long comment :: .
 config/pocknix.conf :: long comment :: .
 devices/sm8250/packages/pocknix-bsp-sm8250/PKGBUILD :: long comment :: .
-devices/sm8250/profile.conf :: long comment :: .
-kernel/sm8250/kernel.conf :: long comment :: .
-kernel/sm8550/kernel.conf :: long comment :: .
 packages/shared/pocknix-bsp-common/PKGBUILD :: long comment :: .
 packages/shared/pocknix-decky/pocknix-control/py_modules/pocknix_control/led.py :: long comment :: .
 packages/shared/pocknix-desktop/pocknix-desktop :: long comment :: .
