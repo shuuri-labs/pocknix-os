@@ -1,5 +1,7 @@
 #!/bin/bash
-# pocknix-desktop-remove-taskpanel — delete Plasma Mobile's bottom taskpanel containment.
+# pocknix-desktop-remove-taskpanel — delete Plasma Mobile's bottom taskpanel containment in gesture
+# mode, and put it back when navigation buttons are picked: that mode also turns the swipe gesture
+# off, so without the panel there is no way to navigate.
 # No config value can hide it: disabling the panels only asks for thickness 0, and PanelView
 # clamps to a ~12 logical px minimum that then floats over app content in overlay mode.
 # Runs per session, not baked into appletsrc, because plasma-mobile's panelsfix.js re-adds it.
@@ -7,14 +9,41 @@ set -u
 # /etc/xdg/autostart is read by every KDE session, desktop Plasma included.
 [ "${DESKTOP_SESSION:-}" = plasma-mobile ] || exit 0
 
-have() { command -v "$1" >/dev/null 2>&1; }
-have qdbus6 || { echo "pocknix-desktop-remove-taskpanel: qdbus6 not found" >&2; exit 1; }
-
 log() { echo "pocknix-desktop-remove-taskpanel: $*" >&2; }
+have() { command -v "$1" >/dev/null 2>&1; }
+have qdbus6 || { log "qdbus6 not found"; exit 1; }
+have kreadconfig6 || { log "kreadconfig6 not found"; exit 1; }
 
-# Snapshot panels() once: remove() shrinks the live list, so a fresh panels() call per index
-# walks off the end mid-loop.
-script='var ps = panels();
+# --type bool answers in the exit code (0 true, 1 false) with KConfig's own parsing, and the same
+# default as plasma-mobile, so this agrees with what the shell shows.
+kreadconfig6 --file plasmamobilerc --group General --key navigationPanelEnabled --type bool --default true
+read_rc=$?
+
+case "${read_rc}" in
+0)
+  # No status bar yet = the saved layout has not loaded; a template now would duplicate the bar.
+  script='var found = false, layout = false;
+var ps = panels();
+for (var i = 0; i < ps.length; i++) {
+    if (ps[i].type == "org.kde.plasma.mobile.taskpanel") {
+        found = true;
+    } else if (ps[i].type == "org.kde.plasma.mobile.panel") {
+        layout = true;
+    }
+}
+if (!layout) {
+    print("WAIT");
+} else {
+    if (!found) {
+        loadTemplate("org.kde.plasma.mobile.defaultNavigationPanel");
+    }
+    print(found ? "navigation buttons on, taskpanel kept" : "navigation buttons on, taskpanel restored");
+}'
+  ;;
+1)
+  # Snapshot panels() once: remove() shrinks the live list, so a fresh panels() call per index
+  # walks off the end mid-loop.
+  script='var ps = panels();
 var out = "";
 for (var i = 0; i < ps.length; i++) {
     if (ps[i].type == "org.kde.plasma.mobile.taskpanel") {
@@ -23,14 +52,22 @@ for (var i = 0; i < ps.length; i++) {
     }
 }
 print(out || "no taskpanel present");'
+  ;;
+*)
+  # Removing on an unreadable value would strand a buttons user without navigation.
+  log "kreadconfig6 failed (${read_rc}), taskpanel left as it was"
+  exit 1
+  ;;
+esac
 
 # plasmashell can take a moment after login to register on D-Bus.
 for _ in $(seq 1 30); do
-  if out="$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "${script}" 2>/dev/null)"; then
+  if out="$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "${script}" 2>/dev/null)" \
+      && [ "${out}" != WAIT ]; then
     log "${out:-done}"
     exit 0
   fi
   sleep 0.5
 done
-log "plasmashell not reachable on D-Bus after ~15s, taskpanel left in place"
+log "plasmashell layout not reachable after ~15s, taskpanel left as it was"
 exit 1

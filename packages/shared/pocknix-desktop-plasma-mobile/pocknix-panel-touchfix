@@ -8,9 +8,27 @@ set -u
 
 QML=/usr/share/plasma/shells/org.kde.plasma.mobileshell/contents/views/Panel.qml
 MARK=pocknixPanelHidden
+# Every panel loads this view; without the guard the navigation-button panel gets the strip too.
+UNGUARDED_HIDDEN='pocknixPanelHidden: PocknixShellState'
+GUARDED_HIDDEN='pocknixPanelHidden: containment?.plasmoid?.pluginName === "org.kde.plasma.mobile.panel" && PocknixShellState'
+
+# Every panel loads this file: a truncated or failed write takes out both bars.
+replace_qml() {
+  [ -s "$1" ] || return 1
+  chmod 644 "$1" && mv -f "$1" "$QML"
+}
 
 [ -f "$QML" ] || exit 0
-grep -q "$MARK" "$QML" && exit 0
+if grep -q "$MARK" "$QML"; then
+  # A file patched before the guard would keep that bug until plasma-mobile is reinstalled.
+  if grep -qF "$UNGUARDED_HIDDEN" "$QML"; then
+    tmp="$(mktemp "${QML}.XXXXXX")" || exit 0
+    trap 'rm -f "$tmp"' EXIT
+    content="$(<"$QML")"
+    printf '%s\n' "${content/"$UNGUARDED_HIDDEN"/"$GUARDED_HIDDEN"}" > "$tmp" && replace_qml "$tmp"
+  fi
+  exit 0
+fi
 
 tmpdir=$(mktemp -d) || exit 0
 trap 'rm -rf "$tmpdir"' EXIT
@@ -22,7 +40,7 @@ QMLEOF
 
 cat > "$tmpdir/block" <<'QMLEOF'
     // pocknix-panel-touchfix: thin the hidden status bar's input region to a swipe strip.
-    readonly property bool pocknixPanelHidden: PocknixShellState.ShellDBusClient.panelState === "hidden"
+    readonly property bool pocknixPanelHidden: containment?.plasmoid?.pluginName === "org.kde.plasma.mobile.panel" && PocknixShellState.ShellDBusClient.panelState === "hidden"
     readonly property int pocknixHiddenThickness: 4
     property int pocknixMaskRev: 0
     onWidthChanged: pocknixMaskRev++
@@ -91,7 +109,9 @@ if awk -v impfile="$tmpdir/import" -v blkfile="$tmpdir/block" -v maskfile="$tmpd
     { print }
     END { exit (imported && injected && masked) ? 0 : 1 }
   ' "$QML" > "$tmpdir/Panel.qml"; then
-  cat "$tmpdir/Panel.qml" > "$QML"
+  tmp="$(mktemp "${QML}.XXXXXX")" || exit 0
+  trap 'rm -rf "$tmpdir"; rm -f "$tmp"' EXIT
+  cat "$tmpdir/Panel.qml" > "$tmp" && replace_qml "$tmp"
 else
   echo "pocknix-panel-touchfix: Panel.qml anchors not found, left unpatched" >&2
 fi
