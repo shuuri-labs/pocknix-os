@@ -6,7 +6,7 @@
 pkgname=gamescope
 epoch=1
 pkgver=3.16.31.rocknix.20260927.f6916aa
-pkgrel=8
+pkgrel=9
 _commit=f6916aacdecb4476f05746fef4dc49a650c28f05
 install=gamescope.install
 pkgdesc="SteamOS session compositing WM — patched (for msm handhelds)"
@@ -90,4 +90,7 @@ build() {
 package() {
   cd gamescope
   meson install -C build --destdir "${pkgdir}"
+
+  # Vendored subprojects install dev files that their standalone packages own.
+  rm -rf "${pkgdir}/usr/include" "${pkgdir}/usr/lib/pkgconfig"
 }
