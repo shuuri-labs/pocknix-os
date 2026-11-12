@@ -90,8 +90,7 @@ for _hook in /usr/lib/pocknix/desktop.d/*.sh; do
   [ -r "${_hook}" ] && { bash "${_hook}" || echo "pocknix-desktop: hook ${_hook} failed" >&2; }
 done
 
-# exec keeps this PID, so it names the session for steamos-session-select and
-# pocknix-desktop-select --now; the supervisor deletes it once the session ends.
+# exec keeps this PID, so it names the session for steamos-session-select and --now switches.
 # Plain word splitting: session Exec lines carry no quoting or field codes.
 read -ra argv <<< "${exec_line}"
 echo "$$" > "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pocknix-desktop.pid"

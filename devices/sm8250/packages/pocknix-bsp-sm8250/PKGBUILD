@@ -20,10 +20,8 @@ package() {
   # scripts/render-bsp.sh renders device.conf and family.conf into ./staged (build-packages.sh).
   install -Dm644 "${startdir}/staged/device.conf" "${pkgdir}/usr/lib/pocknix/device.conf"
   install -Dm644 "${startdir}/staged/kernel-cmdline" "${pkgdir}/usr/lib/pocknix/kernel-cmdline"
-  # root/ is the install tree. makepkg's umask 022 turns git's exec bit into 755/644, and
-  # files created under fakeroot are root-owned; -d keeps the symlinks as links. The units
-  # ship enabled through their wants links so a plain pacman -U activates them, and the
-  # extra UCM conf.d names are inert: only the card's own longname is looked up.
+  # root/ is the install tree: umask 022 normalises git's modes, fakeroot makes it root-owned,
+  # -d keeps links. Units ship enabled via their wants links, so a plain pacman -U activates them.
   cp -dr "${startdir}/root/." "${pkgdir}/"
   # boards/ also comes from startdir (build-packages.sh copies the whole package dir);
   # models is not installed, and the rendered family.conf replaces the committed one.

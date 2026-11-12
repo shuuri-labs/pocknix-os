@@ -33,9 +33,8 @@ prepare() {
 }
 
 build() {
-  # Appended after ALARM's defaults so -march/-mtune override; buildtype=plain below is
-  # what makes meson honour them. Fallback = the sm8550 string, so a standalone makepkg
-  # without build-packages.sh's POCKNIX_TUNE_CFLAGS still reproduces the shipped build.
+  # After ALARM's defaults so -march/-mtune win; buildtype=plain below makes meson honour them.
+  # The sm8550 fallback keeps a standalone makepkg identical to the shipped build.
   local _rocknix_tune="${POCKNIX_TUNE_CFLAGS:--march=armv9-a+fp16+crypto+i8mm+bf16+memtag+sm4+sha3+nosve+nosve2 -mtune=cortex-x3 -mno-outline-atomics}"
   export CFLAGS="${CFLAGS} ${_rocknix_tune}"
   export CXXFLAGS="${CXXFLAGS} ${_rocknix_tune}"

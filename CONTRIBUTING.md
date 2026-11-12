@@ -252,7 +252,9 @@ base.
 - **Rebase on `main`** instead of merging it in, and re-test after.
 - **Code comments: one line, WHY only.** Two when a trap needs its cause; longer only in a file's
   leading header. If a competent reader wouldn't get anything wrong without it, leave it out.
-  `make check` (`scripts/check-comments.py`) enforces the length and what a comment may name.
+  `make check` (`scripts/check-comments.py`) enforces the length and what a comment may name. An
+  exception in `scripts/check-comments.allow` names specific comments; a catch-all, over-broad or
+  stale line fails.
 - **Docs move with the code.** A doc that describes what you changed is updated in the same PR.
 - **CI checks the PR too.** `scripts/check-pr.sh` (run it locally with `PR_BODY_FILE=<body>`)
   fails on a cut-short or headerless `.patch` (`scripts/patch-lint.py`), a `pkgrel` or

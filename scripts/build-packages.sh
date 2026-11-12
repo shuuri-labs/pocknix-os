@@ -13,12 +13,8 @@ need_linux
 need_root build-packages
 for t in curl tar rsync; do need_tool "$t"; done
 
-# Two repo trees: packages/soc/* and packages/gpu/* are PER-SoC (tuned packages share
-# pkgnames across SoCs with different binaries; each SoC gets its own repo, and the
-# chroot is split too so one SoC's tuned makedepends can never leak into
-# another SoC's builds). packages/shared/* are byte-identical across SoCs:
-# built ONCE into the shared localrepo ([pocknix-shared]) — whichever SoC runs
-# first builds them, the other run's incremental skip sees them up to date.
+# soc/ and gpu/ build per SoC (same pkgnames, different binaries) in split chroots, so tuned
+# makedepends never leak; shared/ builds once into [pocknix-shared], by whichever SoC runs first.
 BROOT="${BUILD_DIR}/pkgbuild-root-${SOC}"   # the makepkg build chroot (reused across runs)
 LOCALREPO="${LOCALREPO_DIR}"                # build/localrepo/${SOC} (set in lib.sh)
 LOCALREPO_SHARED="${LOCALREPO_SHARED_DIR}"  # build/localrepo/shared (set in lib.sh)
@@ -50,9 +46,7 @@ pkg_repo_db()    { case "$1" in */packages/shared/*) printf '%s' "${SHARED_REPO_
 pkg_repo_mount() { case "$1" in */packages/shared/*) printf '/localrepo-shared' ;; *) printf '/localrepo' ;; esac; }
 
 setup_chroot() {
-  # Base fingerprint: the chroot is built FROM a base (pinned snapshot id, or
-  # "live" ALARM) and must be recreated when the pin changes — an old-base chroot
-  # stamps binaries with sonames the new base no longer has.
+  # An old-base chroot stamps binaries with sonames the new base lacks: recreate on a pin change.
   local want_base="${POCKNIX_BASE_SNAPSHOT:-live}" have_base
   have_base="$(cat "${BROOT}/.base-snapshot" 2>/dev/null || true)"
   if [ -x "${BROOT}/usr/bin/makepkg" ]; then
@@ -68,17 +62,13 @@ setup_chroot() {
 
   if [ -x "${BROOT}/usr/bin/makepkg" ]; then
     log "reusing build chroot: ${BROOT}"
-    # Re-render drops the [pocknix] stanza; it is re-appended below, AFTER the
-    # -Syu — its file:///localrepo isn't bind-mounted until main(), and pacman
-    # dies on a configured repo with no DB.
+    # Re-render drops [pocknix]; it is re-added after the -Syu, since pacman dies on a repo whose
+    # file:///localrepo isn't mounted until main().
     render_base_pacman_conf "${BROOT}/etc/pacman.conf"
-    # Converge the reused chroot to the configured base. Without this the chroot
-    # is frozen at its creation date and LAGS devices (a user's -Syu gets a new
-    # soname our binaries were never linked against). Pinned base: no-op.
+    # Converge the reused chroot to the base, or it lags devices (sonames we never linked against).
     chroot_mount "${BROOT}"
-    # A PINNED base is frozen, so a chroot already stamped with that pin cannot be stale
-    # and a failed -Syu just means offline. On live/unpinned bases the drift is real, and
-    # building against a chroot that missed it is exactly what this guard exists to stop.
+    # A pinned base is frozen: with a matching stamp a failed -Syu just means offline. Unpinned,
+    # the drift is real and the build must stop.
     if ! chroot "${BROOT}" pacman -Syu --noconfirm; then
       if [ -n "${POCKNIX_BASE_SNAPSHOT}" ] && [ "${have_base}" = "${want_base}" ]; then
         warn "chroot -Syu failed, but the base is pinned to ${want_base} and the chroot already matches it — continuing (frozen base cannot have moved)"
@@ -103,9 +93,7 @@ setup_chroot() {
     printf '%s\n' "${want_base}" > "${BROOT}/.base-snapshot"
   fi
 
-  # Idempotent: ensure the 'builder' user, sudo, and passwordless sudoers exist — this
-  # also repairs chroots created by older versions of this script (which had no sudo),
-  # so `makepkg -s` (deps installed via `sudo pacman` as builder) works without a rebuild.
+  # Idempotent; also repairs chroots made without sudo, which makepkg -s needs as builder.
   chroot "${BROOT}" id builder >/dev/null 2>&1 || chroot "${BROOT}" useradd -m builder
   if [ ! -x "${BROOT}/usr/bin/sudo" ]; then
     chroot_mount "${BROOT}"
@@ -115,9 +103,8 @@ setup_chroot() {
   printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > "${BROOT}/etc/sudoers.d/builder"
   chmod 0440 "${BROOT}/etc/sudoers.d/builder"
 
-  # ccache installs from the base like the rest of the chroot; a base without it builds uncached
-  # rather than failing. makepkg aborts when BUILDENV asks for ccache it cannot find, so the
-  # drop-in only exists next to the binary.
+  # A base without ccache builds uncached. The drop-in exists only next to the binary: makepkg
+  # aborts when BUILDENV asks for a ccache it cannot find.
   CCACHE_ON=0
   rm -f "${BROOT}/etc/makepkg.conf.d/pocknix-ccache.conf"
   if [ "${POCKNIX_CCACHE}" = "1" ]; then
@@ -134,11 +121,8 @@ setup_chroot() {
     fi
   fi
 
-  # Local [pocknix] repo so a package can depend on another locally-built one. Points at
-  # the bind-mounted /localrepo. SigLevel Never, same reason as build-image.sh's
-  # append_local_repo: a signed localrepo db makes Optional TrustAll die on the unknown
-  # key when makepkg -s installs a locally-built dep. The sed branch repairs REUSED
-  # chroots that were created with the old stanza.
+  # SigLevel Never: a signed localrepo db makes Optional TrustAll die on the unknown key when
+  # makepkg -s installs a local dep. The sed branch repairs chroots with the old stanza.
   if ! grep -q '^\[pocknix\]' "${BROOT}/etc/pacman.conf"; then
     printf '\n[pocknix]\nSigLevel = Never\nServer = file:///localrepo\n' \
       >> "${BROOT}/etc/pacman.conf"
@@ -154,9 +138,7 @@ setup_chroot() {
   fi
 }
 
-# Files outside a package's dir that it is also built from (build_one stages what they render
-# into ./staged), so editing one rebuilds it like an edit to its own dir. pocknix.conf holds the
-# SD labels and sm8250's root= PARTUUID; kernel.conf the kernel package's version and release.
+# Files outside a package's dir that it is built from: editing one rebuilds it like its own.
 pkg_extra_srcs() {  # $1 = package name
   case "$1" in
     "${DEVICE_BSP_PKG}") echo "${DEVICE_DIR}/profile.conf ${CONFIG_DIR}/pocknix.conf ${POCKNIX_ROOT}/scripts/render-bsp.sh" ;;
@@ -174,11 +156,10 @@ pkg_name() {  # $1 = package dir
   esac
 }
 
-# makepkg's environment for a package dir. Every makepkg call needs it, --packagelist included:
-# the kernel recipe's name and version come from it. Shared packages get NO SoC/tuning env: they
-# must be byte-stable whichever SoC's run builds them. POCKNIX_BASE_*: pocknix-lock-migrate stamps
-# the target snapshot URL into its script, so snapshot bumps re-target the migrator on rebuild.
+# Every makepkg call needs it, --packagelist included (the kernel recipe's version comes from it).
+# Shared packages get no SoC/tuning env, so they are byte-stable whichever SoC builds them.
 pkg_env() {  # $1 = package dir
+  # pocknix-lock-migrate stamps the base URL into its script: a snapshot bump re-targets it.
   printf ' %s=%q' POCKNIX_BASE_URL "${POCKNIX_BASE_URL}" POCKNIX_BASE_SNAPSHOT "${POCKNIX_BASE_SNAPSHOT}"
   case "$1" in */packages/shared/*) return ;; esac
   printf ' %s=%q' \
@@ -201,14 +182,8 @@ build_one() {
   mkdir -p "${BROOT}/build"
   cp -r "${pkgdir}" "${BROOT}/build/${name}"
   chroot "${BROOT}" chown -R builder:builder "/build/${name}"
-  # Incremental skip: if every artifact this PKGBUILD would produce (per `makepkg
-  # --packagelist`: name-[epoch:]ver-rel-arch, split siblings included) is already in the
-  # localrepo AND newer than every file in the package dir, there is nothing to do — so a
-  # re-run of `make build` doesn't recompile mesa/gamescope/the world. Editing any file in
-  # the package dir (patch, script, PKGBUILD) triggers a rebuild without needing a pkgrel
-  # bump. Force paths: `make packages PKG=<name>` always rebuilds the named packages;
-  # POCKNIX_FORCE_REBUILD=1 rebuilds everything. The kernel package also rebuilds whenever
-  # `make kernel` produced a newer Image than the packaged one.
+  # Skip when every --packagelist artifact is in the localrepo and newer than every file in the
+  # dir. PKG= and POCKNIX_FORCE_REBUILD=1 force; the kernel also rebuilds on a newer Image.
   if [ "${force}" -eq 0 ]; then
     local uptodate=1 nlist=0 p f s
     while IFS= read -r p; do
@@ -232,14 +207,9 @@ build_one() {
     fi
   fi
   log "makepkg: ${name}"
-  # Refresh the chroot's sync DBs (incl. [pocknix], so makepkg -s sees siblings built
-  # earlier this run) — only here, when actually building; skipped packages must not
-  # each pay a network DB refresh.
+  # Refresh sync DBs (makepkg -s must see this run's siblings) only when building.
   chroot "${BROOT}" pacman -Sy --noconfirm >/dev/null 2>&1 || true
-  # The kernel package is THIN: it doesn't compile the kernel (no makepkg/toolchain in the
-  # chroot for that), it just packages `make kernel`'s output. Stage ${KERNEL_BUILD_DIR}/out
-  # into the package build dir as ./staged so its package() can lay it out as /boot +
-  # /usr/lib/modules.
+  # Thin package: it lays out `make kernel`'s out/, staged as ./staged; nothing compiles here.
   if [ "${name}" = "${KERNEL_PKG}" ]; then
     local kout="${KERNEL_BUILD_DIR}/out"
     if [ ! -f "${kout}/Image" ] || [ ! -f "${kout}/kernelrelease" ]; then
@@ -263,25 +233,12 @@ build_one() {
     BOOTLOADER="${BOOTLOADER}" SD_FAT_LABEL="${SD_FAT_LABEL}" ROOT_LABEL="${ROOT_LABEL}" \
       "${POCKNIX_ROOT}/scripts/render-bsp.sh" "${pkgdir}/boards" "${BROOT}/build/${name}/staged"
   fi
-  # Persistent source cache: SRCDEST lives OUTSIDE the per-package build dir (which is wiped
-  # every run), so makepkg downloads each source ONCE and reuses it. File sources (e.g.
-  # fex-emu's pinned x86 sysroot .pkg.tar.zst, ~70 MB) are kept by name; the git source becomes
-  # a cached clone that only `git fetch`es deltas instead of re-cloning 100k+ objects each build.
+  # SRCDEST outlives the wiped build dir: file sources download once, git sources fetch deltas.
   mkdir -p "${BROOT}/build/srccache"
   chroot "${BROOT}" chown -R builder:builder "/build/${name}"
   chroot "${BROOT}" chown builder:builder /build/srccache
-  # makepkg refuses to run as root; build as the 'builder' user.
-  # -s syncs makedepends (gamescope needs many). Device packages (devices/*/packages/*:
-  # BSPs + metapackages) are pure file-drop/meta packages built with --nodeps instead:
-  # with -s makepkg would install their RUNTIME dependency closure into the build chroot
-  # (the kernel package, the Steam stack, fex-rootfs) just to lay out a few files. Their
-  # depends= still ships in the .pkg metadata; -d only skips build-time resolution. A
-  # ./nodeps marker opts in other packages whose runtime deps would drag a layer in.
-  # Per-SoC tuning (devices/<soc>/tuning.conf via lib.sh) rides the makepkg environment
-  # (pkg_env): the tuned PKGBUILDs read POCKNIX_TUNE_CFLAGS, falling back to their sm8550
-  # strings when unset (e.g. standalone makepkg).
-  # Off must be CCACHE_DISABLE: meson wraps its compilers in any ccache on PATH whatever
-  # BUILDENV says.
+  # Device packages and ./nodeps opt-ins build -d: -s would pull their runtime closure into the
+  # chroot. Off must be CCACHE_DISABLE: meson wraps any ccache on PATH whatever BUILDENV says.
   local mkflags="-s" ccenv="CCACHE_DISABLE=1"
   [ "${CCACHE_ON}" = "1" ] && ccenv="CCACHE_DIR=/ccache CCACHE_MAXSIZE=${POCKNIX_CCACHE_SIZE}"
   case "${pkgdir}" in */devices/*/packages/*) mkflags="-d" ;; esac
@@ -291,12 +248,8 @@ build_one() {
     warn "makepkg failed for ${name} — keeping any previous build in ${repo_dir##*/}"
     return 1
   fi
-  # Collect what makepkg ACTUALLY produced via `makepkg --packagelist`: a split PKGBUILD
-  # (packages/soc/mesa -> mesa + vulkan-freedreno) emits sibling packages a "${name}-*" glob
-  # misses (only the mesa half would reach localrepo), while a bare *.pkg.tar.*
-  # sweep would grab .pkg.tar.* files that are makepkg *sources* symlinked into the build
-  # dir (e.g. fex-emu's pinned x86 sysroot pkgs). --packagelist names exactly the built
-  # artifacts, epoch and all.
+  # --packagelist names exactly what was built: a "${name}-*" glob misses split siblings, and a
+  # bare *.pkg.tar.* sweep grabs package sources symlinked into the build dir.
   local built_pkgs=() p
   while IFS= read -r p; do
     p="${BROOT}/build/${name}/$(basename "${p}")"
@@ -307,12 +260,8 @@ build_one() {
     warn "no .pkg.tar.* produced for ${name} — keeping any previous build"
     return 1
   fi
-  # ONLY NOW touch the repo. Removing the previous version(s) and publishing the new one happens
-  # AFTER a confirmed successful build, so a failed/transient rebuild never wipes a known-good
-  # package (build-to-temp-then-swap). The rm also clears stale dupes that would otherwise break
-  # `pacman -U pkg-*.tar` with "duplicate target". (rm before cp: the new file's own epoch'd name
-  # matches the *:* pattern, so cp-then-rm would delete what we just copied.) Clear per PRODUCED
-  # package name — split siblings each have their own previous versions.
+  # Only now touch the repo, so a failed build never wipes a good package. rm before cp: the new
+  # file's epoch'd name matches *:*, so cp then rm would delete it.
   local base
   for p in "${built_pkgs[@]}"; do
     base="$(basename "${p}")"
@@ -320,26 +269,20 @@ build_one() {
     rm -f "${repo_dir}/${base}"-[0-9]*.pkg.tar.* "${repo_dir}/${base}"-*:*.pkg.tar.* 2>/dev/null || true
   done
   cp "${built_pkgs[@]}" "${repo_dir}/"
-  # Register exactly the artifacts just built (NOT *.pkg.tar.* — re-adding the whole repo
-  # for every package spammed 'entry already existed' x N^2). LC_ALL=C: the build chroot
-  # has no generated locales, and bsdtar warns on every tar op otherwise.
+  # Add only what was just built (re-adding the repo is N^2). LC_ALL=C: the chroot has no locales.
   local addlist=""
   for p in "${built_pkgs[@]}"; do addlist+=" $(basename "${p}")"; done
   chroot "${BROOT}" bash -lc "cd ${repo_mount} && LC_ALL=C repo-add -q ${repo_db}${addlist}"
 }
 
 main() {
-  # Optional args = package names to build (subset, always rebuilt); no args = build
-  # everything, skipping packages already up-to-date in the localrepo (see build_one).
-  # e.g. `make packages PKG="inputplumber pocknix-bsp-sm8550"` to force just those two.
+  # Args = package names, always rebuilt; none = everything, skipping what is up to date.
   local want=("$@")
   mkdir -p "${LOCALREPO}" "${LOCALREPO_SHARED}"
   setup_chroot
 
   chroot_mount "${BROOT}"
-  # Keep both local repos bind-mounted throughout so makepkg -s can resolve inter-package
-  # local deps (e.g. pocknix-emu-dolphin -> pocknix-emulation-common) from [pocknix]/[pocknix-shared]
-  # as we go.
+  # Both repos stay mounted so makepkg -s resolves deps built earlier in this run.
   mkdir -p "${BROOT}/localrepo" "${BROOT}/localrepo-shared"
   mount --bind "${LOCALREPO}" "${BROOT}/localrepo"
   mount --bind "${LOCALREPO_SHARED}" "${BROOT}/localrepo-shared"
@@ -372,10 +315,8 @@ main() {
 
   local built=0 name force devdir devsoc pkgsocs pkggpus
   local -a failed=()
-  # Per-SoC and device packages build only into the CURRENT SoC's repo: device packages by
-  # their profile's SOC, packages/soc by ./socs, packages/gpu by ./gpus against GPU_GEN. The
-  # gpus gate keeps the a6xx dxvk2 protons out of every other GPU's repo, where their replaces=
-  # would downgrade DXVK. PKG= names and POCKNIX_FORCE_REBUILD=1 force past the up-to-date skip.
+  # Per-SoC and device packages build only into this SoC's repo. The gpus gate keeps the a6xx
+  # dxvk2 protons out of other GPUs' repos, where their replaces= would downgrade DXVK.
   for pkgdir in "${PACKAGES_DIR}"/shared/*/ "${PACKAGES_DIR}"/soc/*/ "${PACKAGES_DIR}"/gpu/*/ "${POCKNIX_ROOT}"/devices/*/packages/*/; do
     [ -f "${pkgdir}/PKGBUILD" ] || continue
     name="$(pkg_name "${pkgdir}")"
@@ -405,10 +346,7 @@ main() {
     try_build "${pkgdir}" "${force}" || failed+=("${pkgdir}")
   done
 
-  # Dependency order != alphabetical: a package can depend on a sibling the glob builds LATER,
-  # so its first `makepkg -s` aborts with "target not found". Retry failures: once a dep lands
-  # in its repo the dependent builds. Loop until a full pass makes no progress (then they're
-  # real failures).
+  # Glob order is not dependency order: retry failures until a full pass makes no progress.
   while [ "${#failed[@]}" -gt 0 ]; do
     local -a retry=("${failed[@]}"); failed=(); local progress=0
     for pkgdir in "${retry[@]}"; do
@@ -416,10 +354,9 @@ main() {
     done
     [ "${progress}" -eq 1 ] || break
   done
-  # --- failure summary: surface the SILENT danger. A failed rebuild that left an OLDER build in
-  # localrepo gets installed by build-image with no error, so a stale package ships. Split the
-  # failures into "stale artifact still present" (dangerous, loud) vs "no artifact" (build-image
-  # errors at install, not silent).
+  # --- failure summary ---
+  # A failed rebuild that left an older build in localrepo ships silently via build-image, so
+  # report those apart from packages with no artifact (build-image errors on those).
   if [ "${#failed[@]}" -gt 0 ]; then
     local -a stale=() gone=() fnames=()
     local fp fname base p af had line frepo

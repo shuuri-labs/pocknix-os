@@ -1,41 +1,17 @@
 # Exceptions for scripts/check-comments.py: "<path glob> :: <regex>" or "<path glob> :: <kind> ::
 # <regex>" (kind = dead path | notes pointer | provenance/status | version | long comment), matched
-# against the comment line (a long comment's first line). Add one only when the number or path IS
-# the mechanism (a threshold the code tests, a dependency floor, a foreign tree path) or the
-# wording is a licence attribution, or for a file an unmerged branch still owns (the Unswept
-# block), never for a ledger fact.
+# against the comment line (a long comment's first line that is not a rule). Add one only when the
+# number or path IS the mechanism (a threshold the code tests, a dependency floor, a foreign tree
+# path), the wording is a licence attribution, every line of a long comment is its own trap, or the
+# text is not a comment at all (printed heredoc), never for a ledger fact. Each line names specific
+# comments: a catch-all regex, a line matching nothing or more than 6 lines, or a long-comment line
+# on a glob or covering two blocks in one file fails.
 kernel/*/kernel.conf :: ROCKNIX's
 scripts/lib.sh :: common-skip
-scripts/build-kernel.sh :: __assign_str
 packages/shared/pocknix-steam/pocknix-game-launch :: c000007b
 packages/shared/pocknix-tools/pocknix-internal-boot-rename :: from ROCKNIX to POCKNIX
 packages/shared/pocknix-sdcard-automount/format-device.sh :: SteamOS's deck
-packages/shared/pocknix-decky/pocknix-control/py_modules/pocknix_control/calibration.py :: provenance/status :: GPcal
-# Unswept: files an unmerged branch changes. After it merges, cut their comments and drop the line.
-config/packages/base-extras.list :: long comment :: .
-config/packages/base.list :: long comment :: .
-config/pocknix.conf :: long comment :: .
-devices/sm8250/packages/pocknix-bsp-sm8250/PKGBUILD :: long comment :: .
-devices/sm8250/profile.conf :: long comment :: .
-kernel/sm8250/kernel.conf :: long comment :: .
-kernel/sm8550/kernel.conf :: long comment :: .
-packages/shared/pocknix-bsp-common/PKGBUILD :: long comment :: .
-packages/shared/pocknix-decky/pocknix-control/py_modules/pocknix_control/led.py :: long comment :: .
-packages/shared/pocknix-desktop/pocknix-desktop :: long comment :: .
-packages/shared/pocknix-emulation-common/pocknix-roms-init :: long comment :: .
-packages/shared/pocknix-session/pocknix-session :: long comment :: .
-packages/shared/pocknix-steam/PKGBUILD :: long comment :: .
-packages/shared/pocknix-steam/pocknix-steam :: long comment :: .
-packages/shared/pocknix-steam/pocknix-tiles :: long comment :: .
-packages/shared/pocknix-tools/pocknix-install-internal :: long comment :: .
-packages/shared/pocknix-tools/pocknix-share :: long comment :: .
-packages/shared/pocknix-tools/smb.conf :: long comment :: .
-packages/soc/gamescope/PKGBUILD :: long comment :: .
-packages/soc/mesa/PKGBUILD :: long comment :: .
-scripts/build-image.sh :: long comment :: .
-scripts/build-kernel.sh :: long comment :: .
-scripts/build-packages.sh :: long comment :: .
-scripts/build-sd-image.sh :: long comment :: .
-scripts/check.sh :: long comment :: .
-scripts/lib.sh :: long comment :: .
-scripts/sync.sh :: long comment :: .
+scripts/build-kernel.sh :: long comment :: ^# Deltas over the synced config
+packages/shared/pocknix-tools/pocknix-install-internal :: long comment :: ^#\$UD_NUM  userdata
+# #135 edits a line of this block: cut it to the bar once #135 lands.
+config/pocknix.conf :: long comment :: ^# Image target

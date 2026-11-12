@@ -8,8 +8,7 @@ pkgdesc="pocknix shared board support: sleep.d dispatcher, suspend hooks, power-
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-# pocknix-core rides along so a plain -Syu delivers the mandatory layer to devices that
-# predate it: a new package name only reaches installed devices via a dep edge.
+# pocknix-core rides along: a new package name reaches installed devices only via a dep edge.
 # swh-plugins: the LADSPA lookahead limiter at the end of the speaker DSP chain.
 depends=('sudo' 'pocknix-core' 'python' 'python-gobject' 'cpio' 'swh-plugins' 'zram-generator' 'polkit')
 # Older kernels own the /flash deploy files: the versioned conflict makes pacman upgrade the

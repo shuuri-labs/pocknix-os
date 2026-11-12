@@ -38,9 +38,8 @@ mesa-utils
 vulkan-tools
 
 # --- firmware ---
-# The image removes the tarball's linux-firmware meta (build-image.sh), so every split a
-# device loads is listed here. The Adreno sqe/zap blobs ship .zst: the kernel needs
-# FW_LOADER_COMPRESS_ZSTD.
+# build-image.sh removes the tarball's linux-firmware meta, so every split a device loads is
+# listed here. Adreno sqe/zap ship .zst: the kernel needs FW_LOADER_COMPRESS_ZSTD.
 linux-firmware-qcom
 linux-firmware-atheros   # wifi, bluetooth
 linux-firmware-realtek   # USB Ethernet docks (rtl_nic)

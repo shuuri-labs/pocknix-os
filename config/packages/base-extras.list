@@ -7,9 +7,8 @@ tailscale
 wireguard-tools      # no openresolv for wg-quick DNS: conflicts with the base's systemd-resolvconf
 
 # --- emulation layer (opt-in: no image installs it, the Pocknix Store does) ---
-# Its ALARM deps, plus those of the old emulator source builds. Derive changes from an orphan
-# set on a device, not from the snapshot guard: that reads the metas' and their glue packages'
-# depends= only, never the emulators' own.
+# Its ALARM deps plus the old emulator builds'. Derive changes from a device's orphan set: the
+# snapshot guard reads only the metas' and glue packages' depends=, never the emulators'.
 retroarch
 libretro-core-info
 ppsspp
@@ -39,9 +38,7 @@ polkit-kde-agent
 moonlight-qt
 
 # --- desktops (opt-in: hosted only, no image installs them) ---
-# GNOME, COSMIC and Hyprland for desktop mode's session picker. The full closure is listed
-# because the guard checks one dependency level; derive changes with pacman -Sp in a root
-# whose local db is the base, not from the guard.
+# Full closure (the guard checks one dependency level): derive changes with pacman -Sp on the base.
 # shared: needed by more than one desktop (or by printing too)
 gnome-keyring
 xdg-desktop-portal-gtk

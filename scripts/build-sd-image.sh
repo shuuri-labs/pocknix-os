@@ -86,10 +86,8 @@ firstboot_config() {
   log "configuring first boot (root login, fstab, sshd_config, network, hostname)"
   echo "root:${SD_ROOT_PASSWORD}" | chroot "${root}" chpasswd
   cat > "${root}/etc/fstab" <<EOF
-# pocknix-os
-# The root line names NO subvol on purpose: the kernel boots the btrfs DEFAULT subvolume,
-# which is how pocknix-rollback switches roots without touching boot config.
-# noatime + zstd:1 keep the device's own writes cheap; the image was populated at zstd:3.
+# pocknix-os. / names no subvol: pocknix-rollback switches roots via the btrfs default subvolume.
+# noatime + zstd:1 keep device writes cheap; the image was populated at zstd:3.
 PARTUUID=${SD_ROOT_PARTUUID}  /                  btrfs  rw,noatime,compress=zstd:1                       0 0
 PARTUUID=${SD_ROOT_PARTUUID}  /home              btrfs  rw,noatime,compress=zstd:1,subvol=@home          0 0
 PARTUUID=${SD_ROOT_PARTUUID}  /.snapshots        btrfs  rw,noatime,compress=zstd:1,subvol=@snapshots     0 0
@@ -182,9 +180,8 @@ method=auto
 EOF
     chmod 600 "${root}/etc/NetworkManager/system-connections/${SD_WIFI_SSID}.nmconnection"
 
-    # NM 1.56's iwd backend never hands the keyfile PSK to iwd (activation dead-ends at
-    # need-auth), so iwd gets the passphrase directly and NM reflects its connection.
-    # Plain-ASCII SSIDs only: iwd hex-encodes other names as =<hex>.psk.
+    # NM's iwd backend never hands iwd the keyfile PSK (stuck at need-auth), so iwd gets it
+    # directly. Plain-ASCII SSIDs only: iwd hex-encodes other names as =<hex>.psk.
     install -d -m 700 "${root}/var/lib/iwd"
     cat > "${root}/var/lib/iwd/${SD_WIFI_SSID}.psk" <<EOF
 [Security]
@@ -277,9 +274,8 @@ main() {
   # one on first -Sy, so pacman keeps it and pairs it with the live .sig = "signature is invalid".
   rm -f "${MNT}/var/lib/pacman/sync/"*.db "${MNT}/var/lib/pacman/sync/"*.db.sig
   firstboot_config "${MNT}"
-  # Ownership gate: a host->rootfs copy without --chown leaks uid 1000 and silently breaks
-  # capability-bounded services. Each subvol is its own st_dev, so -xdev needs every one
-  # listed; @home is skipped on purpose.
+  # Ownership gate: a host copy without --chown leaks uid 1000 and breaks capability-bounded
+  # services. -xdev needs each subvol listed (own st_dev); @home is skipped on purpose.
   local gate
   for gate in "${MNT}" "${MNT}/var/log" "${MNT}/var/cache/pacman" "${MNT}/.snapshots"; do
     leaked="$(find "${gate}" -xdev \( -uid 1000 -o -gid 1000 \) -print -quit)"

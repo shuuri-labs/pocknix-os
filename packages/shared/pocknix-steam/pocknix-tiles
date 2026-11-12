@@ -286,10 +286,8 @@ def offline(ops: list[dict], prune_legacy: bool) -> dict | None:
     return r
 
 
-# One evaluate per run, and every check before the first change. Tiles are matched by command
-# (exe + launch options), never re-added: a re-add gets a new appid and loses playtime. Early in
-# Steam's startup a tile's details can come back empty: its command then comes from
-# shortcuts.vdf, and a tile known to neither means Steam is not ready (a skip would add a twin).
+# One evaluate per run, every check before any change. Tiles match by command, never re-added (a
+# new appid loses playtime). Empty early details fall back to shortcuts.vdf; unknown to both = wait.
 LIVE = r"""
 (async (ops, legacy, saved, home) => {
   const A = SteamClient.Apps;
