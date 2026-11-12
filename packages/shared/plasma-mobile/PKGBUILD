@@ -2,7 +2,7 @@
 # the base copy by repo order, so it must be rebased whenever a base cut moves Plasma.
 pkgname=plasma-mobile
 pkgver=6.8.1
-pkgrel=3
+pkgrel=4
 pkgdesc="Plasma shell for mobile devices (task switcher and brightness slider fixes)"
 arch=('aarch64')
 url="https://plasma-mobile.org/"
@@ -21,8 +21,10 @@ optdepends=('bluedevil: Bluetooth management'
 source=("https://download.kde.org/stable/plasma/${pkgver}/${pkgname}-${pkgver}.tar.xz"
         '0001-mobiletaskswitcher-only-the-swiped-screens-view-acts-on-a-gesture.patch'
         '0002-screenbrightnessutil-watch-the-powerdevil-service.patch'
-        '0003-screenbrightnessutil-use-brightnessmin-and-restorenone.patch')
+        '0003-screenbrightnessutil-use-brightnessmin-and-restorenone.patch'
+        '0004-screenbrightnessutil-take-availability-from-the-reply.patch')
 sha256sums=('9b3faf56b9c1c3f1a03f4a8172855c330f1474858d994f456da635edb11d5eeb'
+            'SKIP'
             'SKIP'
             'SKIP'
             'SKIP')
@@ -32,6 +34,7 @@ prepare() {
   patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0001-mobiletaskswitcher-only-the-swiped-screens-view-acts-on-a-gesture.patch"
   patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0002-screenbrightnessutil-watch-the-powerdevil-service.patch"
   patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0003-screenbrightnessutil-use-brightnessmin-and-restorenone.patch"
+  patch -Np1 -d "${pkgname}-${pkgver}" < "${srcdir}/0004-screenbrightnessutil-take-availability-from-the-reply.patch"
 }
 
 build() {
