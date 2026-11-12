@@ -6,11 +6,11 @@
 # block), never for a ledger fact.
 kernel/*/kernel.conf :: ROCKNIX's
 scripts/lib.sh :: common-skip
-scripts/build-kernel.sh :: __assign_str
 packages/shared/pocknix-steam/pocknix-game-launch :: c000007b
 packages/shared/pocknix-tools/pocknix-internal-boot-rename :: from ROCKNIX to POCKNIX
 packages/shared/pocknix-sdcard-automount/format-device.sh :: SteamOS's deck
 packages/shared/pocknix-decky/pocknix-control/py_modules/pocknix_control/calibration.py :: provenance/status :: GPcal
+scripts/build-kernel.sh :: long comment :: ^# Deltas over the synced config
 # Unswept: files an unmerged branch changes. After it merges, cut their comments and drop the line.
 config/packages/base-extras.list :: long comment :: .
 config/packages/base.list :: long comment :: .
@@ -32,10 +32,3 @@ packages/shared/pocknix-tools/pocknix-share :: long comment :: .
 packages/shared/pocknix-tools/smb.conf :: long comment :: .
 packages/soc/gamescope/PKGBUILD :: long comment :: .
 packages/soc/mesa/PKGBUILD :: long comment :: .
-scripts/build-image.sh :: long comment :: .
-scripts/build-kernel.sh :: long comment :: .
-scripts/build-packages.sh :: long comment :: .
-scripts/build-sd-image.sh :: long comment :: .
-scripts/check.sh :: long comment :: .
-scripts/lib.sh :: long comment :: .
-scripts/sync.sh :: long comment :: .

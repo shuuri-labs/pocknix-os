@@ -21,10 +21,8 @@ for d in config config/packages scripts packages/shared packages/soc packages/gp
 done
 
 # --- package placement: shared/ vs soc/ vs gpu/ ----------------------------
-# The dir names the build scope: shared/ builds once into [pocknix-shared], soc/ per SoC
-# gated by ./socs, gpu/ per SoC gated by ./gpus against its profile's GPU_GEN. A PKGBUILD
-# elsewhere is invisible to the build, a missing or unknown gate silently drops a package
-# from every repo, and another dir's gate file means the package sits in the wrong dir.
+# A PKGBUILD elsewhere is never built, a missing or unknown gate drops it from every repo, and
+# another dir's gate file means the package sits in the wrong dir.
 while IFS= read -r p; do
   note "package: ${p#"${POCKNIX_ROOT}"/}" "OUTSIDE shared/, soc/ and gpu/: never built"; fail=1
 done < <(find "${POCKNIX_ROOT}/packages" -maxdepth 3 -name PKGBUILD \
@@ -144,10 +142,8 @@ if out="$(python3 "${POCKNIX_ROOT}/scripts/check-comments.py" 2>&1)"; then note 
 else note "code comments" "STALE"; printf '%s\n' "${out}" | sed 's/^/    /'; fail=1; fi
 
 # --- SoC families: what a new SoC or board must carry (all SoCs, not just DEVICE) ----
-# An unreferenced board never loads.
-# devices/README.md's key table as "<key> required|optional" (the Absent column says "required"
-# or what an absent key means) plus its "Env overrides" names as "<key> env". A table that stops
-# parsing empties REQUIRED_KEYS, which the family-key loop below fails on.
+# Keys come from devices/README.md's table and "Env overrides"; a table that stops parsing
+# empties REQUIRED_KEYS, which the family-key loop fails on.
 _doc="${POCKNIX_ROOT}/devices/README.md"
 _keys="$(awk -F'|' '/^\| `POCKNIX_/ { k = $2; a = $4; gsub(/^ +| +$/, "", a)
            while (match(k, /POCKNIX_[A-Z0-9_]+/)) { print substr(k, RSTART, RLENGTH), (a == "required" ? "required" : "optional"); k = substr(k, RSTART + RLENGTH) } }' "${_doc}"
@@ -188,9 +184,8 @@ if printf '%s\n' "${_out}" | grep -q 'reads POCKNIX_BOGUS, which' && ! printf '%
 else note "device.conf keys self-test" "a consumer reading an undocumented key went unflagged"; fail=1; fi
 rm -rf "${_t}"
 
-# Lays out boards dir $1 as family $2's BSP installs it (with what scripts/render-bsp.sh renders:
-# device.conf and family.conf) in a scratch dir (printed). Installed paths point into it, so
-# nested sources (variant -> base -> family.conf) and the dispatcher resolve against the tree.
+# Lays out boards dir $1 as family $2's BSP installs it (with render-bsp.sh's output) in a printed
+# scratch dir, so nested sources and the dispatcher resolve against the tree.
 stage_boards() {  # $1 = boards dir, $2 = SoC
   local t r f dev="${POCKNIX_ROOT}/devices/$2"
   t="$(mktemp -d)"; r="$(mktemp -d)"
@@ -213,10 +208,8 @@ board_values() {  # $1 = boards dir, $2 = SoC, $3 = board
   return "${rc}"
 }
 
-# A consumer missing a key runs on its fallback, so a required key's must be the reference
-# board's value and an optional key's must change nothing (0 or empty). A fallback naming
-# another variable defers to it and is skipped. Allow file $3 rows ("<key> :: <reason>") are the
-# exceptions; a row that matches no fallback fails, so the list only shrinks.
+# A missing key runs on its fallback, so a required key's must be the reference board's value and
+# an optional key's must change nothing. Allow rows ($3) matching no fallback fail.
 check_fallbacks() {  # $1 = "<key> <kind>" lines, $2 = "<key>=<value>" reference, $3 = allow file, $4.. = consumers
   local known="$1" ref="$2" allow="$3" f k v kind want r used=" "
   shift 3
@@ -258,9 +251,8 @@ if grep -q "required POCKNIX_PANEL_W falls back to '1'" <<< "${_out}" && grep -q
 else note "device.conf fallbacks self-test" "a wrong fallback went unflagged (or a right one was flagged)"; fail=1; fi
 rm -rf "${_t}"
 
-# family.conf must carry the SoC and the install-to-internal contract, and every board must
-# resolve each key the table marks required from the two (the consumers fall back to RP6 values
-# without one, which is wrong on any other panel or disk).
+# Every board must resolve each required key from family.conf and its own file: the consumers'
+# fallbacks are RP6 values, wrong on any other panel or disk.
 REQUIRED_FAMILY_KEYS="POCKNIX_SOC POCKNIX_INTERNAL_DISK POCKNIX_BOOT_GPT_NAME
   POCKNIX_BOOT_STYLE POCKNIX_BOOT_FAT_LABEL POCKNIX_ROOT_LABEL"
 REQUIRED_KEYS="$(printf '%s\n' "${_keys}" | awk '$2 == "required" { print $1 }' | paste -sd ' ' -)"
@@ -343,9 +335,8 @@ check_boards() {  # $1 = SoC, $2 = boards dir
   rm -rf "${t}"
 }
 
-# Prints one problem per line: meta PKGBUILD $1 must list (depends or optdepends) every
-# $3/*/gpus package listing GPU_GEN $2 and none that omits it, so a meta carrying another
-# generation's packages fails. Metas run nothing at top level, so sourcing reads the arrays exactly.
+# Prints problems: meta $1 must list every $3/*/gpus package naming GPU_GEN $2, and no other.
+# Metas run nothing at top level, so sourcing reads the arrays exactly.
 check_meta_gpus() {  # $1 = meta PKGBUILD, $2 = GPU_GEN, $3 = packages/gpu dir
   local deps g n
   deps=" $( (set +eu; . "$1" >/dev/null 2>&1; printf '%s ' "${depends[@]}" "${optdepends[@]%%:*}") ) "

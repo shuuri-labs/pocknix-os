@@ -23,11 +23,8 @@ render_pacman_conf() {
   render_base_pacman_conf "${out}"
 }
 
-# The local repos live on the host; we bind-mount them to /localrepo{,-shared}
-# inside the rootfs chroot. Inserted ABOVE the first base repo (not appended):
-# unqualified names — the layer metas' depends resolve this way — pick the
-# FIRST repo in pacman.conf order, and ours must outrank ALARM, exactly like
-# the shipped stanzas.
+# Bind-mounted at /localrepo{,-shared} and inserted ABOVE the first base repo: unqualified names
+# (the metas' depends) take the first repo in pacman.conf order, and ours must outrank ALARM.
 append_local_repo() {
   local out="$1"
   grep -q '^\[pocknix\]' "${out}" && return 0
@@ -48,10 +45,7 @@ prune_fontconfig_compat_links() {
   log "pruned ${n} stale-version fontconfig cache links"
 }
 
-# Install the local pocknix packages into the rootfs: the layer metapackages
-# (pocknix-core + the three optional layers — their depends= ARE the manifest,
-# see packages/shared/pocknix-*/PKGBUILD), the SoC kernel (${KERNEL_PKG}), then
-# the device metapackage (${DEVICE_META_PKG}) with the per-SoC set.
+# The layer metas (their depends= are the manifest), the SoC kernel, then the device meta.
 install_local_packages() {
   local root="$1"
   if [ ! -f "${LOCAL_REPO_DIR}/pocknix.db" ] || [ ! -f "${LOCAL_REPO_SHARED_DIR}/pocknix-shared.db" ]; then
@@ -64,23 +58,15 @@ install_local_packages() {
   mount --bind "${LOCAL_REPO_DIR}" "${root}/localrepo"
   mount --bind "${LOCAL_REPO_SHARED_DIR}" "${root}/localrepo-shared"
   chroot "${root}" pacman -Sy --noconfirm
-  # Same-name replacements FIRST, explicitly qualified: mesa + vulkan-freedreno
-  # (our epoch-2 trimmed/tuned freedreno/turnip builds), gamescope (ROCKNIX-
-  # patched; vanilla black-screens the rotated panel) and mangohud (Adreno
-  # reader, from [pocknix-shared]) REPLACE the ALARM copies base.list installed
-  # for bootstrap. They are depends of the metas below, but a dep already
-  # satisfied by ALARM's installed copy would never be upgraded by a meta
-  # install — so force ours here, loudly.
+  # Same-name replacements first, repo-qualified: a meta dep already met by base.list's ALARM
+  # copy is never upgraded by the meta install, so force ours.
   chroot "${root}" pacman -S --noconfirm --needed \
     pocknix/mesa pocknix/vulkan-freedreno pocknix/gamescope pocknix-shared/mangohud
-  # The layer metas. Emulation is not one of them: Pocknix Tools installs it on the device and
-  # adds its Steam tiles as the user. Unqualified depends resolve by repo
-  # order: [pocknix] + [pocknix-shared] sit ABOVE the base repos (append_local_repo), so pocknix
-  # names resolve to our builds, ALARM names to base.
+  # Not emulation: Pocknix Tools installs it on the device and adds its Steam tiles as the user.
   local metas=(pocknix-core pocknix-steam-full pocknix-desktop-full)
   chroot "${root}" pacman -S --noconfirm --needed "${metas[@]/#/pocknix-shared/}"
-  # GUARD: these local builds MUST come from [pocknix], not silently fall back / go missing. gamescope
-  # especially: without composite rotation it requests a plane rotation the msm DPU rejects.
+  # GUARD: these must come from [pocknix]. ALARM's gamescope lacks composite rotation and
+  # requests a plane rotation the msm DPU rejects.
   local mesa_ver; mesa_ver="$(chroot "${root}" pacman -Q mesa 2>/dev/null | awk '{print $2}')"
   case "${mesa_ver}" in
     2:*) log "mesa OK: ${mesa_ver} (epoch-2 pocknix trimmed build)" ;;
@@ -101,9 +87,7 @@ install_local_packages() {
   chroot "${root}" pacman -Q pocknix-desktop >/dev/null 2>&1 || {
     die "pocknix-desktop not installed — its local build wasn't in [pocknix]. Build it: 'make packages PKG=pocknix-desktop', confirm build/localrepo/pocknix-desktop-*.pkg.tar.* exists, then re-run."
   }
-  # Kernel: swap ALARM's generic linux-aarch64 for our SoC kernel package (Image + modules,
-  # built by `make kernel` -> staged into the package). Its own step (not bundled above) so a
-  # missing kernel build errors clearly, and the replace is deterministic. `provides=linux`.
+  # Its own step so a missing kernel build errors clearly and the swap is deterministic.
   if chroot "${root}" pacman -Si "pocknix/${KERNEL_PKG}" >/dev/null 2>&1; then
     chroot "${root}" pacman -Rdd --noconfirm linux-aarch64 2>/dev/null || true
     rm -rf "${root}/boot/initramfs-linux"*.img 2>/dev/null || true
@@ -112,10 +96,8 @@ install_local_packages() {
       die "${KERNEL_PKG} failed to install — check the pacman output above."
     }
     log "kernel OK: $(chroot "${root}" pacman -Q "${KERNEL_PKG}")"
-    # The tarball's linux-firmware meta pulls ~900 MB of x86/PCIe vendor blobs no Qualcomm
-    # handheld loads; removable only once linux-aarch64 (its dependant) is gone. The splits
-    # base.list keeps arrived as the meta's deps and --needed left them so: mark them
-    # explicit first, or -Rs takes them along.
+    # The tarball's linux-firmware meta pulls ~900 MB no Qualcomm handheld loads. Mark base.list's
+    # splits explicit first: they arrived as its deps, so -Rs would take them along.
     if chroot "${root}" pacman -Q linux-firmware >/dev/null 2>&1; then
       local fw
       mapfile -t fw < <(read_pkglist "${CONFIG_DIR}/packages/base.list" | grep '^linux-firmware-')
@@ -135,20 +117,11 @@ install_local_packages() {
   umount "${root}/localrepo"
   umount "${root}/localrepo-shared"
   rmdir "${root}/localrepo" "${root}/localrepo-shared" 2>/dev/null || true
-  # NB the build-time sync dbs must NOT be dropped here: make snapshot harvests
-  # its name->filename/sha mapping from this rootfs's dbs. build-sd-image.sh
-  # deletes them from the IMAGE copy instead (they must not ship: see there).
-  # Drop the build-only stanzas (their file:///localrepo* bind mounts don't exist on
-  # the device). With POCKNIX_REPO_URL set, re-add stanzas pointing at the PUBLISHED
-  # repos, inserted ABOVE [core]: `pacman -S
-  # <name>` picks the FIRST repo that carries the name, so pocknix must outrank ALARM
-  # for our same-name packages (mesa, gamescope, ...). Without it the image is reflash-only.
+  # Keep the build-time sync dbs: make snapshot harvests them (build-sd-image.sh drops them from
+  # the image). The build-only stanzas go: their file:// mounts don't exist on the device.
   sed -i '/^\[pocknix\]/,+2d;/^\[pocknix-shared\]/,+2d' "${root}/etc/pacman.conf"
-  # Published repos: POCKNIX_REPO_URL is the BASE url. [pocknix] is per-SoC
-  # (<base>/<soc> — tuned packages share pkgnames across SoCs with different
-  # binaries, so those trees must not mix); [pocknix-shared] (<base>/shared) is
-  # one tree for all SoCs. Order matters: per-SoC FIRST so a tuned package could
-  # never be shadowed by a same-name shared one.
+  # [pocknix] is per-SoC (<base>/<soc>) and listed first, so a same-name shared package can never
+  # shadow a tuned one.
   if [ -n "${POCKNIX_REPO_URL}" ]; then
     log "shipping [pocknix] -> ${POCKNIX_REPO_URL}/${SOC} + [pocknix-shared] -> ${POCKNIX_REPO_URL}/shared (SigLevel ${POCKNIX_REPO_SIGLEVEL})"
     # anchor = the first base repo: [core] on a live-ALARM conf, [pocknix-base] on a
@@ -196,20 +169,13 @@ install_packages() {
     mapfile -t -O "${#pkgs[@]}" pkgs < <(read_pkglist "${l}")
   done
   log "installing ${#pkgs[@]} packages from: ${lists[*]##*/}"
-  # -Syy (force DB refresh): a reused rootfs keeps a stale sync DB, and plain -Sy won't
-  # re-download a DB pacman thinks is current -> valid extra pkgs (vulkan-tools, alsa-utils,
-  # alsa-ucm-conf) show up as "target not found". Safe here: this is a fresh-image -Su anyway.
+  # -Syy: a reused rootfs keeps a stale sync DB that plain -Sy won't re-download, so valid
+  # packages come back "target not found".
   chroot "${root}" pacman -Syyu --noconfirm --needed "${pkgs[@]}"
 }
 
-# Bake the native ARM Steam client at BUILD time so first boot needs no network: the on-device
-# launcher has no network-installer fallback, so an image with no seed ships a Steam session that
-# hard-fails. Runs the on-device installer in the rootfs chroot under a STAGING HOME, verifies the
-# tree is complete (steamui.so + the channel .installed manifest, else the seed would re-install
-# online), strips per-session cruft and tars the HOME-agnostic tree (relative .steam symlinks) into
-# ${CACHE_DIR}/steam-seed.tar.zst. The tar is a BUILD-TIME INTERMEDIATE, unpacked into the rootfs
-# at the end of this function and never shipped. The cache makes repeat builds offline;
-# POCKNIX_REBOOTSTRAP_STEAM=1 forces a rebake.
+# Bake the ARM Steam client at build time: the launcher has no network installer, so an image
+# without a seed hard-fails. The cached tarball never ships; POCKNIX_REBOOTSTRAP_STEAM=1 rebakes.
 bootstrap_steam_seed() {
   local root="$1"
   local seed="${CACHE_DIR}/steam-seed.tar.zst"
@@ -218,9 +184,8 @@ bootstrap_steam_seed() {
 
   if [ ! -f "${seed}" ] || [ -n "${POCKNIX_REBOOTSTRAP_STEAM:-}" ]; then
     log "baking native ARM Steam client (downloads + Xvfb self-update; can take several minutes)..."
-    # steam/bwrap need a real writable /dev/shm. chroot_mount binds host /dev (non-recursive), so the
-    # chroot has none. Make the chroot's /dev private FIRST so this tmpfs can't propagate up and
-    # shadow the HOST's /dev/shm (the bind aliases the same path), then mount a private tmpfs.
+    # steam/bwrap need a writable /dev/shm, which the host /dev bind lacks. Make /dev private
+    # first, or this tmpfs propagates up and shadows the HOST's /dev/shm.
     mount --make-rprivate "${root}/dev" 2>/dev/null || true
     mount -t tmpfs tmpfs "${root}/dev/shm"
     chroot "${root}" rm -rf "${home}"; chroot "${root}" mkdir -p "${home}"
@@ -234,9 +199,8 @@ bootstrap_steam_seed() {
       umount "${root}/dev/shm" 2>/dev/null || true
       die "steam bake incomplete (no steamui.so / .installed) — the seed is broken. Re-run (POCKNIX_REBOOTSTRAP_STEAM=1 forces a clean rebake)."
     fi
-    # strip per-session cruft AND registry.vdf so the seed shows the OOBE on first boot
-    # — the user configures Wi-Fi there; pocknix-steamos-shim's steamos-update keeps the OOBE's
-    # required-update step from dead-ending. Then tar the HOME-agnostic tree.
+    # Strip per-session cruft and registry.vdf so first boot shows the OOBE (Wi-Fi is set there);
+    # pocknix-steamos-shim keeps its required-update step from dead-ending.
     chroot "${root}" bash -c "set -e; cd '${home}'
       rm -rf .local/share/Steam/logs .local/share/Steam/appcache/httpcache \
              .local/share/Steam/appcache/cefdata .local/share/Steam/config/htmlcache
@@ -252,14 +216,8 @@ bootstrap_steam_seed() {
   else
     log "using cached steam seed: ${seed} ($(du -h "${seed}" | cut -f1))"
   fi
-  # Pre-extract the baked client into the rootfs's /home/deck HERE — while it's still part of
-  # ROOTFS_DIR, so build-sd-image.sh's `du -sm ROOTFS_DIR` sizes the image partition to INCLUDE the
-  # ~1.3 GB tree. (Extracting later, during image assembly into the already-sized partition, blew
-  # past its size -> "No space left on device".) The tar is NOT shipped in the rootfs: we unpack the
-  # cached seed straight in and drop it, so the image carries only the extracted tree. Files land
-  # root-owned (bake ran as root); build-sd-image.sh creates the deck user (uid 1001) and its
-  # `chown -R deck:deck /home/deck` fixes ownership. The relative .steam symlinks are HOME-agnostic
-  # so they resolve correctly once this tree is deck's HOME.
+  # Extract while still in ROOTFS_DIR, so build-sd-image.sh's du sizes the partition for the
+  # ~1.3 GB tree. The files land root-owned; build-sd-image.sh's chown of /home/deck fixes that.
   log "pre-extracting Steam client into rootfs /home/deck (sized into the partition; no tar shipped)"
   install -d "${root}/home/deck"
   cp "${seed}" "${root}/steam-seed.tar.zst"
@@ -281,10 +239,7 @@ main() {
   chroot_mount "${ROOTFS_DIR}"
   configure_keyring "${ROOTFS_DIR}"
 
-  # 3. packages: the ALARM base only (config/packages/base.list). The session
-  #    stacks (Steam/gamescope, Plasma Mobile, emulation) install later in
-  #    install_local_packages as depends of the layer metapackages — the metas'
-  #    depends= are the single manifest for image AND fleet.
+  # 3. packages: the ALARM base only. The session stacks install later as the metas' depends.
   install_packages "${ROOTFS_DIR}" \
         "${CONFIG_DIR}/packages/base.list"
 
@@ -297,10 +252,8 @@ main() {
   install_local_packages "${ROOTFS_DIR}"
   prune_fontconfig_compat_links "${ROOTFS_DIR}"
 
-  # Build stamp for support: which base snapshot this image shipped with, and
-  # when. Separate file: /etc/os-release is owned by the filesystem package.
-  # (A running device's CURRENT base is pocknix-base-lock's version, which
-  # tracks updates; this records where the image started.)
+  # The base the image started on (pocknix-base-lock tracks the current one). Its own file:
+  # /etc/os-release belongs to the filesystem package.
   printf 'POCKNIX_BASE_SNAPSHOT=%s\nPOCKNIX_IMAGE_BUILD=%s\n' \
     "${POCKNIX_BASE_SNAPSHOT:-live}" "$(date -u +%Y-%m-%d)" > "${ROOTFS_DIR}/etc/pocknix-release"
 

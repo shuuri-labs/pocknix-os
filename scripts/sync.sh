@@ -24,12 +24,8 @@ source "$(dirname "$0")/lib.sh"
 log "syncing ROCKNIX ${ROCKNIX_SOC} from ${ROCKNIX_PROJECT_DIR}"
 
 # --- committed kernel enablement -> kernel/${SOC}/ --------------------------
-# The full patch stack ROCKNIX applies for this SoC, in its scripts/unpack order
-# (PKG_PATCH_DIRS "mainline", then patches/<version>, then the device dir), as
-# numbered subdirs the build applies in sort order. kernel/common/ is ours and
-# outside every rsync below.
-# -c: rsync's size+mtime check skips a same-size upstream edit when both trees
-# were checked out within the same second.
+# The SoC's full ROCKNIX patch stack as numbered subdirs, in scripts/unpack order; kernel/common/
+# stays outside every rsync. -c: size+mtime misses a same-size edit made within the same second.
 log "  kernel enablement -> kernel/${SOC}/ (committed)"
 mkdir -p "${KERNEL_DIR}/patches/10-mainline" \
          "${KERNEL_DIR}/patches/20-version" \
@@ -45,9 +41,8 @@ rsync -ac          "${ROCKNIX_DEVICE_DIR}/linux/linux.aarch64.conf"   "${KERNEL_
 rsync -ac          "${ROCKNIX_DEVICE_DIR}/config/kernel-firmware.dat" "${KERNEL_DIR}/config/"
 
 # --- local delta: restore what the rsync --delete above removed or overwrote ---------
-# kernel/<soc>/sync-keep says what is ours (git holds the content): "path" = our edit of an
-# upstream file, "+path" = our own file, "-path" = deleted locally. Our 1000+ patches the sync
-# deleted are ours by convention. Every warning below is a case to merge by hand.
+# sync-keep: "path" = our edit of an upstream file, "+path" = our file, "-path" = deleted here;
+# 1000+ patches are ours by convention. Each warning below is a case to merge by hand.
 kernel_rel="${KERNEL_DIR#"${POCKNIX_ROOT}"/}"
 in_git() { git -C "${POCKNIX_ROOT}" ls-files --error-unmatch -- "${kernel_rel}/$1" >/dev/null 2>&1; }
 differs() { ! git -C "${POCKNIX_ROOT}" diff --quiet HEAD -- "${kernel_rel}/$1"; }

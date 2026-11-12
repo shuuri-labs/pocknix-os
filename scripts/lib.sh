@@ -13,18 +13,14 @@ export POCKNIX_ROOT="$(cd "${_lib_dir}/.." && pwd)"
 source "${POCKNIX_ROOT}/config/pocknix.conf"
 
 # --- device profile + per-SoC kernel pins -----------------------------------
-# The device profile (devices/<name>/profile.conf) declares what differs per family: SoC,
-# boot style, kernel cmdline, GPU sensor. It sets SOC, which selects the per-SoC kernel tree
-# and its source pins (kernel/<soc>/kernel.conf).
+# The profile (devices/<name>/profile.conf) sets SOC, which picks kernel/<soc>/ and its pins.
 if [ ! -f "${POCKNIX_ROOT}/devices/${DEVICE}/profile.conf" ]; then
   printf 'error: unknown DEVICE=%s — available: %s\n' \
     "${DEVICE}" "$(ls "${POCKNIX_ROOT}/devices" 2>/dev/null | tr '\n' ' ')" >&2
   exit 1
 fi
-# Profile defaults that derive from the profile's own keys, so they run after it; a profile
-# sets any of them to override. The SoC-neutral ones live in config/pocknix.conf instead,
-# because a profile expands them (ROOT_LABEL in its cmdline) while it is being sourced, so a
-# profile overrides those with a plain X=value.
+# These derive from the profile's own keys, so they run after it. SoC-neutral defaults live in
+# config/pocknix.conf instead: a profile expands them (ROOT_LABEL) while being sourced.
 profile_defaults() {
   : "${KERNEL_CMDLINE:=${KERNEL_CMDLINE_ROOT} ${KERNEL_CMDLINE_EXTRA}}"
   : "${DEVICE_BSP_PKG:=pocknix-bsp-${SOC}}"
@@ -42,21 +38,13 @@ source "${POCKNIX_ROOT}/devices/${DEVICE}/tuning.conf"
 : "${DEVICE_DIR:=${POCKNIX_ROOT}/devices/${DEVICE}}"
 : "${KERNEL_DIR:=${POCKNIX_ROOT}/kernel/${SOC}}"
 : "${ROCKNIX_DEVICE_DIR:=${ROCKNIX_PROJECT_DIR}/devices/${ROCKNIX_SOC}}"
-# Per-SoC pacman repo: tuned packages (mesa etc.) share pkgnames across SoCs
-# with different binaries, so each SoC gets its own localrepo/published tree.
-# packages/shared/* are byte-identical across SoCs: built once into the shared
-# localrepo, published once as [pocknix-shared] (repo membership doubles as
-# delivery targeting).
+# Per-SoC repo: tuned packages share pkgnames across SoCs. shared/ builds once into its own tree.
 : "${LOCALREPO_DIR:=${BUILD_DIR}/localrepo/${SOC}}"
 : "${LOCALREPO_SHARED_DIR:=${BUILD_DIR}/localrepo/shared}"
-# Publish staging area (stage-repo.sh): a mirror of the LIVE repo with only the
-# intended packages swapped in — publish-repo.sh publishes THIS, never the
-# raw localrepo (which parallel sessions fill with unvalidated builds).
+# Publish staging: the live repo with only the named packages swapped in. publish-repo.sh never
+# publishes the raw localrepo, which parallel sessions fill with unvalidated builds.
 : "${STAGE_DIR:=${BUILD_DIR}/stage/${SOC}}"
-# Which repo tree stage-repo.sh/publish-repo.sh operate on: the per-SoC
-# [pocknix] tree (default) or the SoC-neutral [pocknix-shared] tree
-# (make stage-shared / publish-shared). The db filename must equal the repo
-# tag, hence REPO_NAME drives both the stanza and the *.db names.
+# The db filename must equal the repo tag, so REPO_NAME drives both the stanza and the *.db names.
 : "${POCKNIX_REPO_SCOPE:=soc}"
 if [ "${POCKNIX_REPO_SCOPE}" = "shared" ]; then
   REPO_NAME="pocknix-shared"; REPO_SEG="shared"
@@ -67,9 +55,7 @@ else
   REPO_LOCALREPO_DIR="${LOCALREPO_DIR}"
   REPO_STAGE_DIR="${STAGE_DIR}"
 fi
-# Per-SoC kernel + image outputs, so switching families never forces a kernel rebuild
-# or mixes one family's out/ with another's. (build/cache and build/rootfs stay shared:
-# the cache is SoC-neutral downloads, the rootfs is wiped by bootstrap.sh on every build.)
+# Per-SoC kernel and image outputs, so switching families never forces a kernel rebuild.
 : "${KERNEL_BUILD_DIR:=${BUILD_DIR}/kernel/${SOC}}"
 : "${IMAGE_DIR:=${BUILD_DIR}/image/${SOC}}"
 
@@ -87,16 +73,16 @@ need_linux() { [ "$(uname -s)" = "Linux" ] || die "the image build must run on a
 have()     { command -v "$1" >/dev/null 2>&1; }
 need_tool(){ have "$1" || die "missing required tool: $1"; }
 
-# --- package lists ---------------------------------------------------------
-# awk $1, not sed 's/#.*//': sed keeps the whitespace before an inline comment and
-# pacman then can't match the name.
-# A variable as one family's build resolves it (pocknix.conf, its profile, the defaults), in a
-# clean environment: everything assigns with ":=", so the selected DEVICE's values would win.
+# A variable as one family's build resolves it, in a clean environment: everything assigns with
+# ":=", so the selected DEVICE's values would win.
 profile_get() {  # $1 = devices/<soc> dir, $2 = variable name
   env -i POCKNIX_ROOT="${POCKNIX_ROOT}" bash -c "$(declare -f profile_defaults)"'
     . "${POCKNIX_ROOT}/config/pocknix.conf" && . "$1/profile.conf" && profile_defaults && printf "%s" "${!2:-}"' sh "$1" "$2"
 }
 
+# --- package lists ---------------------------------------------------------
+# awk $1, not sed 's/#.*//': sed keeps the whitespace before an inline comment, and pacman then
+# can't match the name.
 read_pkglist() {
   awk '{ sub(/#.*/, ""); if ($1 != "") print $1 }' "$1"
 }
@@ -112,10 +98,8 @@ chroot_mount() {
   chroot_resolv "${root}"
 }
 
-# Give the chroot a working /etc/resolv.conf. On systemd-resolved hosts (Fedora,
-# Arch, etc.) the host /etc/resolv.conf is a stub pointing at 127.0.0.53, which
-# resolves nothing inside the chroot — so prefer the real upstream resolvers, and
-# fall back to public DNS if only a localhost stub is available.
+# On systemd-resolved hosts resolv.conf is a 127.0.0.53 stub that resolves nothing in the
+# chroot: prefer the real upstream resolvers, else public DNS.
 chroot_resolv() {
   local root="$1" src
   for src in /run/systemd/resolve/resolv.conf /etc/resolv.conf; do
@@ -217,11 +201,8 @@ ${out}"
   done
 }
 
-# Render the base pacman.conf: with a pinned snapshot, the only package source
-# is the frozen [pocknix-base] repo (ALARM's per-package .sig files are kept in
-# the snapshot, so package SigLevel stays Required; the repo-add DB is unsigned,
-# which DatabaseOptional permits). Without a pin: live ALARM. Shared
-# by the rootfs and the build chroot so both always install from the SAME base.
+# One base pacman.conf for rootfs and chroot. Pinned: only [pocknix-base] (package sigs kept, so
+# SigLevel stays Required; the db is unsigned). Unpinned: live ALARM.
 render_base_pacman_conf() {
   local out="$1"
   if [ -n "${POCKNIX_BASE_SNAPSHOT}" ]; then
