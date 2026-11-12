@@ -140,6 +140,8 @@ else note "speaker DSP profiles" "BROKEN"; printf '%s\n' "${out}" | sed 's/^/   
 # --- code comments: no dead repo paths, provenance or ledger facts ------------
 if out="$(python3 "${POCKNIX_ROOT}/scripts/check-comments.py" 2>&1)"; then note "code comments" "ok"
 else note "code comments" "STALE"; printf '%s\n' "${out}" | sed 's/^/    /'; fail=1; fi
+if python3 "${POCKNIX_ROOT}/scripts/check-comments.py" --selftest >/dev/null 2>&1; then note "code comments self-test" "ok"
+else note "code comments self-test" "a planted comment or allow line went unflagged (or a clean one was flagged)"; fail=1; fi
 
 # --- SoC families: what a new SoC or board must carry (all SoCs, not just DEVICE) ----
 # Keys come from devices/README.md's table and "Env overrides"; a table that stops parsing
