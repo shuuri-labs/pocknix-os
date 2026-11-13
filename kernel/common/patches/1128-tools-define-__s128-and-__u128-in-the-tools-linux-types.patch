@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: theodotdot <59372255+theodotdot@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 17:05:00 +0100
+Subject: [PATCH] tools: define __s128 and __u128 in the tools' linux/types.h
+
+The tools build puts tools/include on the include path, so <linux/types.h> resolves
+to our copy instead of the system's. That copy has never carried the 128-bit
+typedefs, and a host whose linux-api-headers are newer than the pinned kernel source
+needs them: aarch64's <asm/sigcontext.h> describes SVE state with __u128.
+
+  In file included from /usr/include/bits/sigcontext.h:30,
+                   from /usr/include/signal.h:301,
+                   from sigchain.c:2:
+  /usr/include/asm/sigcontext.h:81:9: error: unknown type name '__u128'
+
+Every host tool that includes <signal.h> then fails, which aborts `make kernel`
+before anything is compiled. Seen building the pinned 7.2.10 on the Thor itself,
+where linux-api-headers is 7.3; a cross build on x86 is unaffected because its
+asm/sigcontext.h has no such type.
+
+Copy the two typedefs the uapi header has, behind the same __SIZEOF_INT128__ guard.
+---
+--- a/tools/include/linux/types.h
++++ b/tools/include/linux/types.h
+@@ -13,6 +13,11 @@
+ #include <asm/types.h>
+ #include <asm/posix_types.h>
+ 
++#ifdef __SIZEOF_INT128__
++typedef __signed__ __int128 __s128 __attribute__((aligned(16)));
++typedef unsigned __int128 __u128 __attribute__((aligned(16)));
++#endif
++
+ struct page;
+ struct kmem_cache;
+
