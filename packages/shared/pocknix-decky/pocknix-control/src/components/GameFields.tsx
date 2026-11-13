@@ -54,6 +54,23 @@ export function XaliaToggle({ values, patch, live }: FieldProps) {
   );
 }
 
+export function KeepCompressedToggle({ values, patch, live }: FieldProps) {
+  return (
+    <PanelSectionRow>
+      <ToggleField
+        label="Keep Images Compressed"
+        description={timed(
+          live,
+          APPLIES_NEXT_LAUNCH,
+          "Can raise FPS. ARM Proton and emulators on the built-in Mesas only. Turn off if colours look wrong.",
+        )}
+        checked={values.keepCompressed === true}
+        onChange={(on) => patch({ keepCompressed: on })}
+      />
+    </PanelSectionRow>
+  );
+}
+
 export function TouchField({ values, patch, live }: FieldProps) {
   return (
     <PanelSectionRow>
@@ -215,6 +232,7 @@ export function TweakFields({ config, appid, name, values, patch, live, onReset 
         />
         <SelectEdit label="FEX Preset" description={nextLaunch} value={fexValue} options={fexOptions} onChange={(id) => patch({ fexProfile: id })} />
         <SelectEdit label="Mesa Version" description={nextLaunch} value={mesaValue} options={mesaOptions} onChange={(id) => patch({ mesaVersion: id })} />
+        <KeepCompressedToggle values={values} patch={patch} live={live} />
         <SelectEdit label="Audio Buffer" description={nextLaunch} value={audioValue} options={audioLatencyOptions} onChange={(id) => patch({ audioLatency: id })} />
         <TouchField values={values} patch={patch} live={live} />
         <XaliaToggle values={values} patch={patch} live={live} />

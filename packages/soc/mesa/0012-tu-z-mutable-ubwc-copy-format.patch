@@ -1,0 +1,224 @@
+From: Armada <noreply@armada>
+Subject: [PATCH] tu: copy mutable UBWC images through their written format
+
+TU_Z_MUTABLE=2 keeps UBWC on mutable images, such as DXVK's typeless RGBA16
+resources rendered as FLOAT. A740 can't decode UBWC through a format with a
+different encoding, but copies used the image's own format (UNORM).
+
+Copies now use the format the texels are written in: an explicit render
+target view's, else another view's. Before any view, a copy into the image
+uses the source's recorded format, or the source's own format if it is in
+the image's format list with the same swap. Otherwise the image's own
+format is used. The first copy locks it. Blits, resolves and clears still
+use the image's own format.
+
+On A740, mutable storage images no longer keep UBWC.
+---
+diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_clear_blit.cc
+--- a/src/freedreno/vulkan/tu_clear_blit.cc
++++ b/src/freedreno/vulkan/tu_clear_blit.cc
+@@ -2044,6 +2044,65 @@
+    }
+ 
+    /* Otherwise, simply return the pipe_format */
++   return format;
++}
++
++/* The format recorded for a tracked image, or VK_FORMAT_UNDEFINED. */
++static VkFormat
++tu_image_z_copy_format(const struct tu_image *image)
++{
++   if (!image->z_copy_tracked || !image->layout[0].ubwc)
++      return VK_FORMAT_UNDEFINED;
++   uint32_t state = p_atomic_read(&image->z_copy_state);
++   return (VkFormat)(state & TU_Z_COPY_FORMAT_MASK);
++}
++
++/* For a copy into a tracked image: the source's recorded format, or its own
++ * format if it is in the image's format list with the same swap.
++ */
++static VkFormat
++tu_image_z_copy_src_format(const struct tu_image *dst, const struct tu_image *src)
++{
++   if (src->z_copy_tracked)
++      return tu_image_z_copy_format(src);
++   if (!dst->z_copy_tracked)
++      return VK_FORMAT_UNDEFINED;
++
++   enum pipe_format src_pfmt = vk_format_to_pipe_format(src->vk.format);
++   enum pipe_format dst_pfmt = vk_format_to_pipe_format(dst->vk.format);
++   for (uint32_t i = 0; i < dst->z_view_format_count; i++) {
++      if (dst->z_view_formats[i] == src->vk.format &&
++          tu6_format_texture(src_pfmt, TILE6_LINEAR, false).swap ==
++          tu6_format_texture(dst_pfmt, TILE6_LINEAR, false).swap)
++         return src->vk.format;
++   }
++   return VK_FORMAT_UNDEFINED;
++}
++
++/* The format for raw copies of a tracked image: the recorded one, else
++ * other, else the image's own. The first copy locks it.
++ */
++static VkFormat
++copy_vk_format(struct tu_image *image, VkFormat other)
++{
++   if (!image->z_copy_tracked || !image->layout[0].ubwc)
++      return image->vk.format;
++
++   VkFormat format;
++   uint32_t old = p_atomic_read(&image->z_copy_state);
++   for (;;) {
++      format = (VkFormat)(old & TU_Z_COPY_FORMAT_MASK);
++      if ((old >> TU_Z_COPY_PRIO_SHIFT) == TU_Z_COPY_PRIO_LOCKED)
++         break;
++      if (format == VK_FORMAT_UNDEFINED)
++         format = other != VK_FORMAT_UNDEFINED ? other : image->vk.format;
++      uint32_t locked = (TU_Z_COPY_PRIO_LOCKED << TU_Z_COPY_PRIO_SHIFT) |
++                        (uint32_t)format;
++      uint32_t seen = p_atomic_cmpxchg(&image->z_copy_state, old, locked);
++      if (seen == old)
++         break;
++      old = seen;
++   }
+    return format;
+ }
+ 
+@@ -2606,10 +2665,11 @@
+    uint32_t layers = MAX2(info->imageExtent.depth,
+                           vk_image_subresource_layer_count(&dst_image->vk,
+                                                            &info->imageSubresource));
++   VkFormat image_format = copy_vk_format(dst_image, VK_FORMAT_UNDEFINED);
+    enum pipe_format src_format =
+-      copy_format(dst_image->vk.format, info->imageSubresource.aspectMask);
++      copy_format(image_format, info->imageSubresource.aspectMask);
+    enum pipe_format dst_format =
+-      copy_format(dst_image->vk.format, info->imageSubresource.aspectMask);
++      copy_format(image_format, info->imageSubresource.aspectMask);
+    const struct blit_ops *ops = &r2d_ops<CHIP>;
+ 
+    /* special case for buffer to stencil */
+@@ -2831,10 +2891,11 @@
+    uint32_t layers = MAX2(info->imageExtent.depth,
+                           vk_image_subresource_layer_count(&src_image->vk,
+                                                            &info->imageSubresource));
++   VkFormat image_format = copy_vk_format(src_image, VK_FORMAT_UNDEFINED);
+    enum pipe_format dst_format =
+-      copy_format(src_image->vk.format, info->imageSubresource.aspectMask);
++      copy_format(image_format, info->imageSubresource.aspectMask);
+    enum pipe_format src_format =
+-      copy_format(src_image->vk.format, info->imageSubresource.aspectMask);
++      copy_format(image_format, info->imageSubresource.aspectMask);
+    const struct blit_ops *ops = &r2d_ops<CHIP>;
+ 
+    if (src_image->vk.format == VK_FORMAT_D24_UNORM_S8_UINT &&
+@@ -3093,8 +3154,12 @@
+    copy_compressed(src_image->vk.format, &src_offset, &extent, NULL, NULL);
+    copy_compressed(dst_image->vk.format, &dst_offset, NULL, NULL, NULL);
+ 
+-   enum pipe_format dst_format = copy_format(dst_image->vk.format, info->dstSubresource.aspectMask);
+-   enum pipe_format src_format = copy_format(src_image->vk.format, info->srcSubresource.aspectMask);
++   VkFormat src_known = tu_image_z_copy_src_format(dst_image, src_image);
++   VkFormat dst_known = tu_image_z_copy_format(dst_image);
++   enum pipe_format dst_format = copy_format(copy_vk_format(dst_image, src_known),
++                                             info->dstSubresource.aspectMask);
++   enum pipe_format src_format = copy_format(copy_vk_format(src_image, dst_known),
++                                             info->srcSubresource.aspectMask);
+ 
+    /* note: could use "R8_UNORM" when no UBWC */
+    unsigned blit_param = 0;
+diff --git a/src/freedreno/vulkan/tu_image.cc b/src/freedreno/vulkan/tu_image.cc
+--- a/src/freedreno/vulkan/tu_image.cc
++++ b/src/freedreno/vulkan/tu_image.cc
+@@ -201,6 +201,24 @@
+    else
+       format = vk_format_to_pipe_format(iview->vk.format);
+ 
++   /* Record the written format for copies. Explicit render target views win;
++    * a copy's format is final. Views may be created on several threads.
++    */
++   if (image->z_copy_tracked && aspect_mask == VK_IMAGE_ASPECT_COLOR_BIT) {
++      const VkImageViewUsageCreateInfo *usage_info =
++         vk_find_struct_const(pCreateInfo->pNext, IMAGE_VIEW_USAGE_CREATE_INFO);
++      uint32_t prio = usage_info &&
++         (usage_info->usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) ? 2 : 1;
++      uint32_t state = (prio << TU_Z_COPY_PRIO_SHIFT) | (uint32_t)iview->vk.format;
++      uint32_t old = p_atomic_read(&image->z_copy_state);
++      while ((old >> TU_Z_COPY_PRIO_SHIFT) < prio) {
++         uint32_t seen = p_atomic_cmpxchg(&image->z_copy_state, old, state);
++         if (seen == old)
++            break;
++         old = seen;
++      }
++   }
++
+    if (image->vk.format == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM &&
+        aspect_mask == VK_IMAGE_ASPECT_PLANE_0_BIT) {
+       if (iview->vk.format == VK_FORMAT_R8_UNORM) {
+@@ -616,6 +634,13 @@
+             force_linear_tile = true;
+          } else if (!mutable_ubwc_fc) {
+             int64_t z_mutable = debug_get_option_tu_z_mutable();
++            /* Shader stores corrupt this UBWC on a7xx gen2, the only GPUs
++             * here with ubwc_unorm_snorm_int_compatible.
++             */
++            if (z_mutable >= 2 &&
++                (pCreateInfo->usage & VK_IMAGE_USAGE_STORAGE_BIT) &&
++                device->physical_device->info->props.ubwc_unorm_snorm_int_compatible)
++               z_mutable = 1;
+             if (ubwc_enabled && z_mutable < 2) {
+                if (fmt_list && fmt_list->viewFormatCount == 2) {
+                   perf_debug(
+@@ -655,6 +680,20 @@
+                 (fmt_list_has_swaps && (z_mutable < 1 || no_list_unswapped))) {
+                ubwc_enabled = false;
+                force_linear_tile = true;
++            }
++
++            /* UBWC only decodes through formats with the same encoding, so
++             * copies use the written format (see tu_image::z_copy_state).
++             */
++            if (ubwc_enabled && z_mutable >= 2 &&
++                vk_format_get_plane_count(image->vk.format) == 1) {
++               image->z_copy_tracked = true;
++               if (fmt_list &&
++                   fmt_list->viewFormatCount <= ARRAY_SIZE(image->z_view_formats)) {
++                  image->z_view_format_count = fmt_list->viewFormatCount;
++                  for (uint32_t i = 0; i < fmt_list->viewFormatCount; i++)
++                     image->z_view_formats[i] = fmt_list->pViewFormats[i];
++               }
+             }
+          } else {
+             is_mutable = true;
+diff --git a/src/freedreno/vulkan/tu_image.h b/src/freedreno/vulkan/tu_image.h
+--- a/src/freedreno/vulkan/tu_image.h
++++ b/src/freedreno/vulkan/tu_image.h
+@@ -14,6 +14,12 @@
+ 
+ #include "fdl/freedreno_lrz_layout.h"
+ #include "tu_knl.h"
++#include "util/u_atomic.h"
++
++/* tu_image::z_copy_state layout */
++#define TU_Z_COPY_FORMAT_MASK 0x3fffffffu
++#define TU_Z_COPY_PRIO_SHIFT 30
++#define TU_Z_COPY_PRIO_LOCKED 3u
+ 
+ #define TU_MAX_PLANE_COUNT 3
+ 
+@@ -24,6 +30,16 @@
+    struct fdl_layout layout[3];
+    uint64_t subsampled_metadata_offset;
+    uint64_t total_size;
++
++   /* Mutable UBWC images whose views don't share one encoding. z_copy_state:
++    * bits 0-29 the written VkFormat, bits 30-31 its source (1 view, 2 explicit
++    * render target view, 3 copy, final); 0 is unset.
++    */
++   bool z_copy_tracked;
++   uint32_t z_copy_state;
++   /* Format list, for copies (0: not kept). */
++   uint8_t z_view_format_count;
++   VkFormat z_view_formats[8];
+ 
+    /* Set when bound */
+    uint64_t iova;

@@ -14,6 +14,8 @@ export interface GameTweak {
   lavdMode?: string;
   /** pocknix-game-launch exports PROTON_USE_XALIA=0 unless false; absent = disabled. */
   disableXalia?: boolean;
+  /** true = pocknix-game-launch exports TU_Z_MUTABLE=2; ignored by an x86 Proton. */
+  keepCompressed?: boolean;
   /** true = pocknix-game-launch lists the prime core first in Wine's CPU topology. */
   primeCoreFirst?: boolean;
   /** true = the touchscreen is inhibited while this game runs (pocknix_control/touch.py). */

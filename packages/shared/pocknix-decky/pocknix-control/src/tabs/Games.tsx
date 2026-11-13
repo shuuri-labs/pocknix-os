@@ -1,7 +1,7 @@
 import { PanelSection } from "@decky/ui";
 import type { Dispatch, SetStateAction } from "react";
 import { setFanMode, setLavdMode } from "../backend";
-import { GameOnlyToggle, Note, PrimeCoreToggle, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions, resetFields } from "../components/GameFields";
+import { GameOnlyToggle, KeepCompressedToggle, Note, PrimeCoreToggle, TouchField, TweakFields, XaliaToggle, audioLatencyOptions, fanOptions, lavdOptions, resetFields } from "../components/GameFields";
 import { APPLIES_NEXT_LAUNCH, APPLIES_NOW, timed } from "../lib/applies";
 import { parseEnvVars } from "../lib/envVars";
 import { EnvVarsField } from "../components/EnvVars";
@@ -88,6 +88,7 @@ export function Games({ config, setConfig, patch, reload }: {
           </PanelSection>
           <PanelSection title="GAME TWEAKS">
             <SelectEdit label="FEX Preset" description={nextLaunch} value={fexValue} options={fexOptions} onChange={(id) => patchSettings({ fexProfile: id })} />
+            <KeepCompressedToggle values={values} patch={patchSettings} live={live} />
             <SelectEdit
               label="Audio Buffer"
               description={nextLaunch}

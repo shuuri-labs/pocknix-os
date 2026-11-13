@@ -7,7 +7,7 @@ epoch=2
 pkgver=26.3.0
 # differs from pkgver only for RCs: the tarball keeps the hyphen makepkg forbids in pkgver
 _srcver=${pkgver}
-pkgrel=1
+pkgrel=2
 pkgdesc="Mesa trimmed for Qualcomm handhelds: freedreno GL + turnip Vulkan, SoC-tuned (${_srcver})"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
@@ -22,11 +22,17 @@ makedepends=(
 )
 # upstream considers LTO broken until explicit notice
 options=(!lto)
-source=("https://archive.mesa3d.org/mesa-${_srcver}.tar.xz")
-sha256sums=('91d729aa68bb89e4ec857841300bbe922bcb3e52b1f97566ca83930d3b28343a')
+source=("https://archive.mesa3d.org/mesa-${_srcver}.tar.xz"
+        '0011-tu-z-mutable-ubwc.patch'
+        '0012-tu-z-mutable-ubwc-copy-format.patch')
+sha256sums=('91d729aa68bb89e4ec857841300bbe922bcb3e52b1f97566ca83930d3b28343a'
+            '8e1d91bcc60459079a59964b27f3c14c5eb1e2950359a00a1375c5a4f95244cf'
+            'f17a188f8068344add40eca7622fdc4a9010fcd9bd4ec02675ee9f2ec211fbb3')
 
 prepare() {
   cd "mesa-${_srcver}"
+  patch -p1 < "${srcdir}/0011-tu-z-mutable-ubwc.patch"
+  patch -p1 < "${srcdir}/0012-tu-z-mutable-ubwc-copy-format.patch"
   # package release in the version string so Chromium/CEF (steamwebhelper) invalidates
   # its GPU cache across our rebuilds.
   echo "${pkgver}-pocknix${epoch}.${pkgrel}" > VERSION
