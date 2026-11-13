@@ -3,7 +3,7 @@
 # entry comes from vulkan-freedreno's vk-arm manifest. Same per-SoC tuning contract as packages/soc/mesa.
 pkgname=pocknix-turnip-arm
 pkgver=20261110
-pkgrel=1
+pkgrel=2
 pkgdesc="Pinned aarch64 Turnip build of mesa main for per-game Mesa selection (SoC-tuned)"
 arch=('aarch64')
 url="https://www.mesa3d.org/"
@@ -20,8 +20,18 @@ makedepends=(meson ninja python-mako python-packaging python-yaml python-ply gls
 options=(!lto)
 # Pinned, not floating, so rebuilds reproduce.
 _develcommit=487d4ba4938d043e436dd3aac4e81a42b3b30178
-source=("https://gitlab.freedesktop.org/mesa/mesa/-/archive/${_develcommit}/mesa-${_develcommit}.tar.gz")
-sha256sums=('7dbba95e4a5682bc1f61751b16b8215daae375887744425658bc2dc6bcf2f91a')
+source=("https://gitlab.freedesktop.org/mesa/mesa/-/archive/${_develcommit}/mesa-${_develcommit}.tar.gz"
+        '0011-tu-z-mutable-ubwc.patch'
+        '0012-tu-z-mutable-ubwc-copy-format.patch')
+sha256sums=('7dbba95e4a5682bc1f61751b16b8215daae375887744425658bc2dc6bcf2f91a'
+            '8e1d91bcc60459079a59964b27f3c14c5eb1e2950359a00a1375c5a4f95244cf'
+            'f17a188f8068344add40eca7622fdc4a9010fcd9bd4ec02675ee9f2ec211fbb3')
+
+prepare() {
+  cd "mesa-${_develcommit}"
+  patch -p1 < "${srcdir}/0011-tu-z-mutable-ubwc.patch"
+  patch -p1 < "${srcdir}/0012-tu-z-mutable-ubwc-copy-format.patch"
+}
 
 build() {
   # Same tuning contract as packages/soc/mesa (sm8550 fallback for a standalone makepkg).
