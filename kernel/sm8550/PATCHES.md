@@ -69,6 +69,12 @@ Last rebased: 2026-11-11 (DPU colour LUTs).
   wants no colour still lights when the DSPPs are all taken. Needs: 1121. Trap: DSPPs go to
   whoever lights first; a CRTC lit without one refuses colour until a modeset frees a pair, and
   that modeset is the freeze-prone kind (Thor + DP dock, untested). Source: ours.
+- **1127** A command-mode panel that lost a frame comes back on the first mode switch instead of the
+  second: a failed display-off is reported and then ignored, so the panel core stops keeping the
+  panel marked enabled and stops skipping the next enable, backlight included. Applies: Thor (the
+  driver exists per SoC and only the sm8550 copy is proven). Trap: the DSI controller is still
+  wedged while the panel's disable runs, so its DCS writes fail by design; unprepare drops the
+  rails and resets the panel, and prepare re-sends the init sequence. Source: ours.
 
 ### Haptics
 
@@ -106,7 +112,10 @@ The local delta `kernel/sm8550/sync-keep` restores after each make sync.
 
 ## Not taken
 
-None.
+- Auto-recovery in the DPU after a command-mode kickoff timeout (resetting the panel or forcing a
+  modeset from `dpu_encoder_phys_cmd.c`): the timeout path clears its own reset flag in the same
+  commit, so a later commit cannot tell it happened, and forcing `mode_changed` from `atomic_check`
+  is unproven on these panels. 1127 makes the modeset userspace does anyway cost one switch.
 
 ## Retired numbers
 
