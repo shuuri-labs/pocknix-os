@@ -321,6 +321,16 @@ def apply_prime_first(settings):
         os.environ[key] = f"{count}:" + ",".join([prime] + [c for c in listed if c != prime])
 
 
+def apply_keep_compressed(settings, tool):
+    # Only our patched Turnip reads it. After apply_env_vars so launch options and envVars win.
+    if settings.get("keepCompressed") is not True or "TU_Z_MUTABLE" in os.environ:
+        return
+    if tool is not None and not is_arm(tool):
+        log("keep compressed: an x86 Proton runs the unpatched x86 Turnip")
+        return
+    os.environ["TU_Z_MUTABLE"] = "2"
+
+
 def apply_xalia(settings):
     # Proton starts xalia (gamepad UI helper) for every game, costing CPU inside the pinned
     # tree. Runs after apply_env_vars so launch options and envVars win.
@@ -369,6 +379,7 @@ def main():
     for step in (lambda: apply_audio_latency(settings),
                  lambda: apply_mesa_version(settings, tool),
                  lambda: apply_env_vars(settings),
+                 lambda: apply_keep_compressed(settings, tool),
                  lambda: apply_prime_first(settings),
                  lambda: apply_xalia(settings),
                  lambda: apply_game_modes(settings),

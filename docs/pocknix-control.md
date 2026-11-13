@@ -57,6 +57,10 @@ from its library page: **Manage → Pocknix Settings**.
   development branch: newer fixes, less tested. Any drivers you added yourself come after it
   (see [Adding your own Turnip driver](#adding-your-own-turnip-driver)). Everything except the
   default works with ARM Proton versions only; an x86 Proton always uses its default driver.
+- **Keep Images Compressed**: off by default. Keeps more of the game's images compressed in GPU
+  memory, which can raise FPS when the game is limited by memory bandwidth. Works with ARM Proton
+  and emulators on the system or "git" Mesa; an x86 Proton and your own drivers ignore it. Turn it
+  off if colours look wrong (red and blue swapped, black or white overlays).
 - **Audio Buffer**: **Game default**, **60**, **90**, or **120 ms**. Raising the buffer
   absorbs audio crackle in busy scenes (an FEX audio-mixer quirk) at the cost of a little
   extra audio latency. 120 ms clears crackle and is inaudible in most games. Keep it low (or
