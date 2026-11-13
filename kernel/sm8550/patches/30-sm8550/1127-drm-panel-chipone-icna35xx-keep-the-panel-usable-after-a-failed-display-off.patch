@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: theodotdot <59372255+theodotdot@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 15:55:00 +0100
+Subject: [PATCH] drm/panel: chipone-icna35xx: keep the panel usable after a
+ failed display off
+
+A command-mode panel that loses a frame leaves the DSI controller with a
+command DMA that never completes. Until something resets the controller, every
+DCS write this driver makes times out, so ->disable() returns the accumulated
+-ETIMEDOUT.
+
+drm_panel_disable() keeps the panel marked enabled when ->disable() fails, and
+drm_panel_enable() then skips the next enable, backlight included. The panel
+only comes back on the second switch, once a disable has succeeded on a
+controller msm_dsi_host_disable() has since reset.
+
+Nothing in that failed disable is needed: ->unprepare() drives the reset line
+and cuts the rails, and ->prepare() re-sends the whole init sequence, so the
+panel comes up from scratch on the next enable whatever this call managed to
+write.
+
+Seen on the Ayn Thor (qcs8550-ayn-thor), niri driving the 1080x1920 command-mode
+panel at 120Hz: one lost pingpong done on the DPU encoder left the panel showing
+static, and the first switch to another mode and back logged
+
+  dsi_cmds2buf_tx: cmd dma tx failed, type=0x39, data0=0x51, len=8, ret=-110
+  panel-chipone-icna35xx ae96000.dsi.0: [drm:drm_panel_disable] failed to disable backlight: -110
+  dsi_cmds2buf_tx: cmd dma tx failed, type=0x5, data0=0x28, len=4, ret=-110
+  panel-chipone-icna35xx ae96000.dsi.0: sending DCS SET_DISPLAY_OFF failed: -110
+  panel-chipone-icna35xx ae96000.dsi.0: Skipping enable of already enabled panel
+
+Report the error and return 0, so one mode switch is enough and the next enable
+runs its enable path.
+---
+--- a/drivers/gpu/drm/panel/panel-chipone-icna35xx.c
++++ b/drivers/gpu/drm/panel/panel-chipone-icna35xx.c
+@@ -346,7 +346,16 @@
+ 	mipi_dsi_dcs_enter_sleep_mode_multi(&dsi_ctx);
+ 	mipi_dsi_msleep(&dsi_ctx, 120);
+ 
+-	return dsi_ctx.accum_err;
++	/*
++	 * Never fail the panel state machine: drm_panel_disable() keeps a panel
++	 * marked enabled after an error, so every later enable is skipped, the
++	 * backlight included.
++	 */
++	if (dsi_ctx.accum_err)
++		dev_warn(panel->dev, "display off failed: %d\n",
++			 dsi_ctx.accum_err);
++
++	return 0;
+ }
+ 
+ static int icna35xx_unprepare(struct drm_panel *panel)

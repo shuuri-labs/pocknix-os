@@ -174,6 +174,14 @@ Last rebased: 2026-11-06 (s2idle stack 3).
 - **1067** A 128-bit atomic load on a read-only page no longer oopses the kernel and kills the
   emulated process: its store-exclusive gets a fault entry. Needs: 1062. Source: armada 0505a.
 
+### Host tools
+
+- **1128** `make kernel` on a device whose linux-api-headers are newer than the pinned source no
+  longer dies building host tools: the tools' `linux/types.h` carries the `__s128`/`__u128`
+  typedefs the uapi header has, so aarch64's `<asm/sigcontext.h>` finds the type. Applies: every
+  SoC, a cross build never needed it. Trap: the include path shadows the system's
+  `linux/types.h`, so the type is missing rather than the header being too old. Source: ours.
+
 ## Not taken
 
 None.
