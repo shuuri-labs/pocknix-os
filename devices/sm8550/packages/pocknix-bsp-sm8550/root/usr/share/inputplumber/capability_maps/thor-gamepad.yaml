@@ -1,17 +1,20 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/capability_map_v2.json
 # AYN Thor: sm8550-gamepad.yaml minus the back paddles the Thor lacks, plus the AYN key
 # (KEY_F24 on gpio-keys-ayn).
+#
+# With no paddles, LeftPaddle1 is free: BTN_MODE (the Home/Steam key) takes it so a profile
+# can tell Home from Guide, and the AYN key takes Guide. "..." keeps QuickAccess.
 version: 2
 kind: CapabilityMap
 name: AYN Thor RSInput Mapping
 id: thor_gamepad
 
 mapping:
-  - name: Guide Button
+  - name: Home Button
     source_events:
       - evdev: { event_type: KEY, event_code: BTN_MODE, value_type: button }
     target_event:
-      gamepad: { button: Guide }
+      gamepad: { button: LeftPaddle1 }
 
   - name: Quick Access Button
     source_events:
@@ -130,12 +133,12 @@ mapping:
     target_event:
       gamepad: { button: DPadRight }
 
-  # AYN key: a spare face key, so it doubles the "..." menu.
+  # AYN key: carries Guide so the Home key can keep LeftPaddle1 (see header).
   - name: AYN Key
     source_events:
       - evdev: { event_type: KEY, event_code: KEY_F24, value_type: button }
     target_event:
-      gamepad: { button: QuickAccess }
+      gamepad: { button: Guide }
 
   # Volume-up rocker shares the gpio-keys node; re-emit it on the keyboard target so the
   # exclusive grab doesn't kill it. (Volume-down is on pmic_resin, a node we don't grab.)
