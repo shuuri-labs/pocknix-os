@@ -1,0 +1,13 @@
+#!/bin/sh
+# Drop the Wi-Fi radio for the suspend window: unplugged s2idle measures ~104 mA with it on and
+# ~52 mA with it off. The post hook restores exactly the radios this one changed.
+mkdir -p /run/pocknix
+: > /run/pocknix/deep-sleep.blocked
+for d in /sys/class/rfkill/rfkill*; do
+  [ -r "${d}/type" ] || continue
+  [ "$(cat "${d}/type")" = wlan ] || continue
+  [ "$(cat "${d}/soft")" = 1 ] && continue
+  echo "$(basename "${d}")" >> /run/pocknix/deep-sleep.blocked
+  echo 1 > "${d}/soft"
+done
+exit 0

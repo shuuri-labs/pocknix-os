@@ -24,6 +24,8 @@ User guides for pocknix-os. New here? Start with the [project README](../README.
   games, uninstalling, and restoring the factory bootloader
 - [snapshots.md](snapshots.md) - automatic pre-update snapshots, one-button rollback, and
   manual recovery when an update goes wrong
+- [deep-sleep.md](deep-sleep.md) - Wi-Fi off while the device sleeps, what it saves, and
+  what it costs
 - [licensing.md](licensing.md) - the project license and the third-party components it ships
 
 ## For developers
