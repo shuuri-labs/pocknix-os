@@ -8,6 +8,11 @@
 #include <dt-bindings/input/gpio-keys.h>
 #include "qcs8550-ayn-common.dtsi"
 
+&pm8550b_hv_haptics {
+	qcom,vmax-mv = <1300>;
+	/delete-property/ qcom,use-erm;
+};
+
 / {
 	model = "AYN Thor";
 	compatible = "ayn,thor", "qcom,qcs8550", "qcom,sm8550";
