@@ -1,0 +1,242 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: theodotdot <59372255+theodotdot@users.noreply.github.com>
+Date: Wed, 19 Nov 2026 16:20:00 +0100
+Subject: [PATCH] drm/msm/dpu: keep a plane on its current SSPP while it fits
+
+The resource manager gives a plane the first SSPP that satisfies its
+requirements, scanning the hardware list from the lowest index, and it does
+so on every commit. The pipe the plane already uses carries no weight, so a
+plane moves to a lower-numbered pipe as soon as another CRTC frees one.
+
+On a command-mode CRTC such a move loses a frame. The commit re-binds the
+plane and dpu_plane_atomic_update() programs only the new pipe; the pipe the
+plane came from is left as it was. The frame for that commit then never
+completes and the encoder reports
+
+  [drm] enc38 frame done timeout
+  [drm] id:38 pp:2 kickoff timeout 1 cnt 1
+  [drm] failed wait_for_idle: id:38 ret:-110 pp:2
+
+while the CTL flush register reads 0. The pipeline does not recover on its
+own: every later commit waits the full kickoff timeout, and only disabling
+and re-enabling the CRTC brings the output back.
+
+Seen on qcs8550-ayn-thor with both CRTCs active, the upper 1080x1920
+command-mode panel at 120Hz and the lower panel in video mode. The cursor
+plane on the lower CRTC holds SSPP 11, so the upper cursor plane is bound to
+SSPP 12. When the pointer crosses to the upper panel, one commit disables the
+lower plane and re-binds the upper plane; the upper plane moves from SSPP 12
+to SSPP 11 in that commit and its frame is lost. Crossing in the other
+direction, where the video-mode CRTC takes the freed SSPP, is harmless.
+
+Prefer the plane's current SSPP when it still satisfies the requirements.
+Assignment stays put for a plane that is already running, and the search is
+unchanged for a plane that has no usable pipe of its own or whose pipe is
+claimed earlier in the same commit.
+
+---
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_rm.h
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_rm.h
+@@ -83,7 +83,8 @@
+ struct dpu_hw_sspp *dpu_rm_reserve_sspp(struct dpu_rm *rm,
+ 					struct dpu_global_state *global_state,
+ 					struct drm_crtc *crtc,
+-					struct dpu_rm_sspp_requirements *reqs);
++					struct dpu_rm_sspp_requirements *reqs,
++					struct dpu_hw_sspp *pref);
+ 
+ void dpu_rm_release_all_sspp(struct dpu_global_state *global_state,
+ 			     struct drm_crtc *crtc);
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_rm.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_rm.c
+@@ -785,41 +785,72 @@
+ 	return ret;
+ }
+ 
++static bool dpu_rm_sspp_usable(struct dpu_rm *rm,
++			       struct dpu_global_state *global_state,
++			       struct dpu_rm_sspp_requirements *reqs,
++			       unsigned int type, int i)
++{
++	struct dpu_hw_sspp *hw_sspp = rm->hw_sspp[i];
++
++	if (!hw_sspp)
++		return false;
++
++	if (global_state->sspp_to_crtc_id[i])
++		return false;
++
++	if (hw_sspp->cap->type != type)
++		return false;
++
++	if (reqs->scale && !hw_sspp->cap->sblk->scaler_blk.len)
++		return false;
++
++	// TODO: QSEED2 and RGB scalers are not yet supported
++	if (reqs->scale && !hw_sspp->ops.setup_scaler)
++		return false;
++
++	if (reqs->yuv && !hw_sspp->cap->sblk->csc_blk.len)
++		return false;
++
++	if (reqs->rot90 && !test_bit(DPU_SSPP_INLINE_ROTATION, &hw_sspp->cap->features))
++		return false;
++
++	return true;
++}
++
+ static struct dpu_hw_sspp *dpu_rm_try_sspp(struct dpu_rm *rm,
+ 					   struct dpu_global_state *global_state,
+ 					   struct drm_crtc *crtc,
+ 					   struct dpu_rm_sspp_requirements *reqs,
+-					   unsigned int type)
++					   unsigned int type,
++					   struct dpu_hw_sspp *pref)
+ {
+ 	uint32_t crtc_id = crtc->base.id;
+-	struct dpu_hw_sspp *hw_sspp;
+ 	int i;
+ 
+-	for (i = 0; i < ARRAY_SIZE(rm->hw_sspp); i++) {
+-		if (!rm->hw_sspp[i])
+-			continue;
++	/*
++	 * Prefer the SSPP the plane is already using whenever it still fits.
++	 * Re-binding an active plane to a different SSPP leaves the old pipe
++	 * armed, and the first frame after the move may then never complete;
++	 * on a command-mode CTL that wedges the whole pipeline.
++	 */
++	if (pref) {
++		for (i = 0; i < ARRAY_SIZE(rm->hw_sspp); i++) {
++			if (rm->hw_sspp[i] != pref)
++				continue;
+ 
+-		if (global_state->sspp_to_crtc_id[i])
+-			continue;
++			if (!dpu_rm_sspp_usable(rm, global_state, reqs, type, i))
++				break;
+ 
+-		hw_sspp = rm->hw_sspp[i];
++			global_state->sspp_to_crtc_id[i] = crtc_id;
+ 
+-		if (hw_sspp->cap->type != type)
+-			continue;
++			return pref;
++		}
++	}
+ 
+-		if (reqs->scale && !hw_sspp->cap->sblk->scaler_blk.len)
++	for (i = 0; i < ARRAY_SIZE(rm->hw_sspp); i++) {
++		if (!dpu_rm_sspp_usable(rm, global_state, reqs, type, i))
+ 			continue;
+ 
+-		// TODO: QSEED2 and RGB scalers are not yet supported
+-		if (reqs->scale && !hw_sspp->ops.setup_scaler)
+-			continue;
+-
+-		if (reqs->yuv && !hw_sspp->cap->sblk->csc_blk.len)
+-			continue;
+-
+-		if (reqs->rot90 && !test_bit(DPU_SSPP_INLINE_ROTATION, &hw_sspp->cap->features))
+-			continue;
+-
+ 		global_state->sspp_to_crtc_id[i] = crtc_id;
+ 
+ 		return rm->hw_sspp[i];
+@@ -834,20 +865,22 @@
+  * @global_state: private global state
+  * @crtc: DRM CRTC handle
+  * @reqs: SSPP required features
++ * @pref: SSPP the plane currently uses, preferred if it still fits
+  */
+ struct dpu_hw_sspp *dpu_rm_reserve_sspp(struct dpu_rm *rm,
+ 					struct dpu_global_state *global_state,
+ 					struct drm_crtc *crtc,
+-					struct dpu_rm_sspp_requirements *reqs)
++					struct dpu_rm_sspp_requirements *reqs,
++					struct dpu_hw_sspp *pref)
+ {
+ 	struct dpu_hw_sspp *hw_sspp = NULL;
+ 
+ 	if (!reqs->scale && !reqs->yuv)
+-		hw_sspp = dpu_rm_try_sspp(rm, global_state, crtc, reqs, SSPP_TYPE_DMA);
++		hw_sspp = dpu_rm_try_sspp(rm, global_state, crtc, reqs, SSPP_TYPE_DMA, pref);
+ 	if (!hw_sspp && !reqs->yuv)
+-		hw_sspp = dpu_rm_try_sspp(rm, global_state, crtc, reqs, SSPP_TYPE_RGB);
++		hw_sspp = dpu_rm_try_sspp(rm, global_state, crtc, reqs, SSPP_TYPE_RGB, pref);
+ 	if (!hw_sspp)
+-		hw_sspp = dpu_rm_try_sspp(rm, global_state, crtc, reqs, SSPP_TYPE_VIG);
++		hw_sspp = dpu_rm_try_sspp(rm, global_state, crtc, reqs, SSPP_TYPE_VIG, pref);
+ 
+ 	return hw_sspp;
+ }
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c
+@@ -1254,7 +1254,9 @@
+ 					      struct drm_plane_state *plane_state,
+ 					      struct dpu_global_state *global_state,
+ 					      struct drm_crtc *crtc,
+-					      struct dpu_rm_sspp_requirements *reqs)
++					      struct dpu_rm_sspp_requirements *reqs,
++					      struct dpu_hw_sspp *pref,
++					      struct dpu_hw_sspp *r_pref)
+ {
+ 	struct drm_plane *plane = plane_state->plane;
+ 	struct dpu_kms *dpu_kms = _dpu_plane_get_kms(plane);
+@@ -1264,7 +1266,7 @@
+ 	if (drm_rect_width(&pipe_cfg->src_rect) == 0)
+ 		return 0;
+ 
+-	pipe->sspp = dpu_rm_reserve_sspp(&dpu_kms->rm, global_state, crtc, reqs);
++	pipe->sspp = dpu_rm_reserve_sspp(&dpu_kms->rm, global_state, crtc, reqs, pref);
+ 	if (!pipe->sspp)
+ 		return -ENODEV;
+ 	pipe->multirect_index = DPU_SSPP_RECT_SOLO;
+@@ -1279,7 +1281,8 @@
+ 					      dpu_kms->catalog->caps->max_linewidth))
+ 		return 0;
+ 
+-	r_pipe->sspp = dpu_rm_reserve_sspp(&dpu_kms->rm, global_state, crtc, reqs);
++	r_pipe->sspp = dpu_rm_reserve_sspp(&dpu_kms->rm, global_state, crtc, reqs,
++					   r_pref);
+ 	if (!r_pipe->sspp)
+ 		return -ENODEV;
+ 	r_pipe->multirect_index = DPU_SSPP_RECT_SOLO;
+@@ -1299,12 +1302,24 @@
+ 	struct dpu_kms *dpu_kms = _dpu_plane_get_kms(plane);
+ 	struct dpu_rm_sspp_requirements reqs;
+ 	struct dpu_plane_state *pstate, *prev_adjacent_pstate[STAGES_PER_PLANE];
++	struct dpu_plane_state *old_pstate = NULL;
++	struct drm_plane_state *old_plane_state;
+ 	struct dpu_sw_pipe *pipe;
+ 	struct dpu_sw_pipe_cfg *pipe_cfg;
+ 	const struct msm_format *fmt;
+ 	int i, ret;
+ 
+ 	pstate = to_dpu_plane_state(plane_state);
++
++	/*
++	 * A plane that stays on this CRTC keeps its SSPP when possible: moving
++	 * an active plane to a different SSPP wedges a command-mode pipeline.
++	 */
++	old_plane_state = drm_atomic_get_old_plane_state(state, plane);
++	if (old_plane_state && old_plane_state->crtc == plane_state->crtc &&
++	    old_plane_state->visible)
++		old_pstate = to_dpu_plane_state(old_plane_state);
++
+ 	for (i = 0; i < STAGES_PER_PLANE; i++)
+ 		prev_adjacent_pstate[i] = prev_adjacent_plane_state[i] ?
+ 			to_dpu_plane_state(prev_adjacent_plane_state[i]) : NULL;
+@@ -1341,7 +1356,11 @@
+ 		ret = dpu_plane_assign_resource_in_stage(pipe, pipe_cfg,
+ 							 plane_state,
+ 							 global_state,
+-							 crtc, &reqs);
++							 crtc, &reqs,
++							 old_pstate ?
++							 old_pstate->pipe[i * PIPES_PER_STAGE].sspp : NULL,
++							 old_pstate ?
++							 old_pstate->pipe[i * PIPES_PER_STAGE + 1].sspp : NULL);
+ 		if (ret)
+ 			return ret;
+ 	}
