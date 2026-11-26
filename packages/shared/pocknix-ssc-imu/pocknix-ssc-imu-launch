@@ -1,0 +1,17 @@
+#!/bin/sh
+# Launches pocknix-ssc-imu only on boards whose device.conf provides a verified gyro map.
+set -eu
+
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+
+gyro="${POCKNIX_IMU_GYRO:-}"
+accel="${POCKNIX_IMU_ACCEL:-}"
+scale="${POCKNIX_IMU_GYRO_SCALE:-}"
+
+[ -n "${gyro}" ] || exit 0
+[ -n "${accel}" ] || accel="${gyro}"
+
+set -- --gyro-map "${gyro}" --accel-map "${accel}"
+[ -n "${scale}" ] && set -- "$@" --scale "${scale}"
+exec /usr/bin/pocknix-ssc-imu "$@"

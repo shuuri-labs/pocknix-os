@@ -1,0 +1,33 @@
+# hexagonrpc: Qualcomm FastRPC reverse-tunnel daemon (hexagonrpcd) and libhexagonrpc.
+# Serves staged Android DSP libraries, sensor configs and socinfo to ADSP sensor_pd.
+pkgname=hexagonrpc
+pkgver=0.5.0
+pkgrel=1
+_commit=da7a3742ab8d5273a281b70ee11f16fb2cb6a690
+pkgdesc="Qualcomm FastRPC reverse-tunnel daemon for ADSP sensor_pd"
+arch=('aarch64')
+url="https://github.com/linux-msm/hexagonrpc"
+license=('GPL-3.0-or-later')  # upstream hexagonrpc
+depends=('glibc')
+makedepends=('meson' 'ninja')
+source=("hexagonrpc-${_commit}.tar.gz::https://github.com/linux-msm/hexagonrpc/archive/${_commit}.tar.gz"
+        '0001-rpcd_builder-expose-full-persist-sensors-tree.patch')
+sha256sums=('651ab53dcf92a2766ba6ec42cac2ccdbd67382da5211b14c5fa33b618153c435'
+            'SKIP')
+
+prepare() {
+  cd "hexagonrpc-${_commit}"
+  patch -Np1 -i "${srcdir}/0001-rpcd_builder-expose-full-persist-sensors-tree.patch"
+}
+
+build() {
+  cd "hexagonrpc-${_commit}"
+  # buildtype=plain avoids baking a chip-specific -march into a shared package.
+  meson setup build --prefix=/usr --buildtype=plain -Dhexagonrpcd_verbose=false
+  meson compile -C build
+}
+
+package() {
+  cd "hexagonrpc-${_commit}"
+  meson install -C build --destdir "${pkgdir}"
+}

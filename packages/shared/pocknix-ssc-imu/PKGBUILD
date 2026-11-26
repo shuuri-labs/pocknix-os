@@ -1,0 +1,46 @@
+# pocknix-ssc-imu: Qualcomm ADSP SSC IMU bridge, read-only Android sensor asset extractor,
+# and suspend hooks. Stays dormant unless the board's device.conf sets POCKNIX_IMU_GYRO.
+pkgname=pocknix-ssc-imu
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="pocknix Qualcomm ADSP SSC IMU bridge to virtual evdev motion sensors"
+arch=('aarch64')
+url="https://github.com/shuuri-labs/pocknix-os"
+license=('GPL-2.0-or-later')
+depends=('glibc' 'systemd' 'hexagonrpc' 'python' 'util-linux')
+source=('pocknix-ssc-imu.c'
+        'pocknix-ssc-extract'
+        'pocknix-sensorspd-launch'
+        'pocknix-ssc-imu-launch'
+        'pocknix-sensorspd.service'
+        'pocknix-ssc-imu.service'
+        '050-pocknix-ssc-imu-pre'
+        '050-pocknix-ssc-imu-post')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+build() {
+  gcc ${CFLAGS} ${LDFLAGS} -O2 -Wall -Wextra \
+    "${srcdir}/pocknix-ssc-imu.c" -o "${srcdir}/pocknix-ssc-imu" -lm
+}
+
+package() {
+  install -Dm755 "${srcdir}/pocknix-ssc-imu" "${pkgdir}/usr/bin/pocknix-ssc-imu"
+  install -Dm755 "${srcdir}/pocknix-ssc-extract" "${pkgdir}/usr/lib/pocknix/pocknix-ssc-extract"
+  install -Dm755 "${srcdir}/pocknix-sensorspd-launch" \
+    "${pkgdir}/usr/lib/pocknix/pocknix-sensorspd-launch"
+  install -Dm755 "${srcdir}/pocknix-ssc-imu-launch" \
+    "${pkgdir}/usr/lib/pocknix/pocknix-ssc-imu-launch"
+  install -Dm644 "${srcdir}/pocknix-sensorspd.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-sensorspd.service"
+  install -Dm644 "${srcdir}/pocknix-ssc-imu.service" \
+    "${pkgdir}/usr/lib/systemd/system/pocknix-ssc-imu.service"
+  install -d "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../pocknix-sensorspd.service \
+    "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants/pocknix-sensorspd.service"
+  ln -s ../pocknix-ssc-imu.service \
+    "${pkgdir}/usr/lib/systemd/system/multi-user.target.wants/pocknix-ssc-imu.service"
+  install -Dm755 "${srcdir}/050-pocknix-ssc-imu-pre" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/pre/050-pocknix-ssc-imu"
+  install -Dm755 "${srcdir}/050-pocknix-ssc-imu-post" \
+    "${pkgdir}/usr/lib/pocknix/sleep.d/post/050-pocknix-ssc-imu"
+}

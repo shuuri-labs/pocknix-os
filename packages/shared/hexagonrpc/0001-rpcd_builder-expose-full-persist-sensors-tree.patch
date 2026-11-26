@@ -1,0 +1,31 @@
+From: FrontMage <frontmage@users.noreply.github.com>
+Date: Thu, 26 Nov 2026 12:00:00 +0800
+Subject: [PATCH] rpcd_builder: expose full persist/sensors tree
+
+Upstream maps SENSORS_REGISTRY only at /persist/sensors/registry/registry,
+hiding /persist/sensors/sensors_list.txt and /persist/sensors/registry/sns_reg_version
+that Qualcomm ADSP sensor_pd reads during initialization. Map /persist/sensors
+directly to SENSORS_REGISTRY so the full staged tree is visible.
+---
+ hexagonrpcd/rpcd_builder.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/hexagonrpcd/rpcd_builder.c b/hexagonrpcd/rpcd_builder.c
+index d374958..bc803ec 100644
+--- a/hexagonrpcd/rpcd_builder.c
++++ b/hexagonrpcd/rpcd_builder.c
+@@ -161,11 +161,7 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 	 * a hard link between both locations.
+ 	 */
+ 	persist_dir = hfs_mkdir("persist", 1,
+-				hfs_mkdir("sensors", 1,
+-					hfs_mkdir("registry", 1,
+-						hfs_map("registry", sns_reg)
+-					)
+-				)
++				hfs_map("sensors", sns_reg)
+ 		      );
+ 
+ 	/*
+-- 
+2.45.0

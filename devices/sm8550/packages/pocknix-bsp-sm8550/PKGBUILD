@@ -2,14 +2,14 @@
 # model and the input maps are model-gated, so a new board needs no new package.
 pkgname=pocknix-bsp-sm8550
 pkgver=0.2.0
-pkgrel=23
+pkgrel=24
 pkgdesc="pocknix board support: SM8550 family (RP6, Nova, Odin 2 family, Thor) — runtime board dispatch, input maps, suspend quirks, audio UCM, dual-screen touch policy"
 arch=('any')
 url="https://github.com/shuuri-labs/pocknix-os"
 license=('GPL-2.0-or-later')
-# The firmware reaches the fleet through this edge: -Syu never installs a new name alone.
+# The firmware and SSC IMU reach the fleet through this edge: -Syu never installs a new name alone.
 # An older bsp-common has no speaker DSP renderer, so the board profiles would sit unused.
-depends=('pocknix-bsp-common>=0.1.0-29' 'pocknix-firmware-sm8550')
+depends=('pocknix-bsp-common>=0.1.0-29' 'pocknix-firmware-sm8550' 'pocknix-ssc-imu')
 # One BSP per device (wrong-device guard); replaces= migrates the retired per-device BSPs.
 provides=('pocknix-bsp')
 conflicts=('pocknix-bsp')

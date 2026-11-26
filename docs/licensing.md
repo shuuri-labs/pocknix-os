@@ -41,6 +41,7 @@ not and cannot relicense them. The main ones:
 | MangoHud | `packages/shared/mangohud` | MIT |
 | FEX-Emu | `packages/shared/fex-emu` | MIT |
 | GPcal calibration maths | `packages/shared/pocknix-gamepad-calibration` | MIT |
+| hexagonrpc | `packages/shared/hexagonrpc` | GPL-3.0-or-later |
 | alsa-ucm-conf material | `devices/*` BSPs | BSD-3-Clause |
 | Speaker EQ curves | `devices/*` BSPs, `usr/share/pocknix/speaker-dsp/` | each curve author's terms, named in the profile header (RP5, Flip 2: kokoko3k's jdsp4rp5, GPL-2.0; RP6: Ryan Retro, used with his permission) |
 | Valve DXVK build (fetched, pinned) | `packages/gpu/pocknix-dxvk2-donor` | zlib |

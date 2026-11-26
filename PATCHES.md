@@ -21,6 +21,7 @@ is not taken, retired numbers); files ported from another project record theirs 
 | plasma-mobile | [packages/shared/plasma-mobile/PATCHES.md](packages/shared/plasma-mobile/PATCHES.md) | 6.8.1 tarball (Arch's build) |
 | powerdevil | [packages/shared/powerdevil/PATCHES.md](packages/shared/powerdevil/PATCHES.md) | 6.8.1 tarball (Arch's build, no kdoctools) |
 | gtk2 | [packages/shared/gtk2/PATCHES.md](packages/shared/gtk2/PATCHES.md) | gtk+ 2.24.33 tarball |
+| hexagonrpc | [packages/shared/hexagonrpc/PATCHES.md](packages/shared/hexagonrpc/PATCHES.md) | upstream `da7a3742` (0.5.0, 2026) |
 
 ## Ported files
 

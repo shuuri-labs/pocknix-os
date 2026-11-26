@@ -32,7 +32,7 @@ EXCLUDE = re.compile(
     r"|^(\.github|docs|vendor|build)/|/patches/|/dist/|/dts/|README|provenance|rocknix-reference"
     r"|linux\.aarch64\.conf$|kernel-firmware\.dat$|package-lock|LICENSE"
 )
-SLASH = re.compile(r"\.(ts|tsx|js|vdf|cpp|h)$|polkit-1/rules\.d/")
+SLASH = re.compile(r"\.(ts|tsx|js|vdf|c|cpp|h)$|polkit-1/rules\.d/")
 XML = re.compile(r"\.xml$")
 PYTHON = re.compile(r"\.py$")
 

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Launches hexagonrpcd for ADSP sensor_pd only on boards whose device.conf enables SSC IMU.
+set -eu
+
+[ -r /usr/lib/pocknix/device.conf ] && . /usr/lib/pocknix/device.conf
+[ -r /etc/pocknix/device.conf ] && . /etc/pocknix/device.conf
+
+[ -n "${POCKNIX_IMU_GYRO:-}" ] || exit 0
+[ -c /dev/fastrpc-adsp ] || exit 0
+
+/usr/lib/pocknix/pocknix-ssc-extract || exit 0
+exec /usr/bin/hexagonrpcd -f /dev/fastrpc-adsp -d adsp -s -R /var/lib/pocknix/sensors-root
