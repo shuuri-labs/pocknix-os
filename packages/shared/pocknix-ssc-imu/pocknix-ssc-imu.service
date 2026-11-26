@@ -1,0 +1,14 @@
+[Unit]
+Description=pocknix Qualcomm ADSP SSC IMU to uinput bridge
+After=pocknix-sensorspd.service
+Wants=pocknix-sensorspd.service
+Before=inputplumber.service
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/pocknix/pocknix-ssc-imu-launch
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

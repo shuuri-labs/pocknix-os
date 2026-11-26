@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+"""Read-only extractor of Qualcomm ADSP sensor assets from Android UFS partitions.
+
+Stages /var/lib/pocknix/sensors-root for hexagonrpcd without redistributing vendor blobs
+or writing to any Android partition. Parses Android LP super metadata dynamically.
+"""
+import os
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path("/var/lib/pocknix/sensors-root")
+SENTINEL = ROOT / ".extracted-v1"
+PART_DIR = Path("/dev/disk/by-partlabel")
+LP_GEOM_MAGIC = 0x616C4467
+LP_META_MAGIC = 0x414C5030
+LP_TARGET_LINEAR = 0
+
+
+def run(cmd, check=True):
+    return subprocess.run(cmd, check=check, capture_output=True, text=True)
+
+
+def mount_ro(dev, target):
+    # noload prevents ext4 journal replay from touching Android block storage.
+    for opts in ("ro,noload", "ro"):
+        if run(["mount", "-o", opts, str(dev), str(target)], check=False).returncode == 0:
+            return True
+    return False
+
+
+def parse_super_vendor(super_path):
+    with open(super_path, "rb") as f:
+        f.seek(4096)
+        geom = f.read(64)
+        if len(geom) < 52:
+            return None
+        magic, _, _, meta_max, meta_slots, _ = struct.unpack_from("<II32sIII", geom, 0)
+        if magic != LP_GEOM_MAGIC or meta_max == 0 or meta_slots == 0:
+            return None
+
+        for slot in range(meta_slots):
+            base = 4096 + 8192 + slot * meta_max
+            f.seek(base)
+            hdr = f.read(256)
+            if len(hdr) < 128:
+                continue
+            m_magic, _, _, hdr_sz = struct.unpack_from("<IHHI", hdr, 0)
+            if m_magic != LP_META_MAGIC:
+                continue
+            p_off, p_num, p_esz = struct.unpack_from("<III", hdr, 80)
+            e_off, e_num, e_esz = struct.unpack_from("<III", hdr, 92)
+            f.seek(base + hdr_sz + p_off)
+            pbuf = f.read(p_num * p_esz)
+            f.seek(base + hdr_sz + e_off)
+            ebuf = f.read(e_num * e_esz)
+
+            candidates = {}
+            for i in range(p_num):
+                raw = pbuf[i * p_esz:(i + 1) * p_esz]
+                name = raw[:36].split(b"\x00", 1)[0].decode("ascii", errors="ignore")
+                _, first_ext, num_ext = struct.unpack_from("<III", raw, 36)
+                if name in ("vendor_a", "vendor_b", "vendor") and num_ext > 0:
+                    exts = []
+                    for j in range(first_ext, first_ext + num_ext):
+                        eraw = ebuf[j * e_esz:(j + 1) * e_esz]
+                        n_sec, t_type, t_data, _ = struct.unpack_from("<QIQI", eraw, 0)
+                        if t_type != LP_TARGET_LINEAR:
+                            exts = []
+                            break
+                        exts.append((t_data, n_sec))
+                    if exts:
+                        candidates[name] = exts
+            for pref in ("vendor_a", "vendor_b", "vendor"):
+                if pref in candidates:
+                    return candidates[pref]
+    return None
+
+
+def copy_tree(src, dst):
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst, symlinks=True)
+
+
+def write_socinfo(root):
+    soc_dst = root / "socinfo"
+    soc_dst.mkdir(parents=True, exist_ok=True)
+    soc0 = Path("/sys/devices/soc0")
+    defaults = {
+        "hw_platform": "HDK",
+        "platform_subtype": "0",
+        "platform_subtype_id": "0",
+        "platform_version": "65536",
+        "soc_id": "0",
+        "revision": "1.0",
+    }
+    for key, fallback in defaults.items():
+        val = fallback
+        src = soc0 / key
+        if src.is_file():
+            try:
+                text = src.read_text(encoding="utf-8", errors="ignore").strip()
+                if text:
+                    val = text
+            except OSError:
+                pass
+        (soc_dst / key).write_text(val + "\n", encoding="utf-8")
+
+
+def find_part(*names):
+    for n in names:
+        p = PART_DIR / n
+        if p.exists():
+            return p
+    return None
+
+
+def main():
+    if SENTINEL.is_file() and (ROOT / "dsp/adsp/fastrpc_shell_0").is_file():
+        write_socinfo(ROOT)
+        return 0
+
+    persist = find_part("persist")
+    dsp = find_part("dsp_a", "dsp_b", "dsp")
+    super_dev = find_part("super")
+    direct_vendor = find_part("vendor_a", "vendor_b", "vendor")
+    if not persist or not dsp or (not super_dev and not direct_vendor):
+        print("pocknix-ssc-extract: Android sensor partitions not present, skipping", file=sys.stderr)
+        return 1
+
+    tmp_stage = Path(str(ROOT) + ".tmp")
+    if tmp_stage.exists():
+        shutil.rmtree(tmp_stage)
+    tmp_stage.mkdir(parents=True, exist_ok=True)
+    (tmp_stage / "acdb").mkdir(exist_ok=True)
+    (tmp_stage / "dsp").mkdir(exist_ok=True)
+    (tmp_stage / "sensors").mkdir(exist_ok=True)
+
+    mnt_base = Path(tempfile.mkdtemp(prefix="pocknix-ssc-"))
+    mounted = []
+    loop_dev = None
+    try:
+        m_persist = mnt_base / "persist"
+        m_dsp = mnt_base / "dsp"
+        m_vendor = mnt_base / "vendor"
+        for m in (m_persist, m_dsp, m_vendor):
+            m.mkdir()
+
+        if not mount_ro(persist, m_persist):
+            raise RuntimeError(f"failed to mount {persist} read-only")
+        mounted.append(m_persist)
+        if not (m_persist / "sensors").is_dir():
+            raise RuntimeError("persist/sensors missing")
+        copy_tree(m_persist / "sensors", tmp_stage / "sensors/registry")
+
+        if not mount_ro(dsp, m_dsp):
+            raise RuntimeError(f"failed to mount {dsp} read-only")
+        mounted.append(m_dsp)
+        if not (m_dsp / "adsp").is_dir():
+            raise RuntimeError("dsp/adsp missing")
+        copy_tree(m_dsp / "adsp", tmp_stage / "dsp/adsp")
+
+        vendor_dev = direct_vendor
+        if not vendor_dev and super_dev:
+            exts = parse_super_vendor(super_dev)
+            if not exts or len(exts) != 1:
+                raise RuntimeError("could not locate linear vendor partition in super")
+            start_sec, num_sec = exts[0]
+            res = run([
+                "losetup", "-r", "--find", "--show",
+                "-o", str(start_sec * 512),
+                "--sizelimit", str(num_sec * 512),
+                str(super_dev),
+            ])
+            loop_dev = res.stdout.strip()
+            vendor_dev = Path(loop_dev)
+
+        if not mount_ro(vendor_dev, m_vendor):
+            raise RuntimeError(f"failed to mount {vendor_dev} read-only")
+        mounted.append(m_vendor)
+
+        cfg_src = m_vendor / "etc/sensors/config"
+        reg_src = m_vendor / "etc/sensors/sns_reg_config"
+        if cfg_src.is_dir():
+            copy_tree(cfg_src, tmp_stage / "sensors/config")
+        else:
+            (tmp_stage / "sensors/config").mkdir(exist_ok=True)
+        if reg_src.is_file():
+            shutil.copy2(reg_src, tmp_stage / "sensors/sns_reg.conf")
+
+        write_socinfo(tmp_stage)
+        (tmp_stage / ".extracted-v1").write_text("ok\n", encoding="utf-8")
+
+        ROOT.parent.mkdir(parents=True, exist_ok=True)
+        if ROOT.exists():
+            shutil.rmtree(ROOT)
+        tmp_stage.rename(ROOT)
+        return 0
+    except Exception as exc:
+        print(f"pocknix-ssc-extract: {exc}", file=sys.stderr)
+        shutil.rmtree(tmp_stage, ignore_errors=True)
+        return 1
+    finally:
+        for m in reversed(mounted):
+            run(["umount", str(m)], check=False)
+        if loop_dev:
+            run(["losetup", "-d", loop_dev], check=False)
+        shutil.rmtree(mnt_base, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

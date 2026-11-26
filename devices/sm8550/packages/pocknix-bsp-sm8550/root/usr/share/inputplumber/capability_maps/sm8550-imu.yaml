@@ -1,0 +1,41 @@
+# InputPlumber v2 capability map for the pocknix-ssc-imu virtual motion sensors device.
+version: 2
+kind: CapabilityMap
+name: SM8550 SSC IMU
+id: sm8550_imu
+mapping:
+  - name: Accelerometer
+    source_events:
+      - evdev:
+          event_type: ABS
+          event_code: ABS_X
+          value_type: imu_x
+      - evdev:
+          event_type: ABS
+          event_code: ABS_Y
+          value_type: imu_y
+      - evdev:
+          event_type: ABS
+          event_code: ABS_Z
+          value_type: imu_z
+    target_event:
+      accelerometer:
+        name: Center
+
+  - name: Gyroscope
+    source_events:
+      - evdev:
+          event_type: ABS
+          event_code: ABS_RX
+          value_type: imu_x
+      - evdev:
+          event_type: ABS
+          event_code: ABS_RY
+          value_type: imu_y
+      - evdev:
+          event_type: ABS
+          event_code: ABS_RZ
+          value_type: imu_z
+    target_event:
+      gyroscope:
+        name: Center

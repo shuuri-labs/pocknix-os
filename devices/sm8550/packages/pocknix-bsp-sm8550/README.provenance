@@ -37,6 +37,7 @@ Ours:
     re-emitted on the keyboard target) and the Nova match
   - sm8550-gamepad.yaml = ayn_mcu adapted
   - 02-ayn-thor-controller.yaml + thor-gamepad.yaml are ours
+  - sm8550-imu.yaml and the optional imu source entry in 01-rsinput-controller.yaml are ours
 
 Last synced: never (hand-ported).
 

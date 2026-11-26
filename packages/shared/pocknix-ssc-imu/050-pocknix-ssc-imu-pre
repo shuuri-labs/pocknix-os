@@ -1,0 +1,6 @@
+#!/bin/sh
+# Stops the SSC IMU stream before s2idle so ADSP sensor traffic cannot block CX collapse.
+if systemctl is-active --quiet pocknix-ssc-imu.service; then
+  touch /run/pocknix-ssc-imu.suspended
+  systemctl stop pocknix-ssc-imu.service
+fi

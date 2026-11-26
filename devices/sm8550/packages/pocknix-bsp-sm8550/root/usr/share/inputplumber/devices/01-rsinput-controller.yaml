@@ -15,7 +15,7 @@
 # LeftPaddle1/RightPaddle1 (the Deck's L4/L5 back buttons). That node also
 # carries the volume-up rocker (KEY_VOLUMEUP); because the grab is exclusive,
 # the map re-emits it on the keyboard target so volume up keeps working.
-# (Gyro is still unavailable — no IIO/IMU.)
+# Boards with POCKNIX_IMU_GYRO also attach the pocknix-ssc-imu virtual IMU.
 #
 # Target = `deck` (Steam Deck controller) so Steam Input gets a first-class
 # Steam-native pad.
@@ -79,6 +79,13 @@ source_devices:
       phys_path: gpio-keys/input0
       handler: event*
     capability_map_id: sm8550_gamepad
+
+  # Optional ADSP SSC virtual IMU (only present on boards with POCKNIX_IMU_GYRO).
+  - group: imu
+    evdev:
+      name: "Sunshine gamepad (virtual) motion sensors"
+      handler: event*
+    capability_map_id: sm8550_imu
 
 options:
   auto_manage: true
